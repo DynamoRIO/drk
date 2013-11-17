@@ -135,6 +135,35 @@ KSTAT_DEF("in rct analysis using relocations [per page loop]", rct_reloc_per_pag
 KSTAT_DEF("in aslr_generate_relocated_section for validation", aslr_validate_relocate)
 KSTAT_DEF("in module_contents_compare or aslr_compare_in_place", aslr_compare)
 
+#ifdef LINUX_KERNEL
+KSTAT_DEF("delaying patched interrupt", delaying_patched_interrupt);
+KSTAT_DEF("user interrupt handling", user_interrupt_handling);
+KSTAT_DEF("kernel interrupt handling", kernel_interrupt_handling);
+KSTAT_DEF("kernel interrupt handling", kernel_interrupt_fcache_enter);
+KSTAT_DEF("kernel interrupt handling", kernel_interrupt_fcache_return);
+KSTAT_DEF("kernel interrupt handling", kernel_interrupt_ibl);
+KSTAT_DEF("kernel interrupt handling", kernel_interrupt_frag_success_page_fault);
+KSTAT_DEF("kernel interrupt handling", kernel_interrupt_frag_success_other_sync);
+KSTAT_DEF("kernel interrupt handling", kernel_interrupt_frag_success_async);
+KSTAT_DEF("kernel interrupt handling", kernel_interrupt_frag_delay_dispatch);
+KSTAT_DEF("kernel interrupt handling", kernel_interrupt_frag_delay_pc);
+KSTAT_DEF("kernel interrupt handling", kernel_interrupt_frag_unknown);
+KSTAT_DEF("user mode", usermode);
+KSTAT_DEF("recreate app state", recreate_app_state_failure);
+KSTAT_DEF("recreate app state", recreate_app_state_success_pc);
+KSTAT_DEF("recreate app state", recreate_app_state_success_state);
+KSTAT_DEF("recreate app state", recreate_app_state_delay_dispatch);
+KSTAT_DEF("recreate app state", recreate_app_state_delay_pc);
+KSTAT_DEF("recreate app state", recreate_app_state_unknown);
+KSTAT_DEF("recreate app state", recreate_app_state_frag_intr);
+KSTAT_DEF("recreate app state", recreate_app_state_from_info);
+KSTAT_DEF("recreate app state", recreate_app_state_in_fcache);
+KSTAT_DEF("recreate app state", recreate_fragment_lookup);
+KSTAT_DEF("recreate app state", recreate_fragment_ilist);
+KSTAT_DEF("recreate app state", recreate_app_state_from_ilist);
+KSTAT_DEF("fragment interrupt handling", fragment_interrupt_handling);
+#endif
+
 #ifdef KSTAT_UNIT_TEST
 KSTAT_DEF("empty block overhead", empty)
 KSTAT_DEF("total measured", measured)

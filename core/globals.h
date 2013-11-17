@@ -129,8 +129,8 @@
 
 #define INLINE_ONCE inline
 
-#include <stdlib.h>
-#include <stdio.h>
+// #include <stdlib.h>
+// #include <stdio.h>
 
 /* N.B.: some of these typedefs and defines are duplicated in
  * lib/globals_shared.h!
@@ -158,7 +158,7 @@ typedef HANDLE file_t;
 
 #else /* LINUX */
 /* uint, ushort, and ulong are in types.h */
-#include <sys/types.h> /* for wait */
+// #include "types_wrapper.h" /* for wait */
 #define DIRSEP '/'
 #define ALT_DIRSEP DIRSEP
 #endif
@@ -169,8 +169,10 @@ typedef HANDLE file_t;
  * if so, change thread_id_t to be a signed int and use -1?
  * For now, based on observation, no process on linux and no thread on windows
  * has id 0 (on windows even a new thread in its init apc has a non-0 id)
+ * In the Linux kernel, "thread id" is the processor's index, which certainly
+ * can be 0. So, we use -1 for the kernel.
  */
-#define INVALID_THREAD_ID  0
+#define INVALID_THREAD_ID IF_LINUX_KERNEL_ELSE(-1, 0)
 
 typedef unsigned char uchar;
 typedef byte * cache_pc;  /* fragment cache pc */
@@ -570,6 +572,9 @@ typedef enum {
 #ifdef HOT_PATCHING_INTERFACE
     WHERE_HOTPATCH,
 #endif
+#ifdef LINUX_KERNEL
+    WHERE_USERMODE,
+#endif
     WHERE_LAST
 } where_am_i_t;
 
@@ -709,8 +714,10 @@ struct _dcontext_t {
      */
     bool           initialized;     /* has this context been used yet? */
     thread_id_t      owning_thread;
+#ifndef LINUX_KERNEL
 #ifdef LINUX
     process_id_t     owning_process; /* handle shared address space w/o shared pid */
+#endif
 #endif
     thread_record_t   *thread_record;  /* so don't have to do a thread_lookup */
     where_am_i_t       whereami;        /* where control is at the moment */
@@ -913,12 +920,19 @@ struct _dcontext_t {
     pending_nudge_t *nudge_pending;
     /* frag we unlinked to expedite nudge delivery */
     fragment_t *interrupted_for_nudge;
-# ifdef DEBUG
+# ifndef LINUX_KERNEL
+#  ifdef DEBUG
     /* i#238/PR 499179: check that libc errno hasn't changed */
     int libc_errno;
+#  endif
 # endif
 #endif
-
+    /* The last fragment dispatch entered. Useful for debugging. */
+    fragment_t *current_fragment;
+    /* Holds the address of the next application instruction to execute. Unlike
+     * next_tag, this is not overwritten with a code cache address. */
+    app_pc         next_app_tag;
+    bool emulating_interrupt_return;
 };
 
 /* sentinel value for dcontext_t* used to indicate
@@ -955,7 +969,7 @@ enum {
 #endif
 
 #if !defined(NOT_DYNAMORIO_CORE_PROPER) && !defined(NOT_DYNAMORIO_CORE)
-#  define printf   printf_forbidden_function
+//#  define printf   printf_forbidden_function
 #  define sprintf  sprintf_forbidden_function
 #  define swprintf swprintf_forbidden_function
 #  define vsprintf vsprintf_forbidden_function

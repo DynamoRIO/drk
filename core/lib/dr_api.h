@@ -42,6 +42,10 @@
 extern "C" {
 #endif
 
+#if ${DEBUG}
+#define DEBUG
+#endif
+
 /* Defines and type definitions */
 #include "dr_defines.h"
 

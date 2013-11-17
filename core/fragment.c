@@ -44,10 +44,10 @@
 #include "fcache.h"
 #include "emit.h"
 #include "monitor.h"
-#include <string.h> /* for memset */
+#include "string_wrapper.h" /* for memset */
 #include "instrument.h"
 #include <stddef.h> /* for offsetof */
-#include <limits.h> /* UINT_MAX */
+#include "limits_wrapper.h" /* UINT_MAX */
 #include "perscache.h"
 #include "synch.h"
 #ifdef LINUX
@@ -2116,6 +2116,8 @@ fragment_thread_reset_free(dcontext_t *dcontext)
     /* case 7966: don't initialize at all for hotp_only & thin_client */
     if (RUNNING_WITHOUT_CODE_CACHE())
         return;
+
+    os_fragment_thread_reset_free(dcontext);
 
     /* Dec ref count on any shared tables that are pointed to. */
     dec_all_table_ref_counts(dcontext, pt);
@@ -4433,6 +4435,23 @@ fragment_add_ibl_target(dcontext_t *dcontext, app_pc tag,
             } else if (!INTERNAL_OPTION(link_ibl)) {
                 reason = "-no_link_ibl prevents ibl";
                 STATS_INC(num_ibt_exit_nolink);
+            } else if (dcontext->last_exit == get_ibl_unlinked_found_linkstub()) {
+                reason = "IBL routine unlinked for interrupt.";
+            } else if (DYNAMO_OPTION(indirect_stubs)) {
+                /* When indirect_stubs is enabled, we don't see special
+                 * last_exit values in some cases?
+                 * TODO(peter): I didn't put any time into thinking about this.
+                 * I was just hacking things to get indirect_stubs working for
+                 * debugging. Everything seems to be okay if we ignore the
+                 * assertions inthe else block though.
+                 */
+                 reason = "indirect_stubs";
+            } else if (has_pending_interrupt(dcontext)) {
+                /* TODO(peter): The unlinked path on the IBL routine does not
+                 * set the linkstub to anything special. I should fix this. For
+                 * now, we know that the only time we hit this path is on
+                 * interrupts.
+                 */
             } else {
                 reason = "BAD leak?";
                 DOLOG(3, LOG_FRAGMENT, {
@@ -7080,7 +7099,9 @@ output_trace_binary(dcontext_t *dcontext, per_thread_t *pt, fragment_t *f,
      * We do not support PROFILE_RDTSC or various small fields
      */
     /* FIXME: should allocate buffer elsewhere */
-    byte buf[TRACEBUF_SIZE];
+    // byte buf[TRACEBUF_SIZE];
+    // This is peter's fix:
+    byte* buf = heap_alloc(dcontext, TRACEBUF_SIZE HEAPACCT(ACCT_OTHER));
     byte *p = buf;
     trace_only_t *t = TRACE_FIELDS(f);
     linkstub_t *l;
@@ -7181,6 +7202,7 @@ output_trace_binary(dcontext_t *dcontext, per_thread_t *pt, fragment_t *f,
         os_write(pt->tracefile, buf, (p - buf));
         p = buf;
     }
+    heap_free(dcontext, buf, TRACEBUF_SIZE HEAPACCT(ACCT_OTHER));
 }
 
 /* Output the contents of the specified trace.

@@ -51,8 +51,20 @@
  * @brief Utility routines for identifying features of the processor.
  */
 
+/* TODO(peter): The linux kernel has pages with 4K, 2MB, and 1GB. This size
+ * isn't universal.
+ */
 /* page size is 4K on all DR-supported platforms */
-#define PAGE_SIZE (4*1024) /**< Size of a page of memory. */
+/* DR_API EXPORT VERBATIM */
+#ifndef PAGE_SIZE
+# define PAGE_SIZE (4*1024) /**< Size of a page of memory. */
+#else
+# if PAGE_SIZE != 4096
+#  error bag page size
+# endif
+#endif
+/* DR_API EXPORT END */
+
 
 /**< Convenience macro to align to the start of a page of memory. */
 #define PAGE_START(x) (((ptr_uint_t)(x)) & ~((PAGE_SIZE)-1))

@@ -39,8 +39,8 @@
  */
 
 #include "globals.h"
-#include <string.h>             /* for memcpy */
-#include <limits.h>
+#include "string_wrapper.h"             /* for memcpy */
+#include "limits_wrapper.h"
 
 #include "fragment.h"  /* for struct sizes */
 #include "link.h"      /* for struct sizes */
@@ -313,7 +313,7 @@ static void release_landing_pad_mem(void);
  * DR areas lock first, to retry
  */
 static bool
-safe_to_allocate_or_free_heap_units()
+safe_to_allocate_or_free_heap_units(void)
 {
     return ((!self_owns_recursive_lock(&global_alloc_lock) &&
              !self_owns_recursive_lock(&heap_unit_lock)) ||
@@ -940,7 +940,7 @@ vmm_heap_reserve_blocks(vm_heap_t *vmh, size_t size_in)
 
     if (first_block != BITMAP_NOT_FOUND) {
         p = vmm_block_to_addr(vmh, first_block);
-        STATS_ADD_PEAK(vmm_vsize_used, size);
+        RSTATS_ADD_PEAK(vmm_vsize_used, size);
         STATS_ADD_PEAK(vmm_vsize_blocks_used, request);
         STATS_ADD_PEAK(vmm_vsize_wasted, size - size_in);
         DOSTATS({
@@ -981,7 +981,7 @@ vmm_heap_free_blocks(vm_heap_t *vmh, vm_addr_t p, size_t size_in)
     mutex_unlock(&vmh->lock);
 
     ASSERT(vmh->num_free_blocks <= vmh->num_blocks);
-    STATS_SUB(vmm_vsize_used, size);
+    RSTATS_SUB(vmm_vsize_used, size);
     STATS_SUB(vmm_vsize_blocks_used, request);
     STATS_SUB(vmm_vsize_wasted, size - size_in);
 }
@@ -994,7 +994,7 @@ vmm_heap_free_blocks(vm_heap_t *vmh, vm_addr_t p, size_t size_in)
 START_DATA_SECTION(FREQ_PROTECTED_SECTION, "w");
 
 static bool
-at_reset_at_vmm_limit()
+at_reset_at_vmm_limit(void)
 {
     return
         (DYNAMO_OPTION(reset_at_vmm_percent_free_limit) != 0 &&
@@ -1009,7 +1009,7 @@ at_reset_at_vmm_limit()
 static vm_addr_t
 vmm_heap_reserve(size_t size, heap_error_code_t *error_code, bool executable)
 {
-    vm_addr_t p;
+    vm_addr_t p = NULL;
     /* should only be used on sizable aligned pieces */
     ASSERT(size > 0 && ALIGNED(size, PAGE_SIZE));
     ASSERT(!OWN_MUTEX(&reset_pending_lock));
@@ -1093,6 +1093,7 @@ vmm_heap_reserve(size_t size, heap_error_code_t *error_code, bool executable)
             }
         });
     }
+
     /* if we fail to allocate from our reservation we fall back to the OS */
 #ifdef X64
     /* PR 215395, make sure allocation satisfies heap reachability contraints */
@@ -1589,7 +1590,7 @@ heap_exit()
  * need a test for hitting 2GB (or 3GB!) user mode limit.
  */
 static void
-heap_low_on_memory()
+heap_low_on_memory(void)
 {
     /* free some memory! */
     heap_unit_t *u, *next_u;

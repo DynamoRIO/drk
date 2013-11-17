@@ -47,7 +47,7 @@
 #include <fcntl.h>
 #include <sys/file.h>
 #include <sys/wait.h>
-#include <string.h>
+#include "string_wrapper.h"
 #include <sys/syscall.h>
 
 /* for glibc_stackdump */

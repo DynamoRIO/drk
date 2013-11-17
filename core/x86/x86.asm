@@ -1894,4 +1894,18 @@ GLOBAL_LABEL(load_dynamo_failure:)
         
 #endif /* WINDOWS */
 
+#ifdef LINUX_KERNEL
+        DECLARE_FUNC(native_sysret)
+GLOBAL_LABEL(native_sysret:)
+        swapgs
+        sysretq
+        END_FUNC(native_sysret:)
+
+        DECLARE_FUNC(dr_native_iret)
+GLOBAL_LABEL(dr_native_iret:)
+        swapgs
+        iretq
+        END_FUNC(dr_native_iret)
+#endif /* LINUX_KERNEL */
+
 END_FILE

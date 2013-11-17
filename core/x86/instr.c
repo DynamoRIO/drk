@@ -45,7 +45,7 @@
 #include "decode_fast.h"
 #include "instr_create.h"
 
-#include <string.h> /* for memcpy */
+#include "string_wrapper.h" /* for memcpy */
 
 #ifdef DEBUG
 # include "disassemble.h"
@@ -286,6 +286,7 @@ opnd_get_immed_int(opnd_t opnd)
 }
 
 /* NOTE: requires caller to be under PRESERVE_FLOATING_POINT_STATE */
+#ifndef LINUX_KERNEL
 float
 opnd_get_immed_float(opnd_t opnd)
 {
@@ -296,6 +297,7 @@ opnd_get_immed_float(opnd_t opnd)
      */
     return opnd.value.immed_float;
 }
+#endif
 
 
 /* address operands */
@@ -1417,6 +1419,24 @@ reg_32_to_opsz(reg_id_t reg, opnd_size_t sz)
     return reg;
 }
 
+reg_id_t
+reg_64_to_opsz(reg_id_t reg, opnd_size_t sz)
+{
+    CLIENT_ASSERT(reg >= REG_START_64 && reg <= REG_STOP_64,
+                  "reg_64_to_opsz: passed non-64-bit reg");
+    switch (sz) {
+    case OPSZ_1:
+    case OPSZ_2:
+    case OPSZ_4:
+        return reg_32_to_opsz(reg_64_to_32(reg), sz);
+    case OPSZ_8:
+        break;
+    default: 
+        CLIENT_ASSERT(false, "reg_64_to_opsz: invalid size parameter");
+    }
+    return reg;
+}
+
 int
 reg_parameter_num(reg_id_t reg)
 {
@@ -1586,6 +1606,7 @@ instr_clone(dcontext_t *dcontext, instr_t *orig)
      * mark other client instrs, which could mess up state translation
      */
     instr_set_our_mangling(instr, false);
+    instr_set_cti_translation(instr, false);
 
     if ((orig->flags & INSTR_RAW_BITS_ALLOCATED) != 0) {
         /* instr length already set from memcpy */
@@ -3498,6 +3519,21 @@ instr_set_our_mangling(instr_t *instr, bool ours)
         instr->flags &= ~INSTR_OUR_MANGLING;
 }
 
+bool
+instr_is_cti_translation(instr_t *instr)
+{
+    return TEST(INSTR_CTI_TRANSLATION, instr->flags);
+}
+
+void
+instr_set_cti_translation(instr_t *instr, bool cti_translation)
+{
+    if (cti_translation)
+        instr->flags |= INSTR_CTI_TRANSLATION;
+    else
+        instr->flags &= ~INSTR_CTI_TRANSLATION;
+}
+
 DR_API
 /* Emulates instruction to find the address of the index-th memory operand.
  * Either or both OUT variables can be NULL.
@@ -3610,7 +3646,7 @@ instr_branch_type(instr_t *cti_instr)
         return LINK_DIRECT|LINK_CALL;     /* unconditional */
     case OP_jmp_short: case OP_jmp: case OP_jmp_far:
         return LINK_DIRECT|LINK_JMP;     /* unconditional */
-    case OP_ret: case OP_ret_far: case OP_iret:
+    case OP_ret: case OP_ret_far: IF_NOT_LINUX_KERNEL(case OP_iret:)
         return LINK_INDIRECT|LINK_RETURN;
     case OP_jmp_ind: case OP_jmp_far_ind: 
         return LINK_INDIRECT|LINK_JMP;
@@ -3628,6 +3664,12 @@ instr_branch_type(instr_t *cti_instr)
     case OP_jo: case OP_jno: case OP_jp: case OP_jnp:
     case OP_js: case OP_jns: case OP_jz: case OP_jnz:
         return LINK_DIRECT|LINK_JMP;     /* conditional */
+#ifdef LINUX_KERNEL
+    case OP_iret:
+        return LINK_IRET;
+    case OP_sysret:
+        return LINK_SYSRET;
+#endif
     default:
         LOG(THREAD_GET, LOG_ALL, 0, "branch_type: unknown opcode: %d\n",
             instr_get_opcode(cti_instr));
@@ -3670,7 +3712,8 @@ instr_is_exit_cti(instr_t *instr)
         !instr_ok_to_mangle(instr) ||
         !instr_is_cti(instr) ||
         instr_is_call(instr) ||
-        instr_is_return(instr))
+        instr_is_return(instr)
+    	IF_LINUX_KERNEL(|| instr_may_return_to_user(instr)))
         return false;
     return (instr_num_srcs(instr) > 0 &&
              /* far pc should only happen for mangle's call to here */
@@ -3716,7 +3759,15 @@ bool
 instr_is_return(instr_t *instr)
 {
     int opc = instr_get_opcode(instr);
-    return (opc == OP_ret || opc == OP_ret_far || opc == OP_iret);
+    return (opc == OP_ret || opc == OP_ret_far || opc == OP_iret ||
+            opc == OP_sysret || opc == OP_sysexit);
+}
+
+bool
+instr_may_return_to_user(instr_t *instr) {
+	int opc = instr_get_opcode(instr);
+	return (opc == OP_sysret || opc == OP_iret || opc == OP_sysexit ||
+            opc == OP_ret_far);
 }
 
 /*** WARNING!  The following rely on ordering of opcodes! ***/
@@ -3740,7 +3791,9 @@ instr_is_mbr(instr_t *instr)      /* multi-way branch */
             opc == OP_jmp_far_ind ||
             opc == OP_call_far_ind ||
             opc == OP_ret_far ||
-            opc == OP_iret);
+            opc == OP_iret ||
+            opc == OP_sysret ||
+            opc == OP_sysexit);
 }
 
 bool
@@ -3752,7 +3805,9 @@ instr_is_far_cti(instr_t *instr) /* target address has a segment and offset */
             opc == OP_jmp_far_ind ||
             opc == OP_call_far_ind ||
             opc == OP_ret_far ||
-            opc == OP_iret);
+            opc == OP_iret  ||
+            opc == OP_sysret ||
+            opc == OP_sysexit);
 }
 
 bool
@@ -3775,7 +3830,8 @@ bool
 instr_is_cti(instr_t *instr)      /* any control-transfer instruction */
 {
     return (instr_is_cbr(instr) || instr_is_mbr(instr) || instr_is_ubr(instr) ||
-            instr_is_call(instr));
+            instr_is_call(instr)
+            IF_LINUX_KERNEL(|| instr_may_return_to_user(instr)));
 }
 
 /* This routine does NOT decode the cti of instr if the raw bits are valid,
@@ -3841,9 +3897,15 @@ instr_is_cti_short_rewrite(instr_t *instr, byte *pc)
      * just like ours: instr_convert_short_meta_jmp_to_long() (PR 266292).
      */
     if (pc == NULL) {
-        if (!instr_has_allocated_bits(instr) || instr->length != CTI_SHORT_REWRITE_LENGTH)
+        if (!instr_has_allocated_bits(instr))
             return false;
         pc = instr_get_raw_bits(instr);
+        if (*pc == ADDR_PREFIX_OPCODE) {
+            pc++;
+            if (instr->length != CTI_SHORT_REWRITE_LENGTH + 1)
+                return false;
+        } else if (instr->length != CTI_SHORT_REWRITE_LENGTH)
+            return false;
     }
     if (instr_opcode_valid(instr)) {
         int opc = instr_get_opcode(instr);
@@ -4072,6 +4134,28 @@ instr_is_undefined(instr_t *instr)
             (instr_get_opcode(instr) == OP_ud2a ||
              instr_get_opcode(instr) == OP_ud2b));
 }
+
+bool
+instr_is_stringop_loop(instr_t *instr) 
+{
+    uint opc = instr_get_opcode(instr);
+    /* Copied from drmemory. */
+    return (opc == OP_rep_ins || opc == OP_rep_outs || opc == OP_rep_movs ||
+            opc == OP_rep_stos || opc == OP_rep_lods || opc == OP_rep_cmps ||
+            opc == OP_repne_cmps || opc == OP_rep_scas || opc == OP_repne_scas);
+}
+
+bool
+instr_is_stringop(instr_t *instr) 
+{
+    uint opc = instr_get_opcode(instr);
+    /* Copied from drmemory. */
+    return (instr_is_stringop_loop(instr) ||
+            opc == OP_ins || opc == OP_outs || opc == OP_movs ||
+            opc == OP_stos || opc == OP_lods || opc == OP_cmps ||
+            opc == OP_cmps || opc == OP_scas || opc == OP_scas);
+}
+
 
 /* Given a cbr, change the opcode (and potentially branch hint
  * prefixes) to that of the inverted branch condition.

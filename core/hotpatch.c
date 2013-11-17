@@ -48,10 +48,10 @@
 #include "moduledb.h"   /* macros for nudge; can be moved with nudge to os.c */
 
 #ifndef WINDOWS
-# include <string.h>
+# include "string_wrapper.h"
 #endif
 
-#include <limits.h>  /* for ULLONG_MAX */
+#include "limits_wrapper.h"  /* for ULLONG_MAX */
 
 #include "fcache.h"  /* for fcache_reset_all_caches_proactively */
 #ifdef GBOP

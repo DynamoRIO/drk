@@ -42,7 +42,7 @@
  * FIXME: assumes ELF executable compiled w/ -static
  */
 
-#include <string.h>
+#include "string_wrapper.h"
 #include <errno.h>
 #include <bfd.h>
 /* globals.h gives us stdio, stdlib, and assert */

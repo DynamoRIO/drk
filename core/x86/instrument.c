@@ -52,12 +52,13 @@
 #include "../emit.h"
 #include "../link.h"
 #include "../monitor.h" /* for mark_trace_head */
-#include <string.h> /* for strstr */
+#include "string_wrapper.h" /* for strstr */
 #include <stdarg.h> /* for varargs */
 #include "../nudge.h" /* for nudge_internal() */
 #include "../synch.h"
+#include "barrier.h"
 #ifdef LINUX
-# include <sys/time.h> /* ITIMER_* */
+//# include <sys/time.h> /* ITIMER_* */
 #endif
 
 #ifdef CLIENT_INTERFACE
@@ -79,7 +80,10 @@ extern void do_file_write(file_t f, const char *fmt, va_list ap);
  * and call it.  From there, the client can register which events it
  * wishes to receive.
  */
-#define INSTRUMENT_INIT_NAME "dr_init"
+ /* TODO(peter): dr_init does not want to show up in /proc/kallsyms, so I'm
+  * using drinit for now. This warrants further Investigation.
+  */
+#define INSTRUMENT_INIT_NAME "drinit"
 
 /* PR 250952: version check 
  * If changing this, don't forget to update:
@@ -193,6 +197,9 @@ static callback_list_t end_trace_callbacks = {0,};
 static callback_list_t fragdel_callbacks = {0,};
 static callback_list_t restore_state_callbacks = {0,};
 static callback_list_t restore_state_ex_callbacks = {0,};
+#ifdef LINUX_KERNEL
+static callback_list_t interrupt_callbacks = {0,};
+#endif
 static callback_list_t module_load_callbacks = {0,};
 static callback_list_t module_unload_callbacks = {0,};
 static callback_list_t filter_syscall_callbacks = {0,};
@@ -347,14 +354,22 @@ remove_callback(callback_list_t *vec, void (*func)(void), bool unprotect)
 static void
 add_client_lib(char *path, char *id_str, char *options)
 {
+    #ifdef LINUX_KERNEL
+    static client_id_t id_counter = 0;
+    #endif
     client_id_t id;
     shlib_handle_t client_lib;
     DEBUG_DECLARE(size_t i);
 
     ASSERT(!dynamo_initialized);
 
+#ifdef LINUX_KERNEL
+    id = id_counter;
+    id_counter += 1;
+#else
     /* if ID not specified, we'll default to 0 */
     id = (id_str == NULL) ? 0 : strtoul(id_str, NULL, 16);
+#endif
 
 #ifdef DEBUG
     /* Check for conflicting IDs */
@@ -421,9 +436,11 @@ add_client_lib(char *path, char *id_str, char *options)
             LOG(GLOBAL, LOG_INTERP, 1, "loaded %s at "PFX"-"PFX"\n",
                 path, client_libs[idx].start, client_libs[idx].end);
 #ifdef X64
+#ifndef LINUX_KERNEL
             /* provide a better error message than the heap assert */
             CLIENT_ASSERT(client_libs[idx].start < (app_pc)(ptr_int_t)INT_MAX,
                           "64-bit client library must have base in lower 2GB");
+#endif
             request_region_be_heap_reachable(client_libs[idx].start,
                                              client_libs[idx].end -
                                              client_libs[idx].start);
@@ -559,7 +576,7 @@ free_callback_list(callback_list_t *vec)
     vec->num = 0;
 }
 
-void free_all_callback_lists()
+void free_all_callback_lists(void)
 {
     free_callback_list(&exit_callbacks);
     free_callback_list(&thread_init_callbacks);
@@ -575,6 +592,9 @@ void free_all_callback_lists()
     free_callback_list(&fragdel_callbacks);
     free_callback_list(&restore_state_callbacks);
     free_callback_list(&restore_state_ex_callbacks);
+#ifdef LINUX_KERNEL
+    free_callback_list(&interrupt_callbacks);
+#endif
     free_callback_list(&module_load_callbacks);
     free_callback_list(&module_unload_callbacks);
     free_callback_list(&filter_syscall_callbacks);
@@ -599,7 +619,7 @@ instrument_exit(void)
 
     /* support dr_get_mcontext() from the exit event */
     get_thread_private_dcontext()->client_data->mcontext_in_dcontext = true;
-    call_all(exit_callbacks, int (*)(),
+    call_all(exit_callbacks, int (*)(void*),
              /* It seems the compiler is confused if we pass no var args
               * to the call_all macro.  Bogus NULL arg */
              NULL);
@@ -803,6 +823,27 @@ dr_unregister_restore_state_ex_event(bool (*func) (void *drcontext,  bool restor
 {
     return remove_callback(&restore_state_ex_callbacks, (void (*)(void))func, true);
 }
+
+#ifdef LINUX_KERNEL
+
+void
+dr_register_interrupt_event(bool (*func) (void *drcontext,
+                                          dr_interrupt_t *interrupt))
+{
+    if (!INTERNAL_OPTION(code_api)) {
+        CLIENT_ASSERT(false, "asking for interrupt event when code_api disabled");
+        return;
+    }
+    add_callback(&interrupt_callbacks, (void (*)(void))func, true);
+}
+
+bool
+dr_unregister_interrupt_event(bool (*func) (void *drcontext,
+                                            dr_interrupt_t *interrupt))
+{
+    return remove_callback(&interrupt_callbacks, (void (*)(void))func, true);
+}
+#endif
 
 void
 dr_register_thread_init_event(void (*func)(void *drcontext))
@@ -1215,7 +1256,8 @@ check_ilist_translations(instrlist_t *ilist)
             });
             CLIENT_ASSERT(instr_get_translation(in) == NULL ||
                           instr_is_our_mangling(in) ||
-                          restore_state_callbacks.num > 0,
+                          restore_state_callbacks.num > 0 ||
+                          restore_state_ex_callbacks.num > 0,
                           /* FIXME: if multiple clients, we need to check that this
                            * particular client has the callback: but we have
                            * no way to do that other than looking at library
@@ -1393,6 +1435,19 @@ instrument_restore_state(dcontext_t *dcontext, bool restore_memory,
     }
     CLIENT_ASSERT(!restore_memory || res,
                   "translation should not fail for restore_memory=true");
+    return res;
+}
+
+bool
+instrument_interrupt(dcontext_t *dcontext,
+                     dr_interrupt_t *interrupt)
+{
+    bool res = true;
+    if (interrupt_callbacks.num > 0) {
+        call_all_ret(res, = res && , , interrupt_callbacks,
+                     bool (*)(void *, dr_interrupt_t *),
+                     (void *)dcontext, interrupt);
+    }
     return res;
 }
 
@@ -1903,7 +1958,7 @@ get_num_client_threads(void)
 #ifdef WINDOWS
 /* wait for all nudges to finish */
 void
-wait_for_outstanding_nudges()
+wait_for_outstanding_nudges(void)
 {
     /* block any new nudge threads from starting */
     mutex_lock(&client_thread_count_lock);
@@ -2324,6 +2379,30 @@ dr_memory_is_in_client(const byte *pc)
     return is_in_client_lib((app_pc)pc);
 }
 
+DR_API
+void *
+dr_barrier_create(int count)
+{
+    void *barrier = (void *)HEAP_TYPE_ALLOC(GLOBAL_DCONTEXT, barrier_t, 
+                                            ACCT_CLIENT, UNPROTECTED);
+    barrier_init((barrier_t*) barrier, count);
+    return barrier;
+}
+
+DR_API
+bool
+dr_barrier_wait(void *barrier)
+{
+    return barrier_wait((barrier_t*) barrier);
+}
+
+DR_API
+void
+dr_barrier_destroy(void *barrier)
+{
+    HEAP_TYPE_FREE(GLOBAL_DCONTEXT, (barrier_t*) barrier, barrier_t,
+                   ACCT_CLIENT, UNPROTECTED);
+}
 
 DR_API 
 /* Initializes a mutex
@@ -2567,6 +2646,15 @@ dr_get_proc_address(module_handle_t lib, const char *name)
 {
     return get_proc_address(lib, name);
 }
+
+#ifdef LINUX_KERNEL
+DR_API
+bool
+dr_kernel_find_symbol(const char *name, void **address, size_t *size)
+{
+    return kernel_find_symbol(name, address, size);
+}
+#endif
 
 DR_API
 bool
@@ -3523,7 +3611,7 @@ dr_restore_reg(void *drcontext, instrlist_t *ilist, instr_t *where, reg_id_t reg
 }
 
 DR_API dr_spill_slot_t
-dr_max_opnd_accessible_spill_slot()
+dr_max_opnd_accessible_spill_slot(void)
 {
     if (SCRATCH_ALWAYS_TLS())
         return SPILL_SLOT_TLS_MAX;
@@ -4561,6 +4649,34 @@ dr_app_pc_from_cache_pc(byte *cache_pc)
     return res;
 }
 
+DR_API
+byte *
+dr_fragment_start_pc(byte *cache_pc)
+{
+    fragment_t wrapper;
+    dcontext_t *dcontext = get_thread_private_dcontext();
+    fragment_t *f = fragment_pclookup(dcontext, cache_pc, &wrapper);
+    if (f) {
+        return f->start_pc;
+    } else {
+        return NULL;
+    }
+}
+
+DR_API
+app_pc
+dr_tag_from_cache_pc(byte *cache_pc)
+{
+    fragment_t wrapper;
+    dcontext_t *dcontext = get_thread_private_dcontext();
+    fragment_t *f = fragment_pclookup(dcontext, cache_pc, &wrapper);
+    if (f) {
+        return f->tag;
+    } else {
+        return NULL;
+    }
+}
+
 /***************************************************************************
  * CUSTOM TRACES SUPPORT
  * *could use a method to unmark a trace head, would be nice if DR
@@ -4746,6 +4862,14 @@ dr_add_prefixes_to_basic_blocks(void)
     options_restore_readonly();
 }
 #endif /* UNSUPPORTED_API */
+
+DR_API
+bool
+dr_is_emulating_interrupt_return(void *drcontext)
+{
+    dcontext_t *dcontext = (dcontext_t *)drcontext;
+    return dcontext->emulating_interrupt_return;
+}
 
 #endif /* CLIENT_INTERFACE */
 

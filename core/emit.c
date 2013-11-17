@@ -48,7 +48,7 @@
 #include "instrlist.h"
 #include "instr.h"
 #include "monitor.h"
-#include <string.h> /* memcpy */
+#include "string_wrapper.h" /* memcpy */
 
 #ifdef DEBUG
 # include "decode_fast.h" /* for decode_next_pc for stress_recreate_pc */

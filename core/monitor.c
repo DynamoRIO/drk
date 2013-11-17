@@ -47,7 +47,7 @@
 #ifdef CUSTOM_TRACES
 #  include "instrument.h"
 #endif
-#include <string.h> /* for memset */
+#include "string_wrapper.h" /* for memset */
 #include "instr.h"
 #include "perscache.h"
 
@@ -1925,8 +1925,12 @@ monitor_cache_exit(dcontext_t *dcontext)
          * trace head marking within should_be_trace_head().
          */
         dcontext->trace_sysenter_exit =
+#ifdef LINUX_KERNEL
+            false;
+#else
             (TEST(FRAG_IS_TRACE, dcontext->last_fragment->flags) &&
              TEST(LINK_NI_SYSCALL, dcontext->last_exit->flags));
+#endif
     }
     dcontext->whereami = WHERE_DISPATCH;
 }

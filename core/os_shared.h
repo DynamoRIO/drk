@@ -39,6 +39,8 @@
 #ifndef OS_SHARED_H
 #define OS_SHARED_H
 
+#include "globals.h"
+
 enum {VM_ALLOCATION_BOUNDARY = 64*1024}; /* 64KB allocation size for Windows */
 
 struct _local_state_t; /* in arch_exports.h */
@@ -57,12 +59,21 @@ void os_tls_init(void);
  */
 void os_tls_exit(struct _local_state_t *local_state, bool other_thread);
 void os_thread_init(dcontext_t *dcontext);
+/* Called after arch is initilized (i.e., after gencode is initilzed). */
+void os_thread_after_arch_init(dcontext_t *dcontext);
 void os_thread_exit(dcontext_t *dcontext);
 void os_thread_under_dynamo(dcontext_t *dcontext);
 void os_thread_not_under_dynamo(dcontext_t *dcontext);
 
 void os_heap_init(void);
 void os_heap_exit(void);
+
+/* Called on each thread right before dispatching starts. This can be used to
+ * warm the fragment cache.
+ */
+void os_warm_fcache(dcontext_t* dcontext);
+
+void os_fragment_thread_reset_free(dcontext_t *dcontext);
 
 /* os provided heap routines */
 /* caller is required to handle thread synchronization and to update dynamo vm areas.
@@ -125,6 +136,8 @@ bool thread_terminate(thread_record_t *tr);
 
 bool is_thread_currently_native(thread_record_t *tr);
 
+void os_run_on_all_threads(void (*func) (void *info), void *info);
+
 /* If state beyond that in our dr_mcontext_t is needed, os-specific routines
  * must be used.  These only deal with dr_mcontext_t state.
  */
@@ -139,8 +152,9 @@ void thread_set_self_mcontext(dr_mcontext_t *mc);
 dcontext_t *get_thread_private_dcontext(void);
 void set_thread_private_dcontext(dcontext_t *dcontext);
 
+typedef uint tls_offset_t;
 /* converts a local_state_t offset to a segment offset */
-ushort os_tls_offset(ushort tls_offs);
+tls_offset_t os_tls_offset(tls_offset_t tls_offs);
 
 struct _local_state_t; /* in arch_exports.h */
 struct _local_state_extended_t; /* in arch_exports.h */
@@ -273,7 +287,7 @@ void os_syslog(syslog_event_type_t priority, uint message_id,
  * (xref PR 366195).
  */
 typedef void * shlib_handle_t;
-typedef void (*shlib_routine_ptr_t)();
+typedef void (*shlib_routine_ptr_t)(void);
 
 shlib_handle_t load_shared_library(char *name);
 #endif

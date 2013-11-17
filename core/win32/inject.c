@@ -45,7 +45,7 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <stdio.h>
-#include <string.h>
+#include "string_wrapper.h"
 
 #include "ntdll.h"  /* for get/set context etc. */
 #include "os_private.h"  /* for load_dynamo */

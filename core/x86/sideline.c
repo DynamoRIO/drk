@@ -50,11 +50,11 @@
 #    include <ntdll.h>
 #    define RUN_SIG WINAPI
 #else /* LINUX */
-#    include <sys/types.h> /* for wait */
+#    include "types_wrapper.h" /* for wait */
 #    include <sys/wait.h>  /* for wait */
 #    include <sched.h>     /* for clone */
 #    include <signal.h>    /* for SIGCHLD */
-#    include <string.h>    /* for memset */
+#    include "string_wrapper.h"    /* for memset */
 #    include <unistd.h>    /* for nice */
 #    define RUN_SIG
      typedef pid_t thread_t;

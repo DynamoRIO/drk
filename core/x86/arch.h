@@ -137,6 +137,8 @@
 #define COARSE_IB_SRC_OFFSET   ((PROT_OFFS)+offsetof(dcontext_t, coarse_exit.src_tag))
 #define COARSE_DIR_EXIT_OFFSET ((PROT_OFFS)+offsetof(dcontext_t, coarse_exit.dir_exit))
 
+#define WHERE_AM_I_OFFSET ((PROT_OFFS)+offsetof(dcontext_t, whereami))
+
 int
 reg_spill_tls_offs(reg_id_t reg);
 
@@ -144,6 +146,9 @@ reg_spill_tls_offs(reg_id_t reg);
 static inline bool
 preserve_xmm_caller_saved(void)
 {
+#ifdef LINUX_KERNEL
+    return false;
+#else
     /* PR 264138: we must preserve xmm0-5 if on a 64-bit Windows kernel.
      * PR 302107: we must preserve xmm0-15 for 64-bit Linux apps.
      * PR 306394: for now we do not preserve xmm0-7, which are technically
@@ -152,6 +157,7 @@ preserve_xmm_caller_saved(void)
     return IF_X64_ELSE(true,
                        IF_WINDOWS_ELSE(is_wow64_process(NT_CURRENT_PROCESS), false)) &&
         proc_has_feature(FEATURE_SSE) /* do xmm registers exist? */;
+#endif
 }
 
 typedef enum {
@@ -345,6 +351,21 @@ void mangle(dcontext_t *dcontext, instrlist_t *ilist, uint flags,
 /* in interp.c but not exported to non-x86 files */
 bool must_not_be_inlined(app_pc pc);
 
+#define MAX_IBL_FOUND_EXITS 2
+
+typedef struct ibl_found_exit_t {
+    /* The address of the final jmp-to-target instruction. */
+    byte *jmp_pc;
+    /* The code originally emitted at jmp_pc. This is restored during linking.
+     */
+    int original_jmp_length;
+    byte original_jmp_code[MAX_INSTR_LENGTH];
+    /* True iff this exit targets fragment prefixes. */
+    bool targets_prefix;
+    /* True iff this exit restores eflags. */
+    bool restored_eflags;
+} ibl_found_exit_t;
+
 /* A simple linker to give us indirection for patching after relocating structures */
 typedef struct patch_entry_t {
     union {
@@ -364,7 +385,8 @@ enum {
 #ifdef HASHTABLE_STATISTICS
 6 +     /* will need more only for statistics */
 #endif  
-    7, /* we use 5 normally, 7 w/ -atomic_inlined_linking and inlining */
+    7 /* we use 5 normally, 7 w/ -atomic_inlined_linking and inlining */
+    + MAX_IBL_FOUND_EXITS,
     /* Patch entry flags */
     /* Patch offset entries for dynamic updates from input variables */
     PATCH_TAKE_ADDRESS      = 0x01, /* use computed address if set, value at address otherwise */
@@ -442,6 +464,24 @@ typedef struct ibl_code_t {
     /* Note hashtable statistics are associated with the hashtable for easier use when sharing IBL routines */
     uint entry_stats_to_lookup_table_offset; /* offset to (entry_stats - lookup_table)  */
 #endif 
+    
+    /* To unlink indirect_branch_lookup_routine, we patch the final
+     * jump-to-target jmp with one of the following jmp-to-dispatch routines:
+     *   eflags -> restores eflags
+     *   prefix -> includes prefix
+     * See ibl_found_exit_t::{target_prefix, restore_eflags}.
+     *
+     * We don't have to patch the target-not-found paths because they all return
+     * to the dispatcher.
+     */
+    byte *found_unlinked;
+    byte *found_unlinked_eflags;               
+    byte *found_unlinked_prefix;
+    byte *found_unlinked_eflags_prefix;
+    /* Keep track of the target-found-exit jmps that we patch. */
+    int num_ibl_found_exits;
+    ibl_found_exit_t ibl_found_exits[MAX_IBL_FOUND_EXITS];
+    byte *indirect_branch_lookup_routine_end;
 } ibl_code_t;
     
 /* Each thread needs its own copy of these routines, but not all
@@ -454,7 +494,9 @@ typedef struct ibl_code_t {
  */
 typedef struct _generated_code_t {
     byte *fcache_enter;
+    byte *fcache_enter_end;
     byte *fcache_return;
+    byte *fcache_return_end;
 #ifdef WINDOWS_PC_SAMPLE
     byte *fcache_enter_return_end;
 #endif
@@ -531,6 +573,12 @@ typedef struct _generated_code_t {
     byte *fcache_return_coarse;
     byte *trace_head_return_coarse;
 
+#ifdef LINUX_KERNEL
+    byte *syscall_entry;
+    byte *common_vector_entry;
+    byte *vector_entry[VECTOR_END];
+#endif
+
     bool writable;
 #ifdef X64
     bool x86_mode; /* Is this code for 32-bit (x86 mode)? */
@@ -575,6 +623,29 @@ extern generated_code_t *shared_code;
 extern generated_code_t *shared_code_x86;
 #endif
 
+#ifdef LINUX_KERNEL
+/* In the kernel, we want to be able to use thread-prviate code for patching
+ * (e.g., we patch the indirect branch lookup to ensure timely interrupt
+ * delivery). However, the private code is generated to use TLS.  TODO(peter):
+ * If we want to support shared fragments, we'll have to set USE_SHARED_GENCODE
+ * to true and have the shared gencode jump to the thread-private gencode.
+ */
+ #define USE_SHARED_GENCODE_ALWAYS() false
+ #define USE_SHARED_GENCODE() false
+
+#else
+/* PR 244737: thread-private uses shared gencode on x64 */
+# define USE_SHARED_GENCODE_ALWAYS()                                  \
+     IF_LINUX_KERNEL_ELSE(false, IF_X64_ELSE(true, false))
+/* PR 212570: on linux we need a thread-shared do_syscall for our vsyscall hook,
+ * if we have TLS and support sysenter (PR 361894) 
+ */
+# define USE_SHARED_GENCODE()                                         \
+     (USE_SHARED_GENCODE_ALWAYS() || IF_LINUX(IF_HAVE_TLS_ELSE(true, false) ||) \
+      SHARED_FRAGMENTS_ENABLED() || DYNAMO_OPTION(shared_trace_ibl_routine))
+#endif
+
+
 static inline bool
 is_shared_gencode(generated_code_t *code)
 {
@@ -590,6 +661,7 @@ is_shared_gencode(generated_code_t *code)
 static inline generated_code_t *
 get_shared_gencode(dcontext_t *dcontext _IF_X64(gencode_mode_t mode))
 {
+    ASSERT(USE_SHARED_GENCODE());
 #ifdef X64
     ASSERT(mode != GENCODE_FROM_DCONTEXT || dcontext != GLOBAL_DCONTEXT
            IF_INTERNAL(IF_CLIENT_INTERFACE(|| dynamo_exited)));
@@ -606,15 +678,6 @@ get_shared_gencode(dcontext_t *dcontext _IF_X64(gencode_mode_t mode))
 #endif
 }
 
-/* PR 244737: thread-private uses shared gencode on x64 */
-#define USE_SHARED_GENCODE_ALWAYS() IF_X64_ELSE(true, false)
-/* PR 212570: on linux we need a thread-shared do_syscall for our vsyscall hook,
- * if we have TLS and support sysenter (PR 361894) 
- */
-#define USE_SHARED_GENCODE()                                         \
-    (USE_SHARED_GENCODE_ALWAYS() || IF_LINUX(IF_HAVE_TLS_ELSE(true, false) ||) \
-     SHARED_FRAGMENTS_ENABLED() || DYNAMO_OPTION(shared_trace_ibl_routine))
-
 /* returns the thread private code or GLOBAL thread shared code */
 static inline generated_code_t*
 get_emitted_routines_code(dcontext_t *dcontext _IF_X64(gencode_mode_t mode))
@@ -625,7 +688,9 @@ get_emitted_routines_code(dcontext_t *dcontext _IF_X64(gencode_mode_t mode))
     /* PR 244737: thread-private uses only shared gencode on x64 */
     /* PR 253431: to distinguish shared x86 gencode from x64 gencode, a dcontext
      * must be passed in; use get_shared_gencode() for x64 builds */
+#ifndef LINUX_KERNEL
     IF_X64(ASSERT(mode != GENCODE_FROM_DCONTEXT || dcontext != GLOBAL_DCONTEXT));
+#endif
     if (USE_SHARED_GENCODE_ALWAYS() ||
         (USE_SHARED_GENCODE() && dcontext == GLOBAL_DCONTEXT)) {
         code = get_shared_gencode(dcontext _IF_X64(mode));
@@ -642,6 +707,7 @@ ibl_code_t *get_ibl_routine_code(dcontext_t *dcontext, ibl_branch_type_t branch_
                                  uint fragment_flags);
 ibl_code_t *get_ibl_routine_code_ex(dcontext_t *dcontext, ibl_branch_type_t branch_type,
                                     uint fragment_flags _IF_X64(gencode_mode_t mode));
+ibl_code_t *get_ibl_code_from_routine_pc(dcontext_t *dcontext, cache_pc pc);
 
 /* in emit_utils.c but not exported to non-x86 files */
 byte * emit_inline_ibl_stub(dcontext_t *dcontext, byte *pc, 
@@ -653,6 +719,11 @@ byte * emit_indirect_branch_lookup(dcontext_t *dcontext, generated_code_t *code,
                                    bool target_trace_table,
                                    bool inline_ibl_head,
                                    ibl_code_t *ibl_code);
+
+byte * emit_ibl_found_unlinked_code(dcontext_t *dcontext, byte *pc,
+                                    byte *fcache_return_pc,
+                                    ibl_code_t *ibl_code, bool restore_eflags,
+                                    bool include_prefix);
 void update_indirect_branch_lookup(dcontext_t *dcontext);
 #ifdef RETURN_STACK
 byte * emit_return_lookup(dcontext_t *dcontext, byte *pc,
@@ -704,6 +775,15 @@ void emit_patch_syscall(dcontext_t *dcontext, byte *target _IF_X64(gencode_mode_
 byte * emit_do_syscall(dcontext_t *dcontext, generated_code_t *code, byte *pc,
                        byte *fcache_return_pc, bool thread_shared, bool force_int,
                        uint *syscall_offs /*OUT*/);
+#ifdef LINUX_KERNEL
+byte *emit_syscall_entry(dcontext_t *dcontext, cache_pc fcache_return,
+                         app_pc target, cache_pc pc);
+byte *emit_common_vector_entry(dcontext_t *dcontext, byte* tls_base,
+                               interrupt_handler_t handler, cache_pc pc);
+#define VECTOR_ENTRY_CODE_SIZE (2 * PUSH_IMM32_LENGTH + JMP_LONG_LENGTH)
+byte *emit_vector_entry(dcontext_t *dcontext, byte *common_vector_entry_pc,
+                        interrupt_vector_t vector, cache_pc pc);
+#endif
 
 #ifdef WINDOWS
 /* PR 282576: These separate routines are ugly, but less ugly than adding param to
@@ -824,4 +904,3 @@ byte *instr_encode_check_reachability(dcontext_t *dcontext_t, instr_t *instr, by
 byte *copy_and_re_relativize_raw_instr(dcontext_t *dcontext, instr_t *instr, byte *dst_pc);
 
 #endif /* X86_ARCH_H */
-

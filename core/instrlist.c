@@ -39,7 +39,7 @@
 #include "globals.h"
 #include "instrlist.h"
 #include "instr.h"
-#include <string.h>
+#include "string_wrapper.h"
 
 #ifdef DEBUG
 /* case 10450: give messages to clients */
@@ -398,4 +398,15 @@ void instrlist_append_instrlist(dcontext_t *dcontext,instrlist_t *ilist,
     instrlist_append(ilist,first);
     instrlist_init(appendee);
     instrlist_destroy(dcontext,appendee);
+}
+
+int
+instrlist_length(instrlist_t *ilist)
+{
+    int length = 0;
+    instr_t *i;
+    for (i = instrlist_first(ilist); i != NULL; i = instr_get_next(i)) {
+        length++;
+    }
+    return length;
 }

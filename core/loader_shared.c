@@ -43,7 +43,7 @@
 #include "globals.h"
 #include "module_shared.h"
 
-#include <string.h>
+#include "string_wrapper.h"
 
 #ifdef WINDOWS
 /* around the entire file, to be removed later when Linux loader is added */

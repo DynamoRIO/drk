@@ -58,8 +58,10 @@
 #include "globals.h"
 #include "dr_stats.h"
 #include "stats.h"
+#include "os_exports.h"
+#include "kernel_interface.h"
 
-#include <string.h>  /* for memset */
+#include "string_wrapper.h"  /* for memset */
 
 #ifdef KSTATS
 
@@ -76,9 +78,10 @@ kstat_merge_var(kstat_variable_t *destination, kstat_variable_t *source);
 
 
 static void
-kstat_init_variable(kstat_variable_t *kv)
+kstat_init_variable(kstat_variable_t *kv, const char *name)
 {
     memset(kv, 0x0, sizeof(kstat_variable_t));
+    kv->name = name;
     kv->min_cum = (timestamp_t)-1;
 }
 
@@ -92,7 +95,7 @@ kstats_evaluate_expressions(kstat_variables_t *kvars)
      * all chained KSTAT_SUM equations should appear in evaluation order
      */
 #define KSTAT_SUM(desc, name, var1, var2)               \
-        kstat_init_variable(&kvars->name);              \
+        kstat_init_variable(&kvars->name, #name);       \
         kstat_merge_var(&kvars->name, &kvars->var1);    \
         kstat_merge_var(&kvars->name, &kvars->var2);
 #define KSTAT_DEF(desc, name)   /* nothing to do */
@@ -107,7 +110,7 @@ kstats_evaluate_expressions(kstat_variables_t *kvars)
 static void
 kstat_init_variables(kstat_variables_t *ks)
 {
-#define KSTAT_DEF(desc, name) kstat_init_variable(&ks->name);
+#define KSTAT_DEF(desc, name) kstat_init_variable(&ks->name, #name);
 #include "kstatsx.h"
 #undef KSTAT_DEF
 }
@@ -181,14 +184,14 @@ kstats_main_logfile_name(void)
 }
 
 static char *
-kstats_thread_logfile_name()
+kstats_thread_logfile_name(void)
 {
     return "kstats";
 }
 #endif
 
 void
-kstat_init()
+kstat_init(void)
 {
     kstat_frequency_per_msec = get_timer_frequency();
     kstat_ignore_context_switch = KSTAT_OUTLIER_THRESHOLD_MS * kstat_frequency_per_msec;
@@ -216,7 +219,7 @@ kstat_init()
 }
 
 void
-kstat_exit()
+kstat_exit(void)
 {
     if (!DYNAMO_OPTION(kstats))
         return;
@@ -231,7 +234,7 @@ kstat_exit()
 }    
 
 static void
-kstat_calibrate()
+kstat_calibrate(void)
 {
     uint i;
     static bool kstats_calibrated = false;
@@ -281,6 +284,7 @@ kstat_thread_init(dcontext_t *dcontext)
     /* need to do this in a thread after it's initialized */
     kstat_calibrate();
 
+    RDTSC_LL(new_thread_kstats->start_time);
     KSTART_DC(dcontext, thread_measured);
 
     LOG(THREAD, LOG_STATS, 2, "threads_started\n");
@@ -320,6 +324,58 @@ dump_thread_kstats(dcontext_t *dcontext)
     kstat_report(dcontext->thread_kstats->outfile_kstats, 
                  &dcontext->thread_kstats->vars_kstats);
     print_file(dcontext->thread_kstats->outfile_kstats, "} KSTATS\n");
+}
+
+
+void
+update_lifetime_kstats(dcontext_t *dcontext)
+{
+#ifdef KSTATS
+    timestamp_t actual, sum;
+    if (dcontext->thread_kstats == NULL)
+        return;
+    KSTOP(thread_measured);
+    KSTART(thread_measured);
+    RDTSC_LL(actual);
+    actual -= dcontext->thread_kstats->start_time;
+# define KTIME(name) ({\
+    kstat_variable_t *var = &dcontext->thread_kstats->vars_kstats.name;\
+    var->total_self + var->total_sub + var->total_outliers;\
+    })
+    sum = KTIME(thread_measured) + 
+          KTIME(fcache_default) +
+          KTIME(fcache_trace_trace) +
+          KTIME(usermode) +
+          KTIME(delaying_patched_interrupt) +
+          KTIME(kernel_interrupt_handling) +
+          KTIME(user_interrupt_handling);
+# undef KTIME
+    /* Assert % error: 
+     *
+     * First, assume actual >= sum. This is true true b/c start_time is measured
+     * before thread_measured starts (in kstat_thread_init) and actual is
+     * measured after thread_measured is updated (in this function).
+     *
+     * Second, check error is <= TOL / 100 (i.e., TOL is a percentage). To avoid
+     * floating point, check (error * 100 < TOL). To avoid negative numbers, do
+     * the following:
+     *      100 * (actual - sum) / actual <= TOL 
+     *           100 - 100 * sum / actual <= TOL
+     *                -100 * sum / actual <= TOL - 100
+     *                 100 * sum / actual >= 100 - TOL
+     */
+# define TOL 2
+#if 0
+    ASSERT(TOL >= 0 && TOL <= 100);
+    ASSERT(actual >= sum);
+    ASSERT(100 * sum / actual >= (100 - TOL)) ;
+    /* Have redundant check for the release build. */
+    if (actual < sum || 100 * sum / actual < (100 - TOL)) {
+        os_terminate(dcontext, 0);
+    }
+#endif
+# undef TOL
+#endif
 }
 
 #ifdef DEBUG
@@ -382,7 +438,7 @@ kstat_thread_exit(dcontext_t *dcontext)
 
 #ifdef KSTAT_UNIT_TEST
 uint
-kstat_test()
+kstat_test(void)
 {
     KSTART(measured);
     printf("test %d\n", __LINE__);

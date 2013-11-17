@@ -32,7 +32,7 @@
 
 #include "globals.h"
 #include "instrument.h"
-#include <string.h> /* for memset */
+#include "string_wrapper.h" /* for memset */
 #ifdef WINDOWS
 # include "ntdll.h" /* for protect_virtual_memory */
 #endif

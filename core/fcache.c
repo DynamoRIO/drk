@@ -46,9 +46,9 @@
 #ifdef HOT_PATCHING_INTERFACE
 # include "hotpatch.h"
 #endif
-#include <string.h> /* for memcpy */
+#include "string_wrapper.h" /* for memcpy */
 #include <stddef.h> /* for offsetof */
-#include <limits.h> /* for UCHAR_MAX */
+#include "limits_wrapper.h" /* for UCHAR_MAX */
 #include "perscache.h"
 #include "synch.h"
 

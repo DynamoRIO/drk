@@ -89,4 +89,8 @@ DR_APP_API void dr_app_stop(void);
  */
 DR_APP_API void dr_app_take_over(void);
 
+#ifdef LINUX_KERNEL
+DR_APP_API void dr_smp_exit(void);
+#endif
+
 #endif /* _DR_APP_H_ */

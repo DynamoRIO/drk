@@ -66,7 +66,7 @@
 #include "instrument.h"
 #include "../perscache.h"
 
-#include <string.h> /* for memcpy */
+#include "string_wrapper.h" /* for memcpy */
 #include <windows.h>
 
 /* forward declarations */

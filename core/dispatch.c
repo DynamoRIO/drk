@@ -44,7 +44,7 @@
 #include "fcache.h"
 #include "monitor.h"
 #include "synch.h"
-#include <string.h> /* for strstr */
+#include "string_wrapper.h" /* for strstr */
 
 #ifdef CLIENT_INTERFACE
 # include "emit.h"
@@ -68,6 +68,10 @@
 
 #ifdef VMX86_SERVER
 # include "vmkuw.h"
+#endif
+
+#ifdef LINUX_KERNEL
+# include "kernel_interface.h"
 #endif
 
 /* forward declarations */
@@ -95,6 +99,12 @@ dispatch_exit_fcache_stats(dcontext_t *dcontext);
 static void
 handle_post_system_call(dcontext_t *dcontext);
 
+static bool
+is_kernel_exit_point(dcontext_t *dcontext);
+
+static void
+dispatch_exit_kernel(dcontext_t *dcontext);
+
 #ifdef WINDOWS
 static void
 handle_callback_return(dcontext_t *dcontext);
@@ -108,6 +118,28 @@ found_client_sysenter(void)
     CLIENT_ASSERT(false, "Is your client invoking raw system calls via vdso sysenter? "
                   "While such behavior is not recommended and can create problems, "
                   "it may work with the -sysenter_is_int80 runtime option.");
+}
+#endif
+
+#ifdef LINUX_KERNEL
+# define ASSERT_SANE_DISPATCH_TARGET(pc) do {\
+    ASSERT(!is_in_dynamo_dll((pc)));\
+    ASSERT(!is_dynamo_address((pc)));\
+    ASSERT(is_kernel_code((pc)));\
+} while (0)
+#else
+# define ASSERT_SANE_DISPATCH_TARGET(pc) do {\
+    ASSERT(!is_in_dynamo_dll((pc)));\
+    ASSERT(!is_dynamo_address((pc)));\
+    ASSERT(is_user_address((pc)));\
+} while (0)
+#endif
+
+#ifdef LINUX_KERNEL
+static void
+exiting_for_breakpoint(void)
+{
+    /* Useful for setting breakpoints. */
 }
 #endif
 
@@ -136,9 +168,16 @@ dispatch(dcontext_t *dcontext)
     ASSERT(dcontext == get_thread_private_dcontext() || pid_cached != get_process_id());
 # endif
 #endif
-
+    dcontext->current_fragment = NULL;
     dispatch_enter_dynamorio(dcontext);
     LOG(THREAD, LOG_INTERP, 2, "\ndispatch: target = "PFX"\n", dcontext->next_tag);
+    ASSERT(is_dynamo_address((app_pc) dcontext));
+#ifdef DEBUG
+    if (dcontext->next_tag != (app_pc) fake_user_return_exit_target &&
+        !is_stopping_point(dcontext, dcontext->next_tag)) {
+        ASSERT_SANE_DISPATCH_TARGET(dcontext->next_tag);
+    }
+#endif
 
     /* This is really a 1-iter loop most of the time: we only iterate
      * when we obtain a target fragment but then fail to enter the
@@ -149,9 +188,25 @@ dispatch(dcontext_t *dcontext)
             LOG(THREAD, LOG_INTERP, 1,
                 "\nFound DynamoRIO stopping point: thread %d returning to app @"PFX"\n",
                 get_thread_id(),  dcontext->next_tag);
+#ifdef LINUX_KERNEL
+            if (*dcontext->next_tag == 0xcc) {
+                /* Disable interrupts so we actually get to the breakpoint
+                 * before being interrupted. */
+                get_mcontext(dcontext)->xflags &= ~EFLAGS_IF;
+                exiting_for_breakpoint();        
+            }
+#endif
             dispatch_enter_native(dcontext);
             ASSERT_NOT_REACHED();
         }
+#ifdef LINUX_KERNEL
+        else if (is_kernel_exit_point(dcontext)) {
+            dispatch_exit_kernel(dcontext);
+            ASSERT_NOT_REACHED();
+        }
+#endif
+
+        ASSERT_SANE_DISPATCH_TARGET(dcontext->next_tag);
 
         /* Neither hotp_only nor thin_client should have any fragment 
          * fcache related work to do.
@@ -187,6 +242,9 @@ dispatch(dcontext_t *dcontext)
                                                _IF_CLIENT(false/*!for_trace*/)
                                                _IF_CLIENT(NULL));
                 SELF_PROTECT_LOCAL(dcontext, READONLY);
+                if (dcontext->emulating_interrupt_return) {
+                    STATS_INC(num_fragment_tails_iret);
+                }
             }
             ASSERT(targetf != NULL);
             if (TEST(FRAG_COARSE_GRAIN, targetf->flags)) {
@@ -206,6 +264,8 @@ dispatch(dcontext_t *dcontext)
             /* loop around and re-do monitor check */
         } while (true);
 
+        dcontext->emulating_interrupt_return = false;
+
         if (dispatch_enter_fcache(dcontext, targetf)) {
             /* won't reach here: will re-enter dispatch() with a clean stack */
             ASSERT_NOT_REACHED();
@@ -214,6 +274,46 @@ dispatch(dcontext_t *dcontext)
     } while (true);
     ASSERT_NOT_REACHED();
 }
+
+#ifdef LINUX_KERNEL
+/* Not part of is_stopping_point because is_stopping_point is called by code
+ * other than dispatch.
+ */
+static bool
+is_kernel_exit_point(dcontext_t *dcontext)
+{
+    ASSERT(!TESTANY(LINK_IRET | LINK_SYSRET, dcontext->last_exit->flags) ||
+    		dcontext->next_tag == (app_pc) fake_user_return_exit_target);
+    if (TEST(LINK_IRET, dcontext->last_exit->flags)) {
+        if (emulate_interrupt_return(dcontext)) {
+            dcontext->emulating_interrupt_return = true;
+        } else {
+            LOG(THREAD, LOG_INTERP, 1, "dispatching native iret from frag @ %p\n",
+                dcontext->last_fragment->start_pc);
+            /* TODO(peter) We could set this in build_bb_ilist rather than setting
+             * fake_user_return_exit_target. */
+            ASSERT(!interrupts_enabled(dcontext));  
+            /* TODO(peter): iret can generate exceptions. We should handle these.
+             */
+            dcontext->next_tag = (app_pc) dr_native_iret;
+            return true;
+        } 
+    } else if (TEST(LINK_SYSRET, dcontext->last_exit->flags)) {
+        ASSERT(!DYNAMO_OPTION(optimize_sys_call_ret));
+        LOG(THREAD, LOG_INTERP, 1, "dispatching native sysret from frag @ %p\n",
+            dcontext->last_fragment->start_pc);
+    	/* TODO(peter) We could set this in build_bb_ilist rather than setting
+    	 * fake_user_return_exit_target. */
+        ASSERT(!interrupts_enabled(dcontext));  
+        /* TODO(peter): sysret can generate exceptions. We should handle these.
+         */
+    	dcontext->next_tag = (app_pc) native_sysret;
+    	return true;
+    }
+    ASSERT(dcontext->next_tag != (app_pc) fake_user_return_exit_target);
+    return false;
+}
+#endif
 
 /* returns true if pc is a point at which DynamoRIO should stop interpreting */
 bool
@@ -226,13 +326,18 @@ is_stopping_point(dcontext_t *dcontext, app_pc pc)
          dcontext->native_exec_postsyscall != NULL)
 #ifdef DR_APP_EXPORTS
         || (!automatic_startup && 
-            (pc == (app_pc)dynamorio_app_exit ||
+            (pc == (app_pc)dr_smp_exit ||
+             pc == (app_pc)dynamorio_app_exit ||
              /* FIXME: Is this a holdover from long ago? dymamo_thread_exit
               * should not be called from the cache.
               */
              pc == (app_pc)dynamo_thread_exit ||
              pc == (app_pc)dr_app_stop))
 #endif
+#ifdef LINUX_KERNEL
+        ||   (is_kernel_code(pc) && *pc == 0xcc) /* int3 opcode */
+#endif
+
 #ifdef WINDOWS
         /* we go all the way to NtTerminateThread/NtTerminateProcess */
 #else /* LINUX */
@@ -334,6 +439,7 @@ static bool
 dispatch_enter_fcache(dcontext_t *dcontext, fragment_t *targetf)
 {
     fcache_enter_func_t fcache_enter;
+    dcontext->current_fragment = targetf;
     ASSERT(targetf != NULL);
     /* ensure we don't take over when we should be going native */
     ASSERT(dcontext->native_exec_postsyscall == NULL);
@@ -425,7 +531,7 @@ dispatch_enter_fcache(dcontext_t *dcontext, fragment_t *targetf)
     }
 #endif
 
-#if defined(LINUX) && defined(DEBUG)
+#if defined(LINUX) && defined(DEBUG) && !defined(LINUX_KERNEL)
     /* i#238/PR 499179: check that libc errno hasn't changed.  It's
      * not worth actually saving+restoring since to we'd also need to
      * preserve on clean calls, a perf hit.  Better to catch all libc
@@ -473,6 +579,7 @@ enter_fcache(dcontext_t *dcontext, fcache_enter_func_t entry, cache_pc pc)
 
     /* prepare to enter fcache */
     LOG(THREAD, LOG_DISPATCH, 4, "fcache_enter = "PFX", target = "PFX"\n", entry, pc);
+    ASSERT(is_dynamo_address(pc));
     set_fcache_target(dcontext, pc);
     ASSERT(pc != NULL);
 
@@ -595,9 +702,38 @@ dispatch_enter_native(dcontext_t *dcontext)
     }
     set_fcache_target(dcontext, dcontext->next_tag);
     dcontext->whereami = WHERE_APP;
+    LOG(THREAD, LOG_INTERP, 1, "Going native ... \n");
     (*go_native)(dcontext);
     ASSERT_NOT_REACHED();
 }
+
+#ifdef LINUX_KERNEL
+static void
+dispatch_exit_kernel(dcontext_t *dcontext) {
+    /* Kill any trace in progress. */
+    if (is_building_trace(dcontext)) {
+        LOG(THREAD, LOG_INTERP, 1, "squashing trace-in-progress\n");
+        trace_abort(dcontext);
+    }
+    /* We assume that next_tag was set by is_kernel_exit_point to the
+     * appropriate kernel exit stub. */
+    set_fcache_target(dcontext, dcontext->next_tag);
+    enter_nolinking(dcontext, NULL, false);
+    LOG(THREAD, LOG_INTERP, 1, "Returning to user mode ... \n");
+    /* Stopped in dispatch_exit_fcache_stats. */
+    if (DYNAMO_OPTION(optimize_sys_call_ret)) {
+        dcontext->whereami = WHERE_FCACHE;
+        KSTART(fcache_default);
+    } else {
+        ASSERT(false);
+        dcontext->whereami = WHERE_USERMODE;
+        KSTART(usermode);
+    }
+    ASSERT_OWN_NO_LOCKS();
+    fcache_enter_routine(dcontext)(dcontext);
+    ASSERT_NOT_REACHED();
+}
+#endif
 
 static void
 dispatch_enter_dynamorio(dcontext_t *dcontext)
@@ -610,7 +746,8 @@ dispatch_enter_dynamorio(dcontext_t *dcontext)
     where_am_i_t wherewasi = dcontext->whereami;
 #ifdef LINUX
     if (!(wherewasi == WHERE_FCACHE || wherewasi == WHERE_TRAMPOLINE ||
-          wherewasi == WHERE_APP)) {
+          wherewasi == WHERE_APP
+          IF_LINUX_KERNEL(|| wherewasi == WHERE_USERMODE))) {
         /* This is probably our own syscalls hitting our own sysenter
          * hook (PR 212570), since we're not completely user library
          * independent (PR 206369).
@@ -629,7 +766,8 @@ dispatch_enter_dynamorio(dcontext_t *dcontext)
     }
 #endif
     ASSERT(wherewasi == WHERE_FCACHE || wherewasi == WHERE_TRAMPOLINE ||
-           wherewasi == WHERE_APP);
+           wherewasi == WHERE_APP
+           IF_LINUX_KERNEL(|| wherewasi == WHERE_USERMODE));
     dcontext->whereami = WHERE_DISPATCH;
     ASSERT_LOCAL_HEAP_UNPROTECTED(dcontext);
     ASSERT(check_should_be_protected(DATASEC_RARELY_PROT));
@@ -638,7 +776,7 @@ dispatch_enter_dynamorio(dcontext_t *dcontext)
      */
     ASSERT_OWN_NO_LOCKS();
 
-#if defined(LINUX) && defined(DEBUG)
+#if defined(LINUX) && defined(DEBUG) && !defined(LINUX_KERNEL)
     /* i#238/PR 499179: check that libc errno hasn't changed */
     dcontext->libc_errno = get_libc_errno();
 #endif
@@ -663,7 +801,13 @@ dispatch_enter_dynamorio(dcontext_t *dcontext)
     if (wherewasi == WHERE_APP) { /* first entrance */
         ASSERT(dcontext->last_exit == get_starting_linkstub()
                /* new thread */
-               || IF_WINDOWS_ELSE_0(dcontext->last_exit == get_asynch_linkstub()));
+               || IF_WINDOWS_ELSE_0(dcontext->last_exit == get_asynch_linkstub())
+#ifdef LINUX_KERNEL
+               /* We returned to native inside of the kernel because of an int3
+                * then we re-entered through a system call or an interrupt. */
+               || IS_KERNEL_ENTRY_LINKSTUB(dcontext->last_exit)
+#endif
+               );
     } else {
         ASSERT(dcontext->last_exit != NULL); /* MUST be set, if only to a fake linkstub_t */
         /* cache last_exit's fragment */
@@ -691,6 +835,13 @@ dispatch_enter_dynamorio(dcontext_t *dcontext)
             
             dcontext->next_tag = EXIT_TARGET_TAG(dcontext, dcontext->last_fragment,
                                                  dcontext->last_exit);
+        } else if (dcontext->last_exit == get_ibl_unlinked_found_linkstub()) {
+            fragment_t *ibl_target, wrapper;
+            ASSERT(in_fcache(dcontext->next_tag));
+            ibl_target = fragment_pclookup(dcontext, dcontext->next_tag,
+                                           &wrapper);
+            ASSERT(ibl_target != NULL);
+            dcontext->next_tag = ibl_target->tag;
         } else {
             /* get src info from coarse ibl exit into the right place */
             if (DYNAMO_OPTION(coarse_units) &&
@@ -700,6 +851,12 @@ dispatch_enter_dynamorio(dcontext_t *dcontext)
 
         dispatch_exit_fcache_stats(dcontext);
         KSTOP_NOT_MATCHING(dispatch_num_exits);
+        /* Update the total measured time. This is a convenient place to do this
+         * because thread_measured is at the top of the kstack.
+         */
+        DOKSTATS({
+            update_lifetime_kstats(dcontext);
+        });
     }
     KSTART(dispatch_num_exits); /* KSWITCHed next time around for a better explanation */
 
@@ -707,6 +864,7 @@ dispatch_enter_dynamorio(dcontext_t *dcontext)
         if (get_at_syscall(dcontext))
             handle_post_system_call(dcontext);
 
+#ifndef LINUX_KERNEL
         /* A non-ignorable syscall or cb return ending a bb must be acted on
          * We do it here to avoid becoming couldbelinking twice.
          *
@@ -716,6 +874,7 @@ dispatch_enter_dynamorio(dcontext_t *dcontext)
             handle_system_call(dcontext);
             /* will return here if decided to skip the syscall; else, back to dispatch() */
         }
+#endif
 #ifdef WINDOWS
         else if (TEST(LINK_CALLBACK_RETURN, dcontext->last_exit->flags)) {
             handle_callback_return(dcontext);
@@ -929,7 +1088,7 @@ dispatch_exit_fcache(dcontext_t *dcontext)
     }
 #endif
 
-#ifdef LINUX
+#if defined(LINUX) && !defined(LINUX_KERNEL)
     if (dcontext->signals_pending) {
         /* FIXME: can overflow app stack if stack up too many signals
          * by interrupting prev handlers -- exacerbated by RAC lack of
@@ -937,6 +1096,12 @@ dispatch_exit_fcache(dcontext_t *dcontext)
          * executing every single sigreturn!
          */
         receive_pending_signal(dcontext);
+    }
+#endif
+
+#ifdef LINUX_KERNEL
+    if (has_pending_interrupt(dcontext)) {
+        receive_pending_interrupt(dcontext);
     }
 #endif
 
@@ -1040,6 +1205,41 @@ dispatch_exit_fcache_stats(dcontext_t *dcontext)
     fragment_t *last_f;
     fragment_t coarse_f;
 #endif
+#ifdef DEBUG
+    DOKSTATS({
+        /* According to comment where fcache_default or fcache_trace_trace is
+         * pushed, it can be switched to fcache_bb_bb or fcache_bb_trace,
+         * however these switches never happen. I'm putting this assertion in
+         * to verify that claim.
+         */
+        kstat_stack_t *ks = &dcontext->thread_kstats->stack_kstats; 
+        kstat_variable_t *var = ks->node[ks->depth - 1].var;
+        kstat_variables_t *vars = &dcontext->thread_kstats->vars_kstats;
+        ASSERT(var == &vars->fcache_default ||
+               var == &vars->fcache_trace_trace
+               IF_LINUX_KERNEL(|| var == &vars->usermode
+                               /* Happens when dr_redirect_execution is called
+                                * within a clean callee and there's a pending
+                                * interrupt. */
+                               || var == &vars->kernel_interrupt_handling
+                               || var == &vars->kernel_interrupt_fcache_enter
+                               || var == &vars->kernel_interrupt_fcache_return
+                               || var == &vars->kernel_interrupt_ibl
+                               || var == &vars->kernel_interrupt_frag_success_page_fault
+                               || var == &vars->kernel_interrupt_frag_success_other_sync
+                               || var == &vars->kernel_interrupt_frag_success_async
+                               || var == &vars->kernel_interrupt_frag_delay_dispatch
+                               || var == &vars->kernel_interrupt_frag_delay_pc
+                               || var == &vars->delaying_patched_interrupt
+                               || var == &vars->kernel_interrupt_handling
+                               || var == &vars->user_interrupt_handling));
+#ifdef LINUX_KERNEL
+        if (var == &vars->delaying_patched_interrupt) {
+            ASSERT(dcontext->last_exit == get_client_linkstub());
+        }
+#endif
+    });
+#endif
 
 #ifdef PROFILE_RDTSC
     if (dynamo_options.profile_times) {
@@ -1075,6 +1275,7 @@ dispatch_exit_fcache_stats(dcontext_t *dcontext)
         LOG(THREAD, LOG_DISPATCH, 2, "Exit from system call\n");
         STATS_INC(num_exits_syscalls);
 # ifdef CLIENT_INTERFACE
+#  ifdef KSTATS
         /* PR 356503: clients using libraries that make syscalls, invoked from
          * a clean call, will not trigger the whereami check below: so we
          * locate here via mismatching kstat top-of-stack.
@@ -1084,6 +1285,7 @@ dispatch_exit_fcache_stats(dcontext_t *dcontext)
                 found_client_sysenter();
             }
         });
+#  endif
 # endif
         KSTOP_NOT_PROPAGATED(syscall_fcache);
         return;
@@ -1097,6 +1299,12 @@ dispatch_exit_fcache_stats(dcontext_t *dcontext)
     else if (dcontext->last_exit == get_ibl_deleted_linkstub()) {
         LOG(THREAD, LOG_DISPATCH, 2, "Exit from fragment deleted but hit in ibl\n");
         STATS_INC(num_exits_ibl_deleted);
+        KSWITCH_STOP_NOT_PROPAGATED(fcache_default);
+        return;
+    }
+    else if (dcontext->last_exit == get_ibl_unlinked_found_linkstub()) {
+        LOG(THREAD, LOG_DISPATCH, 2, "Exit from interrupt in ibl hit in ibl\n");
+        STATS_INC(num_exits_ibl_unlinked_found);
         KSWITCH_STOP_NOT_PROPAGATED(fcache_default);
         return;
     }
@@ -1174,6 +1382,32 @@ dispatch_exit_fcache_stats(dcontext_t *dcontext)
         return;
     }
 # endif
+#ifdef LINUX_KERNEL
+    else if (dcontext->last_exit == get_syscall_entry_linkstub()) {
+        LOG(THREAD, LOG_DISPATCH, 2,
+            "Returning to kernel via syscall (i.e., exit from usermode)\n");
+        STATS_INC(num_syscalls);
+        if (DYNAMO_OPTION(optimize_sys_call_ret)) {
+            KSTOP_NOT_PROPAGATED(fcache_default);
+        } else {
+            KSTOP_NOT_PROPAGATED(usermode);
+        }
+        return;
+    }
+    else if (dcontext->last_exit == get_user_interrupt_entry_linkstub()) {
+        LOG(THREAD, LOG_DISPATCH, 2,
+            "Entry from userspace through an interrupt\n");
+        STATS_INC(num_exits_interrupts);
+        KSTOP_NOT_PROPAGATED(user_interrupt_handling);
+        return;
+    } else if (dcontext->last_exit == get_kernel_interrupt_entry_linkstub()) {
+        LOG(THREAD, LOG_DISPATCH, 2,
+            "Entry from kernel through an interrupt\n");
+        STATS_INC(num_exits_interrupts);
+        KSTOP_NOT_MATCHING_NOT_PROPAGATED(kernel_interrupt_handling);
+        return;
+    }
+#endif
 
     /* normal exits from real fragments, though the last_fragment may
      * be deleted and we are working off a copy of its important fields
@@ -1375,8 +1609,8 @@ dispatch_exit_fcache_stats(dcontext_t *dcontext)
         ASSERT(LINKSTUB_DIRECT(dcontext->last_exit->flags) ||
                IS_COARSE_LINKSTUB(dcontext->last_exit));
 
-        if (TESTANY(LINK_NI_SYSCALL_ALL,
-                    dcontext->last_exit->flags)) {
+        if (IF_LINUX_KERNEL_ELSE(false,
+                TESTANY(LINK_NI_SYSCALL_ALL, dcontext->last_exit->flags))) {
             LOG(THREAD, LOG_DISPATCH, 2, " (block ends with syscall)");
             STATS_INC(num_exits_dir_syscall);
             /* FIXME: it doesn't matter whether next_f exists or not we're still in a syscall  */
@@ -1563,6 +1797,8 @@ adjust_syscall_continuation(dcontext_t *dcontext)
 }
 #endif
 
+
+#ifndef LINUX_KERNEL
 /* used to execute a system call instruction in the code cache 
  * dcontext->next_tag is store elsewhere and restored after the system call
  * for resumption of execution post-syscall
@@ -1814,6 +2050,7 @@ handle_system_call(dcontext_t *dcontext)
     }
     SELF_PROTECT_LOCAL(dcontext, READONLY);
 }
+#endif
 
 static void
 handle_post_system_call(dcontext_t *dcontext)

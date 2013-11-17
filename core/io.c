@@ -42,7 +42,8 @@
 /* FIXME: failure modes should be more gracefull then failing asserts in most places */
 
 #include "globals.h"
-#include <string.h>
+#include "string_wrapper.h"
+#include <linux/kernel.h> // for vsscanf
 #include <stdarg.h> /* for varargs */
 
 #define VA_ARG_CHAR2INT
@@ -114,6 +115,7 @@ ulong_to_str(ulong num, int base, char *buf, int decimal, bool caps)
     return p;
 }
 
+#ifndef LINUX_KERNEL
 /* assumes that d > 0 */
 static long
 double2int(double d)
@@ -169,7 +171,9 @@ double_to_str(double d, int decimal, char *buf, bool force_dot, bool suppress_ze
     ASSERT(i<BUF_SIZE);  /* make sure don't overflow buffer */
     return buf;
 }
+#endif
 
+#ifndef LINUX_KERNEL
 static char *
 double_to_exp_str(double d, int exp, int decimal, char * buf, bool force_dot, bool suppress_zeros, bool caps)
 {
@@ -202,6 +206,7 @@ double_to_exp_str(double d, int exp, int decimal, char * buf, bool force_dot, bo
     ASSERT(i < BUF_SIZE); /* make sure don't overflow buffer */
     return buf;
 }
+#endif
 
 
 int
@@ -438,6 +443,10 @@ our_vsnprintf(char *s, size_t max, const char *fmt, va_list ap)
             case 'E':
             case 'f':
                 {
+#ifdef LINUX_KERNEL
+                  ASSERT_NOT_REACHED();
+                  str = "FLOATING POINT NOT SUPPORTED.";
+#else
                     bool caps = (*c == 'E') || (*c == 'G');
                     /* pretty sure will always be promoted to a double in arg list */
                     double val = va_arg(ap, double);
@@ -493,6 +502,7 @@ our_vsnprintf(char *s, size_t max, const char *fmt, va_list ap)
                     }
                     /* print with exponent */
                     str = double_to_exp_str(d, exp, decimal, buf, pound_flag, is_g && !pound_flag, caps);
+                    #endif
                     break;
                 }
             case 'n':
@@ -622,6 +632,7 @@ our_snprintf(char *s, size_t max, const char *fmt, ...)
 }
 
 #ifdef LINUX
+# ifndef LINUX_KERNEL
 /* i#238/PR 499179: avoid touching errno: our __errno_location doesn't
  * affect libc and we're using libc's sscanf.
  *
@@ -642,5 +653,6 @@ our_sscanf(const char *str, const char *fmt, ...)
     va_end(ap);
     return res;
 }
+# endif
 #endif
 

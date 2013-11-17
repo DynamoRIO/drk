@@ -55,7 +55,7 @@
 /* for getenv */
 #include <stdlib.h>
 /* for rindex or strstr */
-#include <string.h>
+#include "string_wrapper.h"
 
 #if VERBOSE
 #define pf(fmt, args...) printf(fmt , ## args)

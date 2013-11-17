@@ -50,6 +50,9 @@ void
 kstat_thread_exit(dcontext_t *dcontext);
 void
 dump_thread_kstats(dcontext_t *dcontext);
+/* Can only be called when thread_measured is at the top of the kstack. */
+void
+update_lifetime_kstats(dcontext_t *dcontext);
 
 /* for debugging only */
 #ifdef DEBUG
@@ -59,6 +62,7 @@ kstats_dump_stack(dcontext_t *dcontext);
 
 /* Kstat variable */
 typedef struct {
+    const char *name;
     /* number of executions */
     uint num_self;
     /* Currently only time data - more performance counters could be
@@ -123,7 +127,9 @@ typedef struct {
     thread_id_t       thread_id;
     kstat_variables_t vars_kstats;
     kstat_stack_t     stack_kstats;
-    file_t           outfile_kstats;
+    file_t            outfile_kstats;
+    timestamp_t       start_time; 
+    timestamp_t       current_time;
 } thread_kstats_t;
 
 extern timestamp_t

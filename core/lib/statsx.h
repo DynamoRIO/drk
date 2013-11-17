@@ -380,11 +380,17 @@
     STATS_DEF("App writes emulated un-successfully", num_emulated_write_failures)
 
     STATS_DEF("Fragments generated, bb and trace", num_fragments)
+#ifdef LINUX_KERNEL
+    STATS_DEF("Fragments tails generated b/c of iret", num_fragment_tails_iret)
+#endif
     RSTATS_DEF("Basic block fragments generated", num_bbs)
     RSTATS_DEF("Trace fragments generated", num_traces)
     STATS_DEF("Trace fragments aborted for any reason", num_aborted_traces)
     STATS_DEF("Trace fragments aborted: shared race", num_aborted_traces_race)
     STATS_DEF("Trace fragments aborted: client bad mod", num_aborted_traces_client)
+#ifdef LINUX_KERNEL
+    STATS_DEF("Trace fragments aborted: interrupt", num_aborted_traces_interrupt)
+#endif
     STATS_DEF("Trace building aborted: shared race", num_trace_building_race)
     STATS_DEF("Trace building truncated: next bb deleted", num_trace_next_bb_deleted)
     STATS_DEF("Trace building reset: no trace head",
@@ -550,6 +556,8 @@
     STATS_DEF("Recreations via app re-decode", recreate_via_app_ilist)
     STATS_DEF("Recreations via stored info", recreate_via_stored_info)
     STATS_DEF("Recreation spill value restores", recreate_spill_restores)
+    STATS_DEF("Recreation eflags value restores", recreate_eflags_restores)
+    STATS_DEF("Recreation return restores", recreate_return_restores)
     STATS_DEF("IBL stubs updated on table resize", num_ibl_stub_resize_updates)
 
     STATS_DEF("Patched fragments", emit_patched_fragments)
@@ -677,6 +685,7 @@
     STATS_DEF("Fcache exits, system call executions", num_exits_syscalls)
     STATS_DEF("Fcache exits, flushed due to code mod", num_exits_code_mod_flush)
     STATS_DEF("Fcache exits, deleted but hit in ibl", num_exits_ibl_deleted)
+    STATS_DEF("Fcache exits, interrupted but hit in ibl", num_exits_ibl_unlinked_found)
 #ifdef LINUX
     STATS_DEF("Fcache exits, sigreturn", num_exits_sigreturn)
 #else /* WINDOWS */
@@ -958,8 +967,8 @@
     STATS_DEF("Peak wasted vmm space due to alignment", peak_vmm_vsize_wasted)
     STATS_DEF("Allocations using multiple vmm blocks", vmm_multi_block_allocs)
     STATS_DEF("Blocks used for multi-block allocs", vmm_multi_blocks)
-    STATS_DEF("Our virtual memory in use (bytes)", vmm_vsize_used)
-    STATS_DEF("Our peak virtual memory in use (bytes)", peak_vmm_vsize_used)
+    RSTATS_DEF("Our virtual memory in use (bytes)", vmm_vsize_used)
+    RSTATS_DEF("Our peak virtual memory in use (bytes)", peak_vmm_vsize_used)
     STATS_DEF("Number of landing pad areas allocated", num_landing_pad_areas)
     STATS_DEF("Total times mutexes acquired", total_acquired)
     STATS_DEF("Total times mutexes contended", total_contended)
@@ -1175,3 +1184,19 @@
     STATS_DEF("GBOP violations, BAD", gbop_violations)
     STATS_DEF("Nudges", num_nudges)
     STATS_DEF("Doubled-up nudges", num_pending_nudges)
+
+#ifdef LINUX_KERNEL
+    STATS_DEF("system call entries", num_syscalls);
+    STATS_DEF("interrupt exits handled by dispatcher", num_exits_interrupts);
+    STATS_DEF("interrupt patches", num_fragment_interrupt_patches);
+    STATS_DEF("interrupt entries", num_interrupts);
+    STATS_DEF("interrupt entries", num_user_interrupts);
+    STATS_DEF("interrupts in ibl", num_ibl_interrupts);
+    STATS_DEF("interrupts in fcache enter", num_fcache_enter_interrupts);
+    STATS_DEF("interrupts in fcache return", num_fcache_return_interrupts);
+    STATS_DEF("interrupts in fragments (delayed)", num_delayed_frag_intr);
+    STATS_DEF("interrupts in fragments (not delayed)", num_ndelayed_frag_intr);
+    STATS_DEF("swapgs in user interrupt handler", num_intr_swap_gs_user);
+    STATS_DEF("swapgs in kernel interrupt handler", num_intr_swap_gs_kernel);
+#endif
+

@@ -43,6 +43,9 @@
 #ifndef _ARCH_EXPORTS_H_
 #define _ARCH_EXPORTS_H_ 1
 
+#include "configure.h"
+#include "os_shared.h"
+
 /* stack slot width */
 #define XSP_SZ (sizeof(reg_t))
 
@@ -131,22 +134,22 @@ typedef struct _local_state_extended_t {
  * accessible off of fs:.  But, the actual segment offset varies, so
  * os_tls_offset() must be used to obtain an fs: offset from a slot.
  */
-#define TLS_XAX_SLOT             ((ushort)offsetof(spill_state_t, xax))
-#define TLS_XBX_SLOT             ((ushort)offsetof(spill_state_t, xbx))
-#define TLS_XCX_SLOT             ((ushort)offsetof(spill_state_t, xcx))
-#define TLS_XDX_SLOT             ((ushort)offsetof(spill_state_t, xdx))
-#define TLS_DCONTEXT_SLOT        ((ushort)offsetof(spill_state_t, dcontext))
+#define TLS_XAX_SLOT             ((tls_offset_t)offsetof(spill_state_t, xax))
+#define TLS_XBX_SLOT             ((tls_offset_t)offsetof(spill_state_t, xbx))
+#define TLS_XCX_SLOT             ((tls_offset_t)offsetof(spill_state_t, xcx))
+#define TLS_XDX_SLOT             ((tls_offset_t)offsetof(spill_state_t, xdx))
+#define TLS_DCONTEXT_SLOT        ((tls_offset_t)offsetof(spill_state_t, dcontext))
 
 #define TABLE_OFFSET             (offsetof(local_state_extended_t, table_space))
-#define TLS_MASK_SLOT(btype)     ((ushort)(TABLE_OFFSET                         \
+#define TLS_MASK_SLOT(btype)     ((tls_offset_t)(TABLE_OFFSET                         \
                                   + offsetof(table_stat_state_t, table[btype])  \
                                   + offsetof(lookup_table_access_t, hash_mask)))
-#define TLS_TABLE_SLOT(btype)    ((ushort)(TABLE_OFFSET                         \
+#define TLS_TABLE_SLOT(btype)    ((tls_offset_t)(TABLE_OFFSET                         \
                                   + offsetof(table_stat_state_t, table[btype])  \
                                   + offsetof(lookup_table_access_t, lookuptable)))
   
 #ifdef HASHTABLE_STATISTICS
-# define TLS_HTABLE_STATS_SLOT   ((ushort)(offsetof(local_state_extended_t,     \
+# define TLS_HTABLE_STATS_SLOT   ((tls_offset_t)(offsetof(local_state_extended_t,     \
                                                     table_space)                \
                                   + offsetof(table_stat_state_t, stats)))
 #endif
@@ -404,9 +407,12 @@ static inline int64 atomic_add_exchange_int64(volatile int64 *var, int64 value) 
 #  define ATOMIC_COMPARE_EXCHANGE_PTR ATOMIC_COMPARE_EXCHANGE
 # endif
 # define SPINLOCK_PAUSE()   __asm__ __volatile__("pause")
-# define RDTSC_LL(llval)                        \
-    __asm__ __volatile__                        \
-    ("rdtsc" : "=A" (llval))
+# define RDTSC_LL(llval) do {\
+    uint32 hi, lo;\
+    __asm__ __volatile__ ("rdtsc" : "=a"(lo), "=d"(hi));\
+    llval = ((uint64) lo) | (((uint64) hi) << 32);\
+} while (0)
+
 # define SERIALIZE_INSTRUCTIONS()                                       \
     __asm__ __volatile__                                                \
     ("xor %%eax, %%eax; cpuid" : : : "eax", "ebx", "ecx", "edx");
@@ -611,6 +617,7 @@ enum {
      */
     TRANSLATE_IDENTICAL      = 0x0001, /* otherwise contiguous */
     TRANSLATE_OUR_MANGLING   = 0x0002, /* added by our own mangling (PR 267260) */
+    TRANSLATE_CTI_TRANSLATION= 0x0004,
 }; /* no typedef b/c we need ushort not int */
 
 /* Translation table entry (case 3559).
@@ -649,6 +656,8 @@ typedef enum {
     RECREATE_FAILURE,
     RECREATE_SUCCESS_PC,
     RECREATE_SUCCESS_STATE,
+    RECREATE_DELAY_UNTIL_DISPATCH,
+    RECREATE_DELAY_UNTIL_PC,
 } recreate_success_t;
 
 recreate_success_t 
@@ -666,6 +675,8 @@ bool is_indirect_branch_lookup_routine(dcontext_t *dcontext, cache_pc pc);
 bool in_generated_routine(dcontext_t *dcontext, cache_pc pc);
 bool in_context_switch_code(dcontext_t *dcontext, cache_pc pc);
 bool in_indirect_branch_lookup_code(dcontext_t *dcontext, cache_pc pc);
+bool in_fcache_enter_code(dcontext_t *dcontext_t, cache_pc pc);
+bool in_fcache_return_code(dcontext_t *dcontext_t, cache_pc pc);
 cache_pc get_fcache_target(dcontext_t *dcontext);
 void set_fcache_target(dcontext_t *dcontext, cache_pc value);
 void copy_mcontext(dr_mcontext_t *src, dr_mcontext_t *dst);
@@ -857,8 +868,6 @@ void
 instrlist_disassemble(dcontext_t *dcontext, app_pc tag,
                       instrlist_t *ilist, file_t outfile);
 #endif /* INTERNAL || DEBUG || CLIENT_INTERFACE */
-
-/* in emit_utils.c */
 
 static inline bool
 use_addr_prefix_on_short_disp(void)
@@ -1073,6 +1082,8 @@ void unlink_direct_exit(dcontext_t *dcontext, fragment_t *f, linkstub_t *l);
 void link_indirect_exit(dcontext_t *dcontext, fragment_t *f, linkstub_t *l,
                         bool hot_patch);
 void unlink_indirect_exit(dcontext_t *dcontext, fragment_t *f, linkstub_t *l);
+void unlink_ibl_routine(dcontext_t *dcontext, cache_pc interrupted_ibl_pc);
+void link_ibl_routine(dcontext_t *dcontext, cache_pc interrupted_ibl_pc);
 void insert_fragment_prefix(dcontext_t *dcontext, fragment_t *f);
 int fragment_prefix_size(uint flags);
 void update_indirect_exit_stub(dcontext_t *dcontext, fragment_t *f, linkstub_t *l);
@@ -1127,6 +1138,7 @@ patch_coarse_exit_prefix(dcontext_t *dcontext, coarse_info_t *info);
 
 enum {
     MAX_INSTR_LENGTH = 17,
+    INTN_LENGTH = 2,
     /* size of 32-bit-offset jcc instr, assuming it has no
      * jcc branch hint!
      */
@@ -1650,9 +1662,10 @@ instrlist_encode(dcontext_t *dcontext, instrlist_t *ilist, byte *pc,
 /* in mangle.c */
 void insert_clean_call_with_arg_jmp_if_ret_true(dcontext_t *dcontext, instrlist_t *ilist,
         instr_t *instr, void *callee, int arg, app_pc jmp_tag, instr_t *jmp_instr);
+void clean_call_clear_saved_interrupt_flag(dcontext_t *dcontext, byte* sp);
 void
 insert_push_immed_ptrsz(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
-                        ptr_int_t val);
+                        ptr_uint_t val);
 #ifdef LINUX
 void mangle_clone_code(dcontext_t *dcontext, byte *pc, bool skip);
 bool mangle_syscall_code(dcontext_t *dcontext, fragment_t *f, byte *pc, bool skip);
@@ -1756,7 +1769,7 @@ typedef struct dr_jmp_buf_t {
     /* optimization: can we trust callee-saved regs r8,r9,r10,r11 and not save them? */
     reg_t r8, r9, r10, r11, r12, r13, r14, r15;
 #endif
-#if defined(LINUX) && defined(DEBUG)
+#if defined(LINUX) && defined(DEBUG) && !defined(LINUX_KERNEL)
     /* i#226/PR 492568: we avoid the cost of storing this by using the
      * mask in the fault's signal frame, but we do record it in debug
      * build to verify our assumptions
@@ -1826,5 +1839,109 @@ void dr_setjmp_sigmask(dr_jmp_buf_t *buf);
 # define APP_PARAM(mc, offs) (*(((reg_t *)((mc)->xsp)) + (offs) + 1))
 #endif
 
+#ifdef LINUX_KERNEL
+/* Returns the cycle count since bootup. See rdtsc. */
+/* TODO(peter): I should implement this in x86.asm so it works on Windows as
+ * well. Instead, I used gcc's inline asm -- which cl.exe can't compile!
+ */
+uint64 get_cycle_count(void);
+
+/* Checks to see if interrupts are enabled for the given execution context
+ * (i.e., not the CPU's state right now). May return true if interrupts are
+ * disabled because this function does not check all interrupt controllers.
+ * However, false indicates that interrupts are definitely disabled.
+ */
+bool
+interrupts_enabled(dcontext_t *dcontext);
+
+/* In x86/x86.asm. */
+void native_sysret(void);
+
+/* In x86/x86.asm. Don't use native_iret because the kernel has this symbol --
+ * making debugging annoying. */
+void dr_native_iret(void);
+
+/* Emulates an iret instruction. Assumes that   
+ *  - get_mcontext(dcontext) points to a mcontext right before iret would have
+ *    run
+ *  - the iret has a 64-bit operand size (i.e., REX.W prefix)
+ */
+bool emulate_interrupt_return(dcontext_t *dcontext);
+
+/* DR_API EXPORT TOFILE dr_events.h */
+/* DR_API EXPORT BEGIN */
+typedef enum {
+    VECTOR_DIVIDE_ERROR = 0,
+    VECTOR_START = VECTOR_DIVIDE_ERROR,
+    VECTOR_EXCEPTION_START = VECTOR_DIVIDE_ERROR,
+    VECTOR_DEBUG = 1,
+    VECTOR_NMI = 2,
+    VECTOR_BREAKPOINT = 3,
+    VECTOR_OVERFLOW = 4,
+    VECTOR_BOUND_RANGE_EXCEEDED = 5,
+    VECTOR_INVALID_OPCODE = 6,
+    VECTOR_DEVICE_NOT_AVAILABLE = 7,
+    VECTOR_DOUBLE_FAULT = 8,
+    VECTOR_COPROCESSOR_SEGMENT_OVERRUN = 9,
+    VECTOR_INVALID_TSS = 10,
+    VECTOR_SEGMENT_NOT_PRESENT = 11,
+    VECTOR_STACK_FAULT = 12,
+    VECTOR_GENERAL_PROTECTION = 13,
+    VECTOR_PAGE_FAULT = 14,
+    /* no 15 */
+    VECTOR_X87_FPU_FLOATING_POINT_ERROR = 16,
+    VECTOR_ALIGNMENT_CHECK = 17,
+    VECTOR_MACHINE_CHECK = 18,
+    VECTOR_SIMD_FLOATING_POINT = 19,
+    VECTOR_EXCEPTION_END = 20,
+    VECTOR_INTERRUPT_START = 20,
+    VECTOR_INTERRUPT_END = 256,
+    VECTOR_END = VECTOR_INTERRUPT_END
+} interrupt_vector_t;
+/* DR_API EXPORT END */
+
+#define MAGIC_FAKE_ERROR 0xfffffffffbadbeef
+
+void patch_interrupt(dcontext_t *dcontext, cache_pc patch_pc,
+                     interrupt_vector_t vector, byte save_buffer[INTN_LENGTH]);
+
+void unpatch_interrupt(dcontext_t *dcontext, cache_pc patch_pc,
+                       byte save_buffer[INTN_LENGTH]);
+
+/* DR_API EXPORT BEGIN */
+/* Returns true if the hardware normally pushes an error code on this vector's
+ * interrupt stack frame.
+ */
+bool vector_has_error_code(interrupt_vector_t vector);
+
+/* The layout of the interrupt stack frame. The stack pointer will point to
+ * error_code. */
+typedef struct {
+    reg_t error_code;
+    byte *xip;
+    reg_t cs;
+    reg_t xflags;
+    reg_t xsp;
+    reg_t ss;
+} interrupt_stack_frame_t;
+/* DR_API EXPORT END */
+
+#define INTERRUPT_STACK_FRAME_ALIGNMENT 0x10
+
+bool was_kernel_interrupted(interrupt_stack_frame_t *frame);
+
+typedef void (*interrupt_handler_t)(interrupt_stack_frame_t*, dr_mcontext_t*,
+                                    interrupt_vector_t);
+
+/* Returns the gencode for syscall entry. */
+cache_pc get_syscall_entry(dcontext_t *dcontext);
+/* Returns the gencode for vector entry. */
+cache_pc get_vector_entry(dcontext_t *dcontext, interrupt_vector_t vector);
+
+bool vector_is_synchronous(interrupt_vector_t vector);
+
+void optimize_syscall_code(dcontext_t *dcontext, fragment_t *f);
+
+#endif
 
 #endif /* _ARCH_EXPORTS_H_ */

@@ -78,22 +78,24 @@
 #if defined(X86_64) && !defined(X64)
 # define X64
 #endif
-
 #ifdef API_EXPORT_ONLY
 #ifdef WINDOWS
 #  define WIN32_LEAN_AND_MEAN
 #  include <windows.h>
 #  include <winbase.h>
 #else
+# ifndef LINUX_KERNEL
 #  include <stdio.h>
 #  include <stdlib.h>
+# endif
 #endif
 #endif
 /* DR_API EXPORT END */
-#include <limits.h>  /* for USHRT_MAX */
+//#include "limits_wrapper.h"  /* for USHRT_MAX */
+#include "limits_wrapper.h"
 #ifdef LINUX
-#  include <sys/types.h>        /* Fix for case 5341. */
-#  include <signal.h>
+#  include "types_wrapper.h"
+#  include "signal_wrapper.h"
 #endif
 /* DR_API EXPORT BEGIN */
 #ifdef WINDOWS
@@ -141,17 +143,21 @@
 
 #ifndef __cplusplus
 #  ifndef DR_DO_NOT_DEFINE_bool
+#   ifndef LINUX_KERNEL
 typedef int bool;
+#   endif
 #  endif
 #  define true  (1)
 #  define false (0)
 #endif
 
+#ifndef _LINUX_TYPES_H
 #ifndef DR_DO_NOT_DEFINE_uint
 typedef unsigned int uint;
 #endif
 #ifndef DR_DO_NOT_DEFINE_ushort
 typedef unsigned short ushort;
+#endif
 #endif
 #ifndef DR_DO_NOT_DEFINE_byte
 typedef unsigned char byte;
@@ -161,7 +167,7 @@ typedef signed char sbyte;
 #endif
 typedef byte * app_pc;
 
-typedef void (*generic_func_t) ();
+typedef void (*generic_func_t) (void);
 
 #ifdef WINDOWS
 #  ifndef DR_DO_NOT_DEFINE_uint64
@@ -217,7 +223,7 @@ typedef int ptr_int_t;
  * Application offset from module base.
  * PE32+ modules are limited to 2GB, but not ELF x64 med/large code model.
  */
-typedef size_t app_rva_t;
+typedef unsigned long app_rva_t;
 
 #ifdef WINDOWS
 typedef ptr_uint_t thread_id_t;
@@ -260,11 +266,11 @@ extern file_t our_stderr;
 /** Allow use of stdin after the application closes it. */
 extern file_t our_stdin;
 /** The file_t value for standard output. */
-#  define STDOUT (our_stdout == INVALID_FILE ? stdout->_fileno : our_stdout)
+#  define STDOUT (/*our_stdout == INVALID_FILE ? stdout->_fileno : */our_stdout)
 /** The file_t value for standard error. */
-#  define STDERR (our_stderr == INVALID_FILE ? stderr->_fileno : our_stderr)
+#  define STDERR (/*our_stderr == INVALID_FILE ? stderr->_fileno : */our_stderr)
 /** The file_t value for standard error. */
-#  define STDIN  (our_stdin == INVALID_FILE ? stdin->_fileno : our_stdin)
+#  define STDIN  (/*our_stdin == INVALID_FILE ? stdin->_fileno : */our_stdin)
 #endif
 
 #ifdef AVOID_API_EXPORT
@@ -400,6 +406,16 @@ typedef struct {
 # define IF_LINUX_ELSE(x,y) x
 # define IF_LINUX_(x) x,
 # define _IF_LINUX(x) , x
+#endif
+
+#ifdef LINUX_KERNEL
+# define IF_LINUX_KERNEL(x) x
+# define IF_LINUX_KERNEL_ELSE(x,y) x
+# define IF_NOT_LINUX_KERNEL(x)
+#else
+# define IF_LINUX_KERNEL(x)
+# define IF_LINUX_KERNEL_ELSE(x,y) y
+# define IF_NOT_LINUX_KERNEL(x) x
 #endif
 
 #ifdef VMX86_SERVER
@@ -562,10 +578,12 @@ typedef enum {
 # define INTERNAL_OPTION(opt) DEFAULT_INTERNAL_OPTION_VALUE(opt)
 #endif /* EXPOSE_INTERNAL_OPTIONS */
 
+/* DR_API EXPORT BEGIN */
 #ifdef LINUX
 #ifndef DR_DO_NOT_DEFINE_uint32
  typedef unsigned int uint32;
 #endif
+/* DR_API EXPORT END */
 /* Note: Linux paths are longer than the 260 limit on Windows, 
    yet we can't afford the 4K of PATH_MAX from <limits.h> */
 typedef uint64 timestamp_t;
@@ -1629,5 +1647,9 @@ typedef struct _dr_mcontext_t {
     };
 } dr_mcontext_t;
 /* DR_API EXPORT END */
+
+#ifdef LINUX_KERNEL
+#define EOF (-1)
+#endif
 
 #endif /* ifndef _GLOBALS_SHARED_H_ */

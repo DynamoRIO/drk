@@ -41,7 +41,7 @@
 #include "instr.h"
 #include "decode.h"
 #include "decode_fast.h"
-#include <string.h> /* for memcpy */
+#include "string_wrapper.h" /* for memcpy */
 
 /*
  * FIXME

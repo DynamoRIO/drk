@@ -51,7 +51,7 @@
 #include "../link.h"
 
 
-#include <string.h> /* for memset */
+#include "string_wrapper.h" /* for memset */
 
 #include "loadtoconst.h"
 

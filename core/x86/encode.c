@@ -43,7 +43,7 @@
 #include "disassemble.h"
 #include "decode_fast.h"
 
-#include <string.h> /* memcpy, memset */
+#include "string_wrapper.h" /* memcpy, memset */
 
 #ifdef DEBUG
 /* case 10450: give messages to clients */
@@ -1172,7 +1172,8 @@ encode_immed(decode_info_t * di, byte *pc)
 #ifdef X64
             /* check if code in 2G assumption is violated, i.e. 0 < val < 2G */
             if (size == OPSZ_4) {
-                CLIENT_ASSERT((val > 0) && (val < INT_MAX),
+                CLIENT_ASSERT(((val > 0) && (val < INT_MAX)) ||
+							  (((uint64)val) >> 31 == 0x1ffffffff),
                               "encode error: immediate has invalid size");
             }
 #endif
@@ -1899,8 +1900,8 @@ instr_encode_common(dcontext_t *dcontext, instr_t *instr, byte *pc,
     opc = instr_get_opcode(instr);
     if ((instr_is_cbr(instr) &&
          (!instr_is_cti_loop(instr) ||
-          /* no data16 */
-          reg_is_32bit(opnd_get_reg(instr_get_src(instr, 1))))) ||
+          /* no addr16 */
+          reg_is_pointer_sized(opnd_get_reg(instr_get_src(instr, 1))))) ||
         /* no indirect or far */
         opc == OP_jmp_short || opc == OP_jmp || opc == OP_call) {
         if (!TESTANY(~(PREFIX_JCC_TAKEN|PREFIX_JCC_NOT_TAKEN), instr->prefixes)) {
@@ -2165,11 +2166,12 @@ instr_encode_common(dcontext_t *dcontext, instr_t *instr, byte *pc,
         IF_X64(instr_set_rip_rel_pos(instr, (byte)(disp_relativize_at - di.start_pc)));
     }
 
-#if DEBUG_DISABLE /* turn back on if want to debug */
+// #if DEBUG_DISABLE /* turn back on if want to debug */
+#ifdef DEBUG
     if (stats->loglevel >= 3) {
         byte *pc = cache_pc;
         LOG(THREAD, LOG_EMIT, 3, "instr_encode on: ");
-        instr_disassemble(dcontext, instr, THREAD);
+        DOLOG(3, LOG_EMIT, {instr_disassemble(dcontext, instr, THREAD); });
         LOG(THREAD, LOG_EMIT, 3, " : ");
         do {
             LOG(THREAD, LOG_EMIT, 3, " %02x", *pc);

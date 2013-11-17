@@ -67,7 +67,7 @@
 #include "decode.h"
 #include "decode_fast.h"
 #include "disassemble.h"
-#include <string.h>
+#include "string_wrapper.h"
 
 /* these are only needed for symbolic address lookup: */
 #include "../fragment.h" /* for fragment_pclookup */
@@ -227,6 +227,9 @@ opnd_disassemble(dcontext_t *dcontext, opnd_t opnd, file_t outfile)
         break;
     case IMMED_FLOAT_kind:
         {
+#ifdef LINUX_KERNEL
+	    print_file(outfile, "%s<NI>%s", immed_prefix(), postop_suffix());
+#else
             /* need to save floating state around float printing */
             PRESERVE_FLOATING_POINT_STATE({
                 uint top; uint bottom;
@@ -237,6 +240,7 @@ opnd_disassemble(dcontext_t *dcontext, opnd_t opnd, file_t outfile)
                            postop_suffix());
             });
             break;
+#endif
         }
     case PC_kind:
         {
@@ -751,7 +755,8 @@ instr_opcode_name(instr_t *instr, const instr_info_t *info)
         }
     }
 #ifdef X64
-    if (!instr_get_x86_mode(instr) && instr_get_opcode(instr) == OP_jecxz) {
+    if (!instr_get_x86_mode(instr) && instr_get_opcode(instr) == OP_jecxz &&
+        reg_is_pointer_sized(opnd_get_reg(instr_get_src(instr, 1)))) {
         return "jrcxz";
     }
 #endif

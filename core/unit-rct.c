@@ -36,6 +36,8 @@
  * unit-rct.c unit tests for rct.c 
  */
 
+#ifdef RCT_IND_BRANCH
+
 #include "rct.c"
 
 UNIT_TEST_MAIN
@@ -507,3 +509,4 @@ unit_main(void) {
     return 0;
 }
 
+#endif

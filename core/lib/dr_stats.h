@@ -71,7 +71,9 @@ typedef struct _dr_statistics_t {
 #ifdef LINUX
     char magicstring[DYNAMORIO_MAGIC_STRING_LEN];
 #endif
+#ifndef LINUX_KENREL
     process_id_t process_id;    /* process id */
+#endif
     char process_name[MAXIMUM_PATH]; /* process name */
     uint logmask;               /* what to log */
     uint loglevel;              /* how much detail to log */

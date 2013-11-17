@@ -34,7 +34,7 @@
 #include "../module_shared.h"
 #include "os_private.h"
 #include <elf.h>    /* for ELF types */
-#include <string.h>
+#include "string_wrapper.h"
 #include <stddef.h> /* offsetof */
 #include <link.h>   /* Elf_Symndx */
 

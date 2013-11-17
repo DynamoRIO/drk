@@ -44,7 +44,7 @@
 #include "fcache.h"
 #include "emit.h"
 #include "monitor.h"
-#include <string.h> /* for memset */
+#include "string_wrapper.h" /* for memset */
 #include "perscache.h"
 #include "instr.h" /* PC_RELATIVE_TARGET */
 
@@ -152,6 +152,7 @@ static const linkstub_t linkstub_reset       = { LINK_FAKE, 0 };
 static const linkstub_t linkstub_syscall     = { LINK_FAKE, 0 };
 static const linkstub_t linkstub_selfmod     = { LINK_FAKE, 0 };
 static const linkstub_t linkstub_ibl_deleted = { LINK_FAKE, 0 };
+static const linkstub_t linkstub_ibl_unlinked_found = { LINK_FAKE, 0 };
 #ifdef LINUX
 static const linkstub_t linkstub_sigreturn   = { LINK_FAKE, 0 };
 #else /* WINDOWS */
@@ -160,7 +161,7 @@ static const linkstub_t linkstub_asynch      = { LINK_FAKE, 0 };
 static const linkstub_t linkstub_native_exec = { LINK_FAKE, 0 };
 /* this one we give the flag LINK_NI_SYSCALL for executing a syscall in dispatch() */
 static const linkstub_t linkstub_native_exec_syscall =
-    { LINK_FAKE| LINK_NI_SYSCALL, 0 };
+    { LINK_FAKE IF_NOT_LINUX_KERNEL(| LINK_NI_SYSCALL), 0 };
 
 #ifdef WINDOWS
 /* used for shared_syscall exits */
@@ -189,6 +190,12 @@ static const linkstub_t linkstub_shared_syscall_bb =
  * on the unlink path */
 static const linkstub_t linkstub_shared_syscall_unlinked = { LINK_FAKE, 0 };
 # endif
+#endif
+
+#ifdef LINUX_KERNEL
+static const linkstub_t linkstub_syscall_entry = { LINK_FAKE, 0 };
+static const linkstub_t linkstub_kernel_interrupt_entry = { LINK_FAKE, 0 };
+static const linkstub_t linkstub_user_interrupt_entry = { LINK_FAKE, 0 };
 #endif
 
 /* A unique fragment_t for use when the details don't matter */
@@ -738,6 +745,12 @@ get_ibl_deleted_linkstub()
     return &linkstub_ibl_deleted;
 }
 
+const linkstub_t *
+get_ibl_unlinked_found_linkstub()
+{
+    return &linkstub_ibl_unlinked_found;
+}
+
 #ifdef LINUX
 const linkstub_t *
 get_sigreturn_linkstub()
@@ -783,6 +796,26 @@ get_shared_syscalls_bb_linkstub()
     return &linkstub_shared_syscall_bb;
 }
 #endif /* WINDOWS */
+
+#ifdef LINUX_KERNEL
+const linkstub_t *
+get_syscall_entry_linkstub()
+{
+    return &linkstub_syscall_entry;
+}
+
+const linkstub_t *
+get_user_interrupt_entry_linkstub()
+{
+    return &linkstub_user_interrupt_entry;
+}
+
+const linkstub_t *
+get_kernel_interrupt_entry_linkstub()
+{
+    return &linkstub_kernel_interrupt_entry;
+}
+#endif
 
 #ifdef HOT_PATCHING_INTERFACE
 const linkstub_t *
@@ -1083,9 +1116,14 @@ is_linkable(dcontext_t *dcontext, fragment_t *from_f, linkstub_t *from_l, fragme
     if ((from_f->flags & FRAG_DYNGEN) != (to_f->flags & FRAG_DYNGEN))
         return false;
 #endif
+#ifdef LINUX_KERNEL
+    if (TESTANY(LINK_SYSRET | LINK_IRET, from_l->flags))
+        return false;
+#else
     /* do not link exit from non-ignorable syscall ending a frag */
     if (TESTANY(LINK_NI_SYSCALL_ALL, from_l->flags))
         return false;
+#endif
 #ifdef WINDOWS
     if (TEST(LINK_CALLBACK_RETURN, from_l->flags))
         return false;
@@ -3801,3 +3839,11 @@ coarse_stubs_set_end_pc(coarse_info_t *info, byte *end_pc)
     ASSERT(ok);
     info->stubs_end_pc = end_pc;
 }
+
+#ifdef LINUX_KERNEL
+void
+fake_user_return_exit_target(void) {
+    ASSERT_MESSAGE(
+        "This function is just a placeholder. It should never run!", false);
+}
+#endif

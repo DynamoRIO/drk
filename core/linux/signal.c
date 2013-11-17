@@ -49,12 +49,12 @@
 #include <asm/sigcontext.h> /* for X86_FXSR_MAGIC */
 
 #include <sys/time.h>
-#include <sys/types.h>
+#include "types_wrapper.h"
 #include <sys/wait.h>
 #include <ucontext.h>
 #include <sys/syscall.h>
 #include <sched.h>
-#include <string.h> /* for memcpy and memset */
+#include "string_wrapper.h" /* for memcpy and memset */
 #include "../globals.h"
 #include "os_private.h"
 #include "../fragment.h"

@@ -40,7 +40,7 @@
 #include "hotpatch.h" /* hotp_only_in_tramp() */
 #include "fragment.h" /* get_at_syscall() */
 #include "fcache.h" /* in_fcache() */
-#include <string.h> /* for memcpy */
+#include "string_wrapper.h" /* for memcpy */
 
 extern vm_area_vector_t *fcache_unit_areas; /* from fcache.c */
 
@@ -452,6 +452,7 @@ at_safe_spot(thread_record_t *trec, dr_mcontext_t *mc,
     if (is_thread_currently_native(trec)) {
         /* thread is running native, verify is not in dr code */
 #ifdef CLIENT_INTERFACE
+# ifdef CLIENT_SIDELINE
         /* We treat client-owned threads (such as a client nudge thread) as native and
          * consider them safe if they are in the client_lib.  Since they might own client
          * locks that could block application threads from progressing, we synchronize
@@ -472,6 +473,7 @@ at_safe_spot(thread_record_t *trec, dr_mcontext_t *mc,
                 (!should_suspend_client_thread(trec->dcontext, desired_state) ||
                  trec->dcontext->client_data->mutex_count == 0);
         }
+# endif
 #endif
         if (is_native_thread_state_valid(trec->dcontext, mc->pc, 
                                          (byte *)mc->xsp)) {
@@ -1217,6 +1219,7 @@ synch_with_all_threads(thread_synch_state_t desired_synch_state,
             /* do not de-ref threads[i] after synching if it was cleaned up! */
             if (synch_array[i] != SYNCH_WITH_ALL_SYNCHED && threads[i]->id != my_id) {
 #ifdef CLIENT_INTERFACE
+# ifdef CLIENT_SIDELINE
                 if (!finished_non_client_threads &&
                     IS_CLIENT_THREAD(threads[i]->dcontext)) {
                     all_synched = false;
@@ -1241,6 +1244,7 @@ synch_with_all_threads(thread_synch_state_t desired_synch_state,
                     threads[i]->dcontext->client_data->left_unsuspended = true;
                     continue;
                 }
+# endif
 #endif
                 /* speed things up a tad */
                 if (synch_array[i] != SYNCH_WITH_ALL_NOTIFIED) {

@@ -352,25 +352,27 @@
              */
             options->stack_size = 20*1024;
 
-            /* For CI builds we'll disable elision by default since we
-             * expect most CI users will prefer a view of the
-             * instruction stream that's as unmodified as possible.
-             * Also xref PR 214169: eliding calls presents a confusing
-             * view of basic blocks since clients see both the call
-             * and the called function in the same block.  TODO PR
-             * 214169: pass both sides to the client and merge
-             * internally to get the best of both worlds.
-             */
-            options->max_elide_jmp = 0;
-            options->max_elide_call = 0;
+            if (!options->opt_speed) {
+                /* For CI builds we'll disable elision by default since we
+                 * expect most CI users will prefer a view of the
+                 * instruction stream that's as unmodified as possible.
+                 * Also xref PR 214169: eliding calls presents a confusing
+                 * view of basic blocks since clients see both the call
+                 * and the called function in the same block.  TODO PR
+                 * 214169: pass both sides to the client and merge
+                 * internally to get the best of both worlds.
+                 */
+                options->max_elide_jmp = 0;
+                options->max_elide_call = 0;
 
-            /* indcall2direct causes problems with the code manip API,
-             * so disable by default (xref PR 214051 & PR 214169).
-             * Even if we address those issues, we may want to keep
-             * disabled if we expect users will be confused by this
-             * optimization.
-             */
-            options->indcall2direct = false;
+                /* indcall2direct causes problems with the code manip API,
+                 * so disable by default (xref PR 214051 & PR 214169).
+                 * Even if we address those issues, we may want to keep
+                 * disabled if we expect users will be confused by this
+                 * optimization.
+                 */
+                options->indcall2direct = false;
+            }
 
             /* To support clients changing syscall numbers we need to
              * be able to swap ignored for non-ignored (xref PR 307284)
@@ -592,12 +594,12 @@
      * turn them on.
      * We mark as pcache-affecting though we have other explicit checks
      */
-    OPTION_COMMAND(bool, disable_traces, false, "disable_traces", {
+    OPTION_COMMAND(bool, disable_traces, IF_LINUX_KERNEL_ELSE(true, false), "disable_traces", {
         if (options->disable_traces) { /* else leave alone */
             DISABLE_TRACES(options);
         }
      }, "disable trace creation (block fragments only)", STATIC, OP_PCACHE_GLOBAL)
-    OPTION_COMMAND(bool, enable_traces, true, "enable_traces", {
+    OPTION_COMMAND(bool, enable_traces, IF_LINUX_KERNEL_ELSE(false, true), "enable_traces", {
         if (options->enable_traces) { /* else leave alone */
             REENABLE_TRACES(options);
         }
@@ -627,13 +629,15 @@
         "all SEH frame pushes")
 
     /* PR 361894: if no TLS available, we fall back to thread-private */
-    PC_OPTION_DEFAULT(bool, shared_bbs, IF_HAVE_TLS_ELSE(true, false),
+    PC_OPTION_DEFAULT(bool, shared_bbs,
+                      IF_LINUX_KERNEL_ELSE(false, IF_HAVE_TLS_ELSE(true, false)),
                       "use thread-shared basic blocks")
     /* Note that if we want traces off by default we would have to turn
      * off -shared_traces to avoid tripping over un-initialized ibl tables
      * PR 361894: if no TLS available, we fall back to thread-private
      */
-    OPTION_COMMAND(bool, shared_traces, IF_HAVE_TLS_ELSE(true, false),
+    OPTION_COMMAND(bool, shared_traces,
+                   IF_LINUX_KERNEL_ELSE(false, IF_HAVE_TLS_ELSE(true, false)),
                    "shared_traces", {
         /* for -no_shared_traces, set options back to defaults for private traces: */
         IF_NOT_X64(options->private_ib_in_tls = options->shared_traces;)
@@ -694,18 +698,18 @@
     OPTION_INTERNAL(bool, single_thread_in_DR, "only one thread in DR at a time")
      /* deprecated: we have finer-grained synch that works now */
 
-    OPTION_DEFAULT(bool, separate_private_stubs, true,
+    OPTION_DEFAULT(bool, separate_private_stubs, IF_LINUX_KERNEL_ELSE(false, true),
         "place private direct exit stubs in a separate area from the code cache")
 
-    OPTION_DEFAULT(bool, separate_shared_stubs, true,
+    OPTION_DEFAULT(bool, separate_shared_stubs, IF_LINUX_KERNEL_ELSE(false, true),
         "place shared direct exit stubs in a separate area from the code cache")
 
-    OPTION_DEFAULT(bool, free_private_stubs, true,
+    OPTION_DEFAULT(bool, free_private_stubs, IF_LINUX_KERNEL_ELSE(false, true),
         "free separated private direct exit stubs when not pointed at")
 
     /* FIXME Freeing shared stubs is currently an unsafe option due to a lack of
      * linking atomicity. (case 2081). */
-    OPTION_DEFAULT(bool, unsafe_free_shared_stubs, false,
+    OPTION_DEFAULT(bool, unsafe_free_shared_stubs, IF_LINUX_KERNEL_ELSE(false, true),
         "free separated shared direct exit stubs when not pointed at")
 
     OPTION_DEFAULT_INTERNAL(bool, cbr_single_stub, true,
@@ -753,7 +757,7 @@
     OPTION_DEFAULT(bool, ibl_table_in_tls, IF_HAVE_TLS_ELSE(true, false),
         "use TLS to hold IBL table addresses & masks")
 
-    OPTION_DEFAULT(bool, bb_ibl_targets, false, "enable BB to BB IBL")
+    OPTION_DEFAULT(bool, bb_ibl_targets, IF_LINUX_KERNEL_ELSE(true, false), "enable BB to BB IBL")
 
      /* IBL code cannot target both single restore prefix and full prefix frags
       * simultaneously since the restore of %eax in the former case means that the
@@ -803,7 +807,8 @@
     /* control sharing of indirect branch lookup routines */
     /* Default TRUE as it's needed for shared_traces (which is on by default) */
     /* PR 361894: if no TLS available, we fall back to thread-private */
-    OPTION_DEFAULT(bool, shared_trace_ibl_routine, IF_HAVE_TLS_ELSE(true, false),
+    OPTION_DEFAULT(bool, shared_trace_ibl_routine,
+                   IF_LINUX_KERNEL_ELSE(false, IF_HAVE_TLS_ELSE(true, false)),
                    "share ibl routine for traces")
     OPTION_DEFAULT(bool, speculate_last_exit, false, 
         "enable speculative linking of trace last IB exit")
@@ -1040,7 +1045,7 @@
         /* default size is in Kilobytes, Examples: 4, 4k, 4m, or 0 for unlimited */
 
     /* adaptive working set */
-    OPTION_DEFAULT(bool, finite_bb_cache, true, "adaptive working set bb cache management")
+    OPTION_DEFAULT(bool, finite_bb_cache, IF_LINUX_KERNEL_ELSE(false, true), "adaptive working set bb cache management")
     OPTION_DEFAULT(bool, finite_trace_cache, true, "adaptive working set trace cache management")
     OPTION_DEFAULT(bool, finite_shared_bb_cache, false, 
         "adaptive working set shared bb cache management")
@@ -1135,7 +1140,8 @@
      * app, however that's prob. better then us spinning (xref 9145). It would be nice
      * to switch back to resetting when the address space is getting low, but there's
      * no easy way to figure that out. */
-    OPTION_DEFAULT(bool, switch_to_os_at_vmm_reset_limit, true,
+    OPTION_DEFAULT(bool, switch_to_os_at_vmm_reset_limit,
+        IF_LINUX_KERNEL_ELSE(false, true),
         "if we hit the reset_at_vmm_*_limit switch to requesting from the os (so we'll "
         "only actually reset once the os is out and we're at the limit)")
     OPTION_DEFAULT(bool, reset_at_switch_to_os_at_vmm_limit, true, 
@@ -1177,7 +1183,7 @@
         "skip the assert curiosity on out of vm_reserve (for regression tests)")
     OPTION_DEFAULT(bool, vm_reserve, true, "reserve virtual memory") 
     /* FIXME - on 64bit probably will need more space */
-    OPTION_DEFAULT(uint_size, vm_size, 128*1024*1024,
+    OPTION_DEFAULT(uint_size, vm_size, IF_LINUX_KERNEL_ELSE(256, 128)*1024*1024,
         "maximum virtual memory reserved, in KB or MB")
         /* default size is in Kilobytes, Examples: 262144, 1024k, 256m, up to maximum of 512M */
      /* FIXME: default value is currently not good enough for sqlserver, for which we need more than 256MB */
@@ -1201,7 +1207,7 @@
     /* For linux, we assume our preferred address gets us <4GB as well: if that
      * has issues we should make them independent (PR 253624).
      */
-    OPTION_DEFAULT(bool, heap_in_lower_4GB, true,
+    OPTION_DEFAULT(bool, heap_in_lower_4GB, IF_LINUX_KERNEL_ELSE(false, true),
                    "on 64bit request that the dr heap "
                    "be allocated entirely within the lower 4GB of address space so that "
                    "it can be accessed directly as a 32bit address. See PR 215395.")
@@ -2633,6 +2639,11 @@ IF_RCT_IND_BRANCH(options->rct_ind_jump = OPTION_DISABLED;)
         }
     }, "run dr in a light weight mode with nothing but a few hooks", STATIC,
     OP_PCACHE_NOP)
+
+#ifdef LINUX_KERNEL
+    OPTION_DEFAULT(bool, optimize_sys_call_ret, true,
+                   "optimize syscall and sysret to avoid dispatch")
+#endif
 
 #undef OPTION
 #undef OPTION_NAME

@@ -193,6 +193,18 @@ bool is_signal_restorer_code(byte *pc, size_t *len);
 #define CONTEXT_HEAP_SIZE_OPAQUE (CONTEXT_HEAP_SIZE(struct sigcontext))
 
 /* struct sigcontext field name changes */
+#ifdef LINUX_KERNEL
+# define SC_XIP ip
+# define SC_XAX ax
+# define SC_XCX cx
+# define SC_XDX dx
+# define SC_XBX bx
+# define SC_XSP sp
+# define SC_XBP bp
+# define SC_XSI si
+# define SC_XDI di
+# define SC_XFLAGS flags
+#else
 #ifdef X64
 # define SC_XIP rip
 # define SC_XAX rax
@@ -215,6 +227,7 @@ bool is_signal_restorer_code(byte *pc, size_t *len);
 # define SC_XSI esi
 # define SC_XDI edi
 # define SC_XFLAGS eflags
+#endif
 #endif
 
 void *

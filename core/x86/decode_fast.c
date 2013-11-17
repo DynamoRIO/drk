@@ -673,7 +673,7 @@ sizeof_fp_op(dcontext_t *dcontext, byte *pc, bool addr16 _IF_X64(byte **rip_rel_
  * extension is present in the modrm byte.
  */
 static const byte interesting[256] = {
-    0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,2,
+    0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,2, /* sys{call,ret,enter,exit}, swapgs */
     0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0,
     0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0,
     0,0,0,0, 0,0,0,0, 0,0,0,0, 0,0,0,0,
@@ -829,7 +829,7 @@ convert_8bit_offset(byte *pc, byte offset, uint len)
 byte *
 decode_cti(dcontext_t *dcontext, byte *pc, instr_t *instr)
 {
-    byte byte0, byte1;
+    byte byte0, byte1, byte2;
     byte *start_pc = pc;
 
     /* find and remember the instruction and its size */
@@ -879,6 +879,7 @@ decode_cti(dcontext_t *dcontext, byte *pc, instr_t *instr)
 
     byte0 = *pc;
     byte1 = *(pc + 1);
+    byte2 = *(pc + 2);
 
     /* eflags analysis
      * we do this even if -unsafe_ignore_eflags b/c it doesn't cost that
@@ -1162,28 +1163,35 @@ decode_cti(dcontext_t *dcontext, byte *pc, instr_t *instr)
         IF_X64(instr_set_rip_rel_pos(instr, rip_rel_pos));
         return (pc + 2);
     }
-    /* sys{enter,exit,call,ret} */
-    if (byte0 == 0x0f &&
-        (byte1 == 0x34 || byte1 == 0x35 || byte1 == 0x05 || byte1 == 0x07)) {
-        if (byte1 == 0x34) {
-            instr_set_opcode(instr, OP_sysenter);
-            instr_set_num_opnds(dcontext, instr, 1, 0);
-            instr_set_dst(instr, 0, opnd_create_reg(REG_XSP));
-        } else if (byte1 == 0x34) {
-            instr_set_opcode(instr, OP_sysexit);
-            instr_set_num_opnds(dcontext, instr, 1, 0);
-            instr_set_dst(instr, 0, opnd_create_reg(REG_XSP));
-        } else if (byte1 == 0x05) {
-            instr_set_opcode(instr, OP_syscall);
-            instr_set_num_opnds(dcontext, instr, 1, 0);
-            instr_set_dst(instr, 0, opnd_create_reg(REG_XCX));
-        } else if (byte1 == 0x07) {
-            instr_set_opcode(instr, OP_sysret);
+    /* sys{enter,exit,call,ret}, swapgs */
+    if (byte0 == 0x0f) {
+        if ((byte1 == 0x34 || byte1 == 0x35 || byte1 == 0x05 || byte1 == 0x07)) {
+            if (byte1 == 0x34) {
+                instr_set_opcode(instr, OP_sysenter);
+                instr_set_num_opnds(dcontext, instr, 1, 0);
+                instr_set_dst(instr, 0, opnd_create_reg(REG_XSP));
+            } else if (byte1 == 0x34) {
+                instr_set_opcode(instr, OP_sysexit);
+                instr_set_num_opnds(dcontext, instr, 1, 0);
+                instr_set_dst(instr, 0, opnd_create_reg(REG_XSP));
+            } else if (byte1 == 0x05) {
+                instr_set_opcode(instr, OP_syscall);
+                instr_set_num_opnds(dcontext, instr, 1, 0);
+                instr_set_dst(instr, 0, opnd_create_reg(REG_XCX));
+            } else if (byte1 == 0x07) {
+                instr_set_opcode(instr, OP_sysret);
+                instr_set_num_opnds(dcontext, instr, 0, 0);
+            }
+            instr_set_raw_bits(instr, start_pc, sz);
+            IF_X64(instr_set_rip_rel_pos(instr, rip_rel_pos));
+            return (pc + 2);
+        } else if (byte1 == 0x01 && byte2 == 0xf8) {
+            instr_set_opcode(instr, OP_swapgs);
             instr_set_num_opnds(dcontext, instr, 0, 0);
+            instr_set_raw_bits(instr, start_pc, sz);
+            IF_X64(instr_set_rip_rel_pos(instr, rip_rel_pos));
+            return (pc + 3);
         }
-        instr_set_raw_bits(instr, start_pc, sz);
-        IF_X64(instr_set_rip_rel_pos(instr, rip_rel_pos));
-        return (pc + 2);
     }
     /* iret */
     if (byte0 == 0xcf) {

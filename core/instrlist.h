@@ -185,4 +185,9 @@ DR_API
 void   
 instrlist_remove(instrlist_t *ilist, instr_t *instr);
 
+DR_API
+/** Returns the number of instructions in \p ilist. */
+int
+instrlist_length(instrlist_t *ilist);
+
 #endif /* _INSTRLIST_H_ */

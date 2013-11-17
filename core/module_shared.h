@@ -277,12 +277,19 @@ bool os_get_module_info_all_names(const app_pc pc,
 generic_func_t
 get_proc_address(module_handle_t lib, const char *name);
 
+bool
+get_proc_size(generic_func_t address, size_t *size);
+
 #ifdef LINUX
 /* if we add any more values, switch to a globally-defined dr_export_info_t 
  * and use it here
  */
 generic_func_t
 get_proc_address_ex(module_handle_t lib, const char *name, bool *is_indirect_code OUT);
+#endif
+
+#ifdef LINUX_KERNEL
+bool kernel_find_symbol(const char *name, void **address, size_t *size);
 #endif
 
 void print_modules(file_t f, bool dump_xml);

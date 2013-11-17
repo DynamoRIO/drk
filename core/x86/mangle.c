@@ -57,7 +57,11 @@
 #endif
 
 #ifdef LINUX
-#include <sys/syscall.h>
+//#include <sys/syscall.h>
+#endif
+
+#ifdef LINUX_KERNEL
+#include "kernel_interface.h"
 #endif
 
 #ifdef WINDOWS
@@ -102,6 +106,8 @@ convert_to_near_rel_common(dcontext_t *dcontext, instrlist_t *ilist, instr_t *in
     }
 
     if (OP_loopne <= opcode && opcode <= OP_jecxz) {
+        uint mangled_sz;
+        uint offs;
         /*
          * from "info as" on GNU/linux system:
        Note that the `jcxz', `jecxz', `loop', `loopz', `loope', `loopnz'
@@ -179,20 +185,35 @@ convert_to_near_rel_common(dcontext_t *dcontext, instrlist_t *ilist, instr_t *in
          * special since the target must be obtained from src0 and not
          * from the raw bits (since that might not reach).
          */
-        /* need 9 bytes */
-        instr_allocate_raw_bits(dcontext, instr, CTI_SHORT_REWRITE_LENGTH);
+        /* need 9 bytes + possible addr prefix */
+        mangled_sz = CTI_SHORT_REWRITE_LENGTH;
+        if (!reg_is_pointer_sized(opnd_get_reg(instr_get_src(instr, 1))))
+            mangled_sz++; /* need addr prefix */
+        instr_allocate_raw_bits(dcontext, instr, mangled_sz);
+        offs = 0;
+        if (mangled_sz > CTI_SHORT_REWRITE_LENGTH) {
+            instr_set_raw_byte(instr, offs, ADDR_PREFIX_OPCODE);
+            offs++;
+        }
         /* first 2 bytes: jecxz 8-bit-offset */
-        instr_set_raw_byte(instr, 0, decode_first_opcode_byte(opcode));
+        instr_set_raw_byte(instr, offs, decode_first_opcode_byte(opcode));
+        offs++;
         /* remember pc-relative offsets are from start of next instr */
-        instr_set_raw_byte(instr, 1, (byte)2);
+        instr_set_raw_byte(instr, offs, (byte)2);
+        offs++;
         /* next 2 bytes: jmp-short 8-bit-offset */
-        instr_set_raw_byte(instr, 2, decode_first_opcode_byte(OP_jmp_short));
-        instr_set_raw_byte(instr, 3, (byte)5);
+        instr_set_raw_byte(instr, offs, decode_first_opcode_byte(OP_jmp_short));
+        offs++;
+        instr_set_raw_byte(instr, offs, (byte)5);
+        offs++;
         /* next 5 bytes: jmp 32-bit-offset */
-        instr_set_raw_byte(instr, 4, decode_first_opcode_byte(OP_jmp));
+        instr_set_raw_byte(instr, offs, decode_first_opcode_byte(OP_jmp));
+        offs++;
         /* for x64 we may not reach, but we go ahead and try */
-        instr_set_raw_word(instr, 5, (int)
-                           (target - (instr->bytes + CTI_SHORT_REWRITE_LENGTH)));
+        instr_set_raw_word(instr, offs, (int)
+                           (target - (instr->bytes + mangled_sz)));
+        offs += sizeof(int);
+        ASSERT(offs == mangled_sz);
         LOG(THREAD, LOG_INTERP, 2, "convert_to_near_rel: jecxz/loop* opcode\n");
         /* original target operand is still valid */
         instr_set_operands_valid(instr, true);
@@ -435,6 +456,22 @@ clean_call_beyond_mcontext(void)
     return XSP_SZ/*errno*/ IF_X64(+ XSP_SZ/*align*/);
 }
 
+void
+clean_call_clear_saved_interrupt_flag(dcontext_t *dcontext, byte *sp)
+{
+    /* The mcontext is pushed onto the dstack. The first sizeof(reg_t) bytes of
+     * the dstack are wasted because x86's push X does (rsp -= 8; *rsp = X).
+     */
+    dr_mcontext_t* mc =
+        (dr_mcontext_t*) (dcontext->dstack - sizeof(dr_mcontext_t));
+    ASSERT(dcontext->dstack - sizeof(reg_t) == (byte*) &mc->pc);
+    if (sp <= (byte*) &mc->xflags) {
+         /* Clean call pushes 0 before it pushes xflags. */
+         ASSERT(mc->pc == 0);
+         mc->xflags &= ~EFLAGS_IF;
+     }
+}
+
 /* prepare_for and cleanup_after assume that the stack looks the same after
  * the call to the instrumentation routine, since it stores the app state
  * on the stack.
@@ -468,6 +505,7 @@ uint
 prepare_for_clean_call(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr)
 {
     uint dstack_offs = 0;
+    IF_LINUX_KERNEL(uint eflags_offs;)
     /* Swap stacks.  For thread-shared, we need to get the dcontext
      * dynamically rather than use the constant passed in here.  Save
      * away xax in a TLS slot and then load the dcontext there.
@@ -518,6 +556,7 @@ prepare_for_clean_call(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr)
     dstack_offs += XSP_SZ;
     PRE(ilist, instr, INSTR_CREATE_pushf(dcontext));
     dstack_offs += XSP_SZ;
+    IF_LINUX_KERNEL(eflags_offs = dstack_offs;)
     /* Base of dstack is 16-byte aligned, and we've done 2 pushes, so we're
      * 16-byte aligned for x64
      */
@@ -531,9 +570,22 @@ prepare_for_clean_call(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr)
      * time) b/c the callee has to ask for the dr_mcontext_t.
      */
 
+#ifdef LINUX_KERNEL
+    /* clear IF and other non-system eflags for callee's usage */
+    PRE(ilist, instr,
+        INSTR_CREATE_push(dcontext,
+                          opnd_create_base_disp(REG_XSP, REG_NULL, 0,
+                          dstack_offs - eflags_offs, OPSZ_STACK)));
+    PRE(ilist, instr,
+        INSTR_CREATE_and(dcontext,
+                         opnd_create_base_disp(REG_XSP, REG_NULL, 0, 0,
+                                               OPSZ_STACK),
+                         OPND_CREATE_INT32(~(EFLAGS_NON_SYSTEM | EFLAGS_IF))));
+#else
     /* clear eflags for callee's usage */
     PRE(ilist, instr,
         INSTR_CREATE_push_imm(dcontext, OPND_CREATE_INT32(0)));
+#endif
     PRE(ilist, instr, INSTR_CREATE_popf(dcontext));
 
 #ifdef WINDOWS
@@ -1437,7 +1489,7 @@ return_stack_mangle_direct_call(dcontext_t *dcontext, instrlist_t *ilist,
 
 void
 insert_push_immed_ptrsz(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
-                        ptr_int_t val)
+                        ptr_uint_t val)
 {
 #ifdef X64
     /* do push-64-bit-immed in two pieces.  tiny corner-case risk of racy
@@ -1446,8 +1498,11 @@ insert_push_immed_ptrsz(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr
      * restore a register. */
     PRE(ilist, instr,
         INSTR_CREATE_push_imm(dcontext, OPND_CREATE_INT32((int)val)));
-    /* push is sign-extended, so we can skip top half if nothing in top 33 bits */
-    if (val >= 0x80000000) {
+    /* push is sign-extended, so we can skip top half if all 0s or all 1s in top
+     * 33 bits */
+    if ((val >> 31) != 0 && (val >> 31) != 0x1ffffffff) {
+        /* This should acutually work. It's just never been tested yet. */
+        ASSERT(false);
         PRE(ilist, instr,
             INSTR_CREATE_mov_st(dcontext, OPND_CREATE_MEM32(REG_XSP, 4),
                                 OPND_CREATE_INT32((int)(val >> 32))));
@@ -1886,6 +1941,10 @@ mangle_return(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
     if (instr_num_srcs(instr) > 0 && opnd_is_immed_int(instr_get_src(instr, 0))) {
         /* if has an operand, return removes some stack space,
          * AFTER the return address is popped
+         *
+         * N.B., recreate_app_state will not restore this memory if we're
+         * interrupted in the ret mangle region. However, the return address is
+         * restored, which is all that should matter.
          */
         int val = (int) opnd_get_immed_int(instr_get_src(instr, 0));
         IF_X64(ASSERT_TRUNCATE(val, int, opnd_get_immed_int(instr_get_src(instr, 0))));
@@ -1931,6 +1990,11 @@ mangle_return(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
         ASSERT(!X64_MODE_DC(dcontext) || opnd_get_size(retaddr) != OPSZ_4);
         PRE(ilist, instr, pop);
         if (opnd_get_size(retaddr) == OPSZ_2) {
+            /* We don't support this because we won't properly restore the stack
+             * in recreate_app_state: we rely on RCX holding the popped return
+             * address.
+             */
+            IF_LINUX_KERNEL(ASSERT_NOT_IMPLEMENTED(false));
             /* we need to zero out the top 2 bytes */
             PRE(ilist, instr, INSTR_CREATE_movzx
                 (dcontext,
@@ -1947,6 +2011,7 @@ mangle_return(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
          * need to be relative to the new segment, w/o messing up current segment.
          * FIXME: can we do better without too much work?
          */
+        IF_LINUX_KERNEL(ASSERT_NOT_IMPLEMENTED(false));
         SYSLOG_INTERNAL_WARNING_ONCE("Encountered a far ret");
         STATS_INC(num_far_rets);
         /* pop selector from stack, but not into cs, just junk it
@@ -1959,13 +2024,17 @@ mangle_return(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
                               opnd_size_in_bytes(opnd_get_size(retaddr)), OPSZ_lea)));
     }
 
+#ifdef LINUX_KERNEL
+    /* We process iret in mangle_return_to_user. */
+	ASSERT(instr_get_opcode(instr) != OP_iret);
+#else
     if (instr_get_opcode(instr) == OP_iret) {
         instr_t *popf;
 
         /* Xref PR 215553 and PR 191977 - we actually see this on 64-bit Vista */
-#ifndef X64
+# ifndef X64
         ASSERT_NOT_TESTED();
-#endif
+# endif
         LOG(THREAD, LOG_INTERP, 2, "Encountered iret at "PFX" - mangling\n",
             instr_get_translation(instr));
         STATS_INC(num_irets);
@@ -2021,6 +2090,7 @@ mangle_return(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
             ASSERT_NOT_TESTED();
         }
     }
+#endif /* !LINUX_KERNEL */
 
     /* remove the ret */
     instrlist_remove(ilist, instr);
@@ -2267,11 +2337,13 @@ mangle_insert_clone_code(dcontext_t *dcontext, instrlist_t *ilist, instr_t *inst
  * not an original app instruction but one inserted by the earlier mangling phase.
  */
 #endif
+#ifndef LINUX_KERNEL
 static void
 mangle_syscall(dcontext_t *dcontext, instrlist_t *ilist, uint flags,
                instr_t *instr, instr_t *next_instr)
 {
-#ifdef LINUX
+# ifdef LINUX
+    instr_t *skip_exit;
     if (get_syscall_method() != SYSCALL_METHOD_INT &&
         get_syscall_method() != SYSCALL_METHOD_SYSCALL &&
         get_syscall_method() != SYSCALL_METHOD_SYSENTER) {
@@ -2300,7 +2372,7 @@ mangle_syscall(dcontext_t *dcontext, instrlist_t *ilist, uint flags,
      * when we want to exit right before the syscall, we call the
      * mangle_syscall_code() routine below.
      */
-    instr_t *skip_exit = INSTR_CREATE_label(dcontext);
+    skip_exit = INSTR_CREATE_label(dcontext);
     PRE(ilist, instr, INSTR_CREATE_jmp_short(dcontext, opnd_create_instr(skip_exit)));
     /* assumption: raw bits of instr == app pc */
     ASSERT(instr_get_raw_bits(instr) != NULL);
@@ -2312,7 +2384,7 @@ mangle_syscall(dcontext_t *dcontext, instrlist_t *ilist, uint flags,
                         (dcontext, opnd_create_pc(instr_get_raw_bits(instr))));
     PRE(ilist, instr, skip_exit);
 
-# ifdef STEAL_REGISTER
+#  ifdef STEAL_REGISTER
     /* in linux, system calls get their parameters via registers.
      * edi is the last one used, but there are system calls that
      * use it, so we put the real value into edi.  plus things
@@ -2361,9 +2433,9 @@ mangle_syscall(dcontext_t *dcontext, instrlist_t *ilist, uint flags,
                              opnd_create_reg(REG_EDI)));
     POST(ilist, instr,
          INSTR_CREATE_push(dcontext, opnd_create_reg(REG_EBX)));
-# endif /* STEAL_REGISTER */
+#  endif /* STEAL_REGISTER */
 
-#else /* WINDOWS */
+# else /* WINDOWS */
     /* special handling of system calls is performed in shared_syscall or
      * in do_syscall
      */
@@ -2481,8 +2553,57 @@ mangle_syscall(dcontext_t *dcontext, instrlist_t *ilist, uint flags,
     /* destroy the syscall instruction */
     instrlist_remove(ilist, instr);
     instr_destroy(dcontext, instr);
-#endif /* WINDOWS */
+# endif /* WINDOWS */
 }
+#else /* LINUX_KERNEL */
+
+static void
+mangle_return_to_user(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr)
+{
+	/* A direct jump was created by build_bb_ilist that will send us back to
+	 * the dispatcher. The dispatcher emulates the instruction.
+	 *
+	 * TODO(peter): Perhaps for iret we want to use regular indirect IBL
+	 * processing when returning to the kernel. We'd need to perform an inline
+	 * check of the target code segment (CS & 3 == 0 --> kernel). If the target
+	 * is kernel, then we could use the existing code in mangle_return to pop the
+	 * interrupt stack frame and call the indirect branch linking code. I haven't
+	 * done this because performing the inline check transparently is a hassle (i.e.,
+	 * because of eflags issues).
+	 */
+    DODEBUG({
+        /* TODO(peter): Support 32-bit iret and sysret. We'd have to create
+         * different versions of native_sysret and native_iret. I'm not sure if
+         * Linux uses these. */
+    });
+    LOG(THREAD, LOG_INTERP, 1, "removed iret/sysret @ pc %p\n", instr->bytes);
+
+    if (instr_get_opcode(instr) == OP_sysret && DYNAMO_OPTION(optimize_sys_call_ret)) {
+        /* If interrupts were enabled at this point. We'd really mess up.
+         * However, any sane OS would have interrupts disabled before calling
+         * sysret because sysret and the preceding swapgs need to be atomic.
+         */
+        instrlist_preinsert(ilist, instr, INSTR_CREATE_swapgs(dcontext));
+    } else {
+        instrlist_remove(ilist, instr);
+        instr_destroy(dcontext, instr);
+    }
+}
+
+static void
+mangle_swapgs(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr)
+{
+    ASSERT(instr_raw_bits_valid(instr));
+    if (!kernel_native_swapgs(instr->bytes)) {
+        LOG(THREAD, LOG_INTERP, 1, "removed swapgs @ pc %p\n", instr->bytes);
+        instrlist_remove(ilist, instr);
+        instr_destroy(dcontext, instr);
+    } else {
+        LOG(THREAD, LOG_INTERP, 1, "kept swapgs @ pc %p\n", instr->bytes);
+    }
+}
+
+#endif
 
 #ifdef LINUX
 
@@ -2962,6 +3083,9 @@ mangle(dcontext_t *dcontext, instrlist_t *ilist, uint flags,
 #endif
 
         if (instr_is_exit_cti(instr)) {
+        	instr_t *cti_translation_label = INSTR_CREATE_label(dcontext);
+        	instr_set_cti_translation(cti_translation_label, true);
+            PRE(ilist, instr, cti_translation_label);
             mangle_exit_cti_prefixes(dcontext, instr);
 
             /* to avoid reachability problems we convert all
@@ -2987,9 +3111,10 @@ mangle(dcontext_t *dcontext, instrlist_t *ilist, uint flags,
             }
         }
 
+#ifndef LINUX_KERNEL
         /* PR 240258: wow64 call* gateway is considered is_syscall */
         if (instr_is_syscall(instr)) {
-#ifdef WINDOWS
+# ifdef WINDOWS
             /* For XP & 2003, which use sysenter, we process the syscall after all
              * mangling is completed, since we need to insert a reference to the
              * post-sysenter instruction. If that instruction is a 'ret', which
@@ -2998,17 +3123,26 @@ mangle(dcontext_t *dcontext, instrlist_t *ilist, uint flags,
              * that case, we defer syscall processing until mangling is completed.
              */
             if (!ignorable_sysenter)
-#endif
+# endif
                 mangle_syscall(dcontext, ilist, flags, instr, next_instr);
             continue;
         }
-        else if (instr_is_interrupt(instr)) { /* non-syscall interrupt */
+        else 
+#endif
+        if (instr_is_interrupt(instr)) { /* non-syscall interrupt */
             mangle_interrupt(dcontext, ilist, instr, next_instr);
             continue;
         }
 #ifdef FOOL_CPUID
         else if (instr_get_opcode(instr) == OP_cpuid) {
             mangle_cpuid(dcontext, ilist, instr, next_instr);
+            continue;
+        }
+#endif
+
+#ifdef LINUX_KERNEL
+        if (instr_get_opcode(instr) == OP_swapgs) {
+            mangle_swapgs(dcontext, ilist, instr);
             continue;
         }
 #endif
@@ -3020,7 +3154,7 @@ mangle(dcontext_t *dcontext, instrlist_t *ilist, uint flags,
             continue;
         }
 
-#ifdef STEAL_REGISTER
+#ifdef STEAL_REGISTERinstr_create_label
         if (ilist->flags) {
             restore_state(dcontext, instr, ilist); /* end of edi calculation */
         }
@@ -3033,6 +3167,12 @@ mangle(dcontext_t *dcontext, instrlist_t *ilist, uint flags,
                 mangle_direct_call(dcontext, ilist, instr, next_instr, mangle_calls);
         } else if (instr_is_call_indirect(instr)) {
             mangle_indirect_call(dcontext, ilist, instr, next_instr, mangle_calls, flags);
+#ifdef LINUX_KERNEL
+        } else if (instr_may_return_to_user(instr)) {
+            /* Important that this comes before mangle_return because sysret and
+             * iret are considered return instructions. */
+        	mangle_return_to_user(dcontext, ilist, instr);
+#endif
         } else if (instr_is_return(instr)) {
             mangle_return(dcontext, ilist, instr, next_instr, flags);
         } else if (instr_is_mbr(instr)) {
@@ -3048,6 +3188,7 @@ mangle(dcontext_t *dcontext, instrlist_t *ilist, uint flags,
              */
             SYSLOG_INTERNAL_WARNING_ONCE("Encountered a far direct jmp");
         }
+
         /* else nothing to do, e.g. direct branches */
     }
 

@@ -36,7 +36,7 @@
 #include "utils.h"
 #include "moduledb.h"
 #include "module_shared.h"
-#include <string.h>  /* for memset, strlen */
+#include "string_wrapper.h"  /* for memset, strlen */
 
 /* An array of pointers to the various exempt lists indexed by the 
  * moduledb_exempt_list_t enum.  We have the ugliness of an extra indirection

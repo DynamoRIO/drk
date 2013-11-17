@@ -55,7 +55,7 @@
 #include <imagehlp.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>             /* memset */
+#include "string_wrapper.h"             /* memset */
 #include <time.h>
 #include <tchar.h>
 

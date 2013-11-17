@@ -52,7 +52,7 @@
 #include "decode.h"
 #include "decode_fast.h"
 #include "disassemble.h"
-#include <string.h> /* for memcpy */
+#include "string_wrapper.h" /* for memcpy */
 #include "instrument.h"
 #include "../hotpatch.h"
 #ifdef RETURN_AFTER_CALL
@@ -113,7 +113,7 @@ file_t bbdump_file = INVALID_FILE;
 
 /* initialization */
 void
-interp_init()
+interp_init(void)
 {
 #ifdef INTERNAL
     if (INTERNAL_OPTION(bbdump_tags)) {
@@ -132,7 +132,7 @@ static int num_rets_removed;
 
 /* cleanup */
 void
-interp_exit()
+interp_exit(void)
 {
 #ifdef INTERNAL
     if (INTERNAL_OPTION(bbdump_tags)) {
@@ -1384,6 +1384,7 @@ bb_process_fs_ref(dcontext_t *dcontext, build_bb_t *bb)
 }
 #endif /* win32 */
 
+#ifndef LINUX_KERNEL
 /* Returns true to indicate that ignorable syscall processing is completed
  * with *continue_bb indicating if the bb should be continued or not.
  * When returning false, continue_bb isn't pertinent.
@@ -1458,6 +1459,7 @@ bb_process_ignorable_syscall(dcontext_t *dcontext, build_bb_t *bb,
     return true;
 #endif
 }
+#endif
 
 #ifdef WINDOWS
 /* Process a syscall that is executed via shared syscall. */
@@ -1498,6 +1500,7 @@ bb_process_shared_syscall(dcontext_t *dcontext, build_bb_t *bb, int sysnum)
 }
 #endif
 
+#ifndef LINUX_KERNEL
 static bool
 bb_process_non_ignorable_syscall(dcontext_t *dcontext, build_bb_t *bb,
                                  int sysnum)
@@ -1522,11 +1525,16 @@ bb_process_non_ignorable_syscall(dcontext_t *dcontext, build_bb_t *bb,
     bb->flags |= FRAG_MUST_END_TRACE;
     return false; /* end bb now */
 }
+#endif
 
 /* returns true to indicate "continue bb" and false to indicate "end bb now" */
 static inline bool
 bb_process_syscall(dcontext_t *dcontext, build_bb_t *bb)
 {
+#ifdef LINUX_KERNEL
+    ASSERT_MESSAGE("There should not be system calls in the kernel.", false);
+    return true;
+#else
     int sysnum;
 #ifdef CLIENT_INTERFACE
     /* PR 307284: for simplicity do syscall/int processing post-client.
@@ -1578,11 +1586,13 @@ bb_process_syscall(dcontext_t *dcontext, build_bb_t *bb)
 
         bool continue_bb;
 
+#ifndef LINUX_KERNEL
         if (bb_process_ignorable_syscall(dcontext, bb, sysnum, &continue_bb)) {
             if (!DYNAMO_OPTION(inline_ignored_syscalls))
                 continue_bb = false;
             return continue_bb;
         }
+#endif
     }
 #ifdef WINDOWS
     if (sysnum > -1 && DYNAMO_OPTION(shared_syscalls) &&
@@ -1594,6 +1604,7 @@ bb_process_syscall(dcontext_t *dcontext, build_bb_t *bb)
     
     /* Fall thru and handle as a non-ignorable syscall. */
     return bb_process_non_ignorable_syscall(dcontext, bb, sysnum);
+#endif
 }
 
 /* Case 3922: for wow64 we treat "call *fs:0xc0" as a system call.
@@ -2226,6 +2237,7 @@ instr_will_be_exit_cti(instr_t *inst)
 }
 
 #ifdef CLIENT_INTERFACE
+# ifndef LINUX_KERNEL
 /* PR 215217: check syscall restrictions */
 static bool
 client_check_syscall(instrlist_t *ilist, instr_t *inst,
@@ -2267,12 +2279,14 @@ client_check_syscall(instrlist_t *ilist, instr_t *inst,
     }
     return true;
 }
+# endif /* LINUX_KERNEL */
 
 /* Pass bb to client, and afterward check for criteria we require and rescan for
  * eflags and other flags that might have changed.
  */
 static void
-client_process_bb(dcontext_t *dcontext, build_bb_t *bb)
+client_process_bb(dcontext_t *dcontext, build_bb_t *bb,
+                  ibl_branch_type_t *ibl_branch_type)
 {
     dr_emit_flags_t emitflags = DR_EMIT_DEFAULT;
     instr_t *inst;
@@ -2355,10 +2369,11 @@ client_process_bb(dcontext_t *dcontext, build_bb_t *bb)
         /* PR 215217: client should not add new source code regions, else our
          * cache consistency (both page prot and selfmod) will fail
          */
-        CLIENT_ASSERT((instr_get_translation(inst) >= bb->start_pc &&
+        CLIENT_ASSERT(DYNAMO_OPTION(opt_speed) || (
+                      (instr_get_translation(inst) >= bb->start_pc &&
                        instr_get_translation(inst) < bb->cur_pc) ||
                       (instr_is_ubr(inst) && opnd_is_pc(instr_get_target(inst)) &&
-                       instr_get_translation(inst) == opnd_get_pc(instr_get_target(inst)))
+                       instr_get_translation(inst) == opnd_get_pc(instr_get_target(inst))))
                       /* the displaced code and jmp return from intercept buffer
                        * has translation fields set to hooked app routine */
                       IF_WINDOWS(|| dr_fragment_app_pc(bb->start_pc) != bb->start_pc),
@@ -2379,8 +2394,10 @@ client_process_bb(dcontext_t *dcontext, build_bb_t *bb)
                 bb->instr = tmp;
         }
 
+#ifndef LINUX_KERNEL
         /* ensure syscall/int2b terminates block */
         client_check_syscall(bb->ilist, inst, &found_syscall, &found_int);
+#endif
 
         if (instr_will_be_exit_cti(inst)) {
 
@@ -2395,7 +2412,8 @@ client_process_bb(dcontext_t *dcontext, build_bb_t *bb)
                  * xref case 10846
                  */
                 CLIENT_ASSERT(!TEST(~(LINK_DIRECT | LINK_INDIRECT | LINK_CALL |
-                                      LINK_RETURN | LINK_JMP | LINK_NI_SYSCALL_ALL
+                                      LINK_RETURN | LINK_JMP
+                                      IF_NOT_LINUX_KERNEL(| LINK_NI_SYSCALL_ALL)
                                       IF_WINDOWS(| LINK_CALLBACK_RETURN)),
                                     bb->exit_type),
                               "client unsupported block exit type internal error");
@@ -2422,6 +2440,13 @@ client_process_bb(dcontext_t *dcontext, build_bb_t *bb)
                     instr_exit_branch_set_type(bb->instr,
                                                instr_branch_type(inst));
                 }
+#ifdef LINUX_KERNEL
+                else if (instr_may_return_to_user(inst)) {
+                    bb->exit_target = (app_pc) fake_user_return_exit_target;
+                    bb->exit_type = instr_branch_type(inst);
+                    bb->flags |= FRAG_MUST_END_TRACE; 
+                }
+#endif
                 else {
                     ASSERT(instr_is_mbr(inst));
                     CLIENT_ASSERT(inst == instrlist_last(bb->ilist),
@@ -2430,6 +2455,7 @@ client_process_bb(dcontext_t *dcontext, build_bb_t *bb)
                                                       DEFAULT_IBL_BB(), 
                                                       get_ibl_branch_type(inst));
                     bb->exit_type = instr_branch_type(inst);
+                    *ibl_branch_type = get_ibl_branch_type(inst);
                 }
 
                 /* since we're walking backward, at the first exit cti
@@ -2454,7 +2480,8 @@ client_process_bb(dcontext_t *dcontext, build_bb_t *bb)
              * reasons as well.
              */
             else {
-                CLIENT_ASSERT(instr_is_ubr(inst),
+                CLIENT_ASSERT(DYNAMO_OPTION(opt_speed) ||
+                              instr_is_ubr(inst),
                               "a second exit cti must be a ubr");
                 bb->flags |= FRAG_CANNOT_BE_TRACE;
                 /* our cti check above should have already turned off coarse */
@@ -2705,6 +2732,31 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
                 disassemble_with_bytes(dcontext, bb->instr_start, THREAD);
             });
 
+#ifdef LINUX_KERNEL            
+            ASSERT(instr_get_opcode(bb->instr) != OP_int);
+            ASSERT(instr_get_opcode(bb->instr) != OP_sysexit);
+            ASSERT(instr_get_opcode(bb->instr) != OP_jmp_far);
+            ASSERT(instr_get_opcode(bb->instr) != OP_jmp_far_ind);
+            ASSERT(instr_get_opcode(bb->instr) != OP_call_far);
+            ASSERT(instr_get_opcode(bb->instr) != OP_call_far_ind);
+            ASSERT(instr_get_opcode(bb->instr) != OP_int3);
+            /* TODO(peter): We can't check for all gs writes because
+             * load_gs_index needs to write to gs. We should whitelist it. */
+# if 0
+            DODEBUG({
+                uint i;
+                for (i = 0; i < instr_num_dsts(bb->instr); i++) {
+                    opnd_t dst = instr_get_dst(bb->instr, i);
+                    if (opnd_is_reg(dst) && opnd_get_reg(dst) == SEG_TLS) {
+                        ASSERT_MESSAGE("We rely on the Linux Kernel's per-CPU "
+                                       "storage. Instructions that modify gs "
+                                       "are not supported.", false);
+                    }
+                }
+            });
+# endif
+#endif
+
 #if defined(INTERNAL) || defined(CLIENT_INTERFACE)
             if (bb->outf != INVALID_FILE)
                 disassemble_with_bytes(dcontext, bb->instr_start, bb->outf);
@@ -2858,6 +2910,7 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
             }
         }
 #else
+#  ifndef LINUX_KERNEL
         if (instr_get_prefix_flag(bb->instr,
                                   (SEG_TLS == SEG_GS) ? PREFIX_SEG_GS : PREFIX_SEG_FS)
             /* __errno_location is interpreted when global, though it's hidden in TOT */
@@ -2868,6 +2921,7 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
             CLIENT_ASSERT(false, "no support yet for application using non-NPTL segment");
             ASSERT_BUG_NUM(205276, false);
         }
+#  endif
 #endif
 
         if (instr_is_ubr(bb->instr)) {
@@ -2887,6 +2941,23 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
         }
 #endif /* RETURN_AFTER_CALL */
 
+#ifdef LINUX_KERNEL
+        if (instr_may_return_to_user(bb->instr)) {
+            /* TODO(peter): Not sure if it is necessary to set
+             * FRAG_MUST_END_TRACE. My intent is to ensure that we return to the
+             * dispatcher when we encounter these instructions.
+             */
+            bb->flags |= FRAG_MUST_END_TRACE; 
+            bb->exit_type = instr_branch_type(bb->instr);
+            /* TODO(peter): Handle sysexit. */
+            ASSERT(TESTANY(LINK_SYSRET | LINK_IRET, bb->exit_type));
+            LOG(THREAD, LOG_INTERP, 2, "Block has %s @ pc %p\n",
+                TEST(LINK_IRET, bb->exit_type) ?
+                    "iret" : "sysret", bb->instr->bytes);
+            bb->exit_target = (app_pc) fake_user_return_exit_target;
+            break;
+        }
+#endif
         if (instr_is_call_direct(bb->instr)) {
             if (!bb_process_call_direct(dcontext, bb)) {
                 if (bb->instr != NULL)
@@ -2996,6 +3067,9 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
             }
         }
         else if (instr_is_syscall(bb->instr)) {
+#ifdef LINUX_KERNEL
+        	CLIENT_ASSERT(false, "System call made within in the kernel.");
+#endif
             if (!bb_process_syscall(dcontext, bb))
                 break;
         } /* end syscall */
@@ -3147,7 +3221,7 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
 #endif
 
 #ifdef CLIENT_INTERFACE
-    client_process_bb(dcontext, bb);
+    client_process_bb(dcontext, bb, &ibl_branch_type);
     if (bb->unmangled_ilist != NULL)
         *bb->unmangled_ilist = instrlist_clone(dcontext, bb->ilist);
 #endif
@@ -3178,6 +3252,7 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
         && !hotp_injected
 #endif
        ) {
+#ifndef LINUX_KERNEL
         /* If the fragment doesn't have a syscalls or contains a
          * non-ignorable one -- meaning that the frag will exit the cache
          * to execute the syscall -- it can be shared.
@@ -3187,6 +3262,7 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
         if (!TEST(FRAG_HAS_SYSCALL, bb->flags) ||
             TESTANY(LINK_NI_SYSCALL_ALL, bb->exit_type))
             bb->flags |= FRAG_SHARED;
+#endif
 #ifdef WINDOWS
         /* A fragment can be shared if it contains a syscall that will be
          * executed via the version of shared syscall that can be targetted by
@@ -3213,7 +3289,6 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
           * FRAG_MUST_END_TRACE and LINK_NI_SYSCALL
           */
          TEST(FRAG_HAS_SYSCALL, bb->flags) ||
-         TEST(FRAG_MUST_END_TRACE, bb->flags) ||
          TEST(FRAG_CANNOT_BE_TRACE, bb->flags) ||
          TEST(FRAG_SELFMOD_SANDBOXED, bb->flags) ||
          /* PR 214142: coarse units does not support storing translations */
@@ -3224,7 +3299,10 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
 #ifdef WINDOWS
          TEST(LINK_CALLBACK_RETURN, bb->exit_type) ||
 #endif
-         TESTANY(LINK_NI_SYSCALL_ALL, bb->exit_type))){
+#ifndef LINUX_KERNEL
+        TESTANY(LINK_NI_SYSCALL_ALL, bb->exit_type) ||
+#endif
+         TEST(FRAG_MUST_END_TRACE, bb->flags))) {
         /* Currently not supported in a coarse unit */
         STATS_INC(num_fine_in_coarse);
         DOSTATS({
@@ -3242,8 +3320,10 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
                 STATS_INC(coarse_prevent_translation); 
             else if (IF_WINDOWS_ELSE_0(TEST(LINK_CALLBACK_RETURN, bb->exit_type)))
                 STATS_INC(coarse_prevent_cbret); 
+#ifndef LINUX_KERNEL
             else if (TESTANY(LINK_NI_SYSCALL_ALL, bb->exit_type))
                 STATS_INC(coarse_prevent_syscall); 
+#endif
             else
                 ASSERT_NOT_REACHED();
         });
@@ -5685,9 +5765,11 @@ mangle_trace(dcontext_t *dcontext, instrlist_t *ilist, monitor_data_t *md)
 
 #ifdef CLIENT_INTERFACE
         /* Ensure non-ignorable syscall/int2b terminates trace */
+#ifndef LINUX_KERNEL
         if (md->pass_to_client &&
             !client_check_syscall(ilist, inst, &found_syscall, &found_int))
             return false;
+#endif
 
         /* Clients should not add new source code regions, which would mess us up
          * here, as well as mess up our cache consistency (both page prot and
@@ -5821,7 +5903,7 @@ mangle_trace(dcontext_t *dcontext, instrlist_t *ilist, monitor_data_t *md)
         CLIENT_ASSERT((!found_syscall && !found_int)
                       /* On linux we allow ignorable syscalls in middle.
                        * FIXME PR 307284: see notes above. */
-                      IF_LINUX(|| !TEST(LINK_NI_SYSCALL, md->final_exit_flags)),
+                      IF_NOT_LINUX_KERNEL(IF_LINUX(|| !TEST(LINK_NI_SYSCALL, md->final_exit_flags))),
                       "client changed exit target where unsupported\n"
                       "check if trace ends in a syscall or int");
     }

@@ -38,7 +38,7 @@
 # include "ntdll.h" /* for create_thread(), nt_free_virtual_memory() */
 # include "os_exports.h" /* for detach_helper(), get_stack_bounds() */
 #else
-# include <string.h>
+# include "string_wrapper.h"
 # include "syscall.h"
 #endif /* WINDOWS */
 

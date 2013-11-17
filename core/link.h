@@ -90,15 +90,23 @@ enum {
      */
     LINK_TRACE_CMP       = 0x0100,
 #endif
-#ifdef WINDOWS
+#ifndef LINUX_KERNEL
+# ifdef WINDOWS
     LINK_CALLBACK_RETURN = 0x0200,
-#else
+# else
     /* PR 286922: we support both OP_sys{call,enter}- and OP_int-based system calls */
     LINK_NI_SYSCALL_INT  = 0x0200,
-#endif
+# endif
     /* indicates whether exit is before a non-ignorable syscall */
     LINK_NI_SYSCALL      = 0x0400,
     LINK_FINAL_INSTR_SHARED_FLAG = LINK_NI_SYSCALL,
+#else
+    /* indicates that exit is right before a native iret */
+    LINK_IRET            = 0x0200,
+    /* indicates that exit is right before a native sysret */
+    LINK_SYSRET          = 0x0400,
+    LINK_FINAL_INSTR_SHARED_FLAG = LINK_SYSRET,
+#endif /* LINUX_KERNEL */
     /* end of instr_t-shared flags  */
     /***************************************************/
 
@@ -483,6 +491,7 @@ const linkstub_t * get_reset_linkstub(void);
 const linkstub_t * get_syscall_linkstub(void);
 const linkstub_t * get_selfmod_linkstub(void);
 const linkstub_t * get_ibl_deleted_linkstub(void);
+const linkstub_t * get_ibl_unlinked_found_linkstub(void);
 #ifdef LINUX
 const linkstub_t * get_sigreturn_linkstub(void);
 #else /* WINDOWS */
@@ -521,6 +530,15 @@ const linkstub_t * get_shared_syscalls_bb_linkstub(void);
 # define IS_SHARED_SYSCALLS_UNLINKED_LINKSTUB(l) false
 # define IS_SHARED_SYSCALLS_LINKSTUB(l) false
 # define IS_SHARED_SYSCALLS_TRACE_LINKSTUB(l) false
+#endif
+
+#ifdef LINUX_KERNEL
+const linkstub_t *get_syscall_entry_linkstub(void);
+const linkstub_t *get_user_interrupt_entry_linkstub(void);
+const linkstub_t *get_kernel_interrupt_entry_linkstub(void);
+# define IS_KERNEL_ENTRY_LINKSTUB(l)\
+    ((l) == get_syscall_entry_linkstub() ||\
+     (l) == get_user_interrupt_entry_linkstub())
 #endif
 
 bool should_separate_stub(dcontext_t *dcontext, app_pc target, uint fragment_flags);
@@ -569,5 +587,11 @@ coarse_stubs_set_info(coarse_info_t *info);
 /* Sets the final used pc in a frozen stub region */
 void
 coarse_stubs_set_end_pc(coarse_info_t *info, byte *end_pc);
+
+#ifdef LINUX_KERNEL
+/* The exit target we set for LINK_IRET and LINK_SYSRET exits. */
+void
+fake_user_return_exit_target(void);
+#endif
 
 #endif /* _CORE_LINK_H_ */

@@ -50,18 +50,22 @@
 #include "instr_create.h"
 #include "instrument.h" /* for dr_insert_call() */
 #include "proc.h"
-#include <string.h> /* for memcpy */
+#include "string_wrapper.h" /* for memcpy */
 #include "../instrlist.h"
 #include "decode.h"
 #include "decode_fast.h"
 #ifdef DEBUG
 #include "disassemble.h"
 #endif
-#include <limits.h> /* for UCHAR_MAX */
+#include "limits_wrapper.h" /* for UCHAR_MAX */
 #include "../perscache.h"
 
 #ifdef VMX86_SERVER
 # include "vmkuw.h"
+#endif
+
+#ifdef LINUX_KERNEL
+# include "msr.h"
 #endif
 
 /* fragment_t fields */
@@ -1085,6 +1089,12 @@ exit_cti_disp_pc(cache_pc branch_pc)
         ASSERT(opcode == RAW_OPCODE_jcc_byte1);
     }
 
+    if (opcode == ADDR_PREFIX_OPCODE) { /* used w/ jecxz/loop* */
+        length++;
+        byte_ptr++;
+        opcode = *byte_ptr;
+    }
+
     if (opcode >= RAW_OPCODE_loop_start && opcode <= RAW_OPCODE_loop_end) {
         /* assume that this is a mangled jcxz/loop*
          * target pc is in last 4 bytes of "9-byte instruction"
@@ -1643,7 +1653,9 @@ cache_pc
 indirect_linkstub_target(dcontext_t *dcontext, fragment_t *f, linkstub_t *l)
 {
     ASSERT(LINKSTUB_INDIRECT(l->flags));
+#ifndef LINUX_KERNEL
     ASSERT(!TESTANY(LINK_NI_SYSCALL_ALL, l->flags));
+#endif
 #ifdef WINDOWS
     if (EXIT_TARGETS_SHARED_SYSCALL(l->flags)) {
         /* currently this is the only way to distinguish shared_syscall
@@ -1829,6 +1841,63 @@ unlink_indirect_exit(dcontext_t *dcontext, fragment_t *f, linkstub_t *l)
             patch_branch(EXIT_CTI_PC(f, l), target, HOT_PATCHABLE);
         }
     }
+}
+
+static byte *
+get_ibl_found_unlinked_target(ibl_code_t *ibl_code, ibl_found_exit_t *exit)
+{
+    if (exit->restored_eflags && exit->targets_prefix) {
+        return ibl_code->found_unlinked_prefix;
+    } else if (exit->restored_eflags && !exit->targets_prefix) {
+        return ibl_code->found_unlinked;
+    } else if (!exit->restored_eflags && exit->targets_prefix) {
+        return ibl_code->found_unlinked_eflags_prefix;
+    } else { /* !exit->restored_eflags && !exit->targets_prefix */
+        /* In append_ibl_found, !target_prefix => restore_eflags. */
+        ASSERT_NOT_REACHED();
+        return ibl_code->found_unlinked_eflags;
+    }
+}
+
+static void
+ibl_linking_common(dcontext_t *dcontext, cache_pc interrupted_ibl_pc,
+                   bool link)
+{
+    int i;
+    generated_code_t *gencode = THREAD_GENCODE(dcontext);
+    ibl_code_t *code = get_ibl_code_from_routine_pc(dcontext,
+                                                    interrupted_ibl_pc);
+    ASSERT(code != NULL);
+    ASSERT(code->indirect_branch_lookup_routine >= gencode->gen_start_pc &&
+           code->indirect_branch_lookup_routine < gencode->gen_end_pc);
+    protect_generated_code(gencode, WRITABLE);
+    for (i = 0; i < code->num_ibl_found_exits; i++) {
+        ibl_found_exit_t *exit = &code->ibl_found_exits[i];
+        /* This does not need to be atomic because we're patching thread
+         * private code. 
+         */
+        if (link) {
+            memcpy(exit->jmp_pc, exit->original_jmp_code, JMP_LONG_LENGTH);
+        } else {
+            IF_DEBUG(byte *pc =)
+            insert_relative_jump(exit->jmp_pc, 
+                         get_ibl_found_unlinked_target(code, exit), false);
+            ASSERT(pc - exit->jmp_pc == JMP_LONG_LENGTH);
+        }
+    }
+    protect_generated_code(gencode, READONLY);
+}
+
+void
+unlink_ibl_routine(dcontext_t *dcontext, cache_pc interrupted_ibl_pc)
+{
+    ibl_linking_common(dcontext, interrupted_ibl_pc, false /* unlink */);
+}
+
+void
+link_ibl_routine(dcontext_t *dcontext, cache_pc interrupted_ibl_pc)
+{
+    ibl_linking_common(dcontext, interrupted_ibl_pc, true /* link */);
 }
 
 /*******************************************************************************
@@ -2216,6 +2285,101 @@ relocate_patch_list(dcontext_t *dcontext, patch_list_t *patch,
     }
 }
 
+#if !0
+/* Updates patch list with offsets in assembled instruction list */
+/* Cf: instrlist_encode which does not support a patch list */
+/* Returns length of emitted code */
+int
+encode_with_patch_list(dcontext_t *dcontext, patch_list_t *patch, 
+                       instrlist_t *ilist, cache_pc start_pc)
+{
+    instr_t *inst;
+    uint len;
+    uint cur = -1;
+    cache_pc pc = start_pc;
+    DEBUG_DECLARE(int patches_found = 0;)
+
+    ASSERT(patch->num_relocations < MAX_PATCH_ENTRIES);
+
+    if (patch->type == PATCH_TYPE_INDIRECT_XDI) {
+        relocate_patch_list(dcontext, patch, ilist);
+    }
+
+    /* now encode the instructions */
+    /* must set note fields first with offset */
+    len = 0;
+    for (inst = instrlist_first(ilist); inst; inst = instr_get_next(inst)) {
+        instr_set_note(inst, (void *)(ptr_uint_t)len);
+        len += instr_length(dcontext, inst);
+    }
+
+    /* after instruction list is assembled we collect the offsets */
+    for (inst = instrlist_first(ilist); inst; inst = instr_get_next(inst)) {
+        byte *nxt_pc = instr_encode(dcontext, inst, pc);
+        ASSERT(nxt_pc != NULL);
+        len = (int) (nxt_pc - pc);
+        pc = nxt_pc;
+
+        for (cur = 0; cur < patch->num_relocations; cur++) {
+            if (inst == patch->entry[cur].where.instr) {
+                short offset_in_instr = patch->entry[cur].instr_offset;
+                ASSERT(!TEST(PATCH_OFFSET_VALID, patch->entry[cur].patch_flags));
+
+                DODEBUG({ patches_found ++; });
+                ASSERT(patches_found <= patch->num_relocations);
+
+                /* support positive offsets from beginning and negative - from end of instruction */
+                if (offset_in_instr < 0) {
+                    /* grab offset offset_in_instr bytes from the end of instruction */
+                    /* most commonly -4 for a 32bit immediate  */
+                    patch->entry[cur].where.offset = 
+                        ((pc + offset_in_instr) - start_pc);
+                } else {
+                    /* grab offset after skipping offset_in_instr from beginning of instruction */
+                    patch->entry[cur].where.offset =
+                        ((pc - len + offset_in_instr) - start_pc);
+                }
+                patch->entry[cur].patch_flags |= PATCH_OFFSET_VALID;
+
+                LOG(THREAD, LOG_EMIT, 4,
+                    "encode_with_patch_list: patch_entry_t[%d] offset="PFX"\n",
+                    cur, patch->entry[cur].where.offset);
+
+                if (TEST(PATCH_MARKER, patch->entry[cur].patch_flags)) {
+                    /* treat value_location_offset as an output argument 
+                       and store there the computed offset, 
+                    */
+                    ptr_uint_t *output_value = (ptr_uint_t *)
+                        patch->entry[cur].value_location_offset;
+                    ptr_uint_t output_offset = patch->entry[cur].where.offset;
+                    if (TEST(PATCH_ASSEMBLE_ABSOLUTE, patch->entry[cur].patch_flags)) {
+                        ASSERT(!TEST(PATCH_UINT_SIZED, patch->entry[cur].patch_flags));
+                        output_offset += (ptr_uint_t)start_pc;
+                    }
+                    if (TEST(PATCH_UINT_SIZED, patch->entry[cur].patch_flags)) {
+                        IF_X64(ASSERT(CHECK_TRUNCATE_TYPE_uint(output_offset)));
+                        *((uint *)output_value) = (uint) output_offset;
+                    } else
+                        *output_value = output_offset;
+                }
+
+                LOG(THREAD, LOG_EMIT, 4, 
+                    "encode_with_patch_list [%d] extras patch_flags=0x%x value_offset="
+                    PFX"\n", cur, patch->entry[cur].patch_flags,
+                    patch->entry[cur].value_location_offset);
+                break;
+            }
+        }
+    }
+
+    LOG(THREAD, LOG_EMIT, 4, "cur %d, num %d", cur, patch->num_relocations);
+    ASSERT(patches_found == patch->num_relocations);
+
+    remove_assembled_patch_markers(dcontext, patch);
+    ASSERT(CHECK_TRUNCATE_TYPE_int(pc - start_pc));
+    return (int)(pc - start_pc);
+}
+#else
 /* Updates patch list with offsets in assembled instruction list */
 /* Cf: instrlist_encode which does not support a patch list */
 /* Returns length of emitted code */
@@ -2306,6 +2470,7 @@ encode_with_patch_list(dcontext_t *dcontext, patch_list_t *patch,
     ASSERT(CHECK_TRUNCATE_TYPE_int(pc - start_pc));
     return (int)(pc - start_pc);
 }
+#endif
 
 #ifdef DEBUG
 void
@@ -2516,6 +2681,14 @@ enum {PREFIX_SIZE_RESTORE_OF = 2, /* add $0x7f, %al  */
 static inline bool
 use_ibt_prefix(uint flags)
 {
+#ifdef LINUX_KERNEL
+    /* We're disabling prefixes to make state translation simpler.
+     * TODO(peter): Update the state translation to handle interrupts in
+     * prefixes. To do this, we need to delay interrupt delivery until the next
+     * non-meta instruction.
+     */
+    return false;
+#else
     /* when no traces, all bbs use IBT prefix */
     /* FIXME: currently to allow bb2bb we simply have a prefix on all BB's
      * should experiment with a shorter prefix for targetting BBs
@@ -2533,11 +2706,20 @@ use_ibt_prefix(uint flags)
             !(DYNAMO_OPTION(coarse_units) &&
               !TEST(FRAG_IS_TRACE, flags) &&
               DYNAMO_OPTION(bb_ibl_targets)));
+#endif
 }
 
 static inline bool
 ibl_use_target_prefix(ibl_code_t *ibl_code)
 {
+#ifdef LINUX_KERNEL
+    /* We're disabling prefixes to make state translation simpler.
+     * TODO(peter): Update the state translation to handle interrupts in
+     * prefixes. To do this, we need to delay interrupt delivery until the next
+     * non-meta instruction.
+     */
+    return false;
+#else
    return !(DYNAMO_OPTION(coarse_units) &&
             /* If coarse units are enabled we need to have no prefix
              * for both fine and coarse bbs
@@ -2552,6 +2734,7 @@ ibl_use_target_prefix(ibl_code_t *ibl_code)
                * another bit of info: whether to do two separate lookups.
                */
               DYNAMO_OPTION(disable_traces) && DYNAMO_OPTION(bb_ibl_targets))));
+#endif
 }
 
 int
@@ -3779,9 +3962,28 @@ append_fcache_return_common(dcontext_t *dcontext, generated_code_t *code,
     /* clear eflags now to avoid app's eflags (namely an app std)
      * messing up our ENTER_DR_HOOK
      */
+
+#ifdef LINUX_KERNEL
+    /* Need to set non-system flags to zero. These flags
+     *      (OF, DF, SF, ZF, AF, PF, CF)
+     * are at bit positions
+     *      (11, 10, 7,  6,  4,  2,  0)
+     * in the xflags register. So write (xflags & ~(1100 1101 0101)) to xlflags.
+     * Note that xbx still holds the xflags value from the last popf. Also note
+     * that AND sign extends, so the higher xflags bits are preserved.
+     */
+    APP(ilist, INSTR_CREATE_and(dcontext,
+                                opnd_create_reg(REG_XBX),
+                                OPND_CREATE_INT32(~(EFLAGS_NON_SYSTEM | EFLAGS_IF))));
+    APP(ilist, INSTR_CREATE_push(dcontext, opnd_create_reg(REG_XBX)));
+#else
     /* on x64 a push immed is sign-extended to 64-bit */
     APP(ilist, INSTR_CREATE_push_imm(dcontext, OPND_CREATE_INT8(0)));
+#endif
     APP(ilist, INSTR_CREATE_RAW_popf(dcontext));
+
+
+    
 
     if (ENTER_DR_HOOK != NULL) {
         /* xax is only reg we need to save around the call.
@@ -4340,6 +4542,8 @@ append_ibl_found(dcontext_t *dcontext, instrlist_t *ilist,
     /*>>>    RESTORE_FROM_UPCONTEXT xbx_OFFSET,%xbx                  */
     /*>>>    jmp     *FRAGMENT_START_PC_OFFS(%xcx)                   */
     instr_t *inst = NULL;
+    instr_t *final_jmp;
+    ibl_found_exit_t *exit;
 
     /* no support for absolute addresses on x64: we always use tls/reg */
     IF_X64(ASSERT_NOT_IMPLEMENTED(!absolute));
@@ -4430,8 +4634,9 @@ append_ibl_found(dcontext_t *dcontext, instrlist_t *ilist,
         /* FIXME: do we want this?  seems to be a problem, I'm disabling:
          * ASSERT(!collision || start_pc_offset == FRAGMENT_START_PC_OFFS);  // c \imply FRAGMENT
          */
-        APP(ilist, INSTR_CREATE_jmp_ind(dcontext,
-                                        OPND_CREATE_MEMPTR(REG_XCX, start_pc_offset)));
+        final_jmp = INSTR_CREATE_jmp_ind(dcontext,
+                                         OPND_CREATE_MEMPTR(REG_XCX,
+                                                            start_pc_offset));
     } else {
         /* There is no prefix so we must restore all and jmp through memory:
          *     mov      start_pc_offset(%xcx), %xcx
@@ -4447,16 +4652,37 @@ append_ibl_found(dcontext_t *dcontext, instrlist_t *ilist,
                 APP(ilist, RESTORE_FROM_TLS(dcontext, REG_XCX, MANGLE_XCX_SPILL_SLOT));
             else
                 APP(ilist, RESTORE_FROM_DC(dcontext, REG_XCX, XCX_OFFSET));
-            APP(ilist, INSTR_CREATE_jmp_ind(dcontext,
-                                            OPND_DC_FIELD(absolute, dcontext, OPSZ_PTR,
-                                                          XBX_OFFSET)));
+            final_jmp = INSTR_CREATE_jmp_ind(dcontext,
+                                     OPND_DC_FIELD(absolute, dcontext, OPSZ_PTR,
+                                                   XBX_OFFSET));
         } else {
             APP(ilist, SAVE_TO_TLS(dcontext, REG_XCX, INDIRECT_STUB_SPILL_SLOT));
             APP(ilist, RESTORE_FROM_TLS(dcontext, REG_XCX, MANGLE_XCX_SPILL_SLOT));
-            APP(ilist, INSTR_CREATE_jmp_ind(dcontext,
-                                            OPND_TLS_FIELD(INDIRECT_STUB_SPILL_SLOT)));
+            final_jmp = INSTR_CREATE_jmp_ind(dcontext,
+                                             OPND_TLS_FIELD(INDIRECT_STUB_SPILL_SLOT));
         }
     }
+
+    /* Keep track of this IBL exit for unlinking. */
+    ASSERT(ibl_code->num_ibl_found_exits < MAX_IBL_FOUND_EXITS);
+    exit = &ibl_code->ibl_found_exits[ibl_code->num_ibl_found_exits];
+    ibl_code->num_ibl_found_exits += 1;
+    APP(ilist, final_jmp);
+    add_patch_marker(patch, final_jmp, PATCH_ASSEMBLE_ABSOLUTE, 0,
+                     (ptr_uint_t*)&exit->jmp_pc);
+    exit->targets_prefix = target_prefix;
+    exit->restored_eflags = restore_eflags;
+    /* Record final_jmp's machine code. We overwrite this jump when we unlink an
+     * IBL routine.
+     */
+    exit->original_jmp_length = instr_length(dcontext, final_jmp);
+    ASSERT(exit->original_jmp_length <= MAX_INSTR_LENGTH);
+    /* We patch in a 5-byte jmp, so pad to this length if necessary. */
+    if (exit->original_jmp_length < JMP_LONG_LENGTH) {
+        APP(ilist, INSTR_CREATE_nopNbyte(dcontext,
+                                 JMP_LONG_LENGTH - exit->original_jmp_length));
+    }
+    instr_encode(dcontext, final_jmp, exit->original_jmp_code);
 
     if (fragment_found != NULL)
         *fragment_found = inst;
@@ -4567,6 +4793,11 @@ append_ibl_head(dcontext_t *dcontext, instrlist_t *ilist,
     uint hash_to_address_factor;
     /* Use TLS only for spilling app state -- registers & flags */
     bool only_spill_state_in_tls = !absolute && !table_in_tls;
+    
+    /* 8-bit jmps are too short when indirect stubs are enabled. I didn't spend
+     * much time investigating why. So, ASSERT(indirect_stubs ==> !miss_8bit)
+     */
+    ASSERT(!DYNAMO_OPTION(indirect_stubs) || !miss_8bit);
 
     /* no support for absolute addresses on x64: we always use tls/reg */
     IF_X64(ASSERT_NOT_IMPLEMENTED(!absolute));
@@ -4575,6 +4806,7 @@ append_ibl_head(dcontext_t *dcontext, instrlist_t *ilist,
     /* For x64 we need this after the cmp post-eflags entry; for x86, it's
      * needed before for thread-private eflags save.
      */
+    
     if (only_spill_state_in_tls) {
         /* grab dcontext in XDI for thread shared routine */
         append_shared_get_dcontext(dcontext, ilist, true /* save xdi to scratch */);
@@ -4919,7 +5151,7 @@ miss:
                                        OPND_CREATE_INT32(0));
         }
         append_ibl_head(dcontext, &ilist, ibl_code, patch, NULL, NULL, NULL,
-                        opnd_create_instr(miss), true/*miss can have 8-bit offs*/,
+                        opnd_create_instr(miss), false/*miss can't have 8-bit offs*/,
                         target_trace_table, true /* inline of course */ );     
 
         /*>>>    SAVE_TO_UPCONTEXT %ebx,ebx_OFFSET                       */
@@ -5138,7 +5370,7 @@ emit_indirect_branch_lookup(dcontext_t *dcontext, generated_code_t *code, byte *
         append_ibl_head(dcontext, &ilist, ibl_code, patch, &fragment_found, &compare_tag,
                         IF_X64_ELSE(&trace_cmp_entry, NULL),
                         opnd_create_instr(next_fragment_nochasing),
-                        true/*miss can have 8-bit offs*/, target_trace_table,
+                        !DYNAMO_OPTION(indirect_stubs), target_trace_table,
                         inline_ibl_head);
 #ifdef X64
         if (IS_IBL_TRACE(ibl_code->source_fragment_type) && !code->x86_mode) {
@@ -5190,7 +5422,9 @@ emit_indirect_branch_lookup(dcontext_t *dcontext, generated_code_t *code, byte *
     /*>>>    je      sentinel_check                                  */
     /* FIXME: je_short ends up not reaching target for shared inline! */
     APP(&ilist,
-        INSTR_CREATE_jcc(dcontext, OP_je_short, opnd_create_instr(sentinel_check)));
+        INSTR_CREATE_jcc(dcontext,
+                         DYNAMO_OPTION(indirect_stubs) ?  OP_je : OP_je_short,
+                         opnd_create_instr(sentinel_check)));
 
     /* For open address hashing xcx = &lookuptable[h]; to get &lt[h+1] just add 8x16
      *   add xcx, 8x16  # no wrap around check, instead rely on a nulltag sentinel entry 
@@ -5222,7 +5456,9 @@ emit_indirect_branch_lookup(dcontext_t *dcontext, generated_code_t *code, byte *
         /*  TODO: check whether the static predictor can help here */
         /*  P4OG:2-18 "Use prefix 3E (DS) for taken and 2E (CS) for not taken cbr" (DS == PREFIX_DATA) */
         APP(&ilist,
-            INSTR_CREATE_jcc(dcontext, OP_jne_short, opnd_create_instr(next_fragment_nochasing)));
+            INSTR_CREATE_jcc(dcontext,
+                             DYNAMO_OPTION(indirect_stubs) ? OP_jne : OP_jne_short,
+                             opnd_create_instr(next_fragment_nochasing)));
 
         append_ibl_found(dcontext, &ilist, ibl_code, patch,
                          HASHLOOKUP_START_PC_OFFS, true, only_spill_state_in_tls,
@@ -5242,7 +5478,9 @@ emit_indirect_branch_lookup(dcontext_t *dcontext, generated_code_t *code, byte *
         /* not found, if not at end of table sentinel fragment  */
         /*>>>    jne      fragment_not_found                        */
         APP(&ilist,
-            INSTR_CREATE_jcc(dcontext, OP_jne_short, opnd_create_instr(fragment_not_found)));
+            INSTR_CREATE_jcc(dcontext,
+                             DYNAMO_OPTION(indirect_stubs) ? OP_jne : OP_jne_short,
+                             opnd_create_instr(fragment_not_found)));
 
 # ifdef HASHTABLE_STATISTICS
         if (INTERNAL_OPTION(hashtable_ibl_stats)) {
@@ -5784,6 +6022,83 @@ emit_indirect_branch_lookup(dcontext_t *dcontext, generated_code_t *code, byte *
     return pc + ibl_code->ibl_routine_length;
 }
 
+byte *
+emit_ibl_found_unlinked_code(dcontext_t *dcontext, byte *pc,
+                             byte *fcache_return_pc, ibl_code_t *ibl_code,
+                             bool restore_eflags, bool include_prefix)
+{
+    instrlist_t ilist;
+    bool absolute = !ibl_code->thread_shared_routine;
+    if (absolute) {
+        ASSERT_NOT_IMPLEMENTED(false);
+        return NULL;
+    }
+    instrlist_init(&ilist);
+
+    if (restore_eflags || include_prefix) {
+        /* xax holds the eflags. We restore the eflags (from xax) and xax. */
+        /* TODO(peter): Notice how below, we save xax to TLS. We could improve
+         * efficiency by eliminating insert_restore_eflags's restoring of xax
+         * and not saving xax below.
+         */
+        insert_restore_eflags(dcontext, &ilist, NULL /* append */, 0,
+                              IBL_EFLAGS_IN_TLS(), absolute);
+    }
+
+    /* We use xax as a scratch reg then set
+     *   xax = get_ibl_unlinked_found_linkstub()
+     * (which is what the fcache_return code expcets).
+     */
+    APP(&ilist, SAVE_TO_TLS(dcontext, REG_XAX, DIRECT_STUB_SPILL_SLOT));
+
+    if (include_prefix) {
+        /* xcx holds pointer to hash table entry. We set
+         *  xax = [xcx + HASHLOOKUP_START_PC_OFFS]
+         * (i.e., the cache's start_pc of the target) and restore the native
+         * xcx.
+         */
+        APP(&ilist,
+            INSTR_CREATE_mov_ld(dcontext, opnd_create_reg(REG_XAX),
+                                OPND_CREATE_MEMPTR(REG_XCX,
+                                                   HASHLOOKUP_START_PC_OFFS)));
+        APP(&ilist, RESTORE_FROM_TLS(dcontext, REG_XCX, MANGLE_XCX_SPILL_SLOT));
+    } else {
+        /* INDIRECT_STUB_SPILL_SLOT holds the cache_pc inside fragment. We copy
+         * this value into xax.
+         */
+        APP(&ilist, RESTORE_FROM_TLS(dcontext, REG_XAX,
+                                    INDIRECT_STUB_SPILL_SLOT));
+    }
+
+    append_shared_get_dcontext(dcontext, &ilist, true /* save xdi to scratch */);
+
+    /* Store the next code cache address of the next fragment in next_tag. The
+     * dispatcher uses this address to determine the native address.
+     * 
+     * In the include_prefix branch above, we could directly recover the next
+     * tag using HASHLOOKUP_TAG_OFFS. Unfortunately, for the !include_prefix
+     * path, there's no way of recovering the tag because the IBL code
+     * throws away the pointer to the hash table entry.
+     * TODO(peter): We could special-case the include_prefix path by directly
+     * loading the next tag. We'd tell the dispatcher by setting a different
+     * linkstub. If we spend a lot of time handling IBL interrupts, then this
+     * special-case optimization might be worthwhile: include_prefix is true
+     * vall of the time because, by default, only traces are targets in the IBL
+     * table and traces always have IBL prefixes. 
+     */
+    APP(&ilist, SAVE_TO_DC(dcontext, REG_XAX, NEXT_TAG_OFFSET));
+    APP(&ilist, INSTR_CREATE_mov_imm(dcontext, opnd_create_reg(REG_XAX),
+                                     OPND_CREATE_INTPTR((ptr_uint_t)
+                                        get_ibl_unlinked_found_linkstub())));
+
+    append_shared_restore_dcontext_reg(dcontext, &ilist);
+    APP(&ilist, INSTR_CREATE_jmp(dcontext, opnd_create_pc(fcache_return_pc)));
+
+    pc = instrlist_encode(dcontext, &ilist, pc, false /* no instr targets */);
+    instrlist_clear(dcontext, &ilist);
+    return pc;
+}
+
 static inline void
 update_ibl_routine(dcontext_t *dcontext, ibl_code_t *ibl_code)
 {
@@ -5827,7 +6142,20 @@ update_indirect_branch_lookup(dcontext_t *dcontext)
 
     ibl_branch_type_t branch_type;
 #ifdef X64
+# ifdef LINUX_KERNEL
+    /* All code is thread private because we need to patch, but it it's
+     * generated in a thread-shared manner (i.e., no absolute addresses).
+     */
+    ASSERT(!is_shared_gencode(code));
+    /* Check that it's generated in a thread-shared manner.
+     * FIXME(peter): This is obviously a hack. There should be a new field, like 
+     * uses_absolute_addresses.
+     */
+    ASSERT(!code->bb_ibl[0].initialized ||
+           code->bb_ibl[0].thread_shared_routine);
+#else
     ASSERT(is_shared_gencode(code));
+#endif
     return; /* nothing to do: routines are all thread-shared */
 #endif
     protect_generated_code(code, WRITABLE);
@@ -7236,8 +7564,9 @@ update_syscall(dcontext_t *dcontext, byte *pc)
             /* instruction must not change size! */
             ASSERT(nxt_pc != NULL);
             if (nxt_pc != pc) {
+		byte *stop_pc;
                 pc = nxt_pc;
-                byte *stop_pc = prev_pc + SYSCALL_METHOD_LONGEST_INSTR;
+                stop_pc = prev_pc + SYSCALL_METHOD_LONGEST_INSTR;
                 ASSERT(nxt_pc <= stop_pc);
                 while (pc < stop_pc) {
                     /* we could add >3-byte nop support but I'm too lazy */
@@ -7546,3 +7875,372 @@ emit_trace_head_incr_shared(dcontext_t *dcontext, byte *pc, byte *fcache_return_
 }
 
 #endif /* TRACE_HEAD_CACHE_INCR */
+
+/*
+    # It's important to not use the native stack in this routine. x86 does not
+    # automatically switch stacks on system calls. So, if we pushed things here,
+    # then we would overwrite anything on the user's stack past %rsp.
+    swapgs
+    mov %xdi, %gs:DCONTEXT_BASE_SPILL_SLOT
+    mov %gs:TLS_DCONTEXT_SLOT, %xdi
+    mov %xax, %gs:TLS_XAX_SLOT
+    # dcontext->next_tag = target
+    mov target, %xax
+    mov %xax, NEXT_TAG_OFFSET(%xdi)
+    # xax = get_syscall_entry_linkstub(). fcache_return sets
+    # dcontext->last_exit = xax.
+    mov get_syscall_entry_linkstub(), %xax
+    # restore %xdi
+    mov %gs:DCONTEXT_BASE_SPILL_SLOT, %xdi
+    jmp fcache_return
+    jmp unexpected_return
+ */
+
+byte *
+emit_syscall_entry(dcontext_t *dcontext, cache_pc fcache_return,
+                   app_pc target, cache_pc pc) {
+    instrlist_t *ilist;
+    instr_t *swapgs = instr_create(dcontext);
+    /* We expect the first instruction in the syscall entry code to be swapgs.
+     * TODO(peter): We need to steal FS!.
+     */
+    decode(dcontext, target, swapgs);
+    ASSERT(instr_get_opcode(swapgs) == OP_swapgs);
+    ilist = instrlist_create(dcontext);
+    APP(ilist, swapgs);
+    /* Save XAX and XDI. Get dcontext into XDI. */
+    append_shared_get_dcontext(dcontext, ilist, true /* save_xdi */);
+    APP(ilist, SAVE_TO_TLS(dcontext, REG_XAX, TLS_XAX_SLOT));
+    /* dcontext->next_tag = target */
+    APP(ilist, INSTR_CREATE_mov_imm(dcontext, opnd_create_reg(REG_XAX),
+                                    OPND_CREATE_INTPTR(target)));
+    APP(ilist, SAVE_TO_DC_VIA_REG(false, dcontext, REG_XDI, REG_XAX,
+                                  NEXT_TAG_OFFSET));
+    /* XAX = get_syscall_entry_linkstub() (fcache_return sets
+     * dcontext->last_exit = XAX) */
+    APP(ilist, INSTR_CREATE_mov_imm(dcontext, opnd_create_reg(REG_XAX),
+                        OPND_CREATE_INTPTR(get_syscall_entry_linkstub())));
+    /* Restore XDI. Don't need to restore XAX because fcache_return does that
+     * for us. */ 
+    append_shared_restore_dcontext_reg(dcontext, ilist);
+    /* Do fcache_return. */
+    APP(ilist, INSTR_CREATE_jmp(dcontext, opnd_create_pc(fcache_return)));
+    APP(ilist, INSTR_CREATE_jmp(dcontext,
+                                opnd_create_pc((app_pc)unexpected_return)));
+    pc = instrlist_encode(dcontext, ilist, pc, false);
+    instrlist_clear_and_destroy(dcontext, ilist);
+    return pc;
+}
+
+/*  Pushes mcontext onto the stack with pc = 0 and xmm registers with garbage
+    values. Clobbers xax.
+
+        # Push an mcontext onto the stack. For now, we push 0 in place of %pc to
+        # indicate an invalid pc. The dispatcher will have to load the native
+        # entry point from the OS module.
+        push 0
+        pushf
+        lea [%rsp - XMM_SLOTS_SIZE], %rsp
+        push %r15
+        ...
+        push %r8
+        push %xax
+        push %xcx
+        push %xdx
+        push %xbx
+        push %xsp
+        push %xbp
+        push %xsi
+        push %xdi
+        # Save the correct %xsp by offsetting the pushed mcontext and anything
+        # else that was pushed on the stack (i.e., extra_stack bytes).
+        #   mcontext.xsp = %xsp + sizeof(dr_mcontext_t) + extra_stack
+        lea [%xsp + sizeof(dr_mcontext_t) + sizeof(reg_t)], %xax
+        mov %xax, [%xsp + offsetof(dr_mcontext_t, xsp)]
+*/
+
+static void
+append_push_mcontext(dcontext_t *dcontext, int extra_stack, instrlist_t *ilist)
+{
+    /* push %pc - use 0 to indicate that it's invalid */
+    APP(ilist, INSTR_CREATE_push_imm(dcontext, OPND_CREATE_INT32(0)));
+    APP(ilist, INSTR_CREATE_RAW_pushf(dcontext));
+    ASSERT(!preserve_xmm_caller_saved());
+    APP(ilist, INSTR_CREATE_lea(dcontext, opnd_create_reg(REG_XSP),
+                        opnd_create_base_disp(REG_XSP, REG_NULL, 0,
+                                              -XMM_SLOTS_SIZE, OPSZ_lea)));
+#ifdef X64
+    APP(ilist, INSTR_CREATE_push(dcontext, opnd_create_reg(REG_R15)));
+    APP(ilist, INSTR_CREATE_push(dcontext, opnd_create_reg(REG_R14)));
+    APP(ilist, INSTR_CREATE_push(dcontext, opnd_create_reg(REG_R13)));
+    APP(ilist, INSTR_CREATE_push(dcontext, opnd_create_reg(REG_R12)));
+    APP(ilist, INSTR_CREATE_push(dcontext, opnd_create_reg(REG_R11)));
+    APP(ilist, INSTR_CREATE_push(dcontext, opnd_create_reg(REG_R10)));
+    APP(ilist, INSTR_CREATE_push(dcontext, opnd_create_reg(REG_R9)));
+    APP(ilist, INSTR_CREATE_push(dcontext, opnd_create_reg(REG_R8)));
+#endif
+    APP(ilist, INSTR_CREATE_push(dcontext, opnd_create_reg(REG_XAX)));
+    APP(ilist, INSTR_CREATE_push(dcontext, opnd_create_reg(REG_XCX)));
+    APP(ilist, INSTR_CREATE_push(dcontext, opnd_create_reg(REG_XDX)));
+    APP(ilist, INSTR_CREATE_push(dcontext, opnd_create_reg(REG_XBX)));
+    APP(ilist, INSTR_CREATE_push(dcontext, opnd_create_reg(REG_XSP)));
+    APP(ilist, INSTR_CREATE_push(dcontext, opnd_create_reg(REG_XBP)));
+    APP(ilist, INSTR_CREATE_push(dcontext, opnd_create_reg(REG_XSI)));
+    APP(ilist, INSTR_CREATE_push(dcontext, opnd_create_reg(REG_XDI)));
+    /* We pushed the wrong value for rsp. Fix that. */
+    APP(ilist, INSTR_CREATE_lea(dcontext, opnd_create_reg(REG_XAX),
+                    opnd_create_base_disp(REG_XSP, REG_NULL, 0,
+                                          sizeof(dr_mcontext_t) + extra_stack,
+                                          OPSZ_lea)));
+    APP(ilist, INSTR_CREATE_mov_st(dcontext,
+                                   opnd_create_base_disp(REG_XSP, REG_NULL, 0,
+                                                         offsetof(dr_mcontext_t, xsp),
+                                                         OPSZ_PTR),
+                                   opnd_create_reg(REG_XAX)));
+}
+
+/*
+    push $vector
+    jmp common_vector_entry_pc
+*/
+byte *
+emit_vector_entry(dcontext_t *dcontext, byte *common_vector_entry_pc,
+                  interrupt_vector_t vector, byte *pc) {
+    instrlist_t* ilist = instrlist_create(dcontext);
+    if (!vector_has_error_code(vector)) {
+        APP(ilist, INSTR_CREATE_push_imm(dcontext,
+                                         OPND_CREATE_INT32(MAGIC_FAKE_ERROR)));
+    }
+    APP(ilist, INSTR_CREATE_push_imm(dcontext, OPND_CREATE_INT32(vector)));
+    APP(ilist, INSTR_CREATE_jmp(dcontext,
+                                opnd_create_pc(common_vector_entry_pc)));
+    pc = instrlist_encode(dcontext, ilist, pc, false);
+    instrlist_clear_and_destroy(dcontext, ilist);
+    return pc;
+}
+
+/*
+    Expects an interrupt stack frame with the vector number and error pushed
+    onto it.  The stack is created like this where rsp = mcontext->rsp = native
+    rsp at the beginning of the interrupt handler.
+
+        ss
+        xsp
+        xflags
+        cs
+        xip
+        error_code      rsp
+        vector          rsp - 8
+        mcontext->pc    rsp - 16
+        ... the rest of mcontext
+
+        <append_push_mcontext>
+
+        # Restore the Kernel's GS base if necessary.
+        mov $MSR_GS_BASE, %rcx
+        rdmsr
+        shl $32, %rdx
+        or %rax, %rdx
+        mov $tls_base, %rcx
+        cmp %rcx, %rdx
+        jeq no_swapgs:
+        swapgs
+        no_swapgs:
+
+        # Save handler arguments into registers.
+        lea [%rsp + sizeof(dr_mcontext_t)], %rax
+        mov %rsp, %rbx
+        mov [%rsp + sizeof(dr_mcontext_t) + sizeof(reg_t)], %rcx
+
+        old_rsp = rsp
+        if (!on_dstack(rsp)) {
+          swap_stacks()
+        }
+        push(old_rsp)
+        handle_interrupt()
+        pop(rsp), so  rsp = old_rsp
+
+        # Swap stacks if we aren't already on the dstack.
+        mov %rsp, %r8
+        # if rsp > dcontext->dstack, then goto swap_stacks
+        mov dcontext->dstack, %rdx
+        cmp %rdx, %rsp
+        jg swap_stacks
+        # if rsp < (smallest addr in dstack),
+        # then goto swapped_stacks
+        mov dcontext->dstack - DYNAMORIO_STACK_SIZE, %rdx
+        cmp %rdx, %rsp
+        jg swapped_stacks
+      swap_stacks:
+        mov dcontext->dstack, %rsp
+      swapped_stacks:
+        push %r8
+
+        # Call the handler.
+        handler(isf=%rax, mcontext=%rbx, vector=%rcx)
+
+        # Restore native stack pointer.
+        pop %rsp
+
+        # pop off mcontext
+        pop %xdi
+        pop %xsi
+        pop %xbp
+        pop %xsp
+        pop %xbx
+        pop %xdx
+        pop %xcx
+        pop %xax
+        pop %r8
+        ...
+        pop %r15
+        # Pop off unused XMM registers and dead xflags, xip, vector, and the
+        # error code.
+        lea [%rsp + XMM_SLOTS_SIZE + sizeof(reg_t) * 4)], %rsp
+
+        iret
+*/
+byte *
+emit_common_vector_entry(dcontext_t *dcontext, byte* tls_base,
+                         interrupt_handler_t handler, cache_pc pc)
+{
+    instrlist_t* ilist = instrlist_create(dcontext);
+    instr_t* no_swapgs = INSTR_CREATE_label(dcontext);
+    instr_t* swap_stacks = INSTR_CREATE_label(dcontext);
+    instr_t* swapped_stacks = INSTR_CREATE_label(dcontext);
+    /* After we push mcontext, the stack contains
+     *   mcontext
+     *   vector
+     *   interrupt stack frame (isf)
+     * if the isf does not have an error code, then we point the first byte of
+     * isf (i.e., the error code) to vector.
+     */
+    int vector_offset = sizeof(dr_mcontext_t);
+    int isf_offset = vector_offset + sizeof(reg_t);
+
+    append_push_mcontext(dcontext, sizeof(reg_t), ilist);
+    
+    /* Check if TLS is setup. Perform a swapgs if necessary.
+     * TODO(peter): We'll make this much more efficient when we implement FS
+     * stealing. In particular, we'll know which instruction addresses can fault
+     * with the native FS value. Knowing that, we won't have to check the MSR.
+     */
+    APP(ilist, INSTR_CREATE_mov_imm(dcontext, opnd_create_reg(REG_XCX),
+                                    OPND_CREATE_INT64(MSR_GS_BASE)));
+    APP(ilist, INSTR_CREATE_rdmsr(dcontext));
+    APP(ilist, INSTR_CREATE_shl(dcontext, opnd_create_reg(REG_XDX),
+                                OPND_CREATE_INT8(32)));
+    APP(ilist, INSTR_CREATE_or(dcontext, opnd_create_reg(REG_XDX),
+                               opnd_create_reg(REG_XAX)));
+    APP(ilist, INSTR_CREATE_mov_imm(dcontext, opnd_create_reg(REG_XCX),
+                                    OPND_CREATE_INT64(tls_base)));
+    APP(ilist, INSTR_CREATE_cmp(dcontext, opnd_create_reg(REG_XCX),
+                                opnd_create_reg(REG_XDX)));
+    APP(ilist, INSTR_CREATE_jcc(dcontext, OP_je, opnd_create_instr(no_swapgs)));
+    APP(ilist, INSTR_CREATE_swapgs(dcontext));
+    APP(ilist, no_swapgs);
+
+    /* Set rax = isf, rbx = mcontext, and rcx = vector then call
+     * handler(isf, mcontext, vector).
+     */
+    APP(ilist, INSTR_CREATE_lea(dcontext, opnd_create_reg(REG_RAX),
+                           opnd_create_base_disp(REG_XSP, REG_NULL, 0, 
+                                                 isf_offset, OPSZ_lea)));
+    APP(ilist, INSTR_CREATE_mov_ld(dcontext, opnd_create_reg(REG_RBX),
+                                   opnd_create_reg(REG_XSP)));
+    APP(ilist, INSTR_CREATE_mov_ld(dcontext, opnd_create_reg(REG_RCX),
+                           opnd_create_base_disp(REG_XSP, REG_NULL, 0,
+                                                 vector_offset, OPSZ_PTR)));
+
+    /* Use r8 to backup rsp for after the handler. */
+    APP(ilist, INSTR_CREATE_mov_st(dcontext, opnd_create_reg(REG_R8),
+                                   opnd_create_reg(REG_RSP)));
+    /* rdx = dcontext->dstack */
+    /* TODO(peter): We could probably perform this check with an immediate in
+     * cmp as long as the dstack address can be represented with a 32-bit sign
+     * extended value. */
+    APP(ilist, INSTR_CREATE_mov_imm(dcontext, opnd_create_reg(REG_RDX),
+                opnd_create_immed_int((ptr_int_t) dcontext->dstack, OPSZ_PTR)));
+    /* TODO(peter): Kernel stacks are normally at lower addresses than the start
+     * of the dstack (i.e., this branch normally falls through). We could
+     * optimize this code by having the common check first
+     * (if rsp <= dstack - DYNAMORIO_STACK_SIZE).
+     */
+    APP(ilist, INSTR_CREATE_cmp(dcontext, opnd_create_reg(REG_RSP),
+                                opnd_create_reg(REG_RDX)));
+    APP(ilist, INSTR_CREATE_jcc(dcontext, OP_jg,
+                                opnd_create_instr(swap_stacks)));
+    APP(ilist, INSTR_CREATE_mov_imm(dcontext, opnd_create_reg(REG_RDX),
+          opnd_create_immed_int(
+              (ptr_int_t)(dcontext->dstack - DYNAMORIO_STACK_SIZE), OPSZ_PTR)));
+    APP(ilist, INSTR_CREATE_cmp(dcontext, opnd_create_reg(REG_RSP),
+                                opnd_create_reg(REG_RDX)));
+    APP(ilist, INSTR_CREATE_jcc(dcontext, OP_jg,
+                                opnd_create_instr(swapped_stacks)));
+    APP(ilist, swap_stacks);
+    APP(ilist, INSTR_CREATE_mov_imm(dcontext, opnd_create_reg(REG_RSP),
+                opnd_create_immed_int((ptr_int_t) dcontext->dstack, OPSZ_PTR)));
+    APP(ilist, swapped_stacks);
+    /* Push the old stack pointer value. */
+    APP(ilist, INSTR_CREATE_push(dcontext, opnd_create_reg(REG_R8)));
+
+    dr_insert_call(dcontext, ilist, NULL /*append*/, handler, 3,
+                   opnd_create_reg(REG_RAX), opnd_create_reg(REG_RBX),
+                   opnd_create_reg(REG_RCX));
+
+    /* Restore the old stack pointer. Note that we could use callee-saved R12
+     * instead of R8 and avoid the push/pop. I'm using push/pop just in case ;-)
+     */
+    APP(ilist, INSTR_CREATE_pop(dcontext, opnd_create_reg(REG_RSP)));
+
+    /* Restore the registers stored in mcontext. */
+    APP(ilist, INSTR_CREATE_pop(dcontext, opnd_create_reg(REG_RDI)));
+    APP(ilist, INSTR_CREATE_pop(dcontext, opnd_create_reg(REG_RSI)));
+    APP(ilist, INSTR_CREATE_pop(dcontext, opnd_create_reg(REG_RBP)));
+    /* pop RSP into dead RBX */
+    APP(ilist, INSTR_CREATE_pop(dcontext, opnd_create_reg(REG_RBX)));
+    APP(ilist, INSTR_CREATE_pop(dcontext, opnd_create_reg(REG_RBX)));
+    APP(ilist, INSTR_CREATE_pop(dcontext, opnd_create_reg(REG_RDX)));
+    APP(ilist, INSTR_CREATE_pop(dcontext, opnd_create_reg(REG_RCX)));
+    APP(ilist, INSTR_CREATE_pop(dcontext, opnd_create_reg(REG_RAX)));
+    APP(ilist, INSTR_CREATE_pop(dcontext, opnd_create_reg(REG_R8)));
+    APP(ilist, INSTR_CREATE_pop(dcontext, opnd_create_reg(REG_R9)));
+    APP(ilist, INSTR_CREATE_pop(dcontext, opnd_create_reg(REG_R10)));
+    APP(ilist, INSTR_CREATE_pop(dcontext, opnd_create_reg(REG_R11)));
+    APP(ilist, INSTR_CREATE_pop(dcontext, opnd_create_reg(REG_R12)));
+    APP(ilist, INSTR_CREATE_pop(dcontext, opnd_create_reg(REG_R13)));
+    APP(ilist, INSTR_CREATE_pop(dcontext, opnd_create_reg(REG_R14)));
+    APP(ilist, INSTR_CREATE_pop(dcontext, opnd_create_reg(REG_R15)));
+    /* Fake pop xmm (which we don't use), xflags (which are dead), xip (which is
+     * dead), the vector, and the error code. */
+    APP(ilist, INSTR_CREATE_lea(dcontext, opnd_create_reg(REG_XSP),
+            opnd_create_base_disp(REG_XSP, REG_NULL, 0,
+                                  XMM_SLOTS_SIZE + 4 * sizeof(reg_t),
+                                  OPSZ_lea)));
+
+    APP(ilist, INSTR_CREATE_iret(dcontext));
+
+    pc = instrlist_encode(dcontext, ilist, pc, true);
+    instrlist_clear_and_destroy(dcontext, ilist);
+    return pc;
+}
+
+void
+patch_interrupt(dcontext_t *dcontext, cache_pc patch_pc,
+                interrupt_vector_t vector, byte save_buffer[INTN_LENGTH])
+{
+    memcpy(save_buffer, patch_pc, INTN_LENGTH);
+    patch_pc[0] = INTN_OPCODE;
+    ASSERT(!vector_has_error_code(vector));
+    patch_pc[1] = (byte) vector;
+    ASSERT_TRUNCATE(patch_pc[1], byte, vector);
+}
+
+void
+unpatch_interrupt(dcontext_t *dcontext, cache_pc patch_pc,
+                  byte save_buffer[INTN_LENGTH])
+{
+    ASSERT(patch_pc[0] == INTN_OPCODE);
+    ASSERT(!vector_has_error_code(patch_pc[1]));
+    memcpy(patch_pc, save_buffer, INTN_LENGTH);
+}

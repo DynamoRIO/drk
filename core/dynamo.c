@@ -45,6 +45,7 @@
 #include "fcache.h"
 #include "emit.h"
 #include "dispatch.h"
+#include "barrier.h"
 #include "utils.h"
 #include "monitor.h"
 #include "vmareas.h"
@@ -61,8 +62,12 @@
 #include "moduledb.h"
 #include "module_shared.h"
 #include "synch.h"
-
-#include <string.h>
+#include "string_wrapper.h"
+#ifdef LINUX_KERNEL
+#include "dynamorio_module_interface.h"
+#include "kernel_interface.h"
+#include "msr.h"
+#endif
 
 #ifdef WINDOWS
 /* for close handle, duplicate handle, free memory and constants associated with them */
@@ -212,16 +217,20 @@ static void data_section_exit(void);
 
 #ifdef DEBUG /*************************/
 
-#include <time.h>
+# ifndef LINUX_KERNEL
+#  include <time.h>
+# endif
 
 /* FIXME: not all dynamo_options references are #ifdef DEBUG
  * are we trying to hardcode the options for a release build?
  */
 # ifdef LINUX
+#  ifndef LINUX_KERNEL
    /* linux include files for mmap stuff*/
-#  include <sys/ipc.h>
-#  include <sys/types.h>
-#  include <unistd.h>
+#   include <sys/ipc.h>
+#   include "types_wrapper.h"
+#   include <unistd.h>
+#  endif
 # endif
 
 static uint starttime;
@@ -288,7 +297,9 @@ statistics_pre_init(void)
     /* The indirection here is left over from when we used to allow alternative
      * locations for stats (namely shared memory for the old MIT gui). */
     stats = &nonshared_stats;
+#ifndef LINUX_KERNEL
     stats->process_id = get_process_id();
+#endif
     strncpy(stats->process_name, get_application_name(), MAXIMUM_PATH);
     stats->process_name[MAXIMUM_PATH-1] = '\0';
     ASSERT(strlen(stats->process_name) > 0);
@@ -324,12 +335,12 @@ statistics_init(void)
      */
 #ifdef DEBUG
 # define STATS_DEF(desc, statname) \
-    strncpy(stats->statname##_pair.name, desc, \
+    strncpy(stats->statname##_pair.name, #statname, \
             BUFFER_SIZE_ELEMENTS(stats->statname##_pair.name)); \
     NULL_TERMINATE_BUFFER(stats->statname##_pair.name);
 #else
 # define RSTATS_DEF(desc, statname) \
-    strncpy(stats->statname##_pair.name, desc, \
+    strncpy(stats->statname##_pair.name, #statname, \
             BUFFER_SIZE_ELEMENTS(stats->statname##_pair.name)); \
     NULL_TERMINATE_BUFFER(stats->statname##_pair.name);
 #endif
@@ -350,6 +361,98 @@ get_dr_stats(void)
     return stats;
 }
 
+#ifdef LINUX_KERNEL
+/* Init barriers */
+static barrier_t before_dynamo_app_init;
+static barrier_t after_dynamo_app_init;
+static barrier_t before_dynamorio_app_take_over;
+
+/* Exit barriers */
+static barrier_t main_thread_exit;
+static barrier_t other_threads_exit;
+
+void
+dr_pre_smp_init(dr_exports_t *exports, const char *options)
+{
+    exports->stats_data = &nonshared_stats;
+    exports->stats_size = sizeof(dr_statistics_t);
+    kernel_setenv(DYNAMORIO_VAR_OPTIONS, options); 
+    barrier_init(&before_dynamo_app_init, get_num_processors());
+    barrier_init(&after_dynamo_app_init, get_num_processors());
+    barrier_init(&before_dynamorio_app_take_over, get_num_processors());
+    barrier_init(&main_thread_exit, get_num_processors());
+    barrier_init(&other_threads_exit, get_num_processors());
+}
+
+void
+cpu_exports_init(dcontext_t *dcontext, dr_cpu_exports_t *exports)
+{
+# ifdef KSTATS
+    if (DYNAMO_OPTION(kstats)) {
+        exports->kstats_data = &dcontext->thread_kstats->vars_kstats;
+        exports->kstats_size = sizeof(dcontext->thread_kstats->vars_kstats);
+    } else {
+# endif
+        exports->kstats_data = NULL;
+        exports->kstats_size = 0;
+# ifdef KSTATS
+    }
+# endif
+}
+
+void
+dr_smp_init(dr_cpu_exports_t *exports)
+{
+    /* Interrupts are disabled at this point. */
+    if (barrier_wait(&before_dynamo_app_init)) {
+        /* barrier_wait only returns true for one thread. We designate this as
+         * the main thread for initilization.
+         */
+        dynamorio_app_init();
+        barrier_wait(&after_dynamo_app_init);
+    } else {
+        barrier_wait(&after_dynamo_app_init);
+        /* The following three lines are called for the main thread by
+         * dynamorio_app_init.
+         */
+        dynamo_thread_init(NULL, NULL _IF_CLIENT_INTERFACE(false));
+        ENTERING_DR();
+        //instrument_thread_init(get_thread_private_dcontext(), false, false);
+    }
+    os_warm_fcache(get_thread_private_dcontext());
+    cpu_exports_init(get_thread_private_dcontext(), exports);
+    barrier_wait(&before_dynamorio_app_take_over);
+    /* dynamorio_app_take_over needs to be called at this point from another
+     * module. Otherwise, we would try to cache some DR instructions (i.e., this
+     * function's implicit return), which DR isn't designed to handle. See
+     * dynamorio_app_take_over() in dynamorio_module_interface.h. */
+}
+
+void
+dr_smp_exit(void)
+{
+    DEBUG_DECLARE(int res;)
+    static bool main_thread_exited = false;
+    if (barrier_wait(&main_thread_exit)) {
+        barrier_wait(&other_threads_exit);
+        barrier_destroy(&before_dynamo_app_init);
+        barrier_destroy(&after_dynamo_app_init);
+        barrier_destroy(&before_dynamorio_app_take_over);
+        barrier_destroy(&main_thread_exit);
+        barrier_destroy(&other_threads_exit);
+        IF_DEBUG(res = ) dr_app_cleanup();
+        ASSERT(res == SUCCESS);
+        asm volatile("mfence");
+        main_thread_exited = true;
+    } else {
+        IF_DEBUG(res = ) dynamo_thread_exit();
+        ASSERT(res == SUCCESS);
+        barrier_wait(&other_threads_exit);
+    }
+    while (!main_thread_exited) {}
+}
+#endif
+
 /* initialize per-process dynamo state; this must be called before any
  * threads are created and before any other API calls are made;
  * returns zero on success, non-zero on failure 
@@ -358,16 +461,19 @@ DYNAMORIO_EXPORT int
 dynamorio_app_init(void)
 {
     int size;
-
     if (!dynamo_initialized /* we do enter if nullcalls is on */) {
-
+#ifdef LINUX_KERNEL
+        kernel_interface_init();
+#endif
 #ifdef WINDOWS
         /* MUST do this before making any system calls */
         syscalls_init();
 #endif
+
         /* avoid time() for libc independence */
         DODEBUG(starttime = query_time_seconds(););
 
+#ifndef LINUX_KERNEL
 #ifdef LINUX
         if (getenv(DYNAMORIO_VAR_EXECVE) != NULL) {
             post_execve = true;
@@ -387,6 +493,7 @@ dynamorio_app_init(void)
             ASSERT(getenv(DYNAMORIO_VAR_EXECVE) == NULL);
         } else
             post_execve = false;
+#endif
 #endif
 
         /* default non-zero dynamo settings (options structure is
@@ -570,10 +677,12 @@ dynamorio_app_init(void)
         /* i#117/PR 395156: it'd be nice to have mc here but would
          * require changing start/stop API
          */
-        dynamo_thread_init(NULL, NULL _IF_CLIENT_INTERFACE(false));
+        dynamo_thread_init(NULL, NULL, false);
 #ifdef LINUX
+# ifndef LINUX_KERNEL
         /* i#27: we need to special-case the 1st thread */
         signal_thread_inherit(get_thread_private_dcontext(), NULL);
+# endif
 #endif
 
         /* We move vm_areas_init() below dynamo_thread_init() so we can have
@@ -651,7 +760,7 @@ dynamorio_app_init(void)
             if (TEST(SELFPROT_DATA_FREQ, DYNAMO_OPTION(protect_mask)))
                 datasec_writable_freqprot = 0;
         }
-        /* this thread is now entering DR */
+
         ENTERING_DR();
 
 #ifdef WINDOWS
@@ -683,6 +792,7 @@ dynamorio_app_init(void)
     return SUCCESS;
 }
 
+#ifndef LINUX_KERNEL
 #ifdef LINUX
 void
 dynamorio_fork_init(dcontext_t *dcontext)
@@ -797,6 +907,7 @@ dynamorio_fork_init(dcontext_t *dcontext)
 # endif
 }
 #endif /* LINUX */
+#endif /* LINUX_KERNEL */
 
 #if defined(CLIENT_INTERFACE) || defined(STANDALONE_UNIT_TEST)
 /* To make DynamoRIO useful as a library for a standalone client
@@ -850,16 +961,6 @@ standalone_init(void)
         print_file(main_logfile, "\n");
     }
 #endif
-
-    /* since we do not export any dr_standalone_exit(), we clean up any .1config
-     * file right now.  the only loss if that we can't synch options: but that
-     * should be less important for standalone.  we disabling synching.
-     */
-    /* options are never made read-only for standalone */
-    dynamo_options.dynamic_options = false;
-    /* make sure to delete .1config */
-    config_exit();
-
     dynamo_initialized = true;
 
     return dcontext;
@@ -869,8 +970,6 @@ void
 standalone_exit(void)
 {
     /* should clean up here */
-    /* make sure to delete .1config */
-    config_exit();
 }
 #endif
 
@@ -1459,8 +1558,10 @@ create_new_dynamo_context(bool initial, byte *dstack_in)
 
     DODEBUG({dcontext->logfile = INVALID_FILE;});
     dcontext->owning_thread = get_thread_id();
+#ifndef LINUX_KERNEL
 #ifdef LINUX
     dcontext->owning_process = get_process_id();
+#endif
 #endif
     /* thread_record is set in add_thread */
     /* all of the thread-private fcache and hashtable fields are shared
@@ -1997,9 +2098,15 @@ dynamo_thread_init(byte *dstack_in, dr_mcontext_t *mc
     /* due to lock issues (see below) we need another var */
     bool reset_at_nth_thread_pending = false;
     bool under_dynamo_control = true;
+
+    /* Disable assertion for Linux kernel because every CPU is initialized
+     * as a "thread" before dynamo_initialized is true.
+     */
+#ifndef LINUX_KERNEL
     APP_EXPORT_ASSERT(dynamo_initialized || dynamo_exited ||
                       get_num_threads() == 0 IF_CLIENT_INTERFACE(|| client_thread),
                       PRODUCT_NAME" not initialized");
+#endif
 
     if (INTERNAL_OPTION(nullcalls))
         return SUCCESS;
@@ -2107,6 +2214,7 @@ dynamo_thread_init(byte *dstack_in, dr_mcontext_t *mc
 #endif
     os_thread_init(dcontext);
     arch_thread_init(dcontext);
+    os_thread_after_arch_init(dcontext);
     synch_thread_init(dcontext);
 
     if (!DYNAMO_OPTION(thin_client))
@@ -2531,15 +2639,21 @@ dynamo_thread_not_under_dynamo(dcontext_t *dcontext)
 void
 dynamorio_app_take_over_helper(dr_mcontext_t *mc)
 {
-    static bool have_taken_over = false; /* ASSUMPTION: not an actual write */
+#ifndef LINUX_KERNEL
+	static bool have_taken_over = false; /* ASSUMPTION: not an actual write */
+#endif
     SELF_UNPROTECT_DATASEC(DATASEC_RARELY_PROT);
     APP_EXPORT_ASSERT(dynamo_initialized, PRODUCT_NAME" not initialized");
-#ifdef RETURN_AFTER_CALL
+#ifdef LINUX_KERNEL
+    control_all_threads = true;
+    dynamo_start(mc);
+#else
+# ifdef RETURN_AFTER_CALL
     /* FIXME : this is set after dynamo_initialized, so a slight race with
      * an injected thread turning on .C protection before the main thread
      * sets this. */
     dr_preinjected = true;      /* currently only relevant on Win32 */
-#endif
+# endif
 
     if (!INTERNAL_OPTION(nullcalls) && !have_taken_over) {
         have_taken_over = true;
@@ -2567,7 +2681,9 @@ dynamorio_app_take_over_helper(dr_mcontext_t *mc)
         /* the interpreter takes over from here */
     } else
         SELF_PROTECT_DATASEC(DATASEC_RARELY_PROT);
+#endif
 }
+
 
 #ifdef WINDOWS
 extern app_pc parent_early_inject_address; /* from os.c */ 
@@ -2854,7 +2970,9 @@ get_data_section_bounds(uint sec)
 #endif
 }
 
-#ifdef LINUX
+/* TODO(peter): Figure out why this causes assembler errors when DEBUG isn't
+ * defined. */
+#if defined(LINUX) && !defined(LINUX_KERNEL)
 /* We get into problems if we keep a .section open across string literals, etc.
  * (such as when wrapping a function to get its local-scope statics in that section),
  * but the VAR_IN_SECTION does the real work for us, just so long as we have one

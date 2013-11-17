@@ -42,15 +42,16 @@
 #include "configure_defines.h"
 #include "utils.h"
 #include "module_shared.h"
-#include <string.h>  /* for memset */
-#include <math.h>
+#include "string_wrapper.h"  /* for memset */
+//#include <math.h>
 
 #ifdef PROCESS_CONTROL
 # include "moduledb.h"   /* for process control macros */
 #endif 
 
 #ifdef LINUX
-# include <sys/types.h>
+# include "types_wrapper.h"
+#ifndef LINUX_KERNEL
 # include <sys/stat.h>
 # include <fcntl.h>
 # include <stdio.h>
@@ -59,11 +60,12 @@
 # include <errno.h>
 # include <sys/time.h>          /* gettimeofday */
 # include "syscall.h"           /* SYS_gettimeofday */
+#endif
 # ifdef VMX86_SERVER
 #  include "vmkuw.h"
 # endif
 #else
-# include <errno.h>
+//# include <errno.h>
 /* FIXME : remove when syslog macros fixed */
 # include "events.h"
 #endif
@@ -78,7 +80,11 @@
 
 #include <stdarg.h> /* for varargs */
 
+#ifdef LINUX_KERNEL
+#include <linux/ctype.h>
+#else
 #include <ctype.h> /* for tolower */
+#endif
 
 #ifdef SIDELINE
 extern void sideline_exit(void);
@@ -90,7 +96,7 @@ extern void sideline_exit(void);
  * performs some cleanup and then calls os_terminate 
  */
 static void
-assertion_terminate()
+assertion_terminate(void)
 {
 #ifdef SIDELINE
     /* kill child threads */
@@ -345,7 +351,7 @@ thread_owns_first_or_both_locks_only(dcontext_t *dcontext, mutex_t *lock1, mutex
 /* dump process locks that have been acquired at least once */
 /* FIXME: since most mutexes are global we don't have thread private lock lists */
 void
-dump_process_locks()
+dump_process_locks(void)
 {
     mutex_t *cur_lock;
     uint depth = 0;
@@ -561,7 +567,7 @@ deadlock_avoidance_lock(mutex_t *lock, bool acquired, bool ownable)
             lock, lock->name, lock->rank);
         ASSERT(lock->rank > 0 && "initialize with INIT_LOCK_FREE");
         if (ownable) {
-            ASSERT(!lock->owner);
+            ASSERT(!HAS_OWNER(lock));
             lock->owner = get_thread_id();
             lock->owning_dcontext = get_thread_private_dcontext();
         }
@@ -737,6 +743,7 @@ utils_init()
     ASSERT(sizeof(reg_t) == sizeof(void *));
 
 #ifdef LINUX /* after options_init(), before we open logfile or call instrument_init() */
+#ifndef LINUX_KERNEL
         /* Problem: tcsh uses descriptors 3-5 for piping stdin, stdout, and
          * stderr.  Those numbers are hardcoded, so if we open descriptor 3 for
          * our logfile, it gets tied up with stdout!
@@ -751,6 +758,7 @@ utils_init()
                 ASSERT(foo != INVALID_FILE);
             }
         }
+#endif
 #endif
 }
 
@@ -1350,7 +1358,6 @@ wait_broadcast_event_helper(broadcast_event_t *be)
         signal_event(be->event);
     }
 }
-
 
 /****************************************************************************/
 /* HASHING */
@@ -2106,6 +2113,12 @@ report_dynamorio_problem(dcontext_t *dcontext, uint dumpcore_flag,
 bool
 is_readable_without_exception_try(byte *pc, size_t size)
 {
+#ifdef LINUX_KERNEL
+    /* TODO(peter): implement TRY blocks for the Linux Kernel. Using TRY instead
+     * of is_readable_without_exception will certainly be faster in the common
+     * case. */
+    return is_readable_without_exception(pc, size);
+#else
     dcontext_t *dcontext = get_thread_private_dcontext();
 
     /* note we need a dcontext for a TRY block */
@@ -2145,6 +2158,7 @@ is_readable_without_exception_try(byte *pc, size_t size)
     }));
 
     return true;
+#endif
 }
 
 bool
@@ -2359,7 +2373,9 @@ static bool basedir_initialized = false;
 /* below used in the create_log_dir function to avoid having it on the stack
  * on what is a critical path for stack depth (diagnostics->create_log_dir->
  * get_parameter */
+#ifndef LINUX_KERNEL
 static char old_basedir[MAXIMUM_PATH];
+#endif
 /* this lock is recursive because current implementation recurses to create the
  * basedir when called to create the logdir before the basedir is created, is
  * also useful in case we receive an exception in the create_log_dir function
@@ -2378,6 +2394,9 @@ enable_new_log_dir()
 void
 create_log_dir(int dir_type)
 {
+#ifdef LINUX_KERNEL
+  ASSERT_NOT_IMPLEMENTED(false);
+#else
 #ifdef LINUX
     char *pre_execve = getenv(DYNAMORIO_VAR_EXECVE_LOGDIR);
     bool sharing_logdir = false;
@@ -2487,6 +2506,7 @@ create_log_dir(int dir_type)
         )
         SYSLOG_INTERNAL_INFO("log dir=%s", logdir);
 #endif /* DEBUG */
+#endif /* LINUX_KERNEL */
 }
 
 /* Copies the name of the specified directory into buffer, returns true if 
@@ -2539,6 +2559,9 @@ get_log_dir(log_dir_t dir_type, char *buffer, uint *buffer_length)
 file_t
 open_log_file(const char *basename, char *finalname_with_path, uint maxlen)
 {
+#ifdef LINUX_KERNEL
+    return STDOUT;
+#else
     file_t file;
     char name[MAXIMUM_PATH];
     uint name_size = BUFFER_SIZE_ELEMENTS(name);
@@ -2586,6 +2609,7 @@ open_log_file(const char *basename, char *finalname_with_path, uint maxlen)
         finalname_with_path[maxlen-1]  = '\0'; /* if max no null */
     }
     return file;
+#endif
 }
 
 /* Generalize further as needed
@@ -2671,6 +2695,7 @@ get_short_name(const char *exename)
 void
 print_statistics(int *data, int size)
 {
+#ifndef LINUX_KERNEL
     int i;
     int min, max;
     /* our context switch does not save & restore floating point state,
@@ -2709,6 +2734,7 @@ print_statistics(int *data, int size)
     LOG(GLOBAL, LOG_ALL, 0, "\tstddev =   %s%7u.%.1u\n", sign, top, bottom);
 
     PRESERVE_FLOATING_POINT_STATE_END();
+#endif
 }
 
 /* FIXME: these should be under ifdef STATS, not necessarily ifdef DEBUG */
@@ -3065,6 +3091,10 @@ print_xml_cdata(file_t f, const char *str)
 void 
 getnamefrompid(int pid, char *name, uint maxlen)
 {
+#ifdef LINUX_KERNEL
+  strncpy(name, "<N/A: getnamefrompid>", maxlen);
+  name[maxlen-1] = '\0';
+#else
     int fd,n;
     char tempstring[200+1], *lastpart;
 
@@ -3094,6 +3124,7 @@ getnamefrompid(int pid, char *name, uint maxlen)
     name[maxlen-1]  = '\0'; /* if max no null */
 
     close_syscall(fd);
+#endif
 }
 #endif
 
@@ -3520,7 +3551,7 @@ MD5Transform(uint32 state[4], const unsigned char block[MD5_BLOCK_LENGTH])
 {
     uint32 a, b, c, d, in[MD5_BLOCK_LENGTH / 4];
 
-#if BYTE_ORDER == LITTLE_ENDIAN
+#ifdef __LITTLE_ENDIAN
     memcpy(in, block, sizeof(in));
 #else
     for (a = 0; a < MD5_BLOCK_LENGTH / 4; a++) {

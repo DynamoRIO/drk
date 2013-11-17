@@ -44,12 +44,13 @@
 #  include "fcache.h"
 #  include "monitor.h"
 #  include "moduledb.h"     /* for the process control defines */
-#  include <string.h>
+#  include "string_wrapper.h"
+#  include "hypercall.h"
 
 #else  /* NOT_DYNAMORIO_CORE */
 #  include "configure.h"
 #  include <stdio.h>            /* snprintf, sscanf */
-#  include <string.h>
+#  include "string_wrapper.h"
 
 # ifdef WINDOWS
 #  define inline __inline
@@ -1831,7 +1832,6 @@ check_option_compatibility_helper(int recurse_count)
     /* case 7626: don't short-circuit checks, as later ones may be needed */
     changed_options = fcache_check_option_compatibility() || changed_options;
     changed_options = heap_check_option_compatibility() || changed_options;
-
     changed_options = os_check_option_compatibility() || changed_options;
 #endif
 
@@ -1848,7 +1848,7 @@ check_option_compatibility_helper(int recurse_count)
 
 /* returns true if changed any options */
 static bool
-check_option_compatibility()
+check_option_compatibility(void)
 {
     ASSERT_OWN_OPTIONS_LOCK(true, &options_lock);
     ASSERT(!OPTIONS_PROTECTED());
@@ -1857,7 +1857,7 @@ check_option_compatibility()
 
 /* returns true if changed any options */
 static bool
-check_dynamic_option_compatibility()
+check_dynamic_option_compatibility(void)
 { 
     ASSERT_OWN_OPTIONS_LOCK(true, &options_lock);
     /* NOTE : use non-synch form of USAGE_ERROR  in here to avoid 
@@ -1867,7 +1867,7 @@ check_dynamic_option_compatibility()
 
 /* initialize dynamo options */
 int
-options_init()
+options_init(void)
 {
     int ret = 0, retval;
 
@@ -1887,14 +1887,14 @@ options_init()
 
 /* clean up dynamo options state */
 void
-options_exit()
+options_exit(void)
 {
     DELETE_READWRITE_LOCK(options_lock);
 }
 
 /* this function returns holding the options lock */
 void
-options_make_writable()
+options_make_writable(void)
 {
     ASSERT_DO_NOT_OWN_WRITE_LOCK(true, &options_lock);
     write_lock(&options_lock);
@@ -1905,7 +1905,7 @@ options_make_writable()
  * options_make_writable() beforehand
  */
 void
-options_restore_readonly()
+options_restore_readonly(void)
 {
     ASSERT_OWN_WRITE_LOCK(true, &options_lock);
     SELF_PROTECT_OPTIONS();

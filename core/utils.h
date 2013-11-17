@@ -144,6 +144,7 @@ void external_error(char *file, int line, char *msg);
 #define CHECK_TRUNCATE_TYPE_ushort(val) ((val) >= 0 && (val) <= USHRT_MAX)
 #define CHECK_TRUNCATE_TYPE_short(val) ((val) <= SHRT_MAX && ((int64)(val)) >= SHRT_MIN)
 #define CHECK_TRUNCATE_TYPE_uint(val) ((val) >= 0 && (val) <= UINT_MAX)
+#define CHECK_TRUNCATE_TYPE_tls_offset_t(val) CHECK_TRUNCATE_TYPE_uint(val)
 #ifdef LINUX
 /* We can't do the proper int check on Linux because it generates a warning if val has
  * type uint that I can't seem to cast around and is impossible to ignore -
@@ -464,6 +465,7 @@ enum {
 
     LOCK_RANK(initstack_mutex),  /* FIXME: NOT TESTED */
 
+    LOCK_RANK(barrier_lock), /* TODO(peter): Test this. */
     LOCK_RANK(event_lock),  /* FIXME: NOT TESTED */
     LOCK_RANK(do_threshold_mutex),  /* FIXME: NOT TESTED */
     LOCK_RANK(threads_killed_lock),  /* FIXME: NOT TESTED */
@@ -721,6 +723,7 @@ void wait_broadcast_event_helper(broadcast_event_t *be);
  * knowing for sure.
  */
 #ifdef DEADLOCK_AVOIDANCE
+# define HAS_OWNER(m) ((m)->owner != INVALID_THREAD_ID)
 # define OWN_MUTEX(m) ((m)->owner == get_thread_id())
 # define ASSERT_OWN_MUTEX(pred, m) \
     ASSERT(!(pred) || OWN_MUTEX(m))
@@ -731,6 +734,7 @@ void wait_broadcast_event_helper(broadcast_event_t *be);
            thread_owns_no_locks(get_thread_private_dcontext()))
 #else
 /* don't know for sure: imprecise in a conservative direction */
+# define HAS_OWNER(m) ((m)->owner != INVALID_THREAD_ID)
 # define OWN_MUTEX(m) (mutex_testlock(m))
 # define ASSERT_OWN_MUTEX(pred, m) \
     ASSERT(!(pred) || OWN_MUTEX(m))
@@ -1057,8 +1061,8 @@ region_intersection(app_pc *intersection_start /* OUT */,
                     const app_pc region1_start, size_t region1_len,
                     const app_pc region2_start, size_t region2_len);
 
-int check_filter(const char *filter, const char *short_name);
-int check_filter_with_wildcards(const char *filter, const char *short_name);
+bool check_filter(const char *filter, const char *short_name);
+bool check_filter_with_wildcards(const char *filter, const char *short_name);
 
 typedef enum {
     BASE_DIR,   /* Only creates directory specified in env */
@@ -1941,8 +1945,10 @@ bool isdigit(int c);
 # ifdef isdigit
 #  undef isdigit
 # endif
+#ifndef LINUX_KERNEL
 # define isprint isprint_HAS_LINK_ERRORS_USE_isprint_fast_INSTEAD
 # define isdigit isdigit_HAS_LINK_ERRORS_USE_isdigit_fast_INSTEAD
+#endif
 /* to avoid calling isprint()/isdigit() and localization tables
  * xref PR 251709 / PR 257565
  */

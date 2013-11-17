@@ -43,7 +43,10 @@
 # include "ntdll.h"
 #endif
 
-#include <string.h>
+#include "string_wrapper.h"
+#ifdef LINUX_KERNEL
+#include "kernel_interface.h"
+#endif
 
 #ifdef LINUX
 # define GLOBAL_CONFIG_DIR "/etc/dynamorio"
@@ -187,9 +190,12 @@ static bool config_initialized;
 const char *
 my_getenv(IF_WINDOWS_ELSE_NP(const wchar_t *, const char *) var, char *buf, size_t bufsz)
 {
-#ifdef LINUX
-    return getenv(var);
+#ifdef LINUX_KERNEL
+  return kernel_getenv(var);
 #else
+# ifdef LINUX
+    return getenv(var);
+# else
     wchar_t wbuf[MAX_REGISTRY_PARAMETER];
     if (env_get_value(var, wbuf, BUFFER_SIZE_BYTES(wbuf))) {
         NULL_TERMINATE_BUFFER(wbuf);
@@ -198,6 +204,7 @@ my_getenv(IF_WINDOWS_ELSE_NP(const wchar_t *, const char *) var, char *buf, size
         return buf;
     }
     return NULL;
+# endif
 #endif
 }
 

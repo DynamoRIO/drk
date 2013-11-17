@@ -70,7 +70,7 @@
  * Need to provide asm code for win32 (currently #error)
  */
 
-#include <string.h> /* for memcpy */
+#include "string_wrapper.h" /* for memcpy */
 
 /* we have two ways of keeping our stack in the xmm registers:
  * use one of them as a stack pointer, or have a constant top of

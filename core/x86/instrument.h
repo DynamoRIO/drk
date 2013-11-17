@@ -593,6 +593,10 @@ typedef struct _dr_fault_fragment_info_t {
      * depending on the type of cache consistency being used by DR.
      */
     bool app_code_consistent;    
+    /**
+     * Instruction list for the fragment. Might be NULL.
+     */
+    instrlist_t *ilist;
 } dr_fault_fragment_info_t;
 
 /**
@@ -614,11 +618,34 @@ typedef struct _dr_restore_state_info_t {
      */
     dr_mcontext_t raw_mcontext;
     /**
+     * The instr_t in fragment_info.ilist that raw_mcontext.pc corresponds to.
+     * Might be NULL.
+     */
+    instr_t *next_instr;
+    /**
      * Information about the code fragment inside the code cache
      * at the translation interruption point.
      */
     dr_fault_fragment_info_t fragment_info;
 } dr_restore_state_info_t;
+
+#ifdef LINUX_KERNEL
+typedef struct _dr_interrupt_t {
+    interrupt_stack_frame_t *frame;
+    interrupt_stack_frame_t *raw_frame;
+    interrupt_vector_t vector;
+    dr_mcontext_t *mcontext;
+} dr_interrupt_t;
+
+void
+dr_register_interrupt_event(bool (*func) (void *drcontext,
+                                          dr_interrupt_t* interrupt));
+
+bool
+dr_unregister_interrupt_event(bool (*func) (void *drcontext,
+                                            dr_interrupt_t* interrupt));
+
+#endif
 /* DR_API EXPORT END */
 
 DR_API
@@ -1309,7 +1336,10 @@ dr_custom_trace_action_t instrument_end_trace(dcontext_t *dcontext, app_pc trace
 void instrument_fragment_deleted(dcontext_t *dcontext, app_pc tag, uint flags);
 bool instrument_restore_state(dcontext_t *dcontext, bool restore_memory,
                               dr_restore_state_info_t *info);
-
+#ifdef LINUX_KERNEL
+bool instrument_interrupt(dcontext_t *dcontext,
+                          dr_interrupt_t *interrupt);
+#endif
 module_data_t * copy_module_area_to_module_data(const module_area_t *area);
 void instrument_module_load_trigger(app_pc modbase);
 void instrument_module_load(module_data_t *data, bool previously_loaded);
@@ -1731,6 +1761,18 @@ dr_memory_is_in_client(const byte *pc);
  */
 /* DR_API EXPORT END */
 
+DR_API
+void *
+dr_barrier_create(int count);
+
+DR_API
+bool
+dr_barrier_wait(void *barrier);
+
+DR_API
+void
+dr_barrier_destroy(void *barrier);
+
 DR_API 
 /** 
  * Initializes a mutex. 
@@ -1952,6 +1994,12 @@ DR_API
  */
 generic_func_t
 dr_get_proc_address(module_handle_t lib, const char *name);
+
+#ifdef LINUX_KERNEL
+DR_API
+bool
+dr_kernel_find_symbol(const char *name, void **address, size_t *size);
+#endif
 
 /* DR_API EXPORT BEGIN */
 /**
@@ -2828,6 +2876,15 @@ void
 dr_restore_arith_flags(void *drcontext, instrlist_t *ilist, instr_t *where,
                        dr_spill_slot_t slot);
 
+DR_API
+/** Emulates the effects of 
+ *  add 7f, al
+ *  sahf
+ * on eflags to restore eflags from xax. Does not modify xax.
+ */
+void
+dr_emulate_restore_arith_flags(dr_mcontext_t *mcontext);
+
 /* FIXME PR 315333: add routine that scans ahead to see if need to save eflags.  See 
  * forward_eflags_analysis(). */
 
@@ -3443,6 +3500,14 @@ DR_API
 app_pc
 dr_app_pc_from_cache_pc(byte *cache_pc);
 
+DR_API
+app_pc
+dr_tag_from_cache_pc(byte *cache_pc);
+
+DR_API
+app_pc
+dr_fragment_start_pc(byte *cache_pc);
+
 #ifdef CUSTOM_TRACES
 /* DR_API EXPORT BEGIN */
 
@@ -3548,5 +3613,9 @@ DR_API
 void
 dr_insert_restore_fpstate(void *drcontext, instrlist_t *ilist, instr_t *where,
                           opnd_t buf);
+
+DR_API
+bool
+dr_is_emulating_interrupt_return(void *drcontext);
 
 #endif /* _INSTRUMENT_H_ */

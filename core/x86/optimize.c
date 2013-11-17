@@ -53,7 +53,7 @@
 #include "../fragment.h"
 #include "disassemble.h"
 #include "proc.h"
-#include <string.h> /* for memset */
+#include "string_wrapper.h" /* for memset */
 
 /* IMPORTANT INSTRUCTIONS FOR WRITING OPTIMIZATIONS:
  * 
