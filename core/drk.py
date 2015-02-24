@@ -21,7 +21,6 @@ def check_open(args, input_string=None):
 
 class Shell(object):
     def check_open(self, args, input_string=None):
-        self.subject.notify(' '.join(args))
         return check_open(args, input_string)
 
 class SecureShell(Shell):
