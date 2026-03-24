@@ -59,7 +59,7 @@ static inline queued_hypercall_t* hypercall_queue_consume(hypercall_queue_t* que
     }
 
     // Remove the head.
-    result = list_entry(queue->head.next, queued_hypercall_t, list);    
+    result = list_entry(queue->head.next, queued_hypercall_t, list);
     list_del(&result->list);
     spin_unlock_irqrestore(&queue->lock, flags);
     return result;
@@ -82,7 +82,7 @@ static int clear_queue(hypercall_queue_t* queue) {
     spin_lock_irqsave(&queue->lock, flags);
     while (!list_empty(&queue->head)) {
         queued_hypercall_t* hypercall =
-            list_entry(queue->head.next, queued_hypercall_t, list);    
+            list_entry(queue->head.next, queued_hypercall_t, list);
         list_del(&hypercall->list);
         kfree(hypercall);
     }
@@ -94,7 +94,7 @@ static int hypercall_dequeue_to_user(hypercall_t __user * user_hypercall) {
     size_t failed_bytes;
     queued_hypercall_t* queued;
     hypercall_t* result;
-    
+
     queued = hypercall_queue_consume(&hypercall_queue);
     if (queued == NULL) {
         /* We were interrupted, so return a nop. */
@@ -164,10 +164,9 @@ unsigned long hypercall_handler(
 
 static int device_major;
 
-static int device_ioctl(struct inode* inode,
-                        struct file* file,
-                        unsigned int ioctl_num,
-                        unsigned long ioctl_param) {
+static long device_ioctl(struct file* file,
+                         unsigned int ioctl_num,
+                         unsigned long ioctl_param) {
     void __user *argp = (void __user *)ioctl_param;
     switch (ioctl_num) {
     case HYPERCALL_IOCTL_DEQUEUE:
@@ -186,7 +185,7 @@ static struct file_operations fops = {
     .write = NULL,
     .open = NULL,
     .release = NULL,
-    .ioctl = device_ioctl,
+    .unlocked_ioctl = device_ioctl,
 };
 
 static int hypercall_host_init(void) {
