@@ -1,4 +1,3 @@
-typedef char bool;
 #include <sys/types.h>
 #include "configure.h"
 #include "globals.h"
@@ -16,5 +15,5 @@ int main() {
 	assert(ALIGN_FORWARD_UINT(x, z) == 0x40000000);
 	assert(ALIGN_FORWARD_UINT(x, y) == 0x40000000);
 	assert(ALIGN_BACKWARD(x, y) == x);
-    return 0;    
+    return 0;
 }
