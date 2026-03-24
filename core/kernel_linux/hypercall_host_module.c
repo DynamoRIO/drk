@@ -170,9 +170,8 @@ hypercall_handler(struct kvm_vcpu *vcpu, unsigned long nr, unsigned long a0,
 
 static int device_major;
 
-static int
-device_ioctl(struct inode *inode, struct file *file, unsigned int ioctl_num,
-             unsigned long ioctl_param)
+static long
+device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
 {
     void __user *argp = (void __user *)ioctl_param;
     switch (ioctl_num) {
@@ -189,7 +188,7 @@ static struct file_operations fops = {
     .write = NULL,
     .open = NULL,
     .release = NULL,
-    .ioctl = device_ioctl,
+    .unlocked_ioctl = device_ioctl,
 };
 
 static int

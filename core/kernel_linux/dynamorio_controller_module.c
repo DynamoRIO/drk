@@ -31,9 +31,8 @@ smp_exit(void *info)
     dr_smp_exit();
 }
 
-static int
-init_ioctl(struct inode *inode, struct file *file, unsigned int ioctl_num,
-           unsigned long ioctl_param)
+static long
+init_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
 {
     dynamorio_init_cmd_t cmd;
     if (initialized) {
@@ -65,9 +64,8 @@ init_ioctl(struct inode *inode, struct file *file, unsigned int ioctl_num,
     return 0;
 }
 
-static int
-exit_ioctl(struct inode *inode, struct file *file, unsigned int ioctl_num,
-           unsigned long ioctl_param)
+static long
+exit_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
 {
     dynamorio_exit_cmd_t cmd;
     if (!initialized) {
@@ -108,9 +106,8 @@ copy_export_to_user(void *data, unsigned long size, unsigned long max_size,
     return 0;
 }
 
-static int
-kstats_ioctl(struct inode *inode, struct file *file, unsigned int ioctl_num,
-             unsigned long ioctl_param)
+static long
+kstats_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
 {
     dynamorio_kstats_cmd_t __user *kstats;
     dr_cpu_exports_t *exports;
@@ -145,9 +142,8 @@ kstats_ioctl(struct inode *inode, struct file *file, unsigned int ioctl_num,
                                DYNAMORIO_KSTATS_MAX_SIZE, &kstats->buffer);
 }
 
-static int
-stats_ioctl(struct inode *inode, struct file *file, unsigned int ioctl_num,
-            unsigned long ioctl_param)
+static long
+stats_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
 {
     dynamorio_stats_cmd_t __user *stats;
     stats = (dynamorio_stats_cmd_t __user *)ioctl_param;
@@ -161,15 +157,14 @@ stats_ioctl(struct inode *inode, struct file *file, unsigned int ioctl_num,
                                DYNAMORIO_STATS_MAX_SIZE, &stats->buffer);
 }
 
-static int
-device_ioctl(struct inode *inode, struct file *file, unsigned int ioctl_num,
-             unsigned long ioctl_param)
+static long
+device_ioctl(struct file *file, unsigned int ioctl_num, unsigned long ioctl_param)
 {
     switch (ioctl_num) {
-    case DYNAMORIO_IOCTL_INIT: return init_ioctl(inode, file, ioctl_num, ioctl_param);
-    case DYNAMORIO_IOCTL_EXIT: return exit_ioctl(inode, file, ioctl_num, ioctl_param);
-    case DYNAMORIO_IOCTL_KSTATS: return kstats_ioctl(inode, file, ioctl_num, ioctl_param);
-    case DYNAMORIO_IOCTL_STATS: return stats_ioctl(inode, file, ioctl_num, ioctl_param);
+    case DYNAMORIO_IOCTL_INIT: return init_ioctl(file, ioctl_num, ioctl_param);
+    case DYNAMORIO_IOCTL_EXIT: return exit_ioctl(file, ioctl_num, ioctl_param);
+    case DYNAMORIO_IOCTL_KSTATS: return kstats_ioctl(file, ioctl_num, ioctl_param);
+    case DYNAMORIO_IOCTL_STATS: return stats_ioctl(file, ioctl_num, ioctl_param);
     default: printk("Uknwown ioctl number %d.\n", ioctl_num);
     }
     return 0;
@@ -180,7 +175,7 @@ static struct file_operations fops = {
     .write = NULL,
     .open = NULL,
     .release = NULL,
-    .ioctl = device_ioctl,
+    .unlocked_ioctl = device_ioctl,
 };
 
 static int
