@@ -16,6 +16,7 @@ extern "C" {
 #include <sys/types.h>
 #include <time.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "linux_device.h"
 
@@ -27,7 +28,7 @@ class HypercallDevice {
             device_(HYPERCALL_DEVICE_NAME, HYPERCALL_DEVICE_PATH) {
         hypercall_ = (hypercall_t*) new char[HYPERCALL_MAX_SIZE];
     }
-    
+
     const hypercall_t& Dequeue() {
         device_.Ioctl(HYPERCALL_IOCTL_DEQUEUE, hypercall_, true);
         if (hypercall_->size > HYPERCALL_MAX_SIZE) {
@@ -154,7 +155,7 @@ class DualFileSystem : public FileSystem {
         b_->Open(fd, path);
     }
 
-    void Close(int fd) { 
+    void Close(int fd) {
         a_->Close(fd);
         b_->Close(fd);
     }
@@ -247,7 +248,7 @@ int main(int argc, char** argv) {
     try {
         HypercallDevice device;
         if (argc == 2 && string(argv[1]) == "clear") {
-            device.Clear();    
+            device.Clear();
         } else {
             HypercallServer server("./logs");
             for (;;) {
