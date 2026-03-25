@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -133,7 +133,7 @@
  */
 #endif
 /** Cross-platform maximum file path length. */
-#define MAXIMUM_PATH      260 
+#define MAXIMUM_PATH      260
 
 /* DR_API EXPORT END */
 /* DR_API EXPORT VERBATIM */
@@ -242,8 +242,8 @@ typedef pid_t process_id_t;
 typedef HANDLE file_t;
 /** The sentinel value for an invalid file_t. */
 #  define INVALID_FILE INVALID_HANDLE_VALUE
-/* dr_get_stdout_file and dr_get_stderr_file return errors as 
- * INVALID_HANDLE_VALUE.  We leave INVALID_HANDLE_VALUE as is, 
+/* dr_get_stdout_file and dr_get_stderr_file return errors as
+ * INVALID_HANDLE_VALUE.  We leave INVALID_HANDLE_VALUE as is,
  * since it equals INVALID_FILE
  */
 /** The file_t value for standard output. */
@@ -330,7 +330,7 @@ typedef struct {
 #ifdef X64
 # define POINTER_MAX ULLONG_MAX
 # define SSIZE_T_MAX LLONG_MAX
-# define POINTER_MAX_32BIT ((ptr_uint_t)UINT_MAX) 
+# define POINTER_MAX_32BIT ((ptr_uint_t)UINT_MAX)
 #else
 # define POINTER_MAX UINT_MAX
 # define SSIZE_T_MAX INT_MAX
@@ -386,7 +386,7 @@ typedef struct {
 
 #ifdef WINDOWS
 # define IF_WINDOWS(x) x
-# define IF_WINDOWS_(x) x, 
+# define IF_WINDOWS_(x) x,
 # define _IF_WINDOWS(x) , x
 # define IF_WINDOWS_ELSE_0(x) (x)
 # define IF_WINDOWS_ELSE(x,y) (x)
@@ -422,7 +422,7 @@ typedef struct {
 # define IF_VMX86(x) x
 # define IF_VMX86_ELSE(x,y) x
 # define _IF_VMX86(x) , x
-# define IF_NOT_VMX86(x) 
+# define IF_NOT_VMX86(x)
 #else
 # define IF_VMX86(x)
 # define IF_VMX86_ELSE(x,y) y
@@ -567,7 +567,7 @@ typedef enum {
                                (ASSERT_MESSAGE("non-internal option argument "#opt, false), \
                                 DYNAMO_OPTION(opt)))
 #else
-  /* Use only for experimental non-release options, 
+  /* Use only for experimental non-release options,
      default value is assumed and command line options are ignored */
   /* We could use IS_OPTION_INTERNAL(opt) ? to determine whether an option is defined as INTERNAL in
      optionsx.h and have that be the only place to modify to transition between internal and external options.
@@ -584,7 +584,7 @@ typedef enum {
  typedef unsigned int uint32;
 #endif
 /* DR_API EXPORT END */
-/* Note: Linux paths are longer than the 260 limit on Windows, 
+/* Note: Linux paths are longer than the 260 limit on Windows,
    yet we can't afford the 4K of PATH_MAX from <limits.h> */
 typedef uint64 timestamp_t;
 #  define NAKED
@@ -623,22 +623,22 @@ typedef int ssize_t;
 #  endif
 /* VC6 doesn't define the standard ULLONG_MAX */
 #  if _MSC_VER <= 1200 && !defined(ULLONG_MAX)
-#    define ULLONG_MAX _UI64_MAX 
+#    define ULLONG_MAX _UI64_MAX
 #  endif
 typedef uint64 timestamp_t;
 #  define NAKED __declspec( naked )
 #endif
 
-#define FIXED_TIMESTAMP_FORMAT "%10"INT64_FORMAT"u"
+#define FIXED_TIMESTAMP_FORMAT "%10" INT64_FORMAT "u"
 
 /* DR_API EXPORT TOFILE dr_defines.h */
 /* DR_API EXPORT BEGIN */
-#define UINT64_FORMAT_CODE INT64_FORMAT"u"
-#define INT64_FORMAT_CODE INT64_FORMAT"d"
-#define UINT64_FORMAT_STRING "%"UINT64_FORMAT_CODE
-#define INT64_FORMAT_STRING "%"INT64_FORMAT_CODE
-#define HEX64_FORMAT_STRING "%"INT64_FORMAT"x"
-#define ZHEX64_FORMAT_STRING "%016"INT64_FORMAT"x"
+#define UINT64_FORMAT_CODE INT64_FORMAT "u"
+#define INT64_FORMAT_CODE INT64_FORMAT "d"
+#define UINT64_FORMAT_STRING "%" UINT64_FORMAT_CODE
+#define INT64_FORMAT_STRING "%" INT64_FORMAT_CODE
+#define HEX64_FORMAT_STRING "%" INT64_FORMAT "x"
+#define ZHEX64_FORMAT_STRING "%016" INT64_FORMAT "x"
 #ifdef API_EXPORT_ONLY
 #define ZHEX32_FORMAT_STRING "%08x"
 #define HEX32_FORMAT_STRING "%x"
@@ -689,7 +689,7 @@ typedef int stats_int_t;
  * there and then disallow %x, to try and avoid 64-bit printing bugs,
  * but it wouldn't be a panacea.
  */
-#define L_UINT64_FORMAT_STRING L"%"L_EXPAND_LEVEL(UINT64_FORMAT_CODE)
+#define L_UINT64_FORMAT_STRING L"%" L_EXPAND_LEVEL(UINT64_FORMAT_CODE)
 #ifdef X64
 #  define PFMT ZHEX64_FORMAT_STRING
 #  define PIFMT HEX64_FORMAT_STRING
@@ -705,9 +705,9 @@ typedef int stats_int_t;
 #  define SZFC "u"
 #  define SSZFC "d"
 #endif
-#define L_PFMT L"%016"L_EXPAND_LEVEL(INT64_FORMAT)L"x"
-#define PFX "0x"PFMT
-#define PIFX "0x"PIFMT
+#define L_PFMT L"%016" L_EXPAND_LEVEL(INT64_FORMAT) L"x"
+#define PFX "0x" PFMT
+#define PIFX "0x" PIFMT
 
 /* printf code for {thread,process}_id_t */
 #ifdef WINDOWS
@@ -787,14 +787,14 @@ typedef char liststring_t[MAX_LIST_OPTION_LENGTH];
 #define COMPANY_LONG_NAME "DynamoRIO developers"
 
 #ifdef BUILD_NUMBER
-#  define BUILD_NUMBER_STRING "build "STRINGIFY(BUILD_NUMBER)
+#  define BUILD_NUMBER_STRING "build " STRINGIFY(BUILD_NUMBER)
 #else
 #  define BUILD_NUMBER_STRING "custom build"
 #  define BUILD_NUMBER (0)
 #endif
 
 #ifdef VERSION_NUMBER
-#  define VERSION_NUMBER_STRING "version "STRINGIFY(VERSION_NUMBER)
+#  define VERSION_NUMBER_STRING "version " STRINGIFY(VERSION_NUMBER)
 #else
 #  define VERSION_NUMBER_STRING "internal version"
 #  define VERSION_NUMBER (0.0)
@@ -815,7 +815,7 @@ typedef char liststring_t[MAX_LIST_OPTION_LENGTH];
 #define DYNAMORIO_VAR_RUNUNDER_ID   DYNAMORIO_RUNUNDER
 #define DYNAMORIO_VAR_CMDLINE_ID    DYNAMORIO_CMDLINE
 #define DYNAMORIO_VAR_ONCRASH_ID    DYNAMORIO_ONCRASH
-#define DYNAMORIO_VAR_SAFEMARKER_ID DYNAMORIO_SAFEMARKER 
+#define DYNAMORIO_VAR_SAFEMARKER_ID DYNAMORIO_SAFEMARKER
 /* NT only, value should be all CAPS and specifies a boot option to match */
 
 #define DYNAMORIO_VAR_CACHE_ROOT_ID   DYNAMORIO_CACHE_ROOT
@@ -933,10 +933,10 @@ typedef char liststring_t[MAX_LIST_OPTION_LENGTH];
 
 #  define EVENTLOG_REGISTRY_SUBKEY "System\\CurrentControlSet\\Services\\EventLog"
 #  define L_EVENTLOG_REGISTRY_SUBKEY L_EXPAND_LEVEL(EVENTLOG_REGISTRY_SUBKEY)
-#  define L_EVENTLOG_REGISTRY_KEY L"\\Registry\\Machine\\"L_EXPAND_LEVEL(EVENTLOG_REGISTRY_SUBKEY)
+#  define L_EVENTLOG_REGISTRY_KEY L"\\Registry\\Machine\\" L_EXPAND_LEVEL(EVENTLOG_REGISTRY_SUBKEY)
 #  define L_EVENT_LOG_KEY LCONCAT(L_EVENTLOG_REGISTRY_KEY,EVENTLOG_NAME)
 #  define L_EVENT_LOG_SUBKEY LCONCAT(L_EVENTLOG_REGISTRY_SUBKEY,EVENTLOG_NAME)
-#  define L_EVENT_LOG_NAME L_EXPAND_LEVEL(EVENTLOG_NAME)      
+#  define L_EVENT_LOG_NAME L_EXPAND_LEVEL(EVENTLOG_NAME)
 #  define L_EVENT_SOURCE_NAME L_EXPAND_LEVEL(EVENTSOURCE_NAME)
 #  define L_EVENT_SOURCE_KEY LCONCAT(L_EVENT_LOG_KEY, EVENTSOURCE_NAME)
 #  define L_EVENT_SOURCE_SUBKEY LCONCAT(L_EVENT_LOG_SUBKEY, EVENTSOURCE_NAME)
@@ -945,14 +945,14 @@ typedef char liststring_t[MAX_LIST_OPTION_LENGTH];
 #  define EVENT_SOURCE_KEY LCONCAT(EVENT_LOG_KEY,EVENTSOURCE_NAME)
 /* Log key values (NOTE the values here are the values our installer uses,
  * not sure what all of them mean).  FIXME would be nice if these were
- * shared with the installer config file. Only used by DRcontrol (via 
+ * shared with the installer config file. Only used by DRcontrol (via
  * share/config.c) to set up new eventlogs (mainly for vista where our
  * installer doesn't work yet xref case 8482).*/
 #  define L_EVENT_FILE_VALUE_NAME L"File"
 #  define L_EVENT_FILE_NAME_PRE_VISTA \
-       L"%SystemRoot%\\system32\\config\\"L_EXPAND_LEVEL(EVENTLOG_NAME)L".evt"
+       L"%SystemRoot%\\system32\\config\\" L_EXPAND_LEVEL(EVENTLOG_NAME) L".evt"
 #  define L_EVENT_FILE_NAME_VISTA \
-       L"%SystemRoot%\\system32\\winevt\\logs\\"L_EXPAND_LEVEL(EVENTLOG_NAME)L".elf"
+       L"%SystemRoot%\\system32\\winevt\\logs\\" L_EXPAND_LEVEL(EVENTLOG_NAME) L".elf"
 #  define L_EVENT_MAX_SIZE_NAME L"MaxSize"
 #  define EVENT_MAX_SIZE 0x500000
 #  define L_EVENT_RETENTION_NAME L"Retention"
@@ -972,11 +972,11 @@ typedef char liststring_t[MAX_LIST_OPTION_LENGTH];
 #  define DYNAMORIO_SHARED_OBJECT_DIRECTORY LCONCAT(DYNAMORIO_SHARED_OBJECT_BASE, "SharedCache")
 
 /* registry */
-#  define DYNAMORIO_REGISTRY_BASE_SUBKEY "Software\\"COMPANY_NAME"\\"PRODUCT_NAME
-#  define DYNAMORIO_REGISTRY_BASE L"\\Registry\\Machine\\Software\\"L_EXPAND_LEVEL(COMPANY_NAME)L("\\")L_EXPAND_LEVEL(PRODUCT_NAME)
+#  define DYNAMORIO_REGISTRY_BASE_SUBKEY "Software\\" COMPANY_NAME "\\" PRODUCT_NAME
+#  define DYNAMORIO_REGISTRY_BASE L"\\Registry\\Machine\\Software\\" L_EXPAND_LEVEL(COMPANY_NAME) L("\\") L_EXPAND_LEVEL(PRODUCT_NAME)
 #  define DYNAMORIO_REGISTRY_HIVE HKEY_LOCAL_MACHINE
 #  define DYNAMORIO_REGISTRY_KEY    DYNAMORIO_REGISTRY_BASE_SUBKEY
-#  define L_DYNAMORIO_REGISTRY_KEY L"Software\\"L_EXPAND_LEVEL(COMPANY_NAME)L"\\"L_EXPAND_LEVEL(PRODUCT_NAME)
+#  define L_DYNAMORIO_REGISTRY_KEY L"Software\\" L_EXPAND_LEVEL(COMPANY_NAME) L"\\" L_EXPAND_LEVEL(PRODUCT_NAME)
 
 #  define INJECT_ALL_HIVE    HKEY_LOCAL_MACHINE
 #  define INJECT_ALL_KEY     "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Windows"
@@ -1017,17 +1017,17 @@ typedef char liststring_t[MAX_LIST_OPTION_LENGTH];
 
 /* for processview, etc */
 #  define DYNAMORIO_LIBRARY_NAME "dynamorio.dll"
-#  define DLLPATH_RELEASE    "\\lib\\release\\"DYNAMORIO_LIBRARY_NAME
-#  define DLLPATH_DEBUG      "\\lib\\debug\\"DYNAMORIO_LIBRARY_NAME
-#  define DLLPATH_PROFILE    "\\lib\\profile\\"DYNAMORIO_LIBRARY_NAME
+#  define DLLPATH_RELEASE    "\\lib\\release\\" DYNAMORIO_LIBRARY_NAME
+#  define DLLPATH_DEBUG      "\\lib\\debug\\" DYNAMORIO_LIBRARY_NAME
+#  define DLLPATH_PROFILE    "\\lib\\profile\\" DYNAMORIO_LIBRARY_NAME
 
 #  define L_DYNAMORIO_LIBRARY_NAME L_EXPAND_LEVEL(DYNAMORIO_LIBRARY_NAME)
-#  define L_DLLPATH_RELEASE    L"\\lib\\release\\"L_DYNAMORIO_LIBRARY_NAME
-#  define L_DLLPATH_DEBUG      L"\\lib\\debug\\"L_DYNAMORIO_LIBRARY_NAME
-#  define L_DLLPATH_PROFILE    L"\\lib\\profile\\"L_DYNAMORIO_LIBRARY_NAME
+#  define L_DLLPATH_RELEASE    L"\\lib\\release\\" L_DYNAMORIO_LIBRARY_NAME
+#  define L_DLLPATH_DEBUG      L"\\lib\\debug\\" L_DYNAMORIO_LIBRARY_NAME
+#  define L_DLLPATH_PROFILE    L"\\lib\\profile\\" L_DYNAMORIO_LIBRARY_NAME
 
-#  define INJECT_ALL_DLL_SUBPATH   "\\lib\\"INJECT_DLL_8_3_NAME
-#  define L_INJECT_ALL_DLL_SUBPATH   L"\\lib\\"L_EXPAND_LEVEL(INJECT_DLL_8_3_NAME)
+#  define INJECT_ALL_DLL_SUBPATH   "\\lib\\" INJECT_DLL_8_3_NAME
+#  define L_INJECT_ALL_DLL_SUBPATH   L"\\lib\\" L_EXPAND_LEVEL(INJECT_DLL_8_3_NAME)
 
 enum DLL_TYPE {
         DLL_NONE,
@@ -1040,9 +1040,9 @@ enum DLL_TYPE {
 };
 #endif /* WINDOWS */
 
-/* DYNAMORIO_RUNUNDER controls the injection technique and process naming, 
+/* DYNAMORIO_RUNUNDER controls the injection technique and process naming,
  *  it is a bitmask of the values below:
- * RUNUNDER_ON: 
+ * RUNUNDER_ON:
  *  take over the app indicated by the corresponding app-specific
  *  subkey; when this is a global param, it only acts as a default for
  *  subkeys which don't explicitly set RUNUNDER. indicates current
@@ -1054,17 +1054,17 @@ enum DLL_TYPE {
  *
  * RUNUNDER_EXPLICIT:
  *  indicates that the app will use the alternate injection technique
- *  currently via -follow_explicit_children, but might change to drinject 
+ *  currently via -follow_explicit_children, but might change to drinject
  *  in the per-executable debugger registry key at some point
  *
  *
  * RUNUNDER_COMMANDLINE_MATCH:
  *  indicates that the process command line must exactly match the
  *  value in the DYNAMORIO_CMDLINE app-specific subkey, or else no
- *  takeover will be done.  Note that only a single instance of 
+ *  takeover will be done.  Note that only a single instance of
  *  a given executable name can be controlled this way.
  *
- * RUNUNDER_COMMANDLINE_DISPATCH: 
+ * RUNUNDER_COMMANDLINE_DISPATCH:
  *  marks that the processes with this executable name should be
  *  differentiated by their canonicalized commandline.  For example,
  *  different dllhost instances will get their own different subkeys,
@@ -1081,10 +1081,10 @@ enum DLL_TYPE {
  *  /v then this flag is needed.
  *
  * RUNUNDER_ONCE:
- *  is used by staging mode to specify that the executable corresponding 
- *  to the current process shouldn't run under DR the next time, i.e., 
+ *  is used by staging mode to specify that the executable corresponding
+ *  to the current process shouldn't run under DR the next time, i.e.,
  *  turn off its RUNUNDER_ON flag after checking it for the current process.
- *  This is needed to prevent perpetual crash-&-boot cycles due to DR failure.  
+ *  This is needed to prevent perpetual crash-&-boot cycles due to DR failure.
  *  See case 3702.
  **/
 enum {
@@ -1118,7 +1118,7 @@ enum {
 /* To use as an iterator define NUDGE_DEF(name, comment) */
 
 /* CAUTION: DO NOT change ordering of the nudge definitions for non-NYI, i.e.,
- *          implemented nudges.  These numbers correspond to specific masks 
+ *          implemented nudges.  These numbers correspond to specific masks
  *          that are used by the nodemanager/drcontrol (thus QA).  Will lead to
  *          a lot of unwanted confusion.
  */
@@ -1156,7 +1156,7 @@ enum {
      */
 
 typedef enum {
-#define NUDGE_DEF(name, comment) NUDGE_DR_##name, 
+#define NUDGE_DEF(name, comment) NUDGE_DR_##name,
     NUDGE_DEFINITIONS()
 #undef NUDGE_DEF
     NUDGE_DR_PARAMETRIZED_END
@@ -1169,7 +1169,7 @@ typedef enum {
 #define NUDGE_ARG_VERSION_1 1
 #define NUDGE_ARG_CURRENT_VERSION NUDGE_ARG_VERSION_1
 
-/* nudge_arg_t flags 
+/* nudge_arg_t flags
  * On Linux only 2 bits for these
  */
 enum {
@@ -1205,7 +1205,7 @@ typedef struct {
     client_id_t client_id; /* unique ID identifying client */
     uint64 client_arg; /* argument for a client nudge */
 #ifdef WIN32
-    /* Add future arguments for nudge actions here. 
+    /* Add future arguments for nudge actions here.
      * There is no room for more Linux arguments.
      */
 #endif
@@ -1262,7 +1262,7 @@ typedef enum {
     /* All the invalid states listed below may arise statically (at the
      * time of parsing the probes, i.e., inside dr_register_probes() or
      * dynamically (i.e., when modules are loaded or unloaded)).
-     */ 
+     */
 
     /** The numeric virtual address specified for the probe insertion location
      * or the callback function is invalid.
@@ -1359,7 +1359,7 @@ typedef enum {
      */
     HOTP_INJECT_DETECT = 100,
 
-    /* One or more patch points in a vulnerability have been patched, but not 
+    /* One or more patch points in a vulnerability have been patched, but not
      * all, yet.  N/A to probes as they can't group multiple patch points.
      */
     HOTP_INJECT_IN_PROGRESS = 101,
@@ -1376,7 +1376,7 @@ typedef enum {
     HOTP_INJECT_NO_MATCH = DR_PROBE_STATUS_LIB_NOT_SEEN,
 
     /*
-    TODO: must distinguish between no match & vulnerable vs. no match & not 
+    TODO: must distinguish between no match & vulnerable vs. no match & not
           vulnerable; future work if needed.
     HOTP_INJECT_NO_MATCH_VULNERABLE,
     HOTP_INJECT_NO_MATCH_NOT_VULNERABLE,
@@ -1391,7 +1391,7 @@ typedef enum {
 typedef dr_probe_status_t hotp_inject_status_t;
 
 
-/* Modes are at a policy level, not a vulnerability level, even though the 
+/* Modes are at a policy level, not a vulnerability level, even though the
  * core organizes things at the vulnerability level.
  */
 typedef enum {
@@ -1402,15 +1402,15 @@ typedef enum {
 
 /* This structure is used to form a table that contains the status of all
  * active policies.  This is separated out into a separate table, as opposed
- * to being part of the hotp_vul_info_t and thus part of the global 
- * vulnerability table, because the node manager will be directly reading 
- * this information from the core's memory.  Thus, this structure serves 
- * as a container to expose only that data which will be needed by the node 
+ * to being part of the hotp_vul_info_t and thus part of the global
+ * vulnerability table, because the node manager will be directly reading
+ * this information from the core's memory.  Thus, this structure serves
+ * as a container to expose only that data which will be needed by the node
  * manager from the core regarding hot patches.
  */
 typedef struct {
     /* polciy_id is the same as the one in hotp_vul_t.  Duplicated because can't
-     * have this pointing to the hopt_vul_t structure because the node manager 
+     * have this pointing to the hopt_vul_t structure because the node manager
      * will have to chase the pointer for each element to read it rather than a
      * single block of memory.
      */
@@ -1419,9 +1419,9 @@ typedef struct {
 
     /* This is the same as the one in hotp_vul_t.  Duplicated for the same
      * reason policy_id (see above) was.  Can't have the hotp_vul_t structure
-     * pointing here too because that struct/table needs to be initialized for 
-     * the policy status table to be created; catch-22.  
-     * Fix for case 5484, where the node manager wasn't able to tell if an 
+     * pointing here too because that struct/table needs to be initialized for
+     * the policy status table to be created; catch-22.
+     * Fix for case 5484, where the node manager wasn't able to tell if an
      * inject status was for a policy that was turned on or off.
      */
     hotp_policy_mode_t mode;
@@ -1636,10 +1636,10 @@ typedef struct _dr_mcontext_t {
                                                 rflags/eflags register */
     }; /* anonymous union of alternative names for rflags/eflags register */
     /*
-     * Anonymous union of alternative names for the program counter / 
-     * instruction pointer (eip/rip).  This field is not always set or 
+     * Anonymous union of alternative names for the program counter /
+     * instruction pointer (eip/rip).  This field is not always set or
      * read by all API routines.
-     */ 
+     */
     union {
         byte *xip; /**< platform-independent name for full rip/eip register */
         byte *pc; /**< platform-independent alt name for full rip/eip register */
