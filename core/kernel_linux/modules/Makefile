@@ -1,5 +1,4 @@
-EXTRA_CFLAGS=-O0 -g $(DR_INCLUDE_FLAGS) -Werror -Wframe-larger-than=4096
-#EXTRA_CFLAGS=-O3 -g $(DR_INCLUDE_FLAGS) -Werror -Wframe-larger-than=4096
+EXTRA_CFLAGS=-O2 -g $(DR_INCLUDE_FLAGS) -Werror -Wframe-larger-than=4096
 
 EXTRA_AFLAGS=$(DR_INCLUDE_FLAGS)\
  -Xassembler -mmnemonic=intel -Xassembler -msyntax=intel -Xassembler -mnaked-reg\
