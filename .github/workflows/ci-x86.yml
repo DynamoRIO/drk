@@ -4,6 +4,9 @@ jobs:
   x86-64:
     runs-on: ubuntu-24.04
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
       - name: Setup build environment
         env:
           DEBIAN_FRONTEND: noninteractive
@@ -23,9 +26,6 @@ jobs:
         run: |
           make defconfig
           make modules_prepare
-
-      - name: Checkout repository
-        uses: actions/checkout@v5
 
       - name: Build drk
         run: cd core && make -f drk.mk KERNELDIR=../$KERNEL_DIR
