@@ -28,11 +28,12 @@ HOST_MODULES_MAKE=-C $(HOST_KERNELDIR) M=$(DR_CORE_DIR)/kernel_linux/host_module
 
 ASM_FILES= $(shell find . -name '*.asm' | sed 's/\.asm/.S/g')
 
-default: exports.c api_headers scons $(ASM_FILES) 
-	cp kernel_linux/host_modules/Module.symvers.in kernel_linux/host_modules/Module.symvers
+# default: exports.c api_headers scons $(ASM_FILES) 
+default: exports.c api_headers $(ASM_FILES)
+#	cp kernel_linux/host_modules/Module.symvers.in kernel_linux/host_modules/Module.symvers
 	cp kernel_linux/modules/Module.symvers.in kernel_linux/modules/Module.symvers
 	$(MAKE) $(MODULES_MAKE) modules
-	$(MAKE) $(HOST_MODULES_MAKE) modules
+#	$(MAKE) $(HOST_MODULES_MAKE) modules
 	
 scons:
 	scons -j10
