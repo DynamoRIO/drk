@@ -32,7 +32,7 @@ ASM_FILES= $(shell find . -name '*.asm' | sed 's/\.asm/.S/g')
 default: exports.c api_headers $(ASM_FILES)
 #	cp kernel_linux/host_modules/Module.symvers.in kernel_linux/host_modules/Module.symvers
 	cp kernel_linux/modules/Module.symvers.in kernel_linux/modules/Module.symvers
-	$(MAKE) $(MODULES_MAKE) modules
+	$(MAKE) $(MODULES_MAKE) KBUILD_MODPOST_WARN=1 modules
 #	$(MAKE) $(HOST_MODULES_MAKE) modules
 	
 scons:
