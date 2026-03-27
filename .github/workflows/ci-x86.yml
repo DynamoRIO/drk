@@ -28,4 +28,4 @@ jobs:
         uses: actions/checkout@v5
 
       - name: Build drk
-        run: cd core && make -f drk.mk KERNDIR=../$KERNEL_DIR
+        run: cd core && make -f drk.mk KERNELDIR=../$KERNEL_DIR
