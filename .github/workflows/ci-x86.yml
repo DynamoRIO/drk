@@ -22,8 +22,7 @@ jobs:
         working-directory: ${{ env.KERNEL_DIR }}
         run: |
           make defconfig
-          make -j$(nproc) vmlinux
-          make -j$(nproc) modules
+          make modules_prepare
 
       - name: Checkout repository
         uses: actions/checkout@v5
