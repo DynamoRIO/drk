@@ -28,13 +28,13 @@ HOST_MODULES_MAKE=-C $(HOST_KERNELDIR) M=$(DR_CORE_DIR)/kernel_linux/host_module
 
 ASM_FILES= $(shell find . -name '*.asm' | sed 's/\.asm/.S/g')
 
-# default: exports.c api_headers scons $(ASM_FILES) 
+# default: exports.c api_headers scons $(ASM_FILES)
 default: exports.c api_headers $(ASM_FILES)
 #	cp kernel_linux/host_modules/Module.symvers.in kernel_linux/host_modules/Module.symvers
 	cp kernel_linux/modules/Module.symvers.in kernel_linux/modules/Module.symvers
 	$(MAKE) $(MODULES_MAKE) KBUILD_MODPOST_WARN=1 modules
 #	$(MAKE) $(HOST_MODULES_MAKE) modules
-	
+
 scons:
 	scons -j10
 
@@ -44,7 +44,7 @@ test: scons
 exports.c: $(API_INCLUDE_DIR) exports.py
 	./exports.py $(API_INCLUDE_DIR)	> exports.c
 
-api_headers: $(API_INCLUDE_DIR)	
+api_headers: $(API_INCLUDE_DIR)
 
 $(API_INCLUDE_DIR): $(shell find . -name '*.h' | grep -v $(API_INCLUDE_DIR) | grep -v 'kernel_linux/clients') lib/genapi.pl
 	mkdir -p $(API_INCLUDE_DIR)
@@ -60,8 +60,8 @@ $(API_INCLUDE_DIR): $(shell find . -name '*.h' | grep -v $(API_INCLUDE_DIR) | gr
 
 clean:
 	$(MAKE) $(MODULES_MAKE) clean
-	$(MAKE) $(HOST_MODULES_MAKE) clean
-	scons -c
+#	$(MAKE) $(HOST_MODULES_MAKE) clean
+#	scons -c
 	rm -f $$(find . -name '*.S')
 	rm -f $$(find . -name '*.o')
 	rm -f $$(find . -name '.*.o.cmd')
