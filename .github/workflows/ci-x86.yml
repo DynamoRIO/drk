@@ -21,7 +21,7 @@ jobs:
           tar -xf linux-$VERSION.tar.xz
           echo "KERNEL_DIR=linux-$VERSION" >> $GITHUB_ENV
 
-      - name: Generate kernel headers and Module.symvers
+      - name: Generate kernel headers
         working-directory: ${{ env.KERNEL_DIR }}
         run: |
           make defconfig
