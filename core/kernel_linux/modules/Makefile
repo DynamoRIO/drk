@@ -8,7 +8,7 @@ EXTRA_AFLAGS=$(DR_INCLUDE_FLAGS)\
 	dynamorio_controller-objs :=\
 ../../kernel_linux/dynamorio_controller_module.o
 ################################################################################
-## TODO i#11: Re-enable the tests at a later step
+## TODO i#14: Re-enable the tests at a later step
 ## ../../kernel_linux/simple_tests/wrap.o\
 ## ../../kernel_linux/simple_tests/recurse.o\
 ## ../../kernel_linux/simple_tests/retaddr.o\

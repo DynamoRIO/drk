@@ -7,7 +7,10 @@
 #include <linux/sched.h>
 #include "dynamorio_controller_module.h"
 #include "dynamorio_module_interface.h"
-// #include "simple_tests.h"
+#if 0
+// TODO i#14: Re-enable the tests once build is passing
+#include "simple_tests.h"
+#endif
 MODULE_LICENSE("Dual BSD/GPL");
 
 static int device_major;
@@ -22,7 +25,10 @@ smp_init_and_takeover(void *info)
     printk("init and takeover\n");
     dr_smp_init(&get_cpu_var(dr_cpu_exports));
     dynamorio_app_take_over();
-    // run_tests();
+#if 0
+    // TODO i#14: Re-enable tests once build is passing
+    run_tests();
+#endif
 }
 
 static void
