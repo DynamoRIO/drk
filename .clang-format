@@ -1,0 +1,28 @@
+---
+BasedOnStyle: WebKit
+AlignTrailingComments: true
+AllowShortBlocksOnASingleLine: false
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: false
+AllowShortIfStatementsOnASingleLine: false
+AlwaysBreakAfterDefinitionReturnType: All
+AlwaysBreakAfterReturnType: All
+AlignAfterOpenBracket: Align
+AlignEscapedNewlines: Left
+BinPackArguments: true
+BinPackParameters: true
+BreakBeforeBinaryOperators: None
+ColumnLimit: 90
+FixNamespaceComments: true
+NamespaceIndentation: None
+IndentWidth: 4
+IndentPPDirectives: AfterHash
+PointerAlignment: Right
+CommentPragmas: '^ clang-format: '
+SortIncludes: false
+MaxEmptyLinesToKeep: 1
+SpaceInEmptyBlock: false
+# SpaceInEmptyBlock is now deprecated and in clang-format 22 replaced by this,
+# which we should enable when we move to that version:
+#SpaceInEmptyBraces: Never
+---
