@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -43,14 +43,14 @@
 #define VERBOSE 0
 #define KNOWN_DLLS 1
 
-void*
-get_module_preferred_base(void* module_base)
+void *
+get_module_preferred_base(void *module_base)
 {
     IMAGE_DOS_HEADER *dos;
     IMAGE_NT_HEADERS *nt;
-    dos = (IMAGE_DOS_HEADER *) module_base;
-    nt = (IMAGE_NT_HEADERS *) (((ptr_uint_t)dos) + dos->e_lfanew);
-    return (void *) nt->OptionalHeader.ImageBase;
+    dos = (IMAGE_DOS_HEADER *)module_base;
+    nt = (IMAGE_NT_HEADERS *)(((ptr_uint_t)dos) + dos->e_lfanew);
+    return (void *)nt->OptionalHeader.ImageBase;
 }
 
 int num_checks = 0;
@@ -58,11 +58,11 @@ int num_at_base = 0;
 int num_no_module = 0;
 
 void
-do_check(const char* hook_dll, const char* hookfn)
+do_check(const char *hook_dll, const char *hookfn)
 {
     HANDLE target_mod = GetModuleHandle(hook_dll);
-    void* preferred = NULL;
-    unsigned char* hooktarget;
+    void *preferred = NULL;
+    unsigned char *hooktarget;
 
     if (target_mod == NULL) {
         HMODULE hmod = LoadLibrary(hook_dll);
@@ -74,7 +74,7 @@ do_check(const char* hook_dll, const char* hookfn)
              * target!  can't think of a way to exploit ;)
              */
             print("GLE: %d\n", GetLastError());
-            print("error: hmod "PFX", target_mod "PFX"\n", hmod, target_mod);
+            print("error: hmod " PFX ", target_mod " PFX "\n", hmod, target_mod);
         }
         if (target_mod == NULL) {
             num_no_module++;
@@ -82,25 +82,24 @@ do_check(const char* hook_dll, const char* hookfn)
         }
     }
 
-    hooktarget = (char*)GetProcAddress(target_mod, hookfn);
+    hooktarget = (char *)GetProcAddress(target_mod, hookfn);
 
     if (hooktarget == NULL) {
         print("error: couldn't find %s!%s\n", hook_dll, hookfn);
-    } else 
+    } else
         print("%s!%s ok\n", hook_dll, hookfn);
 
     if (target_mod != NULL)
         preferred = get_module_preferred_base(target_mod);
 #if VERBOSE
-    print("%s at "PFX", preferred "PFX"\n", hook_dll, target_mod, 
-          preferred);
-    print("%s!%s "PFX"\n", hook_dll, hookfn, hooktarget);
+    print("%s at " PFX ", preferred " PFX "\n", hook_dll, target_mod, preferred);
+    print("%s!%s " PFX "\n", hook_dll, hookfn, hooktarget);
 #endif
-    print("%s at %s base\n", hook_dll, 
+    print("%s at %s base\n", hook_dll,
           (preferred == target_mod) ? "preferred" : "randomized");
 
     num_checks++;
-    if (preferred == target_mod) 
+    if (preferred == target_mod)
         num_at_base++;
 
     print("all should be good\n");
@@ -110,7 +109,7 @@ int
 main()
 {
     INIT();
-    
+
     do_check("kernel32.dll", "GetProcessHeaps");
     do_check("kernel32.dll", "Sleep");
 
@@ -128,7 +127,7 @@ main()
     do_check("comdlg32.dll", "GetOpenFileNameW");
     do_check("gdi32.dll", "GdiPlayEMF");
     do_check("imagehlp.dll", "ImageRvaToVa");
-    // imagehlp!ImageDirectoryEntryToDataEx 
+    // imagehlp!ImageDirectoryEntryToDataEx
     do_check("kernel32.dll", "findexport");
     do_check("lz32.dll", "findexport");
     do_check("ole32.dll", "findexport");
@@ -178,9 +177,7 @@ main()
     print("done\n");
 }
 
-
-
-/* KnownDlls 
+/* KnownDlls
 
 
 in Registry

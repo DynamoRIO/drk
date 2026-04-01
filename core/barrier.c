@@ -27,7 +27,7 @@ barrier_wait(barrier_t *barrier)
     }
     for (;;) {
         mutex_lock(&barrier->lock);
-        count = barrier->count; 
+        count = barrier->count;
         mutex_unlock(&barrier->lock);
         if (count == 0) {
             return false;

@@ -17,7 +17,7 @@ static dr_exports_t dr_exports;
 DEFINE_PER_CPU(dr_cpu_exports_t, dr_cpu_exports);
 
 static void
-smp_init_and_takeover(void* info)
+smp_init_and_takeover(void *info)
 {
     printk("init and takeover\n");
     dr_smp_init(&get_cpu_var(dr_cpu_exports));
@@ -32,8 +32,8 @@ smp_exit(void *info)
 }
 
 static int
-init_ioctl(struct inode* inode, struct file* file,
-           unsigned int ioctl_num, unsigned long ioctl_param)
+init_ioctl(struct inode *inode, struct file *file, unsigned int ioctl_num,
+           unsigned long ioctl_param)
 {
     dynamorio_init_cmd_t cmd;
     if (initialized) {
@@ -42,11 +42,11 @@ init_ioctl(struct inode* inode, struct file* file,
                "module is loaded. Use the exit command then reload it.\n");
         return -EPERM;
     }
-    if (copy_from_user(&cmd, (void*) ioctl_param, sizeof(cmd)) != 0) {
+    if (copy_from_user(&cmd, (void *)ioctl_param, sizeof(cmd)) != 0) {
         printk("Could not copy options from userspace.\n");
         return -EINVAL;
     }
-    #if 0
+#if 0
     if (num_present_cpus() != num_online_cpus()) {
         /* We require all CPUs to be online because we use on_each_cpu, which
          * calls smp_init_and_takeover only on online CPUs. */
@@ -56,7 +56,7 @@ init_ioctl(struct inode* inode, struct file* file,
                num_present_cpus(), num_online_cpus());
         return -EPERM;
     }
-    #endif
+#endif
     initialized = true;
     dr_pre_smp_init(&dr_exports, cmd.options);
     on_each_cpu(smp_init_and_takeover, NULL, false /* wait */);
@@ -66,8 +66,8 @@ init_ioctl(struct inode* inode, struct file* file,
 }
 
 static int
-exit_ioctl(struct inode* inode, struct file* file,
-           unsigned int ioctl_num, unsigned long ioctl_param)
+exit_ioctl(struct inode *inode, struct file *file, unsigned int ioctl_num,
+           unsigned long ioctl_param)
 {
     dynamorio_exit_cmd_t cmd;
     if (!initialized) {
@@ -78,7 +78,7 @@ exit_ioctl(struct inode* inode, struct file* file,
         printk("Module already exited.\n");
         return -EPERM;
     }
-    if (copy_from_user(&cmd, (void*) ioctl_param, sizeof(cmd)) != 0) {
+    if (copy_from_user(&cmd, (void *)ioctl_param, sizeof(cmd)) != 0) {
         printk("Could not copy options from userspace.\n");
         return -EINVAL;
     }
@@ -93,32 +93,30 @@ copy_export_to_user(void *data, unsigned long size, unsigned long max_size,
                     stats_buffer_t *buffer)
 {
     if (size > max_size) {
-        printk("User buffer is too small (%luB) to hold kstats (%luB).\n", 
-               max_size, size);
+        printk("User buffer is too small (%luB) to hold kstats (%luB).\n", max_size,
+               size);
         return -EINVAL;
     }
     if (copy_to_user(&buffer->data, data, size)) {
-        printk("Could not copy data to the user-supplied buffer %p.\n",
-               &buffer->data);
+        printk("Could not copy data to the user-supplied buffer %p.\n", &buffer->data);
         return -EINVAL;
     }
     if (copy_to_user(&buffer->size, &size, sizeof(size))) {
-        printk("Could not copy kstats size to user-supplied field %p.\n",
-               &buffer->size);
+        printk("Could not copy kstats size to user-supplied field %p.\n", &buffer->size);
         return -EINVAL;
     }
     return 0;
 }
 
 static int
-kstats_ioctl(struct inode* inode, struct file* file,
-             unsigned int ioctl_num, unsigned long ioctl_param)
+kstats_ioctl(struct inode *inode, struct file *file, unsigned int ioctl_num,
+             unsigned long ioctl_param)
 {
     dynamorio_kstats_cmd_t __user *kstats;
     dr_cpu_exports_t *exports;
     int cpu;
 
-    kstats = (dynamorio_kstats_cmd_t __user *) ioctl_param;
+    kstats = (dynamorio_kstats_cmd_t __user *)ioctl_param;
 
     if (!initialized) {
         printk("Module not yet initlized. You can't retrieve kstats now.");
@@ -137,7 +135,6 @@ kstats_ioctl(struct inode* inode, struct file* file,
 
     exports = &per_cpu(dr_cpu_exports, cpu);
 
-
     if (exports->kstats_data == NULL) {
         printk("exports->kstats_data is NULL. Make sure to specify the -kstats"
                " option and define KSTATS in your build.\n");
@@ -149,11 +146,11 @@ kstats_ioctl(struct inode* inode, struct file* file,
 }
 
 static int
-stats_ioctl(struct inode* inode, struct file* file,
-            unsigned int ioctl_num, unsigned long ioctl_param)
+stats_ioctl(struct inode *inode, struct file *file, unsigned int ioctl_num,
+            unsigned long ioctl_param)
 {
     dynamorio_stats_cmd_t __user *stats;
-    stats = (dynamorio_stats_cmd_t __user *) ioctl_param;
+    stats = (dynamorio_stats_cmd_t __user *)ioctl_param;
 
     if (!initialized) {
         printk("Module not yet initlized. You can't retrieve stats now.");
@@ -164,21 +161,16 @@ stats_ioctl(struct inode* inode, struct file* file,
                                DYNAMORIO_STATS_MAX_SIZE, &stats->buffer);
 }
 
-static int device_ioctl(struct inode* inode,
-                        struct file* file,
-                        unsigned int ioctl_num,
-                        unsigned long ioctl_param) {
+static int
+device_ioctl(struct inode *inode, struct file *file, unsigned int ioctl_num,
+             unsigned long ioctl_param)
+{
     switch (ioctl_num) {
-    case DYNAMORIO_IOCTL_INIT:
-        return init_ioctl(inode, file, ioctl_num, ioctl_param);
-    case DYNAMORIO_IOCTL_EXIT:
-        return exit_ioctl(inode, file, ioctl_num, ioctl_param);
-    case DYNAMORIO_IOCTL_KSTATS:
-        return kstats_ioctl(inode, file, ioctl_num, ioctl_param);
-    case DYNAMORIO_IOCTL_STATS:
-        return stats_ioctl(inode, file, ioctl_num, ioctl_param);
-    default:
-        printk("Uknwown ioctl number %d.\n", ioctl_num);
+    case DYNAMORIO_IOCTL_INIT: return init_ioctl(inode, file, ioctl_num, ioctl_param);
+    case DYNAMORIO_IOCTL_EXIT: return exit_ioctl(inode, file, ioctl_num, ioctl_param);
+    case DYNAMORIO_IOCTL_KSTATS: return kstats_ioctl(inode, file, ioctl_num, ioctl_param);
+    case DYNAMORIO_IOCTL_STATS: return stats_ioctl(inode, file, ioctl_num, ioctl_param);
+    default: printk("Uknwown ioctl number %d.\n", ioctl_num);
     }
     return 0;
 }
@@ -191,19 +183,21 @@ static struct file_operations fops = {
     .ioctl = device_ioctl,
 };
 
-static int mod_init(void) {
+static int
+mod_init(void)
+{
     device_major = register_chrdev(0, DYNAMORIO_DEVICE_NAME, &fops);
     if (device_major < 0) {
-        printk("Registering the character device failed with %d.\n",
-            device_major);
+        printk("Registering the character device failed with %d.\n", device_major);
         return device_major;
     }
-    printk("Registered device name=%s, major=%d.\n",
-        DYNAMORIO_DEVICE_NAME, device_major);
+    printk("Registered device name=%s, major=%d.\n", DYNAMORIO_DEVICE_NAME, device_major);
     return 0;
 }
 
-static void mod_exit(void) {
+static void
+mod_exit(void)
+{
     unregister_chrdev(device_major, DYNAMORIO_DEVICE_NAME);
 }
 

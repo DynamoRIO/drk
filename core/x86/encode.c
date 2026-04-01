@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -48,38 +48,38 @@
 #ifdef DEBUG
 /* case 10450: give messages to clients */
 /* we can't undef ASSERT b/c of DYNAMO_OPTION */
-# undef ASSERT_TRUNCATE
-# undef ASSERT_BITFIELD_TRUNCATE
-# undef ASSERT_NOT_REACHED
-# define ASSERT_TRUNCATE DO_NOT_USE_ASSERT_USE_CLIENT_ASSERT_INSTEAD
-# define ASSERT_BITFIELD_TRUNCATE DO_NOT_USE_ASSERT_USE_CLIENT_ASSERT_INSTEAD
-# define ASSERT_NOT_REACHED DO_NOT_USE_ASSERT_USE_CLIENT_ASSERT_INSTEAD
+#    undef ASSERT_TRUNCATE
+#    undef ASSERT_BITFIELD_TRUNCATE
+#    undef ASSERT_NOT_REACHED
+#    define ASSERT_TRUNCATE DO_NOT_USE_ASSERT_USE_CLIENT_ASSERT_INSTEAD
+#    define ASSERT_BITFIELD_TRUNCATE DO_NOT_USE_ASSERT_USE_CLIENT_ASSERT_INSTEAD
+#    define ASSERT_NOT_REACHED DO_NOT_USE_ASSERT_USE_CLIENT_ASSERT_INSTEAD
 #endif
 
 /* level at which encoding attempts get dumped out...lots of logging! */
 #define ENC_LEVEL 6
 
-const char * const type_names[] = {
+const char *const type_names[] = {
     "TYPE_NONE",
-    "TYPE_A", /* immediate that is absolute address */
-    "TYPE_C", /* reg of modrm selects control reg */
-    "TYPE_D", /* reg of modrm selects debug reg */
-    "TYPE_E", /* modrm selects reg or mem addr */
-    "TYPE_G", /* reg of modrm selects register */
-    "TYPE_I", /* immediate */
-    "TYPE_J", /* immediate that is relative offset of EIP */
-    "TYPE_M", /* modrm select mem addr */
-    "TYPE_O", /* immediate that is memory offset */
-    "TYPE_P", /* reg of modrm selects MMX */
-    "TYPE_Q", /* modrm selects MMX or mem addr */
-    "TYPE_R", /* mod of modrm selects register */
-    "TYPE_S", /* reg of modrm selects segment register */
-    "TYPE_V", /* reg of modrm selects XMM */
-    "TYPE_W", /* modrm selects XMM or mem addr */
-    "TYPE_X", /* DS:(RE)(E)SI */
-    "TYPE_Y", /* ES:(RE)(E)SDI */
-    "TYPE_P_MODRM",  /* mod of modrm selects MMX */
-    "TYPE_V_MODRM",  /* mod of modrm selects XMM */
+    "TYPE_A",       /* immediate that is absolute address */
+    "TYPE_C",       /* reg of modrm selects control reg */
+    "TYPE_D",       /* reg of modrm selects debug reg */
+    "TYPE_E",       /* modrm selects reg or mem addr */
+    "TYPE_G",       /* reg of modrm selects register */
+    "TYPE_I",       /* immediate */
+    "TYPE_J",       /* immediate that is relative offset of EIP */
+    "TYPE_M",       /* modrm select mem addr */
+    "TYPE_O",       /* immediate that is memory offset */
+    "TYPE_P",       /* reg of modrm selects MMX */
+    "TYPE_Q",       /* modrm selects MMX or mem addr */
+    "TYPE_R",       /* mod of modrm selects register */
+    "TYPE_S",       /* reg of modrm selects segment register */
+    "TYPE_V",       /* reg of modrm selects XMM */
+    "TYPE_W",       /* modrm selects XMM or mem addr */
+    "TYPE_X",       /* DS:(RE)(E)SI */
+    "TYPE_Y",       /* ES:(RE)(E)SDI */
+    "TYPE_P_MODRM", /* mod of modrm selects MMX */
+    "TYPE_V_MODRM", /* mod of modrm selects XMM */
     "TYPE_1",
     "TYPE_FLOATCONST",
     "TYPE_XLAT",     /* DS:(RE)(E)BX+AL */
@@ -102,30 +102,150 @@ const char * const type_names[] = {
 };
 
 /* order corresponds to enum of REG_ and SEG_ constants */
-const char * const * const reg_names = size_names;
+const char *const *const reg_names = size_names;
 
-const char * const size_names[] = {
+const char *const size_names[] = {
     "<NULL>",
-    "rax",  "rcx",  "rdx",  "rbx",  "rsp",  "rbp",  "rsi",  "rdi",
-    "r8",   "r9",   "r10",  "r11",  "r12",  "r13",  "r14",  "r15",
-    "eax",  "ecx",  "edx",  "ebx",  "esp",  "ebp",  "esi",  "edi",
-    "r8d",  "r9d",  "r10d", "r11d", "r12d", "r13d", "r14d", "r15d",
-    "ax",   "cx",   "dx",   "bx",   "sp",   "bp",   "si",   "di",
-    "r8w",  "r9w",  "r10w", "r11w", "r12w", "r13w", "r14w", "r15w",
-    "al",   "cl",   "dl",   "bl",   "ah",   "ch",   "dh",   "bh",
-    "r8l",  "r9l",  "r10l", "r11l", "r12l", "r13l", "r14l", "r15l",
-    "spl",  "bpl",  "sil",  "dil",
-    "mm0",  "mm1",  "mm2",  "mm3",  "mm4",  "mm5",  "mm6",  "mm7",
-    "xmm0", "xmm1", "xmm2", "xmm3", "xmm4", "xmm5", "xmm6", "xmm7",
-    "xmm8", "xmm9", "xmm10","xmm11","xmm12","xmm13","xmm14","xmm15",
-    "st0",  "st1",  "st2",  "st3",  "st4",  "st5",  "st6",  "st7",
-    "es",   "cs",   "ss",   "ds",   "fs",   "gs",
-    "dr0",  "dr1",  "dr2",  "dr3",  "dr4",  "dr5",  "dr6",  "dr7",
-    "dr8",  "dr9",  "dr10", "dr11", "dr12", "dr13", "dr14", "dr15", 
-    "cr0",  "cr1",  "cr2",  "cr3",  "cr4",  "cr5",  "cr6",  "cr7", 
-    "cr8",  "cr9",  "cr10", "cr11", "cr12", "cr13", "cr14", "cr15",
+    "rax",
+    "rcx",
+    "rdx",
+    "rbx",
+    "rsp",
+    "rbp",
+    "rsi",
+    "rdi",
+    "r8",
+    "r9",
+    "r10",
+    "r11",
+    "r12",
+    "r13",
+    "r14",
+    "r15",
+    "eax",
+    "ecx",
+    "edx",
+    "ebx",
+    "esp",
+    "ebp",
+    "esi",
+    "edi",
+    "r8d",
+    "r9d",
+    "r10d",
+    "r11d",
+    "r12d",
+    "r13d",
+    "r14d",
+    "r15d",
+    "ax",
+    "cx",
+    "dx",
+    "bx",
+    "sp",
+    "bp",
+    "si",
+    "di",
+    "r8w",
+    "r9w",
+    "r10w",
+    "r11w",
+    "r12w",
+    "r13w",
+    "r14w",
+    "r15w",
+    "al",
+    "cl",
+    "dl",
+    "bl",
+    "ah",
+    "ch",
+    "dh",
+    "bh",
+    "r8l",
+    "r9l",
+    "r10l",
+    "r11l",
+    "r12l",
+    "r13l",
+    "r14l",
+    "r15l",
+    "spl",
+    "bpl",
+    "sil",
+    "dil",
+    "mm0",
+    "mm1",
+    "mm2",
+    "mm3",
+    "mm4",
+    "mm5",
+    "mm6",
+    "mm7",
+    "xmm0",
+    "xmm1",
+    "xmm2",
+    "xmm3",
+    "xmm4",
+    "xmm5",
+    "xmm6",
+    "xmm7",
+    "xmm8",
+    "xmm9",
+    "xmm10",
+    "xmm11",
+    "xmm12",
+    "xmm13",
+    "xmm14",
+    "xmm15",
+    "st0",
+    "st1",
+    "st2",
+    "st3",
+    "st4",
+    "st5",
+    "st6",
+    "st7",
+    "es",
+    "cs",
+    "ss",
+    "ds",
+    "fs",
+    "gs",
+    "dr0",
+    "dr1",
+    "dr2",
+    "dr3",
+    "dr4",
+    "dr5",
+    "dr6",
+    "dr7",
+    "dr8",
+    "dr9",
+    "dr10",
+    "dr11",
+    "dr12",
+    "dr13",
+    "dr14",
+    "dr15",
+    "cr0",
+    "cr1",
+    "cr2",
+    "cr3",
+    "cr4",
+    "cr5",
+    "cr6",
+    "cr7",
+    "cr8",
+    "cr9",
+    "cr10",
+    "cr11",
+    "cr12",
+    "cr13",
+    "cr14",
+    "cr15",
     "<invalid>",
-    "OPSZ_NA", 
+    "OPSZ_NA",
     "OPSZ_lea",
     "OPSZ_1",
     "OPSZ_2",
@@ -170,14 +290,12 @@ type_instr_uses_reg_bits(int type)
 {
     switch (type) {
     case TYPE_C:
-    case TYPE_D: 
+    case TYPE_D:
     case TYPE_G:
-    case TYPE_P: 
+    case TYPE_P:
     case TYPE_S:
-    case TYPE_V: 
-        return true;
-    default:
-        return false;
+    case TYPE_V: return true;
+    default: return false;
     }
 }
 
@@ -186,16 +304,14 @@ type_uses_modrm_bits(int type)
 {
     switch (type) {
     case TYPE_E:
-    case TYPE_M: 
+    case TYPE_M:
     case TYPE_Q:
-    case TYPE_R: 
+    case TYPE_R:
     case TYPE_W:
     case TYPE_INDIR_E:
     case TYPE_P_MODRM:
-    case TYPE_V_MODRM:
-        return true;
-    default:
-        return false;
+    case TYPE_V_MODRM: return true;
+    default: return false;
     }
 }
 
@@ -205,9 +321,8 @@ type_uses_modrm_bits(int type)
  * is one of the possible sizes in the request.
  */
 static bool
-size_ok_varsz(decode_info_t *di/*prefixes field is IN/OUT; x86_mode is IN*/,
-              opnd_size_t size_op, opnd_size_t size_template,
-              uint prefix_data_addr)
+size_ok_varsz(decode_info_t *di /*prefixes field is IN/OUT; x86_mode is IN*/,
+              opnd_size_t size_op, opnd_size_t size_template, uint prefix_data_addr)
 {
     /* FIXME: this code is getting long and complex: is there a better way?
      * Any way to resolve these var sizes further first?  Doesn't seem like it.
@@ -275,7 +390,7 @@ size_ok_varsz(decode_info_t *di/*prefixes field is IN/OUT; x86_mode is IN*/,
         if (size_template == OPSZ_4_short2)
             return !TEST(prefix_data_addr, di->prefixes);
         if (size_template == OPSZ_4_rex8_short2)
-            return !TESTANY(prefix_data_addr|PREFIX_REX_W, di->prefixes);
+            return !TESTANY(prefix_data_addr | PREFIX_REX_W, di->prefixes);
         if (size_template == OPSZ_4_rex8)
             return !TEST(PREFIX_REX_W, di->prefixes);
         if (size_template == OPSZ_8_short4) {
@@ -339,8 +454,8 @@ size_ok_varsz(decode_info_t *di/*prefixes field is IN/OUT; x86_mode is IN*/,
 }
 
 static opnd_size_t
-resolve_var_x64_size(decode_info_t *di/*x86_mode is IN*/,
-                     opnd_size_t sz, bool addr_short4)
+resolve_var_x64_size(decode_info_t *di /*x86_mode is IN*/, opnd_size_t sz,
+                     bool addr_short4)
 {
     /* Resolve what we can based purely on x64 and addr_short4
      * (gets rid of all NxM sizes), as well as vendor where the size
@@ -350,14 +465,16 @@ resolve_var_x64_size(decode_info_t *di/*x86_mode is IN*/,
      * size_ok routines more complicated.  */
     switch (sz) {
     case OPSZ_4x8: return (X64_MODE(di) ? OPSZ_8 : OPSZ_4);
-    case OPSZ_4_short2xi4: return (X64_MODE(di) && proc_get_vendor() == VENDOR_INTEL ?
-                                  OPSZ_4 : OPSZ_4_short2);
-    case OPSZ_4x8_short2: return (X64_MODE(di) ? 
-                                  (addr_short4 ? OPSZ_8_short4 : OPSZ_8_short2) :
-                                  OPSZ_4_short2);
-    case OPSZ_4x8_short2xi8: return (X64_MODE(di) ? (proc_get_vendor() == VENDOR_INTEL ?
-                                                  OPSZ_8 : OPSZ_8_short2) :
-                                    OPSZ_4_short2);
+    case OPSZ_4_short2xi4:
+        return (X64_MODE(di) && proc_get_vendor() == VENDOR_INTEL ? OPSZ_4
+                                                                  : OPSZ_4_short2);
+    case OPSZ_4x8_short2:
+        return (X64_MODE(di) ? (addr_short4 ? OPSZ_8_short4 : OPSZ_8_short2)
+                             : OPSZ_4_short2);
+    case OPSZ_4x8_short2xi8:
+        return (X64_MODE(di)
+                    ? (proc_get_vendor() == VENDOR_INTEL ? OPSZ_8 : OPSZ_8_short2)
+                    : OPSZ_4_short2);
     case OPSZ_6x10: return (X64_MODE(di) ? OPSZ_10 : OPSZ_6);
     }
     return sz;
@@ -370,7 +487,7 @@ resolve_var_x64_size(decode_info_t *di/*x86_mode is IN*/,
  * ensure the later ones are ok w/ prefixes needed for the earlier ones.
  */
 static bool
-size_ok(decode_info_t *di/*prefixes field is IN/OUT; x86_mode is IN*/,
+size_ok(decode_info_t *di /*prefixes field is IN/OUT; x86_mode is IN*/,
         opnd_size_t size_op, opnd_size_t size_template, bool addr)
 {
     uint prefix_data_addr = (addr ? PREFIX_ADDR : PREFIX_DATA);
@@ -380,19 +497,20 @@ size_ok(decode_info_t *di/*prefixes field is IN/OUT; x86_mode is IN*/,
      * are OPSZ_4x8_short2 and OPSZ_4x8_short2xi8
      */
     CLIENT_ASSERT(!addr || size_template == OPSZ_4x8_short2xi8 ||
-                  size_template == OPSZ_4x8_short2, "internal prefix assumption error");
+                      size_template == OPSZ_4x8_short2,
+                  "internal prefix assumption error");
     size_template = resolve_var_x64_size(di, size_template, addr_short4);
     size_op = resolve_var_x64_size(di, size_op, addr_short4);
     /* all NxM sizes should be resolved (size_op is checked in the switch statement as
      * these values will hit the default assert) */
     CLIENT_ASSERT(size_template != OPSZ_6x10 && size_template != OPSZ_4x8_short2 &&
-                  size_template != OPSZ_4x8_short2xi8 &&
-                  size_template != OPSZ_4_short2xi4 && size_template != OPSZ_4x8,
+                      size_template != OPSZ_4x8_short2xi8 &&
+                      size_template != OPSZ_4_short2xi4 && size_template != OPSZ_4x8,
                   "internal encoding error in size_ok()");
 
     /* First set/check rex.w or data prefix, if necessary
      * if identical size then don't need to set or check anything */
-    if (size_op != size_template) { 
+    if (size_op != size_template) {
         switch (size_op) {
         case OPSZ_1:
             if (size_template == OPSZ_2_short1) {
@@ -418,7 +536,7 @@ size_ok(decode_info_t *di/*prefixes field is IN/OUT; x86_mode is IN*/,
             if (size_template == OPSZ_4_short2)
                 return !TEST(prefix_data_addr, di->prefixes);
             if (size_template == OPSZ_4_rex8_short2)
-                return !TESTANY(prefix_data_addr|PREFIX_REX_W, di->prefixes);
+                return !TESTANY(prefix_data_addr | PREFIX_REX_W, di->prefixes);
             if (size_template == OPSZ_4_rex8)
                 return !TEST(PREFIX_REX_W, di->prefixes);
             if (size_template == OPSZ_6_irex10_short4) {
@@ -435,7 +553,8 @@ size_ok(decode_info_t *di/*prefixes field is IN/OUT; x86_mode is IN*/,
         case OPSZ_6:
             if (size_template == OPSZ_6_irex10_short4)
                 return !TEST(prefix_data_addr, di->prefixes) &&
-                    (!TEST(PREFIX_REX_W, di->prefixes) || proc_get_vendor() == VENDOR_AMD);
+                    (!TEST(PREFIX_REX_W, di->prefixes) ||
+                     proc_get_vendor() == VENDOR_AMD);
             return false;
         case OPSZ_8:
             if (X64_MODE(di) &&
@@ -453,8 +572,7 @@ size_ok(decode_info_t *di/*prefixes field is IN/OUT; x86_mode is IN*/,
                 return true;
             }
             return false;
-        case OPSZ_16:
-            return false; /* no matching varsz, must be exact match */
+        case OPSZ_16: return false; /* no matching varsz, must be exact match */
         case OPSZ_14:
             if (size_template == OPSZ_28_short14) {
                 di->prefixes |= prefix_data_addr;
@@ -508,23 +626,15 @@ size_ok(decode_info_t *di/*prefixes field is IN/OUT; x86_mode is IN*/,
     /* prefix doesn't come into play below here: do a direct comparison */
 
     switch (size_op) {
-    case OPSZ_4_of_8: 
-    case OPSZ_4_of_16: 
-        size_op = OPSZ_4;
-        break;
-    case OPSZ_8_of_16: 
-        size_op = OPSZ_8;
-        break;
+    case OPSZ_4_of_8:
+    case OPSZ_4_of_16: size_op = OPSZ_4; break;
+    case OPSZ_8_of_16: size_op = OPSZ_8; break;
     }
 
     switch (size_template) {
-    case OPSZ_4_of_8: 
-    case OPSZ_4_of_16: 
-        size_template = OPSZ_4;
-        break;
-    case OPSZ_8_of_16: 
-        size_template = OPSZ_8;
-        break;
+    case OPSZ_4_of_8:
+    case OPSZ_4_of_16: size_template = OPSZ_4; break;
+    case OPSZ_8_of_16: size_template = OPSZ_8; break;
     }
 
     DOLOG(4, LOG_EMIT, {
@@ -540,23 +650,19 @@ size_ok(decode_info_t *di/*prefixes field is IN/OUT; x86_mode is IN*/,
  * is needed.
  */
 static bool
-immed_size_ok(decode_info_t *di/*prefixes field is IN/OUT; x86_mode is IN*/,
+immed_size_ok(decode_info_t *di /*prefixes field is IN/OUT; x86_mode is IN*/,
               ptr_int_t immed, opnd_size_t opsize)
 {
     opsize = resolve_variable_size(di, opsize, false);
     switch (opsize) {
-    case OPSZ_1:
-        return (immed >= INT8_MIN && immed <= INT8_MAX);
+    case OPSZ_1: return (immed >= INT8_MIN && immed <= INT8_MAX);
     case OPSZ_2: /* unsigned max is 65535 */
         return (immed >= INT16_MIN && immed <= INT16_MAX);
 #ifndef X64
-    case OPSZ_4:
-        return true;
+    case OPSZ_4: return true;
 #else
-    case OPSZ_4:
-        return (immed >= INT32_MIN && immed <= INT32_MAX);
-    case OPSZ_8:
-        return true;
+    case OPSZ_4: return (immed >= INT32_MIN && immed <= INT32_MAX);
+    case OPSZ_8: return true;
 #endif
     default:
         CLIENT_ASSERT(false, "encode error: immediate has unknown size");
@@ -566,7 +672,7 @@ immed_size_ok(decode_info_t *di/*prefixes field is IN/OUT; x86_mode is IN*/,
 
 /* prefixes that aren't set by size_ok */
 static bool
-reg_set_ext_prefixes(decode_info_t *di/*prefixes field is IN/OUT; x86_mode is IN*/,
+reg_set_ext_prefixes(decode_info_t *di /*prefixes field is IN/OUT; x86_mode is IN*/,
                      reg_id_t reg, uint which_rex)
 {
 #ifdef X64
@@ -581,10 +687,10 @@ reg_set_ext_prefixes(decode_info_t *di/*prefixes field is IN/OUT; x86_mode is IN
 }
 
 static bool
-reg_size_ok(decode_info_t *di/*prefixes field is IN/OUT; x86_mode is IN*/,
-            reg_id_t reg, int optype, opnd_size_t opsize, bool addr)
+reg_size_ok(decode_info_t *di /*prefixes field is IN/OUT; x86_mode is IN*/, reg_id_t reg,
+            int optype, opnd_size_t opsize, bool addr)
 {
-    /* It's ok to have an operand of type mmx or xmm but half-size (e.g., movddup) */ 
+    /* It's ok to have an operand of type mmx or xmm but half-size (e.g., movddup) */
     if (opsize == OPSZ_4_of_8 &&
         (optype == TYPE_P || optype == TYPE_Q || optype == TYPE_P_MODRM))
         return (reg >= REG_START_MMX && reg <= REG_STOP_MMX);
@@ -607,28 +713,25 @@ reg_rm_selectable(reg_id_t reg)
 }
 
 static bool
-mem_size_ok(decode_info_t *di/*prefixes field is IN/OUT; x86_mode is IN*/,
-            opnd_t opnd, int optype, opnd_size_t opsize)
+mem_size_ok(decode_info_t *di /*prefixes field is IN/OUT; x86_mode is IN*/, opnd_t opnd,
+            int optype, opnd_size_t opsize)
 {
     /* TODO PR 238624: support instr targets as pc-relative? */
     if (!opnd_is_memory_reference(opnd))
         return false;
     if (opnd_is_base_disp(opnd) && opnd_is_disp_short_addr(opnd))
         di->prefixes |= PREFIX_ADDR;
-    return (size_ok(di, opnd_get_size(opnd), opsize, false/*!addr*/) &&
-            (IF_X64(!opnd_is_base_disp(opnd) ||)
-             opnd_get_base(opnd) == REG_NULL ||
-             reg_size_ok(di, opnd_get_base(opnd), TYPE_M, OPSZ_4x8_short2,
-                         true/*addr*/)) &&
-            (IF_X64(!opnd_is_base_disp(opnd) ||)
-             opnd_get_index(opnd) == REG_NULL ||
-             reg_size_ok(di, opnd_get_index(opnd), TYPE_M, OPSZ_4x8_short2,
-                         true/*addr*/)));
+    return (
+        size_ok(di, opnd_get_size(opnd), opsize, false /*!addr*/) &&
+        (IF_X64(!opnd_is_base_disp(opnd) ||) opnd_get_base(opnd) == REG_NULL ||
+         reg_size_ok(di, opnd_get_base(opnd), TYPE_M, OPSZ_4x8_short2, true /*addr*/)) &&
+        (IF_X64(!opnd_is_base_disp(opnd) ||) opnd_get_index(opnd) == REG_NULL ||
+         reg_size_ok(di, opnd_get_index(opnd), TYPE_M, OPSZ_4x8_short2, true /*addr*/)));
 }
 
 static bool
-opnd_type_ok(decode_info_t *di/*prefixes field is IN/OUT; x86_mode is IN*/,
-             opnd_t opnd, int optype, opnd_size_t opsize)
+opnd_type_ok(decode_info_t *di /*prefixes field is IN/OUT; x86_mode is IN*/, opnd_t opnd,
+             int optype, opnd_size_t opsize)
 {
     DOLOG(ENC_LEVEL, LOG_EMIT, {
         dcontext_t *dcontext = get_thread_private_dcontext();
@@ -636,88 +739,92 @@ opnd_type_ok(decode_info_t *di/*prefixes field is IN/OUT; x86_mode is IN*/,
         opnd_disassemble(dcontext, opnd, THREAD);
         if (!opnd_is_pc(opnd) && !opnd_is_instr(opnd)) {
             LOG(THREAD, LOG_EMIT, ENC_LEVEL, "with size %s (%d bytes)\n",
-                size_names[opnd_get_size(opnd)],
-                opnd_size_in_bytes(opnd_get_size(opnd)));
+                size_names[opnd_get_size(opnd)], opnd_size_in_bytes(opnd_get_size(opnd)));
         }
-        LOG(THREAD, LOG_EMIT, ENC_LEVEL, "\tvs. template type %s with size %s (%d bytes)\n",
-            type_names[optype], size_names[opsize],
-            opnd_size_in_bytes(opsize));
+        LOG(THREAD, LOG_EMIT, ENC_LEVEL,
+            "\tvs. template type %s with size %s (%d bytes)\n", type_names[optype],
+            size_names[opsize], opnd_size_in_bytes(opsize));
     });
     switch (optype) {
-    case TYPE_NONE: 
-        return opnd_is_null(opnd);
-    case TYPE_REG:
-        return (opnd_is_reg(opnd) && opnd_get_reg(opnd) == opsize);
+    case TYPE_NONE: return opnd_is_null(opnd);
+    case TYPE_REG: return (opnd_is_reg(opnd) && opnd_get_reg(opnd) == opsize);
     case TYPE_VAR_REG:
         return (opnd_is_reg(opnd) &&
-                reg_size_ok(di, opnd_get_reg(opnd), optype, OPSZ_4_rex8_short2, 
-                            false/*!addr*/) &&
-                opnd_get_reg(opnd) == resolve_var_reg(di, opsize, false, true
-                                                      _IF_X64(false) _IF_X64(true)
-                                                      _IF_X64(false/*!extendable*/)));
+                reg_size_ok(di, opnd_get_reg(opnd), optype, OPSZ_4_rex8_short2,
+                            false /*!addr*/) &&
+                opnd_get_reg(opnd) ==
+                    resolve_var_reg(di, opsize, false,
+                                    true _IF_X64(false) _IF_X64(true)
+                                        _IF_X64(false /*!extendable*/)));
     case TYPE_VARZ_REG:
-        return (opnd_is_reg(opnd) &&
-                reg_size_ok(di, opnd_get_reg(opnd), optype, OPSZ_4_short2,
-                            false/*!addr*/) &&
-                opnd_get_reg(opnd) == resolve_var_reg(di, opsize, false, true
-                                                      _IF_X64(false) _IF_X64(false)
-                                                      _IF_X64(false/*!extendable*/)));
+        return (
+            opnd_is_reg(opnd) &&
+            reg_size_ok(di, opnd_get_reg(opnd), optype, OPSZ_4_short2, false /*!addr*/) &&
+            opnd_get_reg(opnd) ==
+                resolve_var_reg(di, opsize, false,
+                                true _IF_X64(false) _IF_X64(false)
+                                    _IF_X64(false /*!extendable*/)));
     case TYPE_VAR_XREG:
         return (opnd_is_reg(opnd) &&
                 reg_size_ok(di, opnd_get_reg(opnd), optype, OPSZ_4x8_short2,
-                            false/*!addr*/) &&
-                opnd_get_reg(opnd) == resolve_var_reg(di, opsize, false, true
-                                                      _IF_X64(true) _IF_X64(true)
-                                                      _IF_X64(false/*!extendable*/)));
+                            false /*!addr*/) &&
+                opnd_get_reg(opnd) ==
+                    resolve_var_reg(di, opsize, false,
+                                    true _IF_X64(true) _IF_X64(true)
+                                        _IF_X64(false /*!extendable*/)));
     case TYPE_VAR_ADDR_XREG:
-        return (opnd_is_reg(opnd) &&
-                reg_size_ok(di, opnd_get_reg(opnd), optype, OPSZ_4x8_short2,
-                            true/*addr*/) &&
-                opnd_get_reg(opnd) == resolve_var_reg(di, opsize, true, true
-                                                      _IF_X64(true) _IF_X64(false)
-                                                      _IF_X64(false/*!extendable*/)));
+        return (
+            opnd_is_reg(opnd) &&
+            reg_size_ok(di, opnd_get_reg(opnd), optype, OPSZ_4x8_short2, true /*addr*/) &&
+            opnd_get_reg(opnd) ==
+                resolve_var_reg(di, opsize, true,
+                                true _IF_X64(true) _IF_X64(false)
+                                    _IF_X64(false /*!extendable*/)));
     case TYPE_REG_EX:
         return (opnd_is_reg(opnd) &&
                 reg_size_ok(di, opnd_get_reg(opnd), optype, reg_get_size(opsize),
-                            false/*!addr*/) &&
-                reg_set_ext_prefixes(di, opnd_get_reg(opnd), PREFIX_REX_B) && 
-                opnd_get_reg(opnd) == resolve_var_reg(di, opsize, false, false
-                                                      _IF_X64(false) _IF_X64(false)
-                                                      _IF_X64(true/*extendable*/)));
+                            false /*!addr*/) &&
+                reg_set_ext_prefixes(di, opnd_get_reg(opnd), PREFIX_REX_B) &&
+                opnd_get_reg(opnd) ==
+                    resolve_var_reg(di, opsize, false,
+                                    false _IF_X64(false) _IF_X64(false)
+                                        _IF_X64(true /*extendable*/)));
     case TYPE_VAR_REG_EX:
         return (opnd_is_reg(opnd) &&
                 reg_size_ok(di, opnd_get_reg(opnd), optype, OPSZ_4_rex8_short2,
-                            false/*!addr*/) &&
-                reg_set_ext_prefixes(di, opnd_get_reg(opnd), PREFIX_REX_B) && 
-                opnd_get_reg(opnd) == resolve_var_reg(di, opsize, false, true
-                                                      _IF_X64(false) _IF_X64(true)
-                                                      _IF_X64(true/*extendable*/)));
+                            false /*!addr*/) &&
+                reg_set_ext_prefixes(di, opnd_get_reg(opnd), PREFIX_REX_B) &&
+                opnd_get_reg(opnd) ==
+                    resolve_var_reg(di, opsize, false,
+                                    true _IF_X64(false) _IF_X64(true)
+                                        _IF_X64(true /*extendable*/)));
     case TYPE_VAR_XREG_EX:
         return (opnd_is_reg(opnd) &&
                 reg_size_ok(di, opnd_get_reg(opnd), optype, OPSZ_4x8_short2,
-                            false/*!addr*/) &&
-                reg_set_ext_prefixes(di, opnd_get_reg(opnd), PREFIX_REX_B) && 
-                opnd_get_reg(opnd) == resolve_var_reg(di, opsize, false, true
-                                                      _IF_X64(true) _IF_X64(true)
-                                                      _IF_X64(true/*extendable*/)));
+                            false /*!addr*/) &&
+                reg_set_ext_prefixes(di, opnd_get_reg(opnd), PREFIX_REX_B) &&
+                opnd_get_reg(opnd) ==
+                    resolve_var_reg(di, opsize, false,
+                                    true _IF_X64(true) _IF_X64(true)
+                                        _IF_X64(true /*extendable*/)));
     case TYPE_VAR_REGX_EX:
-        return (opnd_is_reg(opnd) &&
-                reg_size_ok(di, opnd_get_reg(opnd), optype, OPSZ_4_rex8,
-                            false/*!addr*/) &&
-                reg_set_ext_prefixes(di, opnd_get_reg(opnd), PREFIX_REX_B) && 
-                opnd_get_reg(opnd) == resolve_var_reg(di, opsize, false, false
-                                                      _IF_X64(false) _IF_X64(true)
-                                                      _IF_X64(true/*extendable*/)));
+        return (
+            opnd_is_reg(opnd) &&
+            reg_size_ok(di, opnd_get_reg(opnd), optype, OPSZ_4_rex8, false /*!addr*/) &&
+            reg_set_ext_prefixes(di, opnd_get_reg(opnd), PREFIX_REX_B) &&
+            opnd_get_reg(opnd) ==
+                resolve_var_reg(di, opsize, false,
+                                false _IF_X64(false) _IF_X64(true)
+                                    _IF_X64(true /*extendable*/)));
     case TYPE_FLOATMEM:
-    case TYPE_M:
-        return mem_size_ok(di, opnd, optype, opsize);
+    case TYPE_M: return mem_size_ok(di, opnd, optype, opsize);
     case TYPE_E:
     case TYPE_Q:
-    case TYPE_W: 
+    case TYPE_W:
     case TYPE_INDIR_E:
-        return (mem_size_ok(di, opnd, optype, opsize) || 
+        return (mem_size_ok(di, opnd, optype, opsize) ||
                 (opnd_is_reg(opnd) &&
-                 reg_size_ok(di, opnd_get_reg(opnd), optype, opsize, false/*!addr*/) &&
+                 reg_size_ok(di, opnd_get_reg(opnd), optype, opsize, false /*!addr*/) &&
                  reg_rm_selectable(opnd_get_reg(opnd))));
     case TYPE_G:
     case TYPE_P:
@@ -731,33 +838,29 @@ opnd_type_ok(decode_info_t *di/*prefixes field is IN/OUT; x86_mode is IN*/,
          * have separate types (TYPE_C and TYPE_D).
          */
         return (opnd_is_reg(opnd) &&
-                reg_size_ok(di, opnd_get_reg(opnd), optype, opsize,
-                            false/*!addr*/) &&
+                reg_size_ok(di, opnd_get_reg(opnd), optype, opsize, false /*!addr*/) &&
                 reg_rm_selectable(opnd_get_reg(opnd))); /* reg, not rm, but see above */
     case TYPE_C:
         return (opnd_is_reg(opnd) &&
-                reg_size_ok(di, opnd_get_reg(opnd), optype, opsize,
-                            false/*!addr*/) &&
+                reg_size_ok(di, opnd_get_reg(opnd), optype, opsize, false /*!addr*/) &&
                 opnd_get_reg(opnd) >= REG_START_CR && opnd_get_reg(opnd) <= REG_STOP_CR);
     case TYPE_D:
         return (opnd_is_reg(opnd) &&
-                reg_size_ok(di, opnd_get_reg(opnd), optype, opsize,
-                            false/*!addr*/) &&
+                reg_size_ok(di, opnd_get_reg(opnd), optype, opsize, false /*!addr*/) &&
                 opnd_get_reg(opnd) >= REG_START_DR && opnd_get_reg(opnd) <= REG_STOP_DR);
     case TYPE_S:
-        return (opnd_is_reg(opnd) &&
-                opnd_get_reg(opnd) >= REG_START_SEGMENT &&
+        return (opnd_is_reg(opnd) && opnd_get_reg(opnd) >= REG_START_SEGMENT &&
                 opnd_get_reg(opnd) <= REG_STOP_SEGMENT);
     case TYPE_I:
         /* we allow instr: it means 4/8-byte immed equal to pc of instr */
         return ((opnd_is_near_instr(opnd) &&
-                 (size_ok(di, OPSZ_PTR, opsize, false/*!addr*/) ||
+                 (size_ok(di, OPSZ_PTR, opsize, false /*!addr*/) ||
                   /* xref:i222, assume code cache is always in the first 2G,
                    * so it is possible to use 4-byte opnd to represent the pc
                    */
-                  IF_X64_ELSE(size_ok(di, OPSZ_4, opsize, false), false))) || 
+                  IF_X64_ELSE(size_ok(di, OPSZ_4, opsize, false), false))) ||
                 (opnd_is_immed_int(opnd) &&
-                 size_ok(di, opnd_get_size(opnd), opsize, false/*!addr*/) &&
+                 size_ok(di, opnd_get_size(opnd), opsize, false /*!addr*/) &&
                  immed_size_ok(di, opnd_get_immed_int(opnd), opsize)));
     case TYPE_1:
         /* FIXME (xref PR 229127): Ib vs c1: if say "1, OPSZ_1" will NOT match c1 and
@@ -768,7 +871,7 @@ opnd_type_ok(decode_info_t *di/*prefixes field is IN/OUT; x86_mode is IN*/,
          * specify OPSZ_0 in order to get c1.
          */
         return (opnd_is_immed_int(opnd) && opnd_get_immed_int(opnd) == 1 &&
-                size_ok(di, opnd_get_size(opnd), opsize, false/*!addr*/));
+                size_ok(di, opnd_get_size(opnd), opsize, false /*!addr*/));
     case TYPE_FLOATCONST:
         return (opnd_is_immed_float(opnd)); /* FIXME: is actual float const decoded? */
     case TYPE_J:
@@ -779,34 +882,33 @@ opnd_type_ok(decode_info_t *di/*prefixes field is IN/OUT; x86_mode is IN*/,
          * so we don't need to choose among templates now: we'll complain
          * at emit time if we have reachability issues. */
         return (opnd_is_near_pc(opnd) || opnd_is_near_instr(opnd));
-    case TYPE_A: 
-        {
-            CLIENT_ASSERT(!X64_MODE(di), "x64 has no type A instructions");
+    case TYPE_A: {
+        CLIENT_ASSERT(!X64_MODE(di), "x64 has no type A instructions");
 #ifdef IA32_ON_IA64
-            if (opsize != OPSZ_6_irex10_short4) {
-                return (opnd_is_near_instr(opnd) ||
-                        (opnd_is_near_pc(opnd) &&
-                         immed_size_ok(di, (uint)opnd_get_pc(opnd), opsize)));
-            }
-#endif
-            return (opnd_is_far_pc(opnd) || opnd_is_far_instr(opnd));
+        if (opsize != OPSZ_6_irex10_short4) {
+            return (opnd_is_near_instr(opnd) ||
+                    (opnd_is_near_pc(opnd) &&
+                     immed_size_ok(di, (uint)opnd_get_pc(opnd), opsize)));
         }
+#endif
+        return (opnd_is_far_pc(opnd) || opnd_is_far_instr(opnd));
+    }
     case TYPE_O:
         return (opnd_is_abs_addr(opnd) &&
-                size_ok(di, opnd_get_size(opnd), opsize, false/*!addr*/));
+                size_ok(di, opnd_get_size(opnd), opsize, false /*!addr*/));
     case TYPE_X:
         /* this means the memory address DS:(RE)(E)SI */
         if (opnd_is_far_base_disp(opnd)) {
             reg_id_t base = opnd_get_base(opnd);
             /* reg_size_ok will set PREFIX_ADDR if necessary */
-            return (reg_size_ok(di, base, optype, OPSZ_4x8_short2, true/*addr*/) &&
+            return (reg_size_ok(di, base, optype, OPSZ_4x8_short2, true /*addr*/) &&
                     reg_is_segment(opnd_get_segment(opnd)) &&
-                    base == resolve_var_reg(di, REG_ESI, true, true
-                                            _IF_X64(true) _IF_X64(false)
+                    base ==
+                        resolve_var_reg(di, REG_ESI, true,
+                                        true _IF_X64(true) _IF_X64(false)
                                             _IF_X64(false)) &&
-                    opnd_get_index(opnd) == REG_NULL &&
-                    opnd_get_disp(opnd) == 0 &&
-                    size_ok(di, opnd_get_size(opnd), opsize, false/*!addr*/));
+                    opnd_get_index(opnd) == REG_NULL && opnd_get_disp(opnd) == 0 &&
+                    size_ok(di, opnd_get_size(opnd), opsize, false /*!addr*/));
         } else {
             return false;
         }
@@ -815,14 +917,14 @@ opnd_type_ok(decode_info_t *di/*prefixes field is IN/OUT; x86_mode is IN*/,
         if (opnd_is_far_base_disp(opnd)) {
             reg_id_t base = opnd_get_base(opnd);
             /* reg_size_ok will set PREFIX_ADDR if necessary */
-            return (reg_size_ok(di, base, optype, OPSZ_4x8_short2, true/*addr*/) &&
+            return (reg_size_ok(di, base, optype, OPSZ_4x8_short2, true /*addr*/) &&
                     opnd_get_segment(opnd) == SEG_ES &&
-                    base == resolve_var_reg(di, REG_EDI, true, true
-                                            _IF_X64(true) _IF_X64(false)
+                    base ==
+                        resolve_var_reg(di, REG_EDI, true,
+                                        true _IF_X64(true) _IF_X64(false)
                                             _IF_X64(false)) &&
-                    opnd_get_index(opnd) == REG_NULL &&
-                    opnd_get_disp(opnd) == 0 &&
-                    size_ok(di, opnd_get_size(opnd), opsize, false/*!addr*/));
+                    opnd_get_index(opnd) == REG_NULL && opnd_get_disp(opnd) == 0 &&
+                    size_ok(di, opnd_get_size(opnd), opsize, false /*!addr*/));
         } else {
             return false;
         }
@@ -831,15 +933,15 @@ opnd_type_ok(decode_info_t *di/*prefixes field is IN/OUT; x86_mode is IN*/,
         if (opnd_is_far_base_disp(opnd)) {
             reg_id_t base = opnd_get_base(opnd);
             /* reg_size_ok will set PREFIX_ADDR if necessary */
-            return (reg_size_ok(di, base, optype, OPSZ_4x8_short2, true/*addr*/) &&
+            return (reg_size_ok(di, base, optype, OPSZ_4x8_short2, true /*addr*/) &&
                     reg_is_segment(opnd_get_segment(opnd)) &&
-                    base == resolve_var_reg(di, REG_EBX, true, true
-                                            _IF_X64(true) _IF_X64(false)
+                    base ==
+                        resolve_var_reg(di, REG_EBX, true,
+                                        true _IF_X64(true) _IF_X64(false)
                                             _IF_X64(false)) &&
-                    opnd_get_index(opnd) == REG_AL &&
-                    opnd_get_scale(opnd) == 1 &&
+                    opnd_get_index(opnd) == REG_AL && opnd_get_scale(opnd) == 1 &&
                     opnd_get_disp(opnd) == 0 &&
-                    size_ok(di, opnd_get_size(opnd), opsize, false/*!addr*/));
+                    size_ok(di, opnd_get_size(opnd), opsize, false /*!addr*/));
         } else {
             return false;
         }
@@ -848,29 +950,27 @@ opnd_type_ok(decode_info_t *di/*prefixes field is IN/OUT; x86_mode is IN*/,
         if (opnd_is_far_base_disp(opnd)) {
             reg_id_t base = opnd_get_base(opnd);
             /* reg_size_ok will set PREFIX_ADDR if necessary */
-            return (reg_size_ok(di, base, optype, OPSZ_4x8_short2, true/*addr*/) &&
+            return (reg_size_ok(di, base, optype, OPSZ_4x8_short2, true /*addr*/) &&
                     reg_is_segment(opnd_get_segment(opnd)) &&
-                    base == resolve_var_reg(di, REG_EDI, true, true
-                                            _IF_X64(true) _IF_X64(false)
+                    base ==
+                        resolve_var_reg(di, REG_EDI, true,
+                                        true _IF_X64(true) _IF_X64(false)
                                             _IF_X64(false)) &&
-                    opnd_get_index(opnd) == REG_NULL &&
-                    opnd_get_disp(opnd) == 0 &&
-                    size_ok(di, opnd_get_size(opnd), opsize, false/*!addr*/));
+                    opnd_get_index(opnd) == REG_NULL && opnd_get_disp(opnd) == 0 &&
+                    size_ok(di, opnd_get_size(opnd), opsize, false /*!addr*/));
         } else {
             return false;
         }
     case TYPE_INDIR_REG:
         /* far_ ok */
-        return (opnd_is_base_disp(opnd) &&
-                opnd_get_base(opnd) == opsize &&
-                opnd_get_index(opnd) == REG_NULL &&
-                opnd_get_disp(opnd) == 0 &&
+        return (opnd_is_base_disp(opnd) && opnd_get_base(opnd) == opsize &&
+                opnd_get_index(opnd) == REG_NULL && opnd_get_disp(opnd) == 0 &&
                 /* FIXME: how know data size?  for now just use reg size... */
-                size_ok(di, opnd_get_size(opnd), reg_get_size(opsize), false/*!addr*/));
-    case TYPE_INDIR_VAR_XREG: /* indirect reg that varies (by addr16), base is 4x8,
-                               * opsize that varies by data16 */
-    case TYPE_INDIR_VAR_REG: /* indrect reg that varies (by addr16), base is 4x8,
-                              * opsize that varies by rex & data16 */
+                size_ok(di, opnd_get_size(opnd), reg_get_size(opsize), false /*!addr*/));
+    case TYPE_INDIR_VAR_XREG:  /* indirect reg that varies (by addr16), base is 4x8,
+                                * opsize that varies by data16 */
+    case TYPE_INDIR_VAR_REG:   /* indrect reg that varies (by addr16), base is 4x8,
+                                * opsize that varies by rex & data16 */
     case TYPE_INDIR_VAR_XIREG: /* indrect reg that varies (by addr16), base is 4x8,
                                 * opsize that varies by data16 except on 64-bit Intel */
         if (opnd_is_base_disp(opnd)) {
@@ -882,23 +982,21 @@ opnd_type_ok(decode_info_t *di/*prefixes field is IN/OUT; x86_mode is IN*/,
              * also xref case 214976/10541.
              */
             CLIENT_ASSERT(reg_get_size(opsize) == OPSZ_4, "internal decoding error");
-            return (reg_size_ok(di, base, optype, OPSZ_VARSTACK, true/*addr*/) &&
-                    base == resolve_var_reg(di, opsize, true,
-                                            true _IF_X64(true) _IF_X64(false)
+            return (reg_size_ok(di, base, optype, OPSZ_VARSTACK, true /*addr*/) &&
+                    base ==
+                        resolve_var_reg(di, opsize, true,
+                                        true _IF_X64(true) _IF_X64(false)
                                             _IF_X64(false)) &&
-                    opnd_get_index(opnd) == REG_NULL &&
-                    opnd_get_disp(opnd) == 0 &&
+                    opnd_get_index(opnd) == REG_NULL && opnd_get_disp(opnd) == 0 &&
                     /* FIXME: xref PR 214976: this is used for some instructions that
                      * aren't actually OPSZ_VARSTACK.  NOTE - needs to match size in
                      * decode_operand() and instr_create.h. */
                     size_ok(di, opnd_get_size(opnd), indir_var_reg_size(optype),
-                            false/*!addr*/));
+                            false /*!addr*/));
         } else {
             return false;
         }
-    default:
-        CLIENT_ASSERT(false, "encode error: unknown operand type");
-        return false;
+    default: CLIENT_ASSERT(false, "encode error: unknown operand type"); return false;
     }
 }
 
@@ -915,24 +1013,22 @@ instr_info_extra_opnds(const instr_info_t *info)
 }
 
 /* macro for speed so we don't have to pass opnds around */
-#define TEST_OPND(di, iitype, iisize, iinum, inst_num, get_op)   \
-    if (iitype != TYPE_NONE) {                                   \
-        if (inst_num < iinum)                                    \
-            return false;                                        \
-        if (!opnd_type_ok(di, get_op, iitype, iisize))           \
-            return false;                                        \
-        if (type_instr_uses_reg_bits(iitype)) {                  \
-            if (!opnd_is_null(using_reg_bits) &&                 \
-                !opnd_same(using_reg_bits, get_op))              \
-                return false;                                    \
-            using_reg_bits = get_op;                             \
-        } else if (type_uses_modrm_bits(iitype)) {               \
-            if (!opnd_is_null(using_modrm_bits) &&               \
-                !opnd_same(using_modrm_bits, get_op))            \
-                return false;                                    \
-            using_modrm_bits = get_op;                           \
-        }                                                        \
-    } else if (inst_num >= iinum)                                \
+#define TEST_OPND(di, iitype, iisize, iinum, inst_num, get_op)                           \
+    if (iitype != TYPE_NONE) {                                                           \
+        if (inst_num < iinum)                                                            \
+            return false;                                                                \
+        if (!opnd_type_ok(di, get_op, iitype, iisize))                                   \
+            return false;                                                                \
+        if (type_instr_uses_reg_bits(iitype)) {                                          \
+            if (!opnd_is_null(using_reg_bits) && !opnd_same(using_reg_bits, get_op))     \
+                return false;                                                            \
+            using_reg_bits = get_op;                                                     \
+        } else if (type_uses_modrm_bits(iitype)) {                                       \
+            if (!opnd_is_null(using_modrm_bits) && !opnd_same(using_modrm_bits, get_op)) \
+                return false;                                                            \
+            using_modrm_bits = get_op;                                                   \
+        }                                                                                \
+    } else if (inst_num >= iinum)                                                        \
         return false;
 
 /* May be called a 2nd time to check size prefix consistency.
@@ -940,7 +1036,7 @@ instr_info_extra_opnds(const instr_info_t *info)
  * and don't need to check reg, modrm, numbers, etc.
  */
 static bool
-encoding_possible_pass(decode_info_t *di, instr_t *in, const instr_info_t * ii)
+encoding_possible_pass(decode_info_t *di, instr_t *in, const instr_info_t *ii)
 {
 #ifdef DEBUG
     dcontext_t *dcontext = get_thread_private_dcontext();
@@ -963,21 +1059,20 @@ encoding_possible_pass(decode_info_t *di, instr_t *in, const instr_info_t * ii)
         LOG(THREAD, LOG_EMIT, ENC_LEVEL, "encoding_possible extra operands\n");
         do {
             LOG(THREAD, LOG_EMIT, ENC_LEVEL,
-                "encoding possible checking extra operands for "PFX"\n",
-                ii->opcode);
+                "encoding possible checking extra operands for " PFX "\n", ii->opcode);
             CLIENT_ASSERT(ii->type == OP_CONTD,
                           "encode error: extra operand template mismatch");
 
-            TEST_OPND(di, ii->dst1_type, ii->dst1_size, (offs*2 + 1), in->num_dsts,
-                      instr_get_dst(in, (offs*2 + 0)));
-            TEST_OPND(di, ii->dst2_type, ii->dst2_size, (offs*2 + 2), in->num_dsts,
-                      instr_get_dst(in, (offs*2 + 1)));
-            TEST_OPND(di, ii->src1_type, ii->src1_size, (offs*3 + 1), in->num_srcs,
-                      instr_get_src(in, (offs*3 + 0)));
-            TEST_OPND(di, ii->src2_type, ii->src2_size, (offs*3 + 2), in->num_srcs,
-                      instr_get_src(in, (offs*3 + 1)));
-            TEST_OPND(di, ii->src3_type, ii->src3_size, (offs*3 + 3), in->num_srcs,
-                      instr_get_src(in, (offs*3 + 2)));
+            TEST_OPND(di, ii->dst1_type, ii->dst1_size, (offs * 2 + 1), in->num_dsts,
+                      instr_get_dst(in, (offs * 2 + 0)));
+            TEST_OPND(di, ii->dst2_type, ii->dst2_size, (offs * 2 + 2), in->num_dsts,
+                      instr_get_dst(in, (offs * 2 + 1)));
+            TEST_OPND(di, ii->src1_type, ii->src1_size, (offs * 3 + 1), in->num_srcs,
+                      instr_get_src(in, (offs * 3 + 0)));
+            TEST_OPND(di, ii->src2_type, ii->src2_size, (offs * 3 + 2), in->num_srcs,
+                      instr_get_src(in, (offs * 3 + 1)));
+            TEST_OPND(di, ii->src3_type, ii->src3_size, (offs * 3 + 3), in->num_srcs,
+                      instr_get_src(in, (offs * 3 + 2)));
             offs++;
             ii = instr_info_extra_opnds(ii);
         } while (ii != NULL);
@@ -986,20 +1081,20 @@ encoding_possible_pass(decode_info_t *di, instr_t *in, const instr_info_t * ii)
     return true;
 }
 
-/* Does not check operands beyond 2 dsts and 3 srcs! 
+/* Does not check operands beyond 2 dsts and 3 srcs!
  * Modifies in's prefixes to reflect whether operand or data size
  * prefixes are required.
  * Assumes caller has set di->x86_mode (i.e., ignores in's mode).
  */
 static bool
-encoding_possible(decode_info_t *di, instr_t *in, const instr_info_t * ii)
+encoding_possible(decode_info_t *di, instr_t *in, const instr_info_t *ii)
 {
 #ifdef DEBUG
     dcontext_t *dcontext = get_thread_private_dcontext();
 #endif
     if (ii == NULL || in == NULL)
         return false;
-    LOG(THREAD, LOG_EMIT, ENC_LEVEL, "\nencoding_possible on "PFX"\n", ii->opcode);
+    LOG(THREAD, LOG_EMIT, ENC_LEVEL, "\nencoding_possible on " PFX "\n", ii->opcode);
 
     if (TEST(IF_X64_ELSE(X64_INVALID, X86_INVALID), ii->flags))
         return false;
@@ -1024,11 +1119,12 @@ encoding_possible(decode_info_t *di, instr_t *in, const instr_info_t * ii)
     if (!encoding_possible_pass(di, in, ii))
         return false;
     if (TESTANY(PREFIX_SIZE_SPECIFIERS, di->prefixes)) {
-        LOG(THREAD, LOG_EMIT, ENC_LEVEL, "\tflags needed: "PFX"\n", in->prefixes);
+        LOG(THREAD, LOG_EMIT, ENC_LEVEL, "\tflags needed: " PFX "\n", in->prefixes);
         if (!encoding_possible_pass(di, in, ii))
             return false;
     }
-    LOG(THREAD, LOG_EMIT, ENC_LEVEL, "\ttemplate match w/ flags: "PFX"\n", in->prefixes);
+    LOG(THREAD, LOG_EMIT, ENC_LEVEL, "\ttemplate match w/ flags: " PFX "\n",
+        in->prefixes);
     return true;
 }
 
@@ -1037,7 +1133,7 @@ encoding_possible(decode_info_t *di, instr_t *in, const instr_info_t * ii)
 bool
 instr_is_encoding_possible(instr_t *instr)
 {
-    const instr_info_t * info = get_encoding_info(instr);
+    const instr_info_t *info = get_encoding_info(instr);
     return (info != NULL);
 }
 
@@ -1047,8 +1143,8 @@ instr_is_encoding_possible(instr_t *instr)
 const instr_info_t *
 get_encoding_info(instr_t *instr)
 {
-    const instr_info_t * info = instr_get_instr_info(instr);
-    decode_info_t di = {0};
+    const instr_info_t *info = instr_get_instr_info(instr);
+    decode_info_t di = { 0 };
     IF_X64(di.x86_mode = instr_get_x86_mode(instr));
 
     while (!encoding_possible(&di, instr, info)) {
@@ -1107,7 +1203,7 @@ instr_info_opnd_type(const instr_info_t *info, bool src, uint num)
  */
 
 static byte *
-encode_immed(decode_info_t * di, byte *pc)
+encode_immed(decode_info_t *di, byte *pc)
 {
     /* 1st or 2nd immed? */
     ptr_int_t val;
@@ -1161,9 +1257,9 @@ encode_immed(decode_info_t * di, byte *pc)
             size = di->size_immed2; /* TYPE_I put real size there */
             di->size_immed2 = OPSZ_NA;
             CLIENT_ASSERT((size == OPSZ_4_short2 && !TEST(PREFIX_DATA, di->prefixes)) ||
-                          (size == OPSZ_4) || IF_X64_ELSE((size == OPSZ_8), false),
+                              (size == OPSZ_4) || IF_X64_ELSE((size == OPSZ_8), false),
                           "encode error: immediate has invalid size");
-            /* we want val to be pc of target instr 
+            /* we want val to be pc of target instr
              * immed is the difference between us and target
              * HACK: di->modrm was set with the number of instruction bytes
              * prior to this immed
@@ -1173,7 +1269,7 @@ encode_immed(decode_info_t * di, byte *pc)
             /* check if code in 2G assumption is violated, i.e. 0 < val < 2G */
             if (size == OPSZ_4) {
                 CLIENT_ASSERT(((val > 0) && (val < INT_MAX)) ||
-							  (((uint64)val) >> 31 == 0x1ffffffff),
+                                  (((uint64)val) >> 31 == 0x1ffffffff),
                               "encode error: immediate has invalid size");
             }
 #endif
@@ -1195,15 +1291,15 @@ encode_immed(decode_info_t * di, byte *pc)
 
     switch (size) {
     case OPSZ_1:
-        *pc = (byte) (val);
+        *pc = (byte)(val);
         pc += 1;
         break;
     case OPSZ_2:
-        *((short *)pc) = (short) (val);
+        *((short *)pc) = (short)(val);
         pc += 2;
         break;
     case OPSZ_4:
-        *((int *)pc) = (int) val;
+        *((int *)pc) = (int)val;
         pc += 4;
         break;
 #ifdef X64
@@ -1216,9 +1312,9 @@ encode_immed(decode_info_t * di, byte *pc)
         CLIENT_ASSERT(di->size_immed2 == size,
                       "encode error: immediate has invalid size OPSZ_6");
         di->size_immed2 = OPSZ_NA;
-        *((short *)pc) = (short) (di->immed);
+        *((short *)pc) = (short)(di->immed);
         pc += 2;
-        *((int *)pc) = (int) di->immed2;
+        *((int *)pc) = (int)di->immed2;
         pc += 4;
         break;
     default:
@@ -1238,7 +1334,7 @@ encode_reg_ext_prefixes(decode_info_t *di, reg_id_t reg, uint which_rex)
 
 #ifdef X64
 static void
-encode_rel_addr(decode_info_t * di, opnd_t opnd)
+encode_rel_addr(decode_info_t *di, opnd_t opnd)
 {
     /* Unlike TYPE_J and TYPE_I, who use immed values, can assume
      * there are no other immeds, and have encode_immed complete
@@ -1254,14 +1350,13 @@ encode_rel_addr(decode_info_t * di, opnd_t opnd)
     di->mod = 0;
     di->rm = 5;
     di->has_disp = true;
-    di->disp_abs = (byte *) opnd_get_addr(opnd);
+    di->disp_abs = (byte *)opnd_get_addr(opnd);
     /* PR 253327: since we have no explicit request for addr32, we
      * deduce it here, w/ a conservative range estimate of instr length.
      * However, we consult use_addr_prefix_on_short_disp() first, which will
      * probably disallow for most x64 processors for performance reasons.
      */
-    if (use_addr_prefix_on_short_disp() &&
-        (ptr_uint_t)di->disp_abs <= INT_MAX &&
+    if (use_addr_prefix_on_short_disp() && (ptr_uint_t)di->disp_abs <= INT_MAX &&
         (!REL32_REACHABLE(di->start_pc + MAX_INSTR_LENGTH, di->disp_abs) ||
          !REL32_REACHABLE(di->start_pc + 4, di->disp_abs)))
         di->prefixes |= PREFIX_ADDR;
@@ -1269,7 +1364,7 @@ encode_rel_addr(decode_info_t * di, opnd_t opnd)
 #endif
 
 static void
-encode_base_disp(decode_info_t * di, opnd_t opnd)
+encode_base_disp(decode_info_t *di, opnd_t opnd)
 {
     reg_id_t base, index;
     int scale, disp;
@@ -1328,15 +1423,17 @@ encode_base_disp(decode_info_t * di, opnd_t opnd)
         } else {
             di->has_sib = false;
             di->mod = 0;
-            di->rm = (byte) ((addr16) ? 6 : 5);
+            di->rm = (byte)((addr16) ? 6 : 5);
             di->has_disp = true;
             di->disp = disp;
         }
     } else {
         if (disp == 0 &&
             /* must use 8-bit disp for 0x0(%ebp) or 0x0(%r13) */
-            ((!addr16 && base != REG_EBP /* x64 w/ addr prefix => ebp */
-              IF_X64(&& base != REG_RBP && base != REG_R13 && base != REG_R13D)) ||
+            ((!addr16 &&
+              base !=
+                  REG_EBP /* x64 w/ addr prefix => ebp */
+                      IF_X64(&&base != REG_RBP && base != REG_R13 && base != REG_R13D)) ||
              /* must use 8-bit disp for 0x0(%bp) */
              (addr16 && (base != REG_BP || index != REG_NULL))) &&
             !opnd_is_disp_encode_zero(opnd)) {
@@ -1377,8 +1474,11 @@ encode_base_disp(decode_info_t * di, opnd_t opnd)
                 CLIENT_ASSERT(false, "encode error: invalid 16-bit base+index");
                 di->rm = 0;
             }
-        } else if (index == REG_NULL && base != REG_ESP /* x64 w/ addr prefix => esp */
-                   IF_X64(&& base != REG_RSP && base != REG_R12 && base != REG_R12D)) {
+        } else if (index == REG_NULL &&
+                   base !=
+                       REG_ESP /* x64 w/ addr prefix => esp */
+                           IF_X64(&&base != REG_RSP && base != REG_R12 &&
+                                  base != REG_R12D)) {
             /* don't need SIB byte */
             di->has_sib = false;
             encode_reg_ext_prefixes(di, base, PREFIX_REX_B);
@@ -1392,9 +1492,10 @@ encode_base_disp(decode_info_t * di, opnd_t opnd)
                 di->scale = 0; /* does it matter?!? */
             } else {
                 /* note that r13 can be an index register */
-                CLIENT_ASSERT(index != REG_ESP IF_X64(&& index != REG_RSP),
+                CLIENT_ASSERT(index != REG_ESP IF_X64(&&index != REG_RSP),
                               "encode error: xsp cannot be an index register");
-                CLIENT_ASSERT(reg_is_32bit(index) || (X64_MODE(di) && reg_is_64bit(index)),
+                CLIENT_ASSERT(reg_is_32bit(index) ||
+                                  (X64_MODE(di) && reg_is_64bit(index)),
                               "encode error: index must be general-purpose register");
                 encode_reg_ext_prefixes(di, index, PREFIX_REX_X);
                 if (X64_MODE(di) && reg_is_32bit(index))
@@ -1416,15 +1517,16 @@ encode_base_disp(decode_info_t * di, opnd_t opnd)
             } else {
                 /* can't do nodisp(ebp) or nodisp(r13) */
                 CLIENT_ASSERT(di->mod != 0 ||
-                              (base != REG_EBP
-                               IF_X64(&& base != REG_RBP &&
-                                      base != REG_R13 && base != REG_R13D)),
+                                  (base !=
+                                   REG_EBP IF_X64(&&base != REG_RBP && base != REG_R13 &&
+                                                  base != REG_R13D)),
                               "encode error: xbp/r13 base must have disp");
                 encode_reg_ext_prefixes(di, base, PREFIX_REX_B);
                 if (X64_MODE(di) && reg_is_32bit(base)) {
-                    CLIENT_ASSERT(index == REG_NULL ||
-                                  (reg_is_32bit(index) && TEST(PREFIX_ADDR, di->prefixes)),
-                                  "encode error: index and base must be same width");
+                    CLIENT_ASSERT(
+                        index == REG_NULL ||
+                            (reg_is_32bit(index) && TEST(PREFIX_ADDR, di->prefixes)),
+                        "encode error: index and base must be same width");
                     di->prefixes |= PREFIX_ADDR;
                 }
                 di->base = reg_get_bits(base);
@@ -1451,7 +1553,7 @@ static void
 encode_operand(decode_info_t *di, int optype, opnd_size_t opsize, opnd_t opnd)
 {
     switch (optype) {
-    case TYPE_NONE: 
+    case TYPE_NONE:
     case TYPE_REG:
     case TYPE_VAR_REG:
     case TYPE_VARZ_REG:
@@ -1462,8 +1564,7 @@ encode_operand(decode_info_t *di, int optype, opnd_size_t opsize, opnd_t opnd)
     case TYPE_INDIR_REG:
     case TYPE_INDIR_VAR_XREG:
     case TYPE_INDIR_VAR_REG:
-    case TYPE_INDIR_VAR_XIREG:
-        return;
+    case TYPE_INDIR_VAR_XIREG: return;
     case TYPE_REG_EX:
     case TYPE_VAR_REG_EX:
     case TYPE_VAR_XREG_EX:
@@ -1479,7 +1580,7 @@ encode_operand(decode_info_t *di, int optype, opnd_size_t opsize, opnd_t opnd)
     case TYPE_E:
     case TYPE_Q:
     case TYPE_W:
-    case TYPE_R: /* we already ensured this is a reg, not memory */
+    case TYPE_R:       /* we already ensured this is a reg, not memory */
     case TYPE_P_MODRM: /* we already ensured this is a reg, not memory */
     case TYPE_V_MODRM: /* we already ensured this is a reg, not memory */
         if (opnd_is_memory_reference(opnd)) {
@@ -1487,7 +1588,7 @@ encode_operand(decode_info_t *di, int optype, opnd_size_t opsize, opnd_t opnd)
                 di->seg_override = opnd_get_segment(opnd);
                 /* should be just a SEG_ constant */
                 CLIENT_ASSERT(di->seg_override >= REG_START_SEGMENT &&
-                              di->seg_override <= REG_STOP_SEGMENT,
+                                  di->seg_override <= REG_STOP_SEGMENT,
                               "encode error: invalid segment override");
             }
             /* TODO PR 238624: support instr targets as pc-relative? */
@@ -1516,19 +1617,18 @@ encode_operand(decode_info_t *di, int optype, opnd_size_t opsize, opnd_t opnd)
     case TYPE_V:
     case TYPE_S:
     case TYPE_C:
-    case TYPE_D:
-        {
-            CLIENT_ASSERT(opnd_is_reg(opnd), "encode error: operand must be a register");
-            if (di->reg < 8) {
-                /* already set (by a dst equal to src, probably) */
-                CLIENT_ASSERT(di->reg == reg_get_bits(opnd_get_reg(opnd)),
-                              "encode error: modrm mismatch");
-                return;
-            }
-            encode_reg_ext_prefixes(di, opnd_get_reg(opnd), PREFIX_REX_R);
-            di->reg = reg_get_bits(opnd_get_reg(opnd));
+    case TYPE_D: {
+        CLIENT_ASSERT(opnd_is_reg(opnd), "encode error: operand must be a register");
+        if (di->reg < 8) {
+            /* already set (by a dst equal to src, probably) */
+            CLIENT_ASSERT(di->reg == reg_get_bits(opnd_get_reg(opnd)),
+                          "encode error: modrm mismatch");
             return;
         }
+        encode_reg_ext_prefixes(di, opnd_get_reg(opnd), PREFIX_REX_R);
+        di->reg = reg_get_bits(opnd_get_reg(opnd));
+        return;
+    }
     case TYPE_I:
         if (opnd_is_near_instr(opnd)) {
             /* allow instr as immed, that means we want to put in the 4/8-byte
@@ -1555,158 +1655,153 @@ encode_operand(decode_info_t *di, int optype, opnd_size_t opsize, opnd_t opnd)
             set_immed(di, opnd_get_immed_int(opnd), opsize);
         }
         return;
-    case TYPE_J:
-        {
-            ptr_uint_t target;
-            /* Since we don't know pc values right now, we convert
-             * from an absolute pc to a relative offset in encode_immed.
-             * Here we simply set the immed to the absolute pc target.
+    case TYPE_J: {
+        ptr_uint_t target;
+        /* Since we don't know pc values right now, we convert
+         * from an absolute pc to a relative offset in encode_immed.
+         * Here we simply set the immed to the absolute pc target.
+         */
+        if (opnd_is_near_instr(opnd)) {
+            /* assume the note fields have been set with relative offsets
+             * from some start pc, and that our caller put our note in
+             * di->immed
              */
+            instr_t *target_instr = opnd_get_instr(opnd);
+            target = (ptr_uint_t)target_instr->note - di->immed;
+            /* target is now a pc-relative target, so we can encode as is */
+            set_immed(di, target, opsize);
+            /* this immed is pc-relative except it needs to have the
+             * instruction length subtracted from it -- we indicate that
+             * like this:
+             */
+            CLIENT_ASSERT(di->size_immed2 == OPSZ_NA,
+                          "encode error: immed size already set");
+            di->size_immed2 = opsize;
+            di->size_immed = OPSZ_10; /* == immed needs -length */
+        } else {
+            CLIENT_ASSERT(opnd_is_near_pc(opnd), "encode error: opnd not pc");
+            target = (ptr_uint_t)opnd_get_pc(opnd);
+            set_immed(di, target, opsize);
+            /* here's how we indicate that this immed needs to
+             * be pc-relativized, we take advantage of the fact that all
+             * TYPE_J do not have other immeds in the same instruction:
+             */
+            CLIENT_ASSERT(di->size_immed2 == OPSZ_NA,
+                          "encode error: immed size already set");
+            di->size_immed2 = opsize;
+            di->size_immed = OPSZ_512; /* == immed needs relativizing */
+        }
+        return;
+    }
+    case TYPE_A: {
+        ptr_int_t offs;
+
+#ifdef IA32_ON_IA64
+        ptr_uint_t target;
+        if (opsize == OPSZ_4_short2) {
             if (opnd_is_near_instr(opnd)) {
                 /* assume the note fields have been set with relative offsets
                  * from some start pc, and that our caller put our note in
                  * di->immed
                  */
                 instr_t *target_instr = opnd_get_instr(opnd);
-                target = (ptr_uint_t)target_instr->note - di->immed;
-                /* target is now a pc-relative target, so we can encode as is */
-                set_immed(di, target, opsize);
-                /* this immed is pc-relative except it needs to have the
-                 * instruction length subtracted from it -- we indicate that
-                 * like this:
-                 */
-                CLIENT_ASSERT(di->size_immed2 == OPSZ_NA,
-                              "encode error: immed size already set");
-                di->size_immed2 = opsize;
-                di->size_immed = OPSZ_10; /* == immed needs -length */
-            } else {
-                CLIENT_ASSERT(opnd_is_near_pc(opnd), "encode error: opnd not pc");
-                target = (ptr_uint_t) opnd_get_pc(opnd);
-                set_immed(di, target, opsize);
-                /* here's how we indicate that this immed needs to
-                 * be pc-relativized, we take advantage of the fact that all
-                 * TYPE_J do not have other immeds in the same instruction:
-                 */
-                CLIENT_ASSERT(di->size_immed2 == OPSZ_NA,
-                              "encode error: immed size already set");
-                di->size_immed2 = opsize;
-                di->size_immed = OPSZ_512; /* == immed needs relativizing */
-            }
-            return;
-        }
-    case TYPE_A: 
-        {
-            ptr_int_t offs;
-
-#ifdef IA32_ON_IA64
-            ptr_uint_t target;
-            if (opsize == OPSZ_4_short2) {
-                if (opnd_is_near_instr(opnd)) {
-                    /* assume the note fields have been set with relative offsets
-                     * from some start pc, and that our caller put our note in
-                     * di->immed
-                     */
-                    instr_t *target_instr = opnd_get_instr(opnd);
-                    target = (ptr_uint_t)target_instr->note;
-                    /* target is absolute address of instr ready to go */
-                    set_immed(di, target, opsize);
-                } else {
-                    CLIENT_ASSERT(opnd_is_near_pc(opnd), "encode error: opnd not pc");
-                    target = (ptr_uint_t) opnd_get_pc(opnd);
-                    set_immed(di, target, opsize);
-                }
-                return;
-            }
-#endif
-            
-            CLIENT_ASSERT(!X64_MODE(di), "x64 has no type A instructions");
-            CLIENT_ASSERT(opsize == OPSZ_6_irex10_short4 || opsize == OPSZ_6 ||
-                          opsize == OPSZ_4 ||
-                          (opsize == OPSZ_10 && proc_get_vendor() != VENDOR_AMD),
-                          "encode error: A operand size mismatch");
-            if (opnd_is_far_instr(opnd)) {
-                /* assume the note fields have been set with relative offsets
-                 * from some start pc, and that our caller put our note in
-                 * di->immed
-                 */
-                instr_t *target_instr = opnd_get_instr(opnd);
-                ptr_uint_t target = (ptr_uint_t) target_instr->note;
+                target = (ptr_uint_t)target_instr->note;
                 /* target is absolute address of instr ready to go */
                 set_immed(di, target, opsize);
             } else {
-                CLIENT_ASSERT(opnd_is_far_pc(opnd),
-                              "encode error: A operand must be far pc or far instr");
-                /* FIXME PR 225937: allow client to specify whether data16 or not
-                 * instead of auto-adding the prefix if offset is small
-                 */
-                offs = (ptr_int_t) opnd_get_pc(opnd);
-                if (offs >= INT16_MIN && offs <= INT16_MAX) {
-                    int val;
-                    di->prefixes |= PREFIX_DATA;
-                    val = (opnd_get_segment_selector(opnd)<<16) | ((short) offs);
-                    set_immed(di, val, OPSZ_4);
-                } else {
-                    CLIENT_ASSERT(di->size_immed == OPSZ_NA &&
-                                  di->size_immed2 == OPSZ_NA,
-                                  "encode error: A operand size mismatch");
-                    di->immed = opnd_get_segment_selector(opnd);
-                    di->immed2 = offs;
-                    di->size_immed = OPSZ_6;
-                    di->size_immed2 = OPSZ_6;
-                }
+                CLIENT_ASSERT(opnd_is_near_pc(opnd), "encode error: opnd not pc");
+                target = (ptr_uint_t)opnd_get_pc(opnd);
+                set_immed(di, target, opsize);
             }
             return;
         }
-    case TYPE_O:
-        {
-            ptr_int_t addr;
-            CLIENT_ASSERT(opnd_is_abs_addr(opnd),
-                          "encode error: O operand must be absolute mem ref");
-            addr = (ptr_int_t) opnd_get_addr(opnd);
-            if (opnd_is_far_abs_addr(opnd)) {
-                di->seg_override = opnd_get_segment(opnd);
-                /* should be just a SEG_ constant */
-                CLIENT_ASSERT(di->seg_override >= REG_START_SEGMENT &&
+#endif
+
+        CLIENT_ASSERT(!X64_MODE(di), "x64 has no type A instructions");
+        CLIENT_ASSERT(opsize == OPSZ_6_irex10_short4 || opsize == OPSZ_6 ||
+                          opsize == OPSZ_4 ||
+                          (opsize == OPSZ_10 && proc_get_vendor() != VENDOR_AMD),
+                      "encode error: A operand size mismatch");
+        if (opnd_is_far_instr(opnd)) {
+            /* assume the note fields have been set with relative offsets
+             * from some start pc, and that our caller put our note in
+             * di->immed
+             */
+            instr_t *target_instr = opnd_get_instr(opnd);
+            ptr_uint_t target = (ptr_uint_t)target_instr->note;
+            /* target is absolute address of instr ready to go */
+            set_immed(di, target, opsize);
+        } else {
+            CLIENT_ASSERT(opnd_is_far_pc(opnd),
+                          "encode error: A operand must be far pc or far instr");
+            /* FIXME PR 225937: allow client to specify whether data16 or not
+             * instead of auto-adding the prefix if offset is small
+             */
+            offs = (ptr_int_t)opnd_get_pc(opnd);
+            if (offs >= INT16_MIN && offs <= INT16_MAX) {
+                int val;
+                di->prefixes |= PREFIX_DATA;
+                val = (opnd_get_segment_selector(opnd) << 16) | ((short)offs);
+                set_immed(di, val, OPSZ_4);
+            } else {
+                CLIENT_ASSERT(di->size_immed == OPSZ_NA && di->size_immed2 == OPSZ_NA,
+                              "encode error: A operand size mismatch");
+                di->immed = opnd_get_segment_selector(opnd);
+                di->immed2 = offs;
+                di->size_immed = OPSZ_6;
+                di->size_immed2 = OPSZ_6;
+            }
+        }
+        return;
+    }
+    case TYPE_O: {
+        ptr_int_t addr;
+        CLIENT_ASSERT(opnd_is_abs_addr(opnd),
+                      "encode error: O operand must be absolute mem ref");
+        addr = (ptr_int_t)opnd_get_addr(opnd);
+        if (opnd_is_far_abs_addr(opnd)) {
+            di->seg_override = opnd_get_segment(opnd);
+            /* should be just a SEG_ constant */
+            CLIENT_ASSERT(di->seg_override >= REG_START_SEGMENT &&
                               di->seg_override <= REG_STOP_SEGMENT,
-                              "encode error: invalid segment override");
-                if ((!X64_MODE(di) && addr >= INT16_MIN && addr <= INT16_MAX) ||
-                    (X64_MODE(di) && addr >= INT32_MIN && addr <= INT32_MAX)) {
-                    /* same optimization as in encode_base_disp -- see comments there */
-                    if (use_addr_prefix_on_short_disp()) {
-                        di->prefixes |= PREFIX_ADDR;
-                    }
+                          "encode error: invalid segment override");
+            if ((!X64_MODE(di) && addr >= INT16_MIN && addr <= INT16_MAX) ||
+                (X64_MODE(di) && addr >= INT32_MIN && addr <= INT32_MAX)) {
+                /* same optimization as in encode_base_disp -- see comments there */
+                if (use_addr_prefix_on_short_disp()) {
+                    di->prefixes |= PREFIX_ADDR;
                 }
             }
-            set_immed(di, addr, resolve_addr_size(di));
-            return;
         }
+        set_immed(di, addr, resolve_addr_size(di));
+        return;
+    }
 
     /* assume that opnd_type_ok has already been called --
      * nothing to do unless has an override, these are implicit operands */
-    case TYPE_X: /* this means the memory address DS:(RE)(E)SI */
-    case TYPE_XLAT: /* this means the memory address DS:(RE)(E)BX+AL */
+    case TYPE_X:        /* this means the memory address DS:(RE)(E)SI */
+    case TYPE_XLAT:     /* this means the memory address DS:(RE)(E)BX+AL */
     case TYPE_MASKMOVQ: /* this means the memory address DS:(RE)(E)DI */
         if (opnd_get_segment(opnd) != SEG_DS)
             di->seg_override = opnd_get_segment(opnd);
         return;
     case TYPE_Y: /* this means the memory address ES:(RE)(E)DI */
-        return; /* no override possible */
+        return;  /* no override possible */
 
-    default:
-        CLIENT_ASSERT(false, "encode error: unknown operand type");
+    default: CLIENT_ASSERT(false, "encode error: unknown operand type");
     }
 }
 
-/* special-case (==fast) encoder for cti instructions 
+/* special-case (==fast) encoder for cti instructions
  * this routine cannot handle indirect branches or rets or far jmp/call;
  * it can handle loop/jecxz but it does NOT check for data16!
  */
 static byte *
-encode_cti(instr_t *instr, byte *start_pc, bool check_reachable
-           _IF_DEBUG(bool assert_reachable))
+encode_cti(instr_t *instr, byte *start_pc,
+           bool check_reachable _IF_DEBUG(bool assert_reachable))
 {
     byte *pc = start_pc;
-    const instr_info_t * info = instr_get_instr_info(instr);
+    const instr_info_t *info = instr_get_instr_info(instr);
     opnd_t opnd;
     ptr_uint_t target;
 
@@ -1719,18 +1814,18 @@ encode_cti(instr_t *instr, byte *start_pc, bool check_reachable
             pc++;
         }
         /* assumption: no 16-bit targets */
-        CLIENT_ASSERT(!TESTANY(~(PREFIX_JCC_TAKEN|PREFIX_JCC_NOT_TAKEN),
-                               instr->prefixes),
-                      "encode cti error: non-branch-hint prefixes not supported");
+        CLIENT_ASSERT(
+            !TESTANY(~(PREFIX_JCC_TAKEN | PREFIX_JCC_NOT_TAKEN), instr->prefixes),
+            "encode cti error: non-branch-hint prefixes not supported");
     }
 
     /* output opcode */
     /* first opcode byte */
-    *pc = (byte)((info->opcode & 0x00ff0000) >> 16); 
+    *pc = (byte)((info->opcode & 0x00ff0000) >> 16);
     pc++;
     /* second opcode byte, if there is one */
     if (TEST(OPCODE_TWOBYTES, info->opcode)) {
-        *pc = (byte)((info->opcode & 0x0000ff00) >> 8); 
+        *pc = (byte)((info->opcode & 0x0000ff00) >> 8);
         pc++;
     }
     ASSERT(!TEST(OPCODE_THREEBYTES, info->opcode)); /* no cti has 3 opcode bytes */
@@ -1740,7 +1835,7 @@ encode_cti(instr_t *instr, byte *start_pc, bool check_reachable
      */
     opnd = instr_get_target(instr);
     if (opnd_is_near_pc(opnd)) {
-        target = (ptr_uint_t) opnd_get_pc(opnd);
+        target = (ptr_uint_t)opnd_get_pc(opnd);
     } else if (opnd_is_near_instr(opnd)) {
         instr_t *in = opnd_get_instr(opnd);
         target = (ptr_uint_t)start_pc + ((ptr_uint_t)in->note - (ptr_uint_t)instr->note);
@@ -1762,7 +1857,7 @@ encode_cti(instr_t *instr, byte *start_pc, bool check_reachable
                           "encode_cti error: target beyond 8-bit reach");
             return NULL;
         }
-        *((char *)pc) = (char) offset;
+        *((char *)pc) = (char)offset;
         pc++;
     } else {
         /* 32-bit offset */
@@ -1775,7 +1870,7 @@ encode_cti(instr_t *instr, byte *start_pc, bool check_reachable
             return NULL;
         }
 #endif
-        *((int *)pc) = (int) offset;
+        *((int *)pc) = (int)offset;
         pc += 4;
     }
     return pc;
@@ -1783,7 +1878,7 @@ encode_cti(instr_t *instr, byte *start_pc, bool check_reachable
 
 /* PR 251479: support general re-relativization.
  * Takes in a level 0-3 instruction and encodes it by copying its
- * raw bytes to dst_pc. For x64, if it is marked as having a rip-relative 
+ * raw bytes to dst_pc. For x64, if it is marked as having a rip-relative
  * displacement, that displacement is re-relativized to reach
  * its current target from the encoded location.
  * Returns NULL on failure to encode (due to reachability).
@@ -1809,7 +1904,7 @@ copy_and_re_relativize_raw_instr(dcontext_t *dcontext, instr_t *instr, byte *dst
             CLIENT_ASSERT(false, "mangled jecxz/loop*: target out of 32-bit reach");
             return NULL;
         }
-        *((int *)dst_pc) = (int) (target - (dst_pc + 4));
+        *((int *)dst_pc) = (int)(target - (dst_pc + 4));
     }
 #ifdef X64
     /* We test the flag directly to support cases where the raw bits are
@@ -1833,7 +1928,7 @@ copy_and_re_relativize_raw_instr(dcontext_t *dcontext, instr_t *instr, byte *dst
             decode_sizeof(dcontext, instr->bytes, &num_prefixes, NULL);
             IF_X64(set_x86_mode(dcontext, old_mode));
             for (i = 0; i < num_prefixes; i++) {
-                if (*(instr->bytes+i) == ADDR_PREFIX_OPCODE) {
+                if (*(instr->bytes + i) == ADDR_PREFIX_OPCODE) {
                     addr32 = true;
                     break;
                 }
@@ -1845,13 +1940,14 @@ copy_and_re_relativize_raw_instr(dcontext_t *dcontext, instr_t *instr, byte *dst
              * we fail and rely on caller to do a conservative estimate
              * of reachability and transform this instruction before encoding.
              */
-            CLIENT_ASSERT(false, "encoding failed re-relativizing rip-relative "
+            CLIENT_ASSERT(false,
+                          "encoding failed re-relativizing rip-relative "
                           "address whose target is unreachable");
             return NULL;
         }
         memcpy(dst_pc, instr->bytes, rip_rel_pos);
         dst_pc += rip_rel_pos;
-        *((int *)dst_pc) = (int) new_offs;
+        *((int *)dst_pc) = (int)new_offs;
         if (rip_rel_pos + 4U < instr->length) {
             /* suffix byte */
             memcpy(dst_pc + 4, instr->bytes + rip_rel_pos + 4,
@@ -1865,11 +1961,11 @@ copy_and_re_relativize_raw_instr(dcontext_t *dcontext, instr_t *instr, byte *dst
 
 /* Encodes instrustion instr.  The parameter pc points
  * to the address of this instruction in the fragment cache.
- * Checks for and fixes pc-relative instructions.  
+ * Checks for and fixes pc-relative instructions.
  * N.B: if instr is a jump with an instr_t target, the caller MUST set the note
  * field in the target instr_t prior to calling instr_encode on the jump instr.
- * 
- * Returns the pc after the encoded instr, or NULL if the instruction cannot be encoded.  
+ *
+ * Returns the pc after the encoded instr, or NULL if the instruction cannot be encoded.
  * Note that if instr_is_label(instr) will encoded as a 0-byte instruction.
  * If a pc-relative operand cannot reach its target:
  *   If reachable == NULL, we assert and encoding fails (returning NULL);
@@ -1880,7 +1976,7 @@ static byte *
 instr_encode_common(dcontext_t *dcontext, instr_t *instr, byte *pc,
                     bool check_reachable _IF_DEBUG(bool assert_reachable))
 {
-    const instr_info_t * info;
+    const instr_info_t *info;
     decode_info_t di;
 
     /* pointer to and into the instruction binary */
@@ -1891,7 +1987,8 @@ instr_encode_common(dcontext_t *dcontext, instr_t *instr, byte *pc,
 
     /* first handle the already-encoded instructions */
     if (instr_raw_bits_valid(instr)) {
-        CLIENT_ASSERT(check_reachable, "internal encode error: cannot encode raw "
+        CLIENT_ASSERT(check_reachable,
+                      "internal encode error: cannot encode raw "
                       "bits and ignore reachability");
         /* copy raw bits, possibly re-relativizing */
         return copy_and_re_relativize_raw_instr(dcontext, instr, cache_pc);
@@ -1904,11 +2001,11 @@ instr_encode_common(dcontext_t *dcontext, instr_t *instr, byte *pc,
           reg_is_pointer_sized(opnd_get_reg(instr_get_src(instr, 1))))) ||
         /* no indirect or far */
         opc == OP_jmp_short || opc == OP_jmp || opc == OP_call) {
-        if (!TESTANY(~(PREFIX_JCC_TAKEN|PREFIX_JCC_NOT_TAKEN), instr->prefixes)) {
+        if (!TESTANY(~(PREFIX_JCC_TAKEN | PREFIX_JCC_NOT_TAKEN), instr->prefixes)) {
             /* encode_cti cannot handle funny prefixes or indirect branches or rets */
             return encode_cti(instr, pc, check_reachable _IF_DEBUG(assert_reachable));
         }
-    } 
+    }
 
     /* else really encode */
     info = instr_get_instr_info(instr);
@@ -1932,7 +2029,8 @@ instr_encode_common(dcontext_t *dcontext, instr_t *instr, byte *pc,
     di.prefixes = instr->prefixes;
 
     while (!encoding_possible(&di, instr, info)) {
-        LOG(THREAD, LOG_EMIT, ENC_LEVEL, "\tencoding for 0x%x no good...\n", info->opcode);
+        LOG(THREAD, LOG_EMIT, ENC_LEVEL, "\tencoding for 0x%x no good...\n",
+            info->opcode);
         info = get_next_instr_info(info);
         /* stop when hit end of list or when hit extra operand tables (OP_CONTD) */
         if (info == NULL || info->opcode == OP_CONTD) {
@@ -1961,7 +2059,7 @@ instr_encode_common(dcontext_t *dcontext, instr_t *instr, byte *pc,
     /* prefixes */
     di.seg_override = REG_NULL; /* operands will fill in */
 
-    /* operands 
+    /* operands
      * we can ignore extra operands here, since all extra operands
      * are hardcoded
      */
@@ -1974,7 +2072,7 @@ instr_encode_common(dcontext_t *dcontext, instr_t *instr, byte *pc,
             /* special case: target is instr
              * need to pass this instr's note in
              */
-            di.immed = (ptr_int_t) instr->note;
+            di.immed = (ptr_int_t)instr->note;
         }
         encode_operand(&di, info->src1_type, info->src1_size, instr_get_src(instr, 0));
     }
@@ -2032,9 +2130,9 @@ instr_encode_common(dcontext_t *dcontext, instr_t *instr, byte *pc,
     /* output the opcode required prefix byte (if needed) */
     if (info->opcode > 0xffffff &&
         /* if OPCODE_{MODRM,SUFFIX} there can be no prefix-opcode byte */
-        !TESTANY(OPCODE_MODRM|OPCODE_SUFFIX, info->opcode)) {
+        !TESTANY(OPCODE_MODRM | OPCODE_SUFFIX, info->opcode)) {
         /* prefix byte is part of opcode */
-        *field_ptr = (byte)(info->opcode >> 24); 
+        *field_ptr = (byte)(info->opcode >> 24);
         field_ptr++;
     }
 
@@ -2061,18 +2159,18 @@ instr_encode_common(dcontext_t *dcontext, instr_t *instr, byte *pc,
         field_ptr++;
     }
     /* first opcode byte */
-    *field_ptr = (byte)((info->opcode & 0x00ff0000) >> 16); 
+    *field_ptr = (byte)((info->opcode & 0x00ff0000) >> 16);
     field_ptr++;
     /* second opcode byte, if there is one */
     if (TEST(OPCODE_TWOBYTES, info->opcode)) {
-        *field_ptr = (byte)((info->opcode & 0x0000ff00) >> 8); 
+        *field_ptr = (byte)((info->opcode & 0x0000ff00) >> 8);
         field_ptr++;
     }
     /* /n: part of opcode is in reg of modrm byte */
     if (TEST(OPCODE_REG, info->opcode)) {
         CLIENT_ASSERT(di.reg == 8,
                       "instr_encode error: /n opcode inconsistency"); /* unset */
-        di.reg = (byte) (info->opcode & 0x00000007);
+        di.reg = (byte)(info->opcode & 0x00000007);
         if (di.mod == 5) {
             /* modrm only used for opcode
              * mod and rm are arbitrary: seem to be set to all 1's by compilers
@@ -2084,7 +2182,7 @@ instr_encode_common(dcontext_t *dcontext, instr_t *instr, byte *pc,
     /* opcode depends on entire modrm byte */
     if (TEST(OPCODE_MODRM, info->opcode)) {
         /* modrm is encoded in prefix byte */
-        *field_ptr = (byte)(info->opcode >> 24); 
+        *field_ptr = (byte)(info->opcode >> 24);
         field_ptr++;
         di.mod = 5; /* prevent modrm output from opnds below */
     }
@@ -2100,7 +2198,7 @@ instr_encode_common(dcontext_t *dcontext, instr_t *instr, byte *pc,
         *field_ptr = modrm;
         field_ptr++;
         if (di.has_sib) {
-            byte sib = (byte) ((di.scale << 6) | (di.index << 3) | (di.base));
+            byte sib = (byte)((di.scale << 6) | (di.index << 3) | (di.base));
             CLIENT_ASSERT(di.scale <= 0x3 && di.index <= 0x7 && di.base <= 0x7,
                           "encode error: invalid scale/index/base");
             *field_ptr = sib;
@@ -2108,13 +2206,13 @@ instr_encode_common(dcontext_t *dcontext, instr_t *instr, byte *pc,
         }
         if (di.has_disp) {
             if (di.mod == 1) {
-                *field_ptr = (byte) di.disp;
+                *field_ptr = (byte)di.disp;
                 field_ptr++;
             } else if (!X64_MODE(&di) && TEST(PREFIX_ADDR, di.prefixes)) {
                 CLIENT_ASSERT_TRUNCATE(*((short *)field_ptr), ushort, di.disp,
                                        "encode error: modrm disp too large for 16-bit");
-                *((short *)field_ptr) = (ushort) di.disp;
-                field_ptr+=2;
+                *((short *)field_ptr) = (ushort)di.disp;
+                field_ptr += 2;
             } else {
                 if (X64_MODE(&di) && di.mod == 0 && di.rm == 5) {
                     /* pc-relative, but we don't know size of immeds yet */
@@ -2122,7 +2220,7 @@ instr_encode_common(dcontext_t *dcontext, instr_t *instr, byte *pc,
                 } else {
                     *((int *)field_ptr) = di.disp;
                 }
-                field_ptr+=4;
+                field_ptr += 4;
             }
         }
     }
@@ -2133,7 +2231,7 @@ instr_encode_common(dcontext_t *dcontext, instr_t *instr, byte *pc,
      */
     CLIENT_ASSERT_TRUNCATE(di.modrm, byte, (field_ptr - cache_pc),
                            "encode error: instr too long");
-    di.modrm = (byte) (field_ptr - cache_pc);
+    di.modrm = (byte)(field_ptr - cache_pc);
     if (di.size_immed != OPSZ_NA)
         field_ptr = encode_immed(&di, field_ptr);
     if (di.size_immed2 != OPSZ_NA)
@@ -2144,21 +2242,20 @@ instr_encode_common(dcontext_t *dcontext, instr_t *instr, byte *pc,
         /* none of these have immeds, currently (and presumably never will have) */
         ASSERT_CURIOSITY(di.size_immed == OPSZ_NA && di.size_immed2 == OPSZ_NA);
         /* modrm is encoded in prefix byte */
-        *field_ptr = (byte)(info->opcode >> 24); 
+        *field_ptr = (byte)(info->opcode >> 24);
         field_ptr++;
     }
 
     if (disp_relativize_at != NULL) {
         CLIENT_ASSERT(X64_MODE(&di), "encode error: no rip-relative in x86 mode!");
-        if (check_reachable &&
-            !CHECK_TRUNCATE_TYPE_int(di.disp_abs - field_ptr) &&
+        if (check_reachable && !CHECK_TRUNCATE_TYPE_int(di.disp_abs - field_ptr) &&
             /* PR 253327: we auto-add addr prefix for out-of-reach low tgt */
             (!TEST(PREFIX_ADDR, di.prefixes) || (ptr_uint_t)di.disp_abs > INT_MAX)) {
             CLIENT_ASSERT(!assert_reachable,
                           "encode error: rip-relative reference out of 32-bit reach");
             return NULL;
         }
-        *((int *)disp_relativize_at) = (int) (di.disp_abs - field_ptr);
+        *((int *)disp_relativize_at) = (int)(di.disp_abs - field_ptr);
         /* in case caller is caching these bits (in particular,
          * private_instr_encode()), set rip_rel_pos */
         CLIENT_ASSERT(CHECK_TRUNCATE_TYPE_byte(disp_relativize_at - di.start_pc),
@@ -2171,7 +2268,7 @@ instr_encode_common(dcontext_t *dcontext, instr_t *instr, byte *pc,
     if (stats->loglevel >= 3) {
         byte *pc = cache_pc;
         LOG(THREAD, LOG_EMIT, 3, "instr_encode on: ");
-        DOLOG(3, LOG_EMIT, {instr_disassemble(dcontext, instr, THREAD); });
+        DOLOG(3, LOG_EMIT, { instr_disassemble(dcontext, instr, THREAD); });
         LOG(THREAD, LOG_EMIT, 3, " : ");
         do {
             LOG(THREAD, LOG_EMIT, 3, " %02x", *pc);
@@ -2184,45 +2281,44 @@ instr_encode_common(dcontext_t *dcontext, instr_t *instr, byte *pc,
         int i;
         int len = (field_ptr - cache_pc);
         byte ours, orig;
-        for (i=0; i<len; i++) {
-            ours = *(cache_pc+i);
-            orig = *(((byte *)instr_get_raw_bits(instr))+i);
+        for (i = 0; i < len; i++) {
+            ours = *(cache_pc + i);
+            orig = *(((byte *)instr_get_raw_bits(instr)) + i);
             if (ours != orig) {
                 /* special cases: difference is ok, not an error: */
-                if (i==0 && ours==0x66 && (orig==0xf2||orig==0xf3) &&
+                if (i == 0 && ours == 0x66 && (orig == 0xf2 || orig == 0xf3) &&
                     /* allow rep/repne & data prefixes to have order swapped */
-                    *(cache_pc+i+1)==orig &&
-                    *(((byte *)instr_get_raw_bits(instr))+i+1)==ours) {
+                    *(cache_pc + i + 1) == orig &&
+                    *(((byte *)instr_get_raw_bits(instr)) + i + 1) == ours) {
                     i++; /* skip next */
-                } else if (i==0 && 
-                           ((ours==0x3a && orig==0x38) ||
-                            (ours==0x3b && orig==0x39) ||
-                            (ours==0x03 && orig==0x01) ||
-                            (ours==0x33 && orig==0x31))) {
+                } else if (i == 0 &&
+                           ((ours == 0x3a && orig == 0x38) ||
+                            (ours == 0x3b && orig == 0x39) ||
+                            (ours == 0x03 && orig == 0x01) ||
+                            (ours == 0x33 && orig == 0x31))) {
                     /* Gv, Ev vs Ev, Gv equivalent when both opnds regs */
                     i++; /* skip next */
-                } else if ((i==1 || i==2) && 
-                           ((ours | 0x3c)==0x3c) && 
-                           ((orig | 0x7c)==0x7c) && 
-                           *(((byte *)instr_get_raw_bits(instr))+i+2)==0x0) {
+                } else if ((i == 1 || i == 2) && ((ours | 0x3c) == 0x3c) &&
+                           ((orig | 0x7c) == 0x7c) &&
+                           *(((byte *)instr_get_raw_bits(instr)) + i + 2) == 0x0) {
                     /* mod=0, rm=4, no disp same as mod=1, rm=4, disp=0 */
                     /* I see these for (%esp) */
-                    i=len; /* skip rest */
-                } else if (i==0 && ours==0xd8 && orig==0xdc &&
-                    *(cache_pc+i+1)==0xc0 &&
-                    *(((byte *)instr_get_raw_bits(instr))+i+1)==0xc0) {
+                    i = len; /* skip rest */
+                } else if (i == 0 && ours == 0xd8 && orig == 0xdc &&
+                           *(cache_pc + i + 1) == 0xc0 &&
+                           *(((byte *)instr_get_raw_bits(instr)) + i + 1) == 0xc0) {
                     /* fadd st0, st0 => st0: two ways to do it */
                     i++; /* skip rest */
                 } else {
-                    LOG(THREAD, LOG_EMIT, 3, 
+                    LOG(THREAD, LOG_EMIT, 3,
                         "Error: encoding does not match original bits!\n");
-                    for (i=0; i<len; i++) {
-                        ours = *(cache_pc+i);
+                    for (i = 0; i < len; i++) {
+                        ours = *(cache_pc + i);
                         LOG(THREAD, LOG_EMIT, 3, " %02x", ours);
                     }
                     LOG(THREAD, LOG_EMIT, 3, " vs. ");
-                    for (i=0; i<len; i++) {
-                        orig = *(((byte *)instr_get_raw_bits(instr))+i);
+                    for (i = 0; i < len; i++) {
+                        orig = *(((byte *)instr_get_raw_bits(instr)) + i);
                         LOG(THREAD, LOG_EMIT, 3, " %02x", orig);
                     }
                     LOG(THREAD, LOG_EMIT, 3, "\n");
@@ -2280,4 +2376,3 @@ instrlist_encode(dcontext_t *dcontext, instrlist_t *ilist, byte *pc,
     }
     return pc;
 }
-

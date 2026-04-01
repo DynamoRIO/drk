@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -38,112 +38,141 @@
 //
 
 #if !defined(AFX_DYNAMORIO_H__23EBE600_BBF9_4F81_B49E_8CA6E806E7F8__INCLUDED_)
-#define AFX_DYNAMORIO_H__23EBE600_BBF9_4F81_B49E_8CA6E806E7F8__INCLUDED_
+#    define AFX_DYNAMORIO_H__23EBE600_BBF9_4F81_B49E_8CA6E806E7F8__INCLUDED_
 
-#include "configure.h"
+#    include "configure.h"
 
-#if _MSC_VER > 1000
-#pragma once
-#endif // _MSC_VER > 1000
+#    if _MSC_VER > 1000
+#        pragma once
+#    endif // _MSC_VER > 1000
 
-#ifndef __AFXWIN_H__
-#error include 'stdafx.h' before including this file for PCH
-#endif
+#    ifndef __AFXWIN_H__
+#        error include 'stdafx.h' before including this file for PCH
+#    endif
 
-#include "resource.h"       // main symbols
-#include "MainFrm.h"    // Added by ClassView
-#include "DynamoRIODoc.h"
-#include "DynamoRIOView.h"
+#    include "resource.h" // main symbols
+#    include "MainFrm.h"  // Added by ClassView
+#    include "DynamoRIODoc.h"
+#    include "DynamoRIOView.h"
 
-#define MYMBFLAGS   MB_TOPMOST | MB_ICONEXCLAMATION
+#    define MYMBFLAGS MB_TOPMOST | MB_ICONEXCLAMATION
 
-#ifdef UNICODE
-# define ASCII_PRINTF _T("S")
-# define UNICODE_PRINTF _T("s")
-#else
-# define ASCII_PRINTF _T("s")
-# define UNICODE_PRINTF _T("S")
-#endif
+#    ifdef UNICODE
+#        define ASCII_PRINTF _T("S")
+#        define UNICODE_PRINTF _T("s")
+#    else
+#        define ASCII_PRINTF _T("s")
+#        define UNICODE_PRINTF _T("S")
+#    endif
 
 /////////////////////////////////////////////////////////////////////////////
 // CDynamoRIOApp:
 // See DynamoRIO.cpp for the implementation of this class
 //
 
-class CDynamoRIOApp : public CWinApp
-{
+class CDynamoRIOApp : public CWinApp {
 public:
-#ifndef DRGUI_DEMO
-    BOOL ConfigureForNewUser();
-    void SetEnvVarPermanently(TCHAR *var, TCHAR *val);
-    void PreExit();
-    BOOL RunNewApp(LPCTSTR lpszFileName);
-#endif
-    CDocument * OpenDocumentFile(LPCTSTR lpszFileName);
+#    ifndef DRGUI_DEMO
+    BOOL
+    ConfigureForNewUser();
+    void
+    SetEnvVarPermanently(TCHAR *var, TCHAR *val);
+    void
+    PreExit();
+    BOOL
+    RunNewApp(LPCTSTR lpszFileName);
+#    endif
+    CDocument *
+    OpenDocumentFile(LPCTSTR lpszFileName);
     CDynamoRIOApp();
 
     // global function for TimerProc inside view
-    static CDynamoRIOView * GetActiveView();
-#ifndef DRGUI_DEMO
+    static CDynamoRIOView *
+    GetActiveView();
+#    ifndef DRGUI_DEMO
     // global function for systemwide status
-    static BOOL SystemwideSet();
+    static BOOL
+    SystemwideSet();
     // global function for current library to use
-    static TCHAR * GetDllPath();
+    static TCHAR *
+    GetDllPath();
     // global function for current library type
-    static DLL_TYPE GetDllType();
+    static DLL_TYPE
+    GetDllType();
     // global function for registry setting
-    static void SetSystemwideSetting(int val);
+    static void
+    SetSystemwideSetting(int val);
     // global function for clean up at exit (InstanceExit is too late!)
-    static void AboutToExit();
-#endif
+    static void
+    AboutToExit();
+#    endif
     // global function for setting status bar text
-    static void SetStatusbarText(TCHAR *txt);
+    static void
+    SetStatusbarText(TCHAR *txt);
 
     // Overrides
     // ClassWizard generated virtual function overrides
     //{{AFX_VIRTUAL(CDynamoRIOApp)
 public:
-    virtual BOOL InitInstance();
-    virtual int ExitInstance();
+    virtual BOOL
+    InitInstance();
+    virtual int
+    ExitInstance();
     //}}AFX_VIRTUAL
 
     // Implementation
     //{{AFX_MSG(CDynamoRIOApp)
-    afx_msg void OnAppAbout();
-    afx_msg void OnAppExit();
-#ifndef DRGUI_DEMO
-    afx_msg void OnEditOptions();
-    afx_msg void OnLibraryRelease();
-    afx_msg void OnLibraryProfile();
-    afx_msg void OnLibraryDebug();
-    afx_msg void OnFileRun();
-    afx_msg void OnFileSystemwide();
-    afx_msg void OnHelpHelp();
-    afx_msg void OnEditIgnorelist();
-#endif
+    afx_msg void
+    OnAppAbout();
+    afx_msg void
+    OnAppExit();
+#    ifndef DRGUI_DEMO
+    afx_msg void
+    OnEditOptions();
+    afx_msg void
+    OnLibraryRelease();
+    afx_msg void
+    OnLibraryProfile();
+    afx_msg void
+    OnLibraryDebug();
+    afx_msg void
+    OnFileRun();
+    afx_msg void
+    OnFileSystemwide();
+    afx_msg void
+    OnHelpHelp();
+    afx_msg void
+    OnEditIgnorelist();
+#    endif
     //}}AFX_MSG
     DECLARE_MESSAGE_MAP()
 
 protected:
-    BOOL CheckWindowsVersion(BOOL &windows_NT);
+    BOOL
+    CheckWindowsVersion(BOOL &windows_NT);
     CMainFrame *m_pMainFrame;
-#ifndef DRGUI_DEMO
-    void DisableMissingLibraries(BOOL notify);
-    void DisableSystemwideInject();
+#    ifndef DRGUI_DEMO
+    void
+    DisableMissingLibraries(BOOL notify);
+    void
+    DisableSystemwideInject();
     BOOL m_bSystemwideAllowed;
-    BOOL SetSystemwideInject(TCHAR *val);
+    BOOL
+    SetSystemwideInject(TCHAR *val);
     BOOL m_bInjectAll;
-    BOOL SwitchLibraries(TCHAR *newdllpath, BOOL notify);
+    BOOL
+    SwitchLibraries(TCHAR *newdllpath, BOOL notify);
     TCHAR m_dynamorio_home[_MAX_DIR];
     TCHAR m_inject_all_value[MAX_PATH];
     TCHAR m_dll_path[MAX_PATH];
     DLL_TYPE m_dll_type;
-#endif
+#    endif
 };
 
 /////////////////////////////////////////////////////////////////////////////
 
 //{{AFX_INSERT_LOCATION}}
-// Microsoft Visual C++ will insert additional declarations immediately before the previous line.
+// Microsoft Visual C++ will insert additional declarations immediately before the
+// previous line.
 
 #endif // !defined(AFX_DYNAMORIO_H__23EBE600_BBF9_4F81_B49E_8CA6E806E7F8__INCLUDED_)

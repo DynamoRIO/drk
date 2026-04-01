@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -38,19 +38,18 @@
 #include "tools.h"
 
 #ifdef WINDOWS
-# include <windows.h>
-# include <stdio.h>
+#    include <windows.h>
+#    include <stdio.h>
 #else
-# include <stdlib.h>
-# include <stdio.h>
-# include <string.h>
-# include <unistd.h>
-# include <dlfcn.h>
-# include <signal.h>
-# include <ucontext.h>
-# include <assert.h>
+#    include <stdlib.h>
+#    include <stdio.h>
+#    include <string.h>
+#    include <unistd.h>
+#    include <dlfcn.h>
+#    include <signal.h>
+#    include <ucontext.h>
+#    include <assert.h>
 #endif
-
 
 #ifdef LINUX
 /* handler with SA_SIGINFO flag set gets three arguments: */
@@ -60,11 +59,11 @@ static void
 signal_handler(int sig, siginfo_t *siginfo, ucontext_t *ucxt)
 {
     if (sig == SIGUSR1)
-	print("Got SIGUSR1\n");
+        print("Got SIGUSR1\n");
     else if (sig == SIGUSR2)
-	print("Got SIGUSR2\n");
+        print("Got SIGUSR2\n");
     else if (sig == SIGURG)
-	print("Got SIGURG\n");
+        print("Got SIGURG\n");
 }
 
 /* set up signal_handler as the handler for signal "sig" */
@@ -84,23 +83,23 @@ intercept_signal(int sig, handler_t handler)
 #endif /* LINUX */
 
 int
-main(int argc, char** argv)
+main(int argc, char **argv)
 {
 #ifdef WINDOWS
     HMODULE hmod;
 
-    /* 
+    /*
      * Cause an exception event
      */
     __try {
         HANDLE heap = GetProcessHeap();
-        char *buf = (char *)HeapAlloc(((char *)heap)+1, HEAP_GENERATE_EXCEPTIONS, 10);
-    }
-    __except (GetExceptionCode() == STATUS_ACCESS_VIOLATION ? 
-              EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH) {
+        char *buf = (char *)HeapAlloc(((char *)heap) + 1, HEAP_GENERATE_EXCEPTIONS, 10);
+    } __except (GetExceptionCode() == STATUS_ACCESS_VIOLATION
+                    ? EXCEPTION_EXECUTE_HANDLER
+                    : EXCEPTION_CONTINUE_SEARCH) {
     }
 
-    /* 
+    /*
      * Load and unload a module to cause a module unload event
      */
     hmod = LoadLibrary("shell32.dll");
@@ -112,64 +111,64 @@ main(int argc, char** argv)
     char buf[1000];
     size_t len = 0;
     char *end_path = NULL;
-    /* 
+    /*
      * Load and unload a module to cause a module unload event
      */
-#if 1
+#    if 1
     if (argc != 2)
         exit(1);
     strncpy(buf, argv[1], sizeof(buf));
-    buf[sizeof(buf)-1] = '\0';
+    buf[sizeof(buf) - 1] = '\0';
     end_path = strrchr(buf, '/');
     if (end_path == NULL)
         len = 0;
     else
         len = (end_path - buf) + 1;
-#else
+#    else
     getcwd(buf, sizeof(buf));
-    buf[sizeof(buf)-1] = '\0';
+    buf[sizeof(buf) - 1] = '\0';
     len = strlen(buf);
-    strncpy(buf+len, "/../client-interface/", sizeof(buf)-len);
-    buf[sizeof(buf)-1] = '\0';
+    strncpy(buf + len, "/../client-interface/", sizeof(buf) - len);
+    buf[sizeof(buf) - 1] = '\0';
     len = strlen(buf);
-#endif
+#    endif
 
-      /* small .bss */
-#ifdef X64
-    strncpy(buf+len, "events64_dummy1.so", sizeof(buf)-len); 
-#else
-    strncpy(buf+len, "events_dummy1.so", sizeof(buf)-len);
-#endif
-    buf[sizeof(buf)-1] = '\0';
-    hmod = dlopen(buf, RTLD_LAZY|RTLD_LOCAL);
+        /* small .bss */
+#    ifdef X64
+    strncpy(buf + len, "events64_dummy1.so", sizeof(buf) - len);
+#    else
+    strncpy(buf + len, "events_dummy1.so", sizeof(buf) - len);
+#    endif
+    buf[sizeof(buf) - 1] = '\0';
+    hmod = dlopen(buf, RTLD_LAZY | RTLD_LOCAL);
     if (hmod != NULL)
-	dlclose(hmod);
+        dlclose(hmod);
     else
-	print("module load of %s failed\n", buf);
-    
-    /* large .bss */
-#ifdef X64
-    strncpy(buf+len, "events64_dummy2.so", sizeof(buf)-len); 
-#else
-    strncpy(buf+len, "events_dummy2.so", sizeof(buf)-len);
-#endif
-    buf[sizeof(buf)-1] = '\0';
-    hmod = dlopen(buf, RTLD_LAZY|RTLD_LOCAL);
+        print("module load of %s failed\n", buf);
+
+        /* large .bss */
+#    ifdef X64
+    strncpy(buf + len, "events64_dummy2.so", sizeof(buf) - len);
+#    else
+    strncpy(buf + len, "events_dummy2.so", sizeof(buf) - len);
+#    endif
+    buf[sizeof(buf) - 1] = '\0';
+    hmod = dlopen(buf, RTLD_LAZY | RTLD_LOCAL);
     if (hmod != NULL)
-	dlclose(hmod);
+        dlclose(hmod);
     else
-	print("module load of %s failed\n", buf);
+        print("module load of %s failed\n", buf);
 
     /* test load of non-existent file */
-    hmod = dlopen("foo_bar_no_exist.so", RTLD_LAZY|RTLD_LOCAL);
+    hmod = dlopen("foo_bar_no_exist.so", RTLD_LAZY | RTLD_LOCAL);
     if (hmod != NULL) {
-	print("ERROR - module load of %s succeeded\n", buf);
-	dlclose(hmod);
+        print("ERROR - module load of %s succeeded\n", buf);
+        dlclose(hmod);
     }
 
-    intercept_signal(SIGUSR1, (handler_t) signal_handler);
-    intercept_signal(SIGUSR2, (handler_t) signal_handler);
-    intercept_signal(SIGURG, (handler_t) signal_handler);
+    intercept_signal(SIGUSR1, (handler_t)signal_handler);
+    intercept_signal(SIGUSR2, (handler_t)signal_handler);
+    intercept_signal(SIGURG, (handler_t)signal_handler);
     print("Sending SIGUSR1\n");
     kill(getpid(), SIGUSR1);
     print("Sending SIGUSR2\n");
@@ -182,22 +181,21 @@ main(int argc, char** argv)
      */
     if (fork() == 0) {
         abort();
-    }
-    else {
+    } else {
         wait(NULL);
     }
 #endif /* LINUX */
 
 #ifdef WINDOWS
-    /* 
+    /*
      * Cause an exception event, we test redirecting the application to redirect()
      */
     __try {
         HANDLE heap = GetProcessHeap();
-        char *buf = (char *)HeapAlloc(((char *)heap)+1, HEAP_GENERATE_EXCEPTIONS, 10);
-    }
-    __except (GetExceptionCode() == STATUS_ACCESS_VIOLATION ? 
-              EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH) {
+        char *buf = (char *)HeapAlloc(((char *)heap) + 1, HEAP_GENERATE_EXCEPTIONS, 10);
+    } __except (GetExceptionCode() == STATUS_ACCESS_VIOLATION
+                    ? EXCEPTION_EXECUTE_HANDLER
+                    : EXCEPTION_CONTINUE_SEARCH) {
     }
 #else
     *(int *)4 = 0;
@@ -207,10 +205,9 @@ main(int argc, char** argv)
 }
 
 #ifdef WINDOWS
-__declspec(dllexport) 
+__declspec(dllexport)
 #endif
-void
-redirect()
+    void redirect()
 {
     print("Redirect success!\n");
     exit(0);

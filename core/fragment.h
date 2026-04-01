@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -34,8 +34,8 @@
 /* Copyright (c) 2001-2003 Massachusetts Institute of Technology */
 /* Copyright (c) 2000-2001 Hewlett-Packard Company */
 
-/* 
- * fragment.h - fragment_t structures 
+/*
+ * fragment.h - fragment_t structures
  */
 
 #ifndef _FRAGMENT_H_
@@ -45,26 +45,26 @@
 
 /* Flags, stored in fragment_t->flags bitfield
  */
-#define FRAG_IS_FUTURE              0x000001
-#define FRAG_TRACE_LINKS_SHIFTED    0x000002
-#define FRAG_IS_TRACE               0x000004
-#define FRAG_IS_TRACE_HEAD          0x000008
-#define FRAG_LINKED_OUTGOING        0x000010
-#define FRAG_LINKED_INCOMING        0x000020
-#define FRAG_CANNOT_DELETE          0x000040
-#define FRAG_CANNOT_BE_TRACE        0x000080
+#define FRAG_IS_FUTURE 0x000001
+#define FRAG_TRACE_LINKS_SHIFTED 0x000002
+#define FRAG_IS_TRACE 0x000004
+#define FRAG_IS_TRACE_HEAD 0x000008
+#define FRAG_LINKED_OUTGOING 0x000010
+#define FRAG_LINKED_INCOMING 0x000020
+#define FRAG_CANNOT_DELETE 0x000040
+#define FRAG_CANNOT_BE_TRACE 0x000080
 
 /* Indicates an irregular fragment_t.  In particular, there are no
  * trailing linkstubs after this fragment_t struct.  Note that other
  * "fake fragment_t" flags should be set in combination with this one
  * (FRAG_IS_{FUTURE,EXTRA_VMAREA*,EMPTY_SLOT}, FRAG_FCACHE_FREE_LIST).
  */
-#define FRAG_FAKE                   0x000100
+#define FRAG_FAKE 0x000100
 
 /* this flag indicates fragment writes all 6 flags prior to reading */
-#define FRAG_WRITES_EFLAGS_6        0x000200
+#define FRAG_WRITES_EFLAGS_6 0x000200
 /* this flag indicates fragment writes OF before reading it */
-#define FRAG_WRITES_EFLAGS_OF       0x000400
+#define FRAG_WRITES_EFLAGS_OF 0x000400
 
 /* This is not a fragment_t but an fcache free list entry.
  * In current usage this is checked to see if the previous free list entry is
@@ -72,63 +72,63 @@
  * This flag MUST be in the bottom 16 bits since free_list_header_t.flags
  * is a ushort!
  */
-#define FRAG_FCACHE_FREE_LIST       0x000800
+#define FRAG_FCACHE_FREE_LIST 0x000800
 
-#define FRAG_HAS_SYSCALL            0x001000
+#define FRAG_HAS_SYSCALL 0x001000
 /* this flags indicates that a trace is being built from fragment_t->tag */
-#define FRAG_TRACE_BUILDING         0x002000
+#define FRAG_TRACE_BUILDING 0x002000
 
-/* used on future fragments, currently only read for adaptive working set 
- * also used for fragments to know whether they are on the deleted list 
+/* used on future fragments, currently only read for adaptive working set
+ * also used for fragments to know whether they are on the deleted list
  * (shared) or flush queue (private)
  */
-#define FRAG_WAS_DELETED            0x004000
+#define FRAG_WAS_DELETED 0x004000
 /* indicates frag is from a non-protected page and may be self-modifying */
-#define FRAG_SELFMOD_SANDBOXED      0x008000
+#define FRAG_SELFMOD_SANDBOXED 0x008000
 /* indicates whether frag contains an elided direct cti */
-#define FRAG_HAS_DIRECT_CTI         0x010000
+#define FRAG_HAS_DIRECT_CTI 0x010000
 /* used by fcache to distinguish fragment_t from its own empty slot struct */
-#define FRAG_IS_EMPTY_SLOT          0x020000
+#define FRAG_IS_EMPTY_SLOT 0x020000
 /* used by vmarea to distinguish fragment_t from its own multi unit struct */
-#define FRAG_IS_EXTRA_VMAREA        0x040000
-#define FRAG_IS_EXTRA_VMAREA_INIT   0x080000
+#define FRAG_IS_EXTRA_VMAREA 0x040000
+#define FRAG_IS_EXTRA_VMAREA_INIT 0x080000
 
 #ifdef PROGRAM_SHEPHERDING
 /* indicates from memory that wasn't part of code from image on disk */
-# define FRAG_DYNGEN                0x100000
-# ifdef DGC_DIAGNOSTICS
+#    define FRAG_DYNGEN 0x100000
+#    ifdef DGC_DIAGNOSTICS
 /* for now, only used to identify regions that fail our policies */
-#  define FRAG_DYNGEN_RESTRICTED    0x200000
-# endif
+#        define FRAG_DYNGEN_RESTRICTED 0x200000
+#    endif
 #endif
 
 #ifdef X64
 /* this fragment contains 32-bit code */
-# define FRAG_32_BIT                0x400000
-# ifdef RETURN_STACK
-#  error RETURN_STACK not compatible with X64
-# endif
+#    define FRAG_32_BIT 0x400000
+#    ifdef RETURN_STACK
+#        error RETURN_STACK not compatible with X64
+#    endif
 #elif defined(RETURN_STACK)
 /* used for RETURN_STACK */
-# define FRAG_ENDS_WITH_RETURN      0x400000
+#    define FRAG_ENDS_WITH_RETURN 0x400000
 #endif
 
-#define FRAG_MUST_END_TRACE         0x800000
+#define FRAG_MUST_END_TRACE 0x800000
 
-#define FRAG_SHARED                0x1000000
+#define FRAG_SHARED 0x1000000
 /* indicates a temporary private copy of a shared bb, used
  * for trace building
  */
-#define FRAG_TEMP_PRIVATE          0x2000000
+#define FRAG_TEMP_PRIVATE 0x2000000
 
-#define FRAG_TRACE_OUTPUT          0x4000000
+#define FRAG_TRACE_OUTPUT 0x4000000
 
 #define FRAG_CBR_FALLTHROUGH_SHORT 0x8000000
 
 /* Indicates coarse-grain cache management, i.e., batch units with
  * no individual fragment_t.
  */
-#define FRAG_COARSE_GRAIN         0x10000000
+#define FRAG_COARSE_GRAIN 0x10000000
 
 /* Translation info was recorded at fragment emit time in a post-fragment_t field.
  * This is NOT set for flushed fragments, which store their info in the in_xlate
@@ -138,11 +138,11 @@
 #define FRAG_HAS_TRANSLATION_INFO 0x20000000
 
 #ifdef SIDELINE
-# define FRAG_DO_NOT_SIDELINE     0x40000000
+#    define FRAG_DO_NOT_SIDELINE 0x40000000
 #endif
 
 /* This fragment immediately follows a free entry in the fcache */
-#define FRAG_FOLLOWS_FREE_ENTRY   0x80000000
+#define FRAG_FOLLOWS_FREE_ENTRY 0x80000000
 
 /* Flags that a future fragment can transfer to a real on taking its place:
  * Naturally we don't want FRAG_IS_FUTURE or FRAG_WAS_DELETED.
@@ -155,13 +155,14 @@
  */
 #define FUTURE_FLAGS_TRANSFER (FRAG_IS_TRACE_HEAD)
 /* only used for debugging */
-#define FUTURE_FLAGS_ALLOWED (FUTURE_FLAGS_TRANSFER|FRAG_FAKE|FRAG_IS_FUTURE|\
-                              FRAG_WAS_DELETED|FRAG_SHARED|FRAG_TEMP_PRIVATE)
+#define FUTURE_FLAGS_ALLOWED                                                 \
+    (FUTURE_FLAGS_TRANSFER | FRAG_FAKE | FRAG_IS_FUTURE | FRAG_WAS_DELETED | \
+     FRAG_SHARED | FRAG_TEMP_PRIVATE)
 
 /* to save space size field is a ushort => maximum fragment size */
 enum { MAX_FRAGMENT_SIZE = USHRT_MAX };
 
-/* fragment structure used for basic blocks and traces 
+/* fragment structure used for basic blocks and traces
  * this is the core structure shared by everything
  * trace heads and traces extend it below
  */
@@ -171,12 +172,12 @@ struct _fragment_t {
      * And flags' offset must match fcache.c's empty_slot_t as well as
      * vmarea.c's multi_entry_t structs
      */
-    app_pc    tag;              /* non-zero fragment tag used for lookups */
+    app_pc tag; /* non-zero fragment tag used for lookups */
 
     /* Contains FRAG_ flags.  Should only be modified for FRAG_SHARED fragments
      * while holding the change_linking_lock.
      */
-    uint      flags;
+    uint flags;
 
     /* trace head counters are in separate hashtable since always private.
      * FIXME: when all fragments are private, a separate table uses more memory
@@ -185,44 +186,44 @@ struct _fragment_t {
 
     /* size in bytes of the fragment (includes body and stubs, and for
      * selfmod fragments also includes selfmod app code copy and size field)
-     */    
-    ushort       size;
+     */
+    ushort size;
 
     /* both of these fields are tiny -- padding shouldn't be more than a cache line
      * size (32 P3, 64 P4), prefix should be even smaller.
      * they combine with size to shrink fragment_t for us
      * N.B.: byte is an unsigned char
      */
-    byte      prefix_size;      /* size of prefix, after which is non-ind. br. entry */
-    byte      fcache_extra;     /* padding to fit in fcache slot, also includes the header */
+    byte prefix_size;  /* size of prefix, after which is non-ind. br. entry */
+    byte fcache_extra; /* padding to fit in fcache slot, also includes the header */
 
-    cache_pc  start_pc;         /* very top of fragment's code, equals
-                                 * entry point when indirect branch target */
+    cache_pc start_pc; /* very top of fragment's code, equals
+                        * entry point when indirect branch target */
 
     union {
         /* For a live fragment, we store a list of other fragments' exits that target
          * this fragment (outgoing exit stubs are all allocated with fragment_t struct,
          * use FRAGMENT_EXIT_STUBS() to access).
          */
-        linkstub_t  *incoming_stubs;
+        linkstub_t *incoming_stubs;
         /* For a pending-deletion fragment (marked with FRAG_WAS_DELETED),
          * we store translation info.
          */
         translation_info_t *translation_info;
     } in_xlate;
 
-    fragment_t  *next_vmarea;     /* for chaining fragments in vmarea list */
-    fragment_t  *prev_vmarea;     /* for chaining fragments in vmarea list */
+    fragment_t *next_vmarea; /* for chaining fragments in vmarea list */
+    fragment_t *prev_vmarea; /* for chaining fragments in vmarea list */
     union {
-        fragment_t  *also_vmarea;     /* for chaining fragments across vmarea lists */
+        fragment_t *also_vmarea; /* for chaining fragments across vmarea lists */
         /* For lazily-deleted fragments, we store the flushtime here, as this
          * field is no longer used once a fragment is not live.
          */
-        uint      flushtime;
+        uint flushtime;
     } also;
 
 #ifdef DEBUG
-    int       id;               /* thread-shared-unique fragment identifier */
+    int id; /* thread-shared-unique fragment identifier */
 #endif
 
 #ifdef CUSTOM_TRACES_RET_REMOVAL
@@ -231,17 +232,15 @@ struct _fragment_t {
 #endif
 }; /* fragment_t */
 
-
 /* Shared fragments don't need some fields that private ones do, so we
  * dynamically choose different structs.  fragment_t is for shared only.
  * Here we again use C awkwardness to have a subclass.
  */
 typedef struct _private_fragment_t {
-    fragment_t  f;
-    fragment_t  *next_fcache;     /* for chaining fragments in fcache unit */
-    fragment_t  *prev_fcache;     /* for chaining fragments in fcache unit */
+    fragment_t f;
+    fragment_t *next_fcache; /* for chaining fragments in fcache unit */
+    fragment_t *prev_fcache; /* for chaining fragments in fcache unit */
 } private_fragment_t;
-
 
 /* Structure used for future fragments, separate to save memory.
  * next and flags must be at same offset as for fragment_t, so that
@@ -249,9 +248,9 @@ typedef struct _private_fragment_t {
  * and future_fragment_t.  The rule is enforced in fragment_init.
  */
 struct _future_fragment_t {
-    app_pc    tag;              /* non-zero fragment tag used for lookups */
-    uint      flags;            /* contains FRAG_ flags */
-    linkstub_t  *incoming_stubs;  /* list of other fragments' exits that target
+    app_pc tag;                 /* non-zero fragment tag used for lookups */
+    uint flags;                 /* contains FRAG_ flags */
+    linkstub_t *incoming_stubs; /* list of other fragments' exits that target
                                  * this fragment */
 };
 
@@ -273,8 +272,8 @@ typedef struct _trace_bb_info_t {
  */
 typedef struct _trace_only_t {
 #ifdef PROFILE_RDTSC
-    uint64    count;            /* number of executions of this fragment */
-    uint64    total_time;       /* total time ever spent in this fragment */
+    uint64 count;      /* number of executions of this fragment */
+    uint64 total_time; /* total time ever spent in this fragment */
 #endif
 
 #ifdef SIDELINE_COUNT_STUDY
@@ -284,25 +283,26 @@ typedef struct _trace_only_t {
 
     /* holds the tags (and other info) for all constituent basic blocks */
     trace_bb_info_t *bbs;
-    uint    num_bbs;
+    uint num_bbs;
 } trace_only_t;
 
 /* trace extension of fragment_t */
 struct _trace_t {
-    fragment_t     f; /* shared fields */
+    fragment_t f; /* shared fields */
     trace_only_t t;
 }; /* trace_t */
 
 /* private version of trace_t */
 typedef struct _private_trace_t {
-    private_fragment_t  f;
-    trace_only_t        t;
+    private_fragment_t f;
+    trace_only_t t;
 } private_trace_t;
 
 /* convenient way to deal w/ trace fields: this returns trace_only_t* */
-#define TRACE_FIELDS(f) (ASSERT(TEST(FRAG_IS_TRACE, (f)->flags)), \
-    (TEST(FRAG_SHARED, (f)->flags) ? \
-     &(((trace_t *)(f))->t) : &(((private_trace_t *)(f))->t)))
+#define TRACE_FIELDS(f)                                      \
+    (ASSERT(TEST(FRAG_IS_TRACE, (f)->flags)),                \
+     (TEST(FRAG_SHARED, (f)->flags) ? &(((trace_t *)(f))->t) \
+                                    : &(((private_trace_t *)(f))->t)))
 
 /* FIXME: Can be used to determine if a frag should have a prefix since currently
  * all IB targets have the same prefix. Use a different macro if different frags
@@ -321,31 +321,34 @@ typedef struct _private_trace_t {
  * However it's not very useful to go after the short lived FRAG_TEMP_PRIVATE
  */
 /* can a frag w/the given flags be an IBL target? */
-#define IS_IBL_TARGET(flags)                                         \
-    (TEST(FRAG_IS_TRACE, (flags)) ? \
-     (TEST(FRAG_SHARED, (flags)) || !DYNAMO_OPTION(shared_trace_ibt_tables)) : \
-     (DYNAMO_OPTION(bb_ibl_targets) && \
-      (TEST(FRAG_SHARED, (flags)) || !DYNAMO_OPTION(shared_bb_ibt_tables))))
+#define IS_IBL_TARGET(flags)                                                       \
+    (TEST(FRAG_IS_TRACE, (flags))                                                  \
+         ? (TEST(FRAG_SHARED, (flags)) || !DYNAMO_OPTION(shared_trace_ibt_tables)) \
+         : (DYNAMO_OPTION(bb_ibl_targets) &&                                       \
+            (TEST(FRAG_SHARED, (flags)) || !DYNAMO_OPTION(shared_bb_ibt_tables))))
 
-#define HASHTABLE_IBL_OFFSET(branch_type) \
-    (((branch_type) == IBL_INDCALL) ? DYNAMO_OPTION(ibl_indcall_hash_offset) : \
-     DYNAMO_OPTION(ibl_hash_func_offset))
+#define HASHTABLE_IBL_OFFSET(branch_type)                                    \
+    (((branch_type) == IBL_INDCALL) ? DYNAMO_OPTION(ibl_indcall_hash_offset) \
+                                    : DYNAMO_OPTION(ibl_hash_func_offset))
 
 #ifdef HASHTABLE_STATISTICS
 /* Statistics written from the cache that must be allocated separately */
 typedef struct _unprot_ht_statistics_t {
     /* Statistics for App mode indirect branch lookups. Useful only for trace table. */
     /* These should be accessible by indirect_branch_lookup emitted routines. */
-    /* Should have the form <ibl_routine>_stats, and are per hash table per routine (and per thread) */
-    /* FIXME: These are in the hash table itself for easier access when sharing IBL routines */
+    /* Should have the form <ibl_routine>_stats, and are per hash table per routine (and
+     * per thread) */
+    /* FIXME: These are in the hash table itself for easier access when sharing IBL
+     * routines */
 
     hashtable_statistics_t trace_ibl_stats[IBL_BRANCH_TYPE_END];
     hashtable_statistics_t bb_ibl_stats[IBL_BRANCH_TYPE_END];
 
     /* FIXME: this should really go to x86/arch.c instead of here */
-# ifdef WINDOWS
-    hashtable_statistics_t shared_syscall_hit_stats; /* miss path is shared with trace_ibl */
-#  endif
+#    ifdef WINDOWS
+    hashtable_statistics_t
+        shared_syscall_hit_stats; /* miss path is shared with trace_ibl */
+#    endif
 } unprot_ht_statistics_t;
 #endif /* HASHTABLE_STATISTICS */
 
@@ -353,8 +356,8 @@ typedef struct _unprot_ht_statistics_t {
  * well as by ibl_table_t
  */
 typedef struct _fragment_entry_t {
-    app_pc    tag_fragment;     /* non-zero fragment tag used for lookups */
-    cache_pc  start_pc_fragment;/* very top of fragment's code from fragment_t */
+    app_pc tag_fragment;        /* non-zero fragment tag used for lookups */
+    cache_pc start_pc_fragment; /* very top of fragment's code from fragment_t */
 } fragment_entry_t;
 
 #define HASHLOOKUP_SENTINEL_START_PC ((cache_pc)PTR_UINT_1)
@@ -368,17 +371,17 @@ typedef struct _fragment_entry_t {
  */
 /* Updates to these flags should be reflected in
  * x86/arch.c:table_flags_to_frag_flags() */
-#define FRAG_TABLE_INCLUSIVE_HIERARCHY   HASHTABLE_NOT_PRIMARY_STORAGE
+#define FRAG_TABLE_INCLUSIVE_HIERARCHY HASHTABLE_NOT_PRIMARY_STORAGE
 /* Set for IBL targeted tables, used in conjuction with FRAG_INCLUSIVE_HIERARCHY */
-#define FRAG_TABLE_IBL_TARGETED          HASHTABLE_LOCKLESS_ACCESS
+#define FRAG_TABLE_IBL_TARGETED HASHTABLE_LOCKLESS_ACCESS
 /* Set for IBL targeted tables, indicates that the table holds shared targets */
-#define FRAG_TABLE_TARGET_SHARED         HASHTABLE_ENTRY_SHARED
+#define FRAG_TABLE_TARGET_SHARED HASHTABLE_ENTRY_SHARED
 /* Indicates that the table is shared */
-#define FRAG_TABLE_SHARED                HASHTABLE_SHARED
+#define FRAG_TABLE_SHARED HASHTABLE_SHARED
 /* is this table allocated in persistent memory? */
-#define FRAG_TABLE_PERSISTENT            HASHTABLE_PERSISTENT
+#define FRAG_TABLE_PERSISTENT HASHTABLE_PERSISTENT
 /* Indicates that the table targets traces */
-#define FRAG_TABLE_TRACE                 HASHTABLE_CUSTOM_FLAGS_START 
+#define FRAG_TABLE_TRACE HASHTABLE_CUSTOM_FLAGS_START
 
 /* hashtable of fragment_t* entries */
 /* macros w/ name and types are duplicated in fragment.c -- keep in sync */
@@ -390,42 +393,38 @@ typedef struct _fragment_entry_t {
 #include "hashtablex.h"
 #undef HASHTABLEX_HEADER
 
-
 /* hashtable of fragment_entry_t entries for per-type ibl tables */
 /* macros w/ name and types are duplicated in fragment.c -- keep in sync */
 #define NAME_KEY ibl
 #define ENTRY_TYPE fragment_entry_t
 /* not defining HASHTABLE_USE_LOOKUPTABLE */
 #ifdef HASHTABLE_STATISTICS
-# define HASHTABLE_ENTRY_STATS 1
-# define CUSTOM_FIELDS \
-    ibl_branch_type_t branch_type; \
-    /* stats written from the cache must be unprotected by allocating separately \
-     * FIXME: we could avoid this when protect_mask==0 by having a union here,   \
-     * like we have with mcontext in the dcontext, but not worth the complexity  \
-     * or space for debug-build-only stats \
-     */ \
-    unprot_ht_statistics_t *unprot_stats;
+#    define HASHTABLE_ENTRY_STATS 1
+#    define CUSTOM_FIELDS                                                            \
+        ibl_branch_type_t branch_type;                                               \
+        /* stats written from the cache must be unprotected by allocating separately \
+         * FIXME: we could avoid this when protect_mask==0 by having a union here,   \
+         * like we have with mcontext in the dcontext, but not worth the complexity  \
+         * or space for debug-build-only stats                                       \
+         */                                                                          \
+        unprot_ht_statistics_t *unprot_stats;
 #else
-# define CUSTOM_FIELDS \
-    ibl_branch_type_t branch_type;
+#    define CUSTOM_FIELDS ibl_branch_type_t branch_type;
 #endif /* HASHTABLE_STATISTICS */
 #define HASHTABLEX_HEADER 1
 #include "hashtablex.h"
 #undef HASHTABLEX_HEADER
 
-
-#if defined(RETURN_AFTER_CALL) || defined (RCT_IND_BRANCH)
+#if defined(RETURN_AFTER_CALL) || defined(RCT_IND_BRANCH)
 /* 3 macros w/ name and types are duplicated in fragment.c -- keep in sync */
-#define NAME_KEY app_pc
-#define ENTRY_TYPE app_pc
+#    define NAME_KEY app_pc
+#    define ENTRY_TYPE app_pc
 /* not defining HASHTABLE_USE_LOOKUPTABLE */
-#define CUSTOM_FIELDS /* none */
-#define HASHTABLEX_HEADER 1
-#include "hashtablex.h"
-#undef HASHTABLEX_HEADER
+#    define CUSTOM_FIELDS /* none */
+#    define HASHTABLEX_HEADER 1
+#    include "hashtablex.h"
+#    undef HASHTABLEX_HEADER
 #endif /* defined(RETURN_AFTER_CALL) || defined (RCT_IND_BRANCH) */
-
 
 /* We keep basic blocks and traces in separate hashtables.  This is to
  * speed up indirect_branch_lookup that looks for traces only, but it
@@ -440,14 +439,14 @@ typedef struct _fragment_entry_t {
  * FIXME: Shared bb IBL routines indirectly access only a few fields
  * from each fragment_table_t which will touch a separate cache line for
  * each.  However, trace IBL routines don't indirect so I don't expect
- * a performance hit of using the current struct layout.  
+ * a performance hit of using the current struct layout.
  * FIXME: The bb IBL routines however are shared and therefore
  * indirect, so splitting the fragment_table_t in two compactable
  * structures may be worth trying.
  */
 typedef struct _per_thread_t {
     ibl_table_t trace_ibt[IBL_BRANCH_TYPE_END]; /* trace IB targets */
-    ibl_table_t bb_ibt[IBL_BRANCH_TYPE_END]; /* bb IB targets */
+    ibl_table_t bb_ibt[IBL_BRANCH_TYPE_END];    /* bb IB targets */
     fragment_table_t bb;
     fragment_table_t trace;
     fragment_table_t future;
@@ -460,32 +459,31 @@ typedef struct _per_thread_t {
     file_t tracefile;
 
     /* used for unlinking other threads' caches for flushing */
-    bool           could_be_linking;     /* accessing link data structs? */
-    bool           wait_for_unlink;      /* should this thread wait at synch point? */
-    bool           about_to_exit;        /* is this thread about to exit, so no need to flush? */
-    bool           flush_queue_nonempty; /* is this thread's deletion queue nonempty? */
-    event_t        waiting_for_unlink;   /* synch bet flusher and flushee */
-    event_t        finished_with_unlink; /* ditto */
-    event_t        finished_all_unlink;/* ditto */
+    bool could_be_linking;        /* accessing link data structs? */
+    bool wait_for_unlink;         /* should this thread wait at synch point? */
+    bool about_to_exit;           /* is this thread about to exit, so no need to flush? */
+    bool flush_queue_nonempty;    /* is this thread's deletion queue nonempty? */
+    event_t waiting_for_unlink;   /* synch bet flusher and flushee */
+    event_t finished_with_unlink; /* ditto */
+    event_t finished_all_unlink;  /* ditto */
     /* this lock controls all 4 vars above, plus linking/unlinking shared_syscall,
      * plus modifying queue of to-be-deleted thread-local vm regions
      */
-    mutex_t          linking_lock;
-    bool           soon_to_be_linking; /* tells flusher thread is at cache exit synch */
+    mutex_t linking_lock;
+    bool soon_to_be_linking; /* tells flusher thread is at cache exit synch */
     /* for shared_deletion protocol */
-    uint           flushtime_last_update;
+    uint flushtime_last_update;
     /* for syscalls_synch_flush, only used to cache whether a thread was at
      * a syscall during early flushing stages for use in later stages.
      * not used while not flushing.
      */
-    bool           at_syscall_at_flush;
+    bool at_syscall_at_flush;
 
 #ifdef PROFILE_LINKCOUNT
     uint tracedump_num_below_threshold;
     linkcount_type_t tracedump_count_below_threshold;
 #endif
 } per_thread_t;
-
 
 #define FCACHE_ENTRY_PC(f) (f->start_pc + f->prefix_size)
 #define FCACHE_PREFIX_ENTRY_PC(f) \
@@ -495,38 +493,41 @@ typedef struct _per_thread_t {
 /* translation info pointer can be at end of any struct, so rather than have
  * 8 different structs we keep it out of the formal struct definitions
  */
-#define FRAGMENT_STRUCT_SIZE(flags) \
-    ((TEST(FRAG_IS_TRACE, (flags)) ? \
-      (TEST(FRAG_SHARED, (flags)) ? sizeof(trace_t) : sizeof(private_trace_t)) : \
-      (TEST(FRAG_SHARED, (flags)) ? sizeof(fragment_t) : sizeof(private_fragment_t))) \
-     + (TEST(FRAG_HAS_TRANSLATION_INFO, flags) ? sizeof(translation_info_t*) : 0))
+#define FRAGMENT_STRUCT_SIZE(flags)                                                  \
+    ((TEST(FRAG_IS_TRACE, (flags))                                                   \
+          ? (TEST(FRAG_SHARED, (flags)) ? sizeof(trace_t) : sizeof(private_trace_t)) \
+          : (TEST(FRAG_SHARED, (flags)) ? sizeof(fragment_t)                         \
+                                        : sizeof(private_fragment_t))) +             \
+     (TEST(FRAG_HAS_TRANSLATION_INFO, flags) ? sizeof(translation_info_t *) : 0))
 
-#define FRAGMENT_EXIT_STUBS(f) \
-   (TEST(FRAG_FAKE, (f)->flags) ? \
-    (ASSERT(false && "fake fragment_t has no exit stubs!"), (linkstub_t *)NULL) : \
-    ((linkstub_t *)(((byte*)(f)) + FRAGMENT_STRUCT_SIZE((f)->flags))))
+#define FRAGMENT_EXIT_STUBS(f)                                                         \
+    (TEST(FRAG_FAKE, (f)->flags)                                                       \
+         ? (ASSERT(false && "fake fragment_t has no exit stubs!"), (linkstub_t *)NULL) \
+         : ((linkstub_t *)(((byte *)(f)) + FRAGMENT_STRUCT_SIZE((f)->flags))))
 
 /* selfmod copy size is stored at very end of fragment space */
-#define FRAGMENT_SELFMOD_COPY_SIZE(f)                \
-  (ASSERT(TEST(FRAG_SELFMOD_SANDBOXED, (f)->flags)), \
-   (*((uint *)((f)->start_pc + (f)->size - sizeof(uint)))))
-#define FRAGMENT_SELFMOD_COPY_PC(f)                  \
-  (ASSERT(TEST(FRAG_SELFMOD_SANDBOXED, (f)->flags)), \
-   ((f)->start_pc + (f)->size - FRAGMENT_SELFMOD_COPY_SIZE(f)))
+#define FRAGMENT_SELFMOD_COPY_SIZE(f)                  \
+    (ASSERT(TEST(FRAG_SELFMOD_SANDBOXED, (f)->flags)), \
+     (*((uint *)((f)->start_pc + (f)->size - sizeof(uint)))))
+#define FRAGMENT_SELFMOD_COPY_PC(f)                    \
+    (ASSERT(TEST(FRAG_SELFMOD_SANDBOXED, (f)->flags)), \
+     ((f)->start_pc + (f)->size - FRAGMENT_SELFMOD_COPY_SIZE(f)))
 
-#define FRAGMENT_TRANSLATION_INFO_ADDR(f) \
-  (TEST(FRAG_HAS_TRANSLATION_INFO, (f)->flags) ? \
-   ((translation_info_t **)(((byte*)(f)) + FRAGMENT_STRUCT_SIZE((f)->flags) \
-                            - sizeof(translation_info_t*))) : \
-    ((INTERNAL_OPTION(safe_translate_flushed) && TEST(FRAG_WAS_DELETED, (f)->flags)) ? \
-     &((f)->in_xlate.translation_info) : NULL))
+#define FRAGMENT_TRANSLATION_INFO_ADDR(f)                                              \
+    (TEST(FRAG_HAS_TRANSLATION_INFO, (f)->flags)                                       \
+         ? ((translation_info_t **)(((byte *)(f)) + FRAGMENT_STRUCT_SIZE((f)->flags) - \
+                                    sizeof(translation_info_t *)))                     \
+         : ((INTERNAL_OPTION(safe_translate_flushed) &&                                \
+             TEST(FRAG_WAS_DELETED, (f)->flags))                                       \
+                ? &((f)->in_xlate.translation_info)                                    \
+                : NULL))
 
-#define HAS_STORED_TRANSLATION_INFO(f) \
-  (TEST(FRAG_HAS_TRANSLATION_INFO, (f)->flags) || \
-   (INTERNAL_OPTION(safe_translate_flushed) && TEST(FRAG_WAS_DELETED, (f)->flags)))
+#define HAS_STORED_TRANSLATION_INFO(f)              \
+    (TEST(FRAG_HAS_TRANSLATION_INFO, (f)->flags) || \
+     (INTERNAL_OPTION(safe_translate_flushed) && TEST(FRAG_WAS_DELETED, (f)->flags)))
 
 #define FRAGMENT_TRANSLATION_INFO(f) \
-  (HAS_STORED_TRANSLATION_INFO(f) ? (*(FRAGMENT_TRANSLATION_INFO_ADDR(f))) : NULL)
+    (HAS_STORED_TRANSLATION_INFO(f) ? (*(FRAGMENT_TRANSLATION_INFO_ADDR(f))) : NULL)
 
 /* Returns the end of the fragment body + any local stubs (excluding selfmod copy) */
 cache_pc
@@ -576,9 +577,8 @@ get_total_linkcount(fragment_t *f);
 #endif
 
 fragment_t *
-fragment_create(dcontext_t *dcontext, app_pc tag,
-                int body_size, int direct_exits, int indirect_exits,
-                int exits_size, uint flags);
+fragment_create(dcontext_t *dcontext, app_pc tag, int body_size, int direct_exits,
+                int indirect_exits, int exits_size, uint flags);
 
 /* Creates a new fragment_t+linkstubs from the passed-in fragment and
  * fills in linkstub_t and fragment_t fields, copying the fcache-related fields
@@ -606,16 +606,16 @@ fragment_copy_data_fields(dcontext_t *dcontext, fragment_t *f_src, fragment_t *f
  * N.B.: these are NEGATIVE since callers care what's NOT done
  */
 enum {
-    FRAGDEL_ALL               = 0x000,
-    FRAGDEL_NO_OUTPUT         = 0x001,
-    FRAGDEL_NO_UNLINK         = 0x002,
-    FRAGDEL_NO_HTABLE         = 0x004,
-    FRAGDEL_NO_FCACHE         = 0x008,
-    FRAGDEL_NO_HEAP           = 0x010,
-    FRAGDEL_NO_MONITOR        = 0x020,
-    FRAGDEL_NO_VMAREA         = 0x040,
+    FRAGDEL_ALL = 0x000,
+    FRAGDEL_NO_OUTPUT = 0x001,
+    FRAGDEL_NO_UNLINK = 0x002,
+    FRAGDEL_NO_HTABLE = 0x004,
+    FRAGDEL_NO_FCACHE = 0x008,
+    FRAGDEL_NO_HEAP = 0x010,
+    FRAGDEL_NO_MONITOR = 0x020,
+    FRAGDEL_NO_VMAREA = 0x040,
 
-    FRAGDEL_NEED_CHLINK_LOCK  = 0x080,
+    FRAGDEL_NEED_CHLINK_LOCK = 0x080,
 };
 void
 fragment_delete(dcontext_t *dcontext, fragment_t *f, uint actions);
@@ -678,7 +678,7 @@ fragment_pclookup(dcontext_t *dcontext, cache_pc pc, fragment_t *wrapper);
  */
 fragment_t *
 fragment_pclookup_with_linkstubs(dcontext_t *dcontext, cache_pc pc,
-                                 /*OUT*/bool *alloc);
+                                 /*OUT*/ bool *alloc);
 
 #ifdef DEBUG
 fragment_t *
@@ -713,8 +713,8 @@ fragment_add_after_call(dcontext_t *dcontext, app_pc tag);
 void
 fragment_flush_after_call(dcontext_t *dcontext, app_pc tag);
 uint
-invalidate_after_call_target_range(dcontext_t *dcontext, 
-                                   app_pc text_start, app_pc text_end);
+invalidate_after_call_target_range(dcontext_t *dcontext, app_pc text_start,
+                                   app_pc text_end);
 #endif /* RETURN_AFTER_CALL */
 
 #if defined(RETURN_AFTER_CALL) || defined(RCT_IND_BRANCH)
@@ -733,9 +733,9 @@ struct _rct_module_table_t {
     app_pc live_max;
 };
 
-# ifdef LINUX
+#    ifdef LINUX
 extern rct_module_table_t rct_global_table;
-# endif
+#    endif
 
 void
 rct_module_table_free(dcontext_t *dcontext, rct_module_table_t *permod, app_pc modpc);
@@ -748,8 +748,7 @@ void
 rct_module_table_persisted_invalidate(dcontext_t *dcontext, app_pc modpc);
 
 bool
-rct_module_persisted_table_exists(dcontext_t *dcontext, app_pc modpc,
-                                  rct_type_t which);
+rct_module_persisted_table_exists(dcontext_t *dcontext, app_pc modpc, rct_type_t which);
 
 uint
 rct_module_live_entries(dcontext_t *dcontext, app_pc modpc, rct_type_t which);
@@ -830,38 +829,37 @@ fragment_coarse_htable_free(coarse_info_t *info);
  */
 void
 fragment_coarse_htable_merge(dcontext_t *dcontext, coarse_info_t *dst,
-                             coarse_info_t *info1, coarse_info_t *info2,
-                             bool add_info2, bool add_th_htable);
+                             coarse_info_t *info1, coarse_info_t *info2, bool add_info2,
+                             bool add_th_htable);
 
 uint
 fragment_coarse_num_entries(coarse_info_t *info);
 
 /* Add coarse fragment represented by wrapper f to its hashtable */
 void
-fragment_coarse_add(dcontext_t *dcontext, coarse_info_t *info,
-                    app_pc tag, cache_pc cache);
+fragment_coarse_add(dcontext_t *dcontext, coarse_info_t *info, app_pc tag,
+                    cache_pc cache);
 
 void
-fragment_coarse_th_add(dcontext_t *dcontext, coarse_info_t *info,
-                       app_pc tag, cache_pc cache);
+fragment_coarse_th_add(dcontext_t *dcontext, coarse_info_t *info, app_pc tag,
+                       cache_pc cache);
 
 void
-fragment_coarse_th_unlink_and_add(dcontext_t *dcontext, app_pc tag,
-                                  cache_pc stub_pc, cache_pc body_pc);
+fragment_coarse_th_unlink_and_add(dcontext_t *dcontext, app_pc tag, cache_pc stub_pc,
+                                  cache_pc body_pc);
 
 #ifdef DEBUG
 /* only exported to allow an assert to avoid rank order issues in
  * push_pending_freeze() */
 void
-coarse_body_from_htable_entry(dcontext_t *dcontext, coarse_info_t *info,
-                              app_pc tag, cache_pc res,
-                              cache_pc *stub_pc_out/*OUT*/,
-                              cache_pc *body_pc_out/*OUT*/);
+coarse_body_from_htable_entry(dcontext_t *dcontext, coarse_info_t *info, app_pc tag,
+                              cache_pc res, cache_pc *stub_pc_out /*OUT*/,
+                              cache_pc *body_pc_out /*OUT*/);
 #endif
 
 void
 fragment_coarse_lookup_in_unit(dcontext_t *dcontext, coarse_info_t *info, app_pc tag,
-                               cache_pc *stub_pc/*OUT*/, cache_pc *body_pc/*OUT*/);
+                               cache_pc *stub_pc /*OUT*/, cache_pc *body_pc /*OUT*/);
 
 cache_pc
 fragment_coarse_lookup(dcontext_t *dcontext, app_pc tag);
@@ -873,8 +871,8 @@ fragment_t *
 fragment_coarse_lookup_wrapper(dcontext_t *dcontext, app_pc tag, fragment_t *wrapper);
 
 fragment_t *
-fragment_lookup_fine_and_coarse(dcontext_t *dcontext, app_pc tag,
-                                fragment_t *wrapper, linkstub_t *last_exit);
+fragment_lookup_fine_and_coarse(dcontext_t *dcontext, app_pc tag, fragment_t *wrapper,
+                                linkstub_t *last_exit);
 
 fragment_t *
 fragment_lookup_fine_and_coarse_sharing(dcontext_t *dcontext, app_pc tag,
@@ -898,27 +896,25 @@ fragment_coarse_replace(dcontext_t *dcontext, coarse_info_t *info, app_pc tag,
  */
 app_pc
 fragment_coarse_pclookup(dcontext_t *dcontext, coarse_info_t *info, cache_pc pc,
-                         /*OUT*/cache_pc *body);
+                         /*OUT*/ cache_pc *body);
 
 /* Returns the tag for the coarse fragment whose body _begins at_ pc */
 app_pc
-fragment_coarse_entry_pclookup(dcontext_t *dcontext, coarse_info_t *info,
-                               cache_pc pc);
+fragment_coarse_entry_pclookup(dcontext_t *dcontext, coarse_info_t *info, cache_pc pc);
 
 void
-fragment_coarse_unit_freeze(dcontext_t *dcontext,
-                            coarse_freeze_info_t *freeze_info);
+fragment_coarse_unit_freeze(dcontext_t *dcontext, coarse_freeze_info_t *freeze_info);
 
 uint
 fragment_coarse_htable_persist_size(dcontext_t *dcontext, coarse_info_t *info,
                                     bool cache_table);
 
 bool
-fragment_coarse_htable_persist(dcontext_t *dcontext,  coarse_info_t *info,
+fragment_coarse_htable_persist(dcontext_t *dcontext, coarse_info_t *info,
                                bool cache_table, file_t fd);
 
 void
-fragment_coarse_htable_resurrect(dcontext_t *dcontext,  coarse_info_t *info,
+fragment_coarse_htable_resurrect(dcontext_t *dcontext, coarse_info_t *info,
                                  bool cache_table, byte *mapped_table);
 
 /*******************************************************************************/
@@ -927,9 +923,9 @@ void
 fragment_output(dcontext_t *dcontext, fragment_t *f);
 
 bool
-fragment_overlaps(dcontext_t *dcontext, fragment_t *f,
-                  byte *region_start, byte *region_end, bool page_only,
-                  overlap_info_t *info_res, app_pc *bb_tag);
+fragment_overlaps(dcontext_t *dcontext, fragment_t *f, byte *region_start,
+                  byte *region_end, bool page_only, overlap_info_t *info_res,
+                  app_pc *bb_tag);
 
 bool
 is_self_flushing(void);
@@ -981,7 +977,7 @@ get_at_syscall(dcontext_t *dcontext);
  * should be used (they MUST be used together). If no executable area removal
  * is needed use flush_fragments_from_region().
  *
- * Alternatively, the trio (also not usable individually) 
+ * Alternatively, the trio (also not usable individually)
  *   1) flush_fragments_synch_unlink_priv
  *   2) flush_fragments_unlink_shared
  *   3) flush_fragments_end_synch
@@ -1025,8 +1021,8 @@ flush_fragments_end_synch(dcontext_t *dcontext, bool keep_initexit_lock);
 void
 flush_fragments_in_region_start(dcontext_t *dcontext, app_pc base, size_t size,
                                 bool own_initexit_lock, bool free_futures,
-                                bool exec_invalid, bool force_synchall
-                                _IF_DGCDIAG(app_pc written_pc));
+                                bool exec_invalid,
+                                bool force_synchall _IF_DGCDIAG(app_pc written_pc));
 
 void
 flush_fragments_in_region_finish(dcontext_t *dcontext, bool keep_initexit_lock);
@@ -1057,8 +1053,8 @@ invalidate_code_cache(void);
  * toflush needs to be thread-private.
  */
 void
-flush_vmvector_regions(dcontext_t *dcontext, vm_area_vector_t *toflush,
-                       bool free_futures, bool exec_invalid);
+flush_vmvector_regions(dcontext_t *dcontext, vm_area_vector_t *toflush, bool free_futures,
+                       bool exec_invalid);
 
 /*
  ****************************************************************************/
@@ -1092,13 +1088,13 @@ void
 print_shared_stats(void);
 #endif
 
-#define PROTECT_FRAGMENT_ENABLED(flags) \
-    (TEST(FRAG_SHARED, (flags)) ?                         \
-     TEST(SELFPROT_GLOBAL, dynamo_options.protect_mask) : \
-     TEST(SELFPROT_LOCAL, dynamo_options.protect_mask))
+#define PROTECT_FRAGMENT_ENABLED(flags)                                              \
+    (TEST(FRAG_SHARED, (flags)) ? TEST(SELFPROT_GLOBAL, dynamo_options.protect_mask) \
+                                : TEST(SELFPROT_LOCAL, dynamo_options.protect_mask))
 
 #ifdef DEBUG
-void study_all_hashtables(dcontext_t *dcontext);
+void
+study_all_hashtables(dcontext_t *dcontext);
 #endif /* DEBUG */
 
 #ifdef HASHTABLE_STATISTICS
@@ -1107,16 +1103,13 @@ int
 append_ib_trace_last_ibl_exit_stat(dcontext_t *dcontext, instrlist_t *trace,
                                    app_pc speculate_next_tag);
 
-static INLINE_ONCE 
-hashtable_statistics_t*
+static INLINE_ONCE hashtable_statistics_t *
 get_ibl_per_type_statistics(dcontext_t *dcontext, ibl_branch_type_t branch_type)
 {
-    per_thread_t *pt = (per_thread_t *) dcontext->fragment_field;
-    return &pt->trace_ibt[branch_type].unprot_stats->
-        trace_ibl_stats[branch_type];
+    per_thread_t *pt = (per_thread_t *)dcontext->fragment_field;
+    return &pt->trace_ibt[branch_type].unprot_stats->trace_ibl_stats[branch_type];
 }
 #endif /* HASHTABLE_STATISTICS */
-
 
 /* DR_API EXPORT TOFILE dr_tools.h */
 /* DR_API EXPORT BEGIN */
@@ -1154,9 +1147,9 @@ get_ibl_per_type_statistics(dcontext_t *dcontext, ibl_branch_type_t branch_type)
 </pre>
  */
 typedef struct _tracedump_file_header_t {
-    int version;           /**< The DynamoRIO version that created the file. */
-    bool x64;              /**< Whether a 64-bit DynamoRIO library created the file. */
-    int linkcount_size;    /**< Size of the linkcount (linkcounts are deprecated). */
+    int version;        /**< The DynamoRIO version that created the file. */
+    bool x64;           /**< Whether a 64-bit DynamoRIO library created the file. */
+    int linkcount_size; /**< Size of the linkcount (linkcounts are deprecated). */
 } tracedump_file_header_t;
 
 /** Header for an individual trace in a binary trace dump file. */
@@ -1172,14 +1165,14 @@ typedef struct _tracedump_trace_header_t {
 } tracedump_trace_header_t;
 
 /** Size of tag + bb_code_size fields for each bb. */
-#define BB_ORIGIN_HEADER_SIZE (sizeof(app_pc)+sizeof(int))
+#define BB_ORIGIN_HEADER_SIZE (sizeof(app_pc) + sizeof(int))
 
 /**< tracedump_stub_data_t.stub_size will not exceed this value. */
 #define SEPARATE_STUB_MAX_SIZE IF_X64_ELSE(23, 15)
 
 /** The format of a stub in a trace dump file. */
 typedef struct _tracedump_stub_data {
-    int cti_offs;   /**< Offset from the start of the fragment. */
+    int cti_offs; /**< Offset from the start of the fragment. */
     /* stub_pc is an absolute address, since can be separate from body. */
     app_pc stub_pc; /**< Code cache address of the stub. */
     app_pc target;  /**< Target of the stub. */
@@ -1187,16 +1180,16 @@ typedef struct _tracedump_stub_data {
     int stub_size;  /**< Length of stub_code array */
     /****** the rest of the fields are optional and may not be present! ******/
     union {
-        uint count32; /**< 32-bit exit execution count. */
+        uint count32;   /**< 32-bit exit execution count. */
         uint64 count64; /**< 64-bit exit execution count. */
-    } count; /**< Which field is present depends on the first entry in
-              * the file, which indicates the linkcount size. */
+    } count;            /**< Which field is present depends on the first entry in
+                         * the file, which indicates the linkcount size. */
     /** Code for exit stubs.  Only present if:
      *   stub_pc < cache_start_pc ||
-     *   stub_pc >= cache_start_pc+code_size). 
+     *   stub_pc >= cache_start_pc+code_size).
      * The actual size of the array varies and is indicated by the stub_size field.
      */
-    byte stub_code[1/*variable-sized*/];
+    byte stub_code[1 /*variable-sized*/];
 } tracedump_stub_data_t;
 
 /** The last offset into tracedump_stub_data_t of always-present fields. */

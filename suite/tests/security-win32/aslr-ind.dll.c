@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -37,7 +37,7 @@
 
 typedef int (*fiptr)();
 
-#define NAKED __declspec( naked ) 
+#define NAKED __declspec(naked)
 
 /* could be an export but instead is address taken callback */
 NAKED
@@ -48,7 +48,7 @@ funny_target()
     __asm {
         mov eax,1
         jmp over
-        mov eax,2               /* bad target */
+        mov eax,2 /* bad target */
 over:
         add eax,eax
         add eax,eax
@@ -58,25 +58,20 @@ over:
     }
 }
 
-fiptr
-__declspec(dllexport)
-giveme_target(int arg)
+fiptr __declspec(dllexport) giveme_target(int arg)
 {
     print("ready to go %d\n", arg);
     return funny_target;
 }
 
-void
-__declspec(dllexport)
-precious(void)
+void __declspec(dllexport) precious(void)
 {
     print("PRECIOUS in a DLL, ATTACK SUCCESSFUL!\n");
     /* stack not clean have to stop here */
     exit(1);
 }
 
-
-BOOL APIENTRY 
+BOOL APIENTRY
 DllMain(HANDLE hModule, DWORD reason_for_call, LPVOID Reserved)
 {
     switch (reason_for_call) {

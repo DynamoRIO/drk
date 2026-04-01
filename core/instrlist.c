@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -43,22 +43,22 @@
 
 #ifdef DEBUG
 /* case 10450: give messages to clients */
-# undef ASSERT /* N.B.: if have issues w/ DYNAMO_OPTION, re-instate */
-# undef ASSERT_TRUNCATE
-# undef ASSERT_BITFIELD_TRUNCATE
-# undef ASSERT_NOT_REACHED
-# define ASSERT DO_NOT_USE_ASSERT_USE_CLIENT_ASSERT_INSTEAD
-# define ASSERT_TRUNCATE DO_NOT_USE_ASSERT_USE_CLIENT_ASSERT_INSTEAD
-# define ASSERT_BITFIELD_TRUNCATE DO_NOT_USE_ASSERT_USE_CLIENT_ASSERT_INSTEAD
-# define ASSERT_NOT_REACHED DO_NOT_USE_ASSERT_USE_CLIENT_ASSERT_INSTEAD
+#    undef ASSERT /* N.B.: if have issues w/ DYNAMO_OPTION, re-instate */
+#    undef ASSERT_TRUNCATE
+#    undef ASSERT_BITFIELD_TRUNCATE
+#    undef ASSERT_NOT_REACHED
+#    define ASSERT DO_NOT_USE_ASSERT_USE_CLIENT_ASSERT_INSTEAD
+#    define ASSERT_TRUNCATE DO_NOT_USE_ASSERT_USE_CLIENT_ASSERT_INSTEAD
+#    define ASSERT_BITFIELD_TRUNCATE DO_NOT_USE_ASSERT_USE_CLIENT_ASSERT_INSTEAD
+#    define ASSERT_NOT_REACHED DO_NOT_USE_ASSERT_USE_CLIENT_ASSERT_INSTEAD
 #endif
 
 /* returns an empty instrlist_t object */
-instrlist_t*
+instrlist_t *
 instrlist_create(dcontext_t *dcontext)
 {
-    instrlist_t *ilist = (instrlist_t*) heap_alloc(dcontext, sizeof(instrlist_t)
-                                               HEAPACCT(ACCT_IR));
+    instrlist_t *ilist =
+        (instrlist_t *)heap_alloc(dcontext, sizeof(instrlist_t) HEAPACCT(ACCT_IR));
     CLIENT_ASSERT(ilist != NULL, "instrlist_create: allocation error");
     instrlist_init(ilist);
     return ilist;
@@ -70,7 +70,7 @@ instrlist_init(instrlist_t *ilist)
 {
     CLIENT_ASSERT(ilist != NULL, "instrlist_create: NULL parameter");
     ilist->first = ilist->last = NULL;
-    ilist->flags = 0;   /* no flags set */
+    ilist->flags = 0; /* no flags set */
     ilist->translation_target = NULL;
 }
 
@@ -98,8 +98,8 @@ instrlist_clear(dcontext_t *dcontext, instrlist_t *ilist)
 void
 instrlist_clear_and_destroy(dcontext_t *dcontext, instrlist_t *ilist)
 {
-    instrlist_clear(dcontext,ilist);
-    instrlist_destroy(dcontext,ilist);
+    instrlist_clear(dcontext, ilist);
+    instrlist_destroy(dcontext, ilist);
 }
 
 /* All future Instrs inserted into ilist that do not have raw bits
@@ -133,14 +133,14 @@ instrlist_get_our_mangling(instrlist_t *ilist)
 }
 
 /* returns the first inst in the list */
-instr_t*
+instr_t *
 instrlist_first(instrlist_t *ilist)
 {
     return ilist->first;
 }
 
 /* returns the last inst in the list */
-instr_t*
+instr_t *
 instrlist_last(instrlist_t *ilist)
 {
     return ilist->last;
@@ -175,8 +175,7 @@ instrlist_append(instrlist_t *ilist, instr_t *inst)
         instr_set_next(ilist->last, top);
         instr_set_prev(top, ilist->last);
         ilist->last = bot;
-    } 
-    else {
+    } else {
         ilist->first = top;
         ilist->last = bot;
     }
@@ -201,13 +200,11 @@ instrlist_prepend(instrlist_t *ilist, instr_t *inst)
         instr_set_next(bot, ilist->first);
         instr_set_prev(ilist->first, bot);
         ilist->first = top;
-    } 
-    else {
+    } else {
         ilist->first = top;
         ilist->last = bot;
     }
 }
-
 
 /* inserts "inst" before "where" ("inst" can be a chain of insts) */
 void
@@ -236,8 +233,7 @@ instrlist_preinsert(instrlist_t *ilist, instr_t *where, instr_t *inst)
     if (whereprev) {
         instr_set_next(whereprev, top);
         instr_set_prev(top, whereprev);
-    }
-    else {
+    } else {
         ilist->first = top;
     }
     instr_set_next(bot, where);
@@ -274,15 +270,14 @@ instrlist_postinsert(instrlist_t *ilist, instr_t *where, instr_t *inst)
     if (wherenext) {
         instr_set_next(bot, wherenext);
         instr_set_prev(wherenext, bot);
-    }
-    else {
+    } else {
         ilist->last = bot;
     }
 }
 
-/* replace oldinst with newinst, remove oldinst from ilist, and return oldinst 
+/* replace oldinst with newinst, remove oldinst from ilist, and return oldinst
    (newinst can be a chain of insts) */
-instr_t*
+instr_t *
 instrlist_replace(instrlist_t *ilist, instr_t *oldinst, instr_t *newinst)
 {
     instr_t *where;
@@ -318,7 +313,7 @@ instrlist_remove(instrlist_t *ilist, instr_t *inst)
     instr_set_next(inst, NULL);
 }
 
-instrlist_t*
+instrlist_t *
 instrlist_clone(dcontext_t *dcontext, instrlist_t *old)
 {
     instr_t *inst, *copy;
@@ -334,7 +329,7 @@ instrlist_clone(dcontext_t *dcontext, instrlist_t *old)
     }
 
     /* Fix up instr src if it is an instr and restore note field */
-    /* Note: we do not allows instruction update code cache, 
+    /* Note: we do not allows instruction update code cache,
      * which is very dangerous.
      * So we do not support instr as dst opnd and won't fix up here if any.
      */
@@ -344,21 +339,18 @@ instrlist_clone(dcontext_t *dcontext, instrlist_t *old)
         int i;
         for (i = 0; i < inst->num_srcs; i++) {
             instr_t *tgt;
-            opnd_t   op = instr_get_src(copy, i);
+            opnd_t op = instr_get_src(copy, i);
             if (!opnd_is_instr(op))
                 continue;
             CLIENT_ASSERT(opnd_get_instr(op) != NULL,
                           "instrlist_clone: NULL instr operand");
-            tgt = (instr_t *) instr_get_note(opnd_get_instr(op));
-            CLIENT_ASSERT(tgt != NULL,
-                          "instrlist_clone: operand instr not in instrlist");
+            tgt = (instr_t *)instr_get_note(opnd_get_instr(op));
+            CLIENT_ASSERT(tgt != NULL, "instrlist_clone: operand instr not in instrlist");
             if (opnd_is_far_instr(op)) {
                 instr_set_src(copy, i,
-                              opnd_create_far_instr
-                              (opnd_get_segment_selector(op), tgt));
+                              opnd_create_far_instr(opnd_get_segment_selector(op), tgt));
             } else
-                instr_set_src(copy, i,
-                              opnd_create_instr(tgt));     
+                instr_set_src(copy, i, opnd_create_instr(tgt));
         }
     }
     for (inst = instrlist_first(old), copy = instrlist_first(newlist);
@@ -371,33 +363,33 @@ instrlist_clone(dcontext_t *dcontext, instrlist_t *old)
     return newlist;
 }
 
-
 /*
  * puts a whole list (prependee) onto the front of ilist
  * frees prependee when done because it will contain nothing useful
  */
-  
+
 void
-instrlist_prepend_instrlist(dcontext_t *dcontext,instrlist_t *ilist,
+instrlist_prepend_instrlist(dcontext_t *dcontext, instrlist_t *ilist,
                             instrlist_t *prependee)
 {
-    instr_t *first=instrlist_first(prependee);
+    instr_t *first = instrlist_first(prependee);
     if (!first)
         return;
-    instrlist_prepend(ilist,first);
+    instrlist_prepend(ilist, first);
     instrlist_init(prependee);
-    instrlist_destroy(dcontext,prependee);
+    instrlist_destroy(dcontext, prependee);
 }
 
-void instrlist_append_instrlist(dcontext_t *dcontext,instrlist_t *ilist,
-                                instrlist_t *appendee)
+void
+instrlist_append_instrlist(dcontext_t *dcontext, instrlist_t *ilist,
+                           instrlist_t *appendee)
 {
-    instr_t *first=instrlist_first(appendee);
+    instr_t *first = instrlist_first(appendee);
     if (!first)
         return;
-    instrlist_append(ilist,first);
+    instrlist_append(ilist, first);
     instrlist_init(appendee);
-    instrlist_destroy(dcontext,appendee);
+    instrlist_destroy(dcontext, appendee);
 }
 
 int

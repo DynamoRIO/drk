@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -33,7 +33,7 @@
 /* C++ sample client:
  * stl_test.cpp
  *
- * Some simple tests with C++ STL containers to make sure they 
+ * Some simple tests with C++ STL containers to make sure they
  * work with a DR client.
  */
 
@@ -43,7 +43,6 @@
 #include <map>
 
 using namespace std;
-
 
 DR_EXPORT void
 dr_init(client_id_t client_id)
@@ -58,19 +57,19 @@ dr_init(client_id_t client_id)
     dr_printf("testing vector...");
 #endif
 
-    vector<int>* v = new vector<int>();
-    for (i=0; i<5; i++) {
+    vector<int> *v = new vector<int>();
+    for (i = 0; i < 5; i++) {
         v->push_back(i);
     }
-    
-    for (i=0; i<5; i++) {
+
+    for (i = 0; i < 5; i++) {
 #ifdef SHOW_RESULTS
         dr_printf("%d ", (*v)[i]);
 #endif
         if ((*v)[i] != i) {
             success = false;
         }
-    }    
+    }
     delete v;
 
     //
@@ -81,7 +80,7 @@ dr_init(client_id_t client_id)
 #endif
 
     list<int> l;
-    for (i=0; i<5; i++) {
+    for (i = 0; i < 5; i++) {
         l.push_back(i);
     }
 
@@ -103,12 +102,12 @@ dr_init(client_id_t client_id)
     dr_printf("\ntesting map...");
 #endif
 
-    map<int,int> m;
-    for (i=0; i<5; i++) {
+    map<int, int> m;
+    for (i = 0; i < 5; i++) {
         m[i] = i;
     }
 
-    for (i=0; i<5; i++) {
+    for (i = 0; i < 5; i++) {
 #ifdef SHOW_RESULTS
         dr_printf("%d ", m[i]);
 #endif
@@ -122,18 +121,17 @@ dr_init(client_id_t client_id)
     //
 #ifdef SHOW_RESULTS
     if (success) {
-# ifdef WINDOWS
+#    ifdef WINDOWS
         dr_messagebox("SUCCESS");
-# else
+#    else
         dr_printf("\nSUCCESS\n");
-# endif
-    }
-    else {
-# ifdef WINDOWS
+#    endif
+    } else {
+#    ifdef WINDOWS
         dr_messagebox("FAILURE");
-# else
+#    else
         dr_printf("\nFAILURE\n");
-# endif
+#    endif
     }
 #endif
 }

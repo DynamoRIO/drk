@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -43,25 +43,27 @@
 typedef void (*funcptr)();
 
 void
-foo() 
+foo()
 {
     print("foo\n");
 }
 
 void
-bar() 
+bar()
 {
     print("bar\n");
 }
 
 void
-func1() 
+func1()
 {
     print("bar\n");
 }
 
 #pragma code_seg(".mycode1")
-void func2() { 
+void
+func2()
+{
     print("func2\n");
 }
 
@@ -74,17 +76,21 @@ funcptr f2 = &func2;
  * #pragma code_seg(push, r1, ".mycode2")
  */
 #pragma code_seg(".mycode2")
-void func3() { 
+void
+func3()
+{
     print("calling f2\n");
     (*f2)();
     print("func3\n");
 }
 
-#pragma code_seg(".mycode1")      /* back to my_code1 */
-void func4() {
+#pragma code_seg(".mycode1") /* back to my_code1 */
+void
+func4()
+{
     print("func4\n");
 }
-#pragma code_seg()                /* back in .text */
+#pragma code_seg() /* back in .text */
 
 const funcptr cf = &foo;
 funcptr f = &foo;
@@ -95,7 +101,7 @@ funcptr f4 = &func4;
 #pragma data_seg()
 
 void
-dlltest(void) 
+dlltest(void)
 {
     print("dlltest\n");
     f();
@@ -109,11 +115,8 @@ dlltest(void)
     f4();
 }
 
-
 /* our Makefile expects a .lib */
-int
-__declspec(dllexport)
-data_attack(int arg)
+int __declspec(dllexport) data_attack(int arg)
 {
     print("data_attack\n");
     /* FIXME: will do this some other time */
@@ -121,14 +124,11 @@ data_attack(int arg)
     return 1;
 }
 
-BOOL APIENTRY 
+BOOL APIENTRY
 DllMain(HANDLE hModule, DWORD reason_for_call, LPVOID Reserved)
 {
     switch (reason_for_call) {
-    case DLL_PROCESS_ATTACH:
-        dlltest();
-
-        break;
+    case DLL_PROCESS_ATTACH: dlltest(); break;
     }
     return TRUE;
 }

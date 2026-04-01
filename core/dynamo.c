@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -50,13 +50,13 @@
 #include "monitor.h"
 #include "vmareas.h"
 #ifdef SIDELINE
-# include "sideline.h"
+#    include "sideline.h"
 #endif
 #ifdef PAPI
-# include "perfctr.h"
+#    include "perfctr.h"
 #endif
 #ifdef CLIENT_INTERFACE
-# include "instrument.h"
+#    include "instrument.h"
 #endif
 #include "hotpatch.h"
 #include "moduledb.h"
@@ -64,36 +64,36 @@
 #include "synch.h"
 #include "string_wrapper.h"
 #ifdef LINUX_KERNEL
-#include "dynamorio_module_interface.h"
-#include "kernel_interface.h"
-#include "msr.h"
+#    include "dynamorio_module_interface.h"
+#    include "kernel_interface.h"
+#    include "msr.h"
 #endif
 
 #ifdef WINDOWS
 /* for close handle, duplicate handle, free memory and constants associated with them */
 /* also for nt_terminate_process_for_app() */
-#include "ntdll.h"
-#include "nudge.h" /* to get generic_nudge_target() address for an assert */
+#    include "ntdll.h"
+#    include "nudge.h" /* to get generic_nudge_target() address for an assert */
 #endif
 
 #ifdef RCT_IND_BRANCH
-#  include "rct.h"
+#    include "rct.h"
 #endif
 
 #include "perscache.h"
 
 #ifdef VMX86_SERVER
-#  include "vmkuw.h"
+#    include "vmkuw.h"
 #endif
 
 /* global thread-shared variables */
-bool    dynamo_initialized = false;
-bool    dynamo_heap_initialized = false;
-bool    automatic_startup = false;
-bool    control_all_threads = false;
+bool dynamo_initialized = false;
+bool dynamo_heap_initialized = false;
+bool automatic_startup = false;
+bool control_all_threads = false;
 #ifdef WINDOWS
-bool    dr_early_injected = false;
-int     dr_early_injected_location = INJECT_LOCATION_Invalid;
+bool dr_early_injected = false;
+int dr_early_injected_location = INJECT_LOCATION_Invalid;
 
 /* should be set if we are controlling the primary thread, either by
  * injecting initially (!dr_injected_secondary_thread), or by retaking
@@ -101,45 +101,45 @@ int     dr_early_injected_location = INJECT_LOCATION_Invalid;
  * purposes, yet can't rely on !dr_injected_secondary_thread very
  * early in the process
  */
-bool    dr_injected_primary_thread = false;
-bool    dr_injected_secondary_thread = false;
+bool dr_injected_primary_thread = false;
+bool dr_injected_secondary_thread = false;
 
 /* should be set once we retakeover the primary thread for -inject_primary */
-bool    dr_late_injected_primary_thread = false;
+bool dr_late_injected_primary_thread = false;
 #endif /* WINDOWS */
 #ifdef DR_APP_EXPORTS
 /* flags to indicate when DR is being initialized / exited using the API */
-bool    dr_api_entry = false;
-bool    dr_api_exit  = false;
+bool dr_api_entry = false;
+bool dr_api_exit = false;
 #endif
 #ifdef RETURN_AFTER_CALL
-bool    dr_preinjected = false;
+bool dr_preinjected = false;
 #endif /* RETURN_AFTER_CALL */
 #ifdef LINUX
 static bool dynamo_exiting = false;
 #endif
-bool    dynamo_exited = false;
-bool    dynamo_exited_and_cleaned = false;
+bool dynamo_exited = false;
+bool dynamo_exited_and_cleaned = false;
 #ifdef DEBUG
-bool    dynamo_exited_log_and_stats = false;
+bool dynamo_exited_log_and_stats = false;
 #endif
 /* Only used in release build to decide whether synch is needed, justifying
  * its placement in .nspdata.  If we use it for more we should protect it.
  */
 DECLARE_NEVERPROT_VAR(bool dynamo_all_threads_synched, false);
-bool    dynamo_resetting = false;
+bool dynamo_resetting = false;
 #if defined(CLIENT_INTERFACE) || defined(STANDALONE_UNIT_TEST)
-bool    standalone_library = false;
+bool standalone_library = false;
 #endif
 #ifdef LINUX
-bool    post_execve = false;
+bool post_execve = false;
 #endif
 /* initial stack so we don't have to use app's */
-byte *  initstack;
+byte *initstack;
 
 #if defined(WINDOWS) && defined(STACK_GUARD_PAGE)
 /* PR203701: separate stack for error reporting when the dstack is exhausted */
-#define EXCEPTION_STACK_SIZE (2 * PAGE_SIZE)
+#    define EXCEPTION_STACK_SIZE (2 * PAGE_SIZE)
 DECLARE_NEVERPROT_VAR(byte *exception_stack, NULL);
 #endif
 
@@ -154,22 +154,24 @@ dynamo_thread_exit_pre_client(dcontext_t *dcontext, thread_id_t id);
 START_DATA_SECTION(NEVER_PROTECTED_SECTION, "w");
 
 /* spinlock used in assembly trampolines when we can't spare registers for more */
-mutex_t initstack_mutex VAR_IN_SECTION(NEVER_PROTECTED_SECTION)
-     = INIT_SPINLOCK_FREE(initstack_mutex);
-byte * initstack_app_xsp VAR_IN_SECTION(NEVER_PROTECTED_SECTION) = 0;
+mutex_t initstack_mutex VAR_IN_SECTION(NEVER_PROTECTED_SECTION) =
+    INIT_SPINLOCK_FREE(initstack_mutex);
+byte *initstack_app_xsp VAR_IN_SECTION(NEVER_PROTECTED_SECTION) = 0;
 /* keeps track of how many threads are in cleanup_and_terminate */
 int exiting_thread_count VAR_IN_SECTION(NEVER_PROTECTED_SECTION) = 0;
 
 /* This is unprotected to allow stats to be written while the data
  * segment is still protected (right now the only ones are selfmod stats)
  */
-static dr_statistics_t nonshared_stats VAR_IN_SECTION(NEVER_PROTECTED_SECTION)
-     = {{0},};
+static dr_statistics_t nonshared_stats VAR_IN_SECTION(NEVER_PROTECTED_SECTION) = {
+    { 0 },
+};
 
 /* Each lock protects its corresponding datasec_start, datasec_end, and
  * datasec_writable variables.
  */
-static mutex_t datasec_lock[DATASEC_NUM] VAR_IN_SECTION(NEVER_PROTECTED_SECTION) = {{0}};
+static mutex_t
+    datasec_lock[DATASEC_NUM] VAR_IN_SECTION(NEVER_PROTECTED_SECTION) = { { 0 } };
 
 /* back to normal section */
 END_DATA_SECTION()
@@ -194,7 +196,7 @@ const uint DATASEC_SELFPROT[] = {
     SELFPROT_DATA_CXTSW,
 };
 
-const char * const DATASEC_NAMES[] = {
+const char *const DATASEC_NAMES[] = {
     NEVER_PROTECTED_SECTION,
     RARELY_PROTECTED_SECTION,
     FREQ_PROTECTED_SECTION,
@@ -212,26 +214,28 @@ typedef struct _protect_info_t {
 } protect_info_t;
 static protect_info_t *protect_info;
 
-static void data_section_init(void);
-static void data_section_exit(void);
+static void
+data_section_init(void);
+static void
+data_section_exit(void);
 
 #ifdef DEBUG /*************************/
 
-# ifndef LINUX_KERNEL
-#  include <time.h>
-# endif
+#    ifndef LINUX_KERNEL
+#        include <time.h>
+#    endif
 
 /* FIXME: not all dynamo_options references are #ifdef DEBUG
  * are we trying to hardcode the options for a release build?
  */
-# ifdef LINUX
-#  ifndef LINUX_KERNEL
-   /* linux include files for mmap stuff*/
-#   include <sys/ipc.h>
-#   include "types_wrapper.h"
-#   include <unistd.h>
-#  endif
-# endif
+#    ifdef LINUX
+#        ifndef LINUX_KERNEL
+/* linux include files for mmap stuff*/
+#            include <sys/ipc.h>
+#            include "types_wrapper.h"
+#            include <unistd.h>
+#        endif
+#    endif
 
 static uint starttime;
 
@@ -250,19 +254,18 @@ DECLARE_FREQPROT_VAR(static uint threads_ever_count, 0);
 
 /* FIXME : not static so os.c can hand walk it for dump core */
 /* FIXME: use new generic_table_t and generic_hash_* routines */
-thread_record_t ** all_threads; /* ALL_THREADS_HASH_BITS-bit addressed hash table */
+thread_record_t **all_threads; /* ALL_THREADS_HASH_BITS-bit addressed hash table */
 
 /* these locks are used often enough that we put them in .cspdata: */
 
-/* not static so can be referenced in win32/os.c for SuspendThread handling, 
+/* not static so can be referenced in win32/os.c for SuspendThread handling,
  * FIXME : is almost completely redundant in usage with thread_initexit_lock
  * maybe replace this lock with thread_initexit_lock? */
 DECLARE_CXTSWPROT_VAR(mutex_t all_threads_lock, INIT_LOCK_FREE(all_threads_lock));
-/* used for synch to prevent thread creation/deletion in critical periods 
+/* used for synch to prevent thread creation/deletion in critical periods
  * due to its use for flushing, this lock cannot be held while couldbelinking!
  */
-DECLARE_CXTSWPROT_VAR(mutex_t thread_initexit_lock,
-                      INIT_LOCK_FREE(thread_initexit_lock));
+DECLARE_CXTSWPROT_VAR(mutex_t thread_initexit_lock, INIT_LOCK_FREE(thread_initexit_lock));
 
 /* recursive to handle signals/exceptions while in DR code */
 DECLARE_CXTSWPROT_VAR(static recursive_lock_t thread_in_DR_exclusion,
@@ -301,7 +304,7 @@ statistics_pre_init(void)
     stats->process_id = get_process_id();
 #endif
     strncpy(stats->process_name, get_application_name(), MAXIMUM_PATH);
-    stats->process_name[MAXIMUM_PATH-1] = '\0';
+    stats->process_name[MAXIMUM_PATH - 1] = '\0';
     ASSERT(strlen(stats->process_name) > 0);
     stats->num_stats = 0;
 }
@@ -320,11 +323,11 @@ statistics_init(void)
 #endif
     stats->num_stats = 0
 #ifdef DEBUG
-# define STATS_DEF(desc, name) +1
+#    define STATS_DEF(desc, name) +1
 #else
-# define RSTATS_DEF(desc, name) +1
+#    define RSTATS_DEF(desc, name) +1
 #endif
-# include "statsx.h"
+#include "statsx.h"
 #undef STATS_DEF
 #undef RSTATS_DEF
         ;
@@ -334,17 +337,17 @@ statistics_init(void)
      * not much in release build.
      */
 #ifdef DEBUG
-# define STATS_DEF(desc, statname) \
-    strncpy(stats->statname##_pair.name, #statname, \
-            BUFFER_SIZE_ELEMENTS(stats->statname##_pair.name)); \
-    NULL_TERMINATE_BUFFER(stats->statname##_pair.name);
+#    define STATS_DEF(desc, statname)                               \
+        strncpy(stats->statname##_pair.name, #statname,             \
+                BUFFER_SIZE_ELEMENTS(stats->statname##_pair.name)); \
+        NULL_TERMINATE_BUFFER(stats->statname##_pair.name);
 #else
-# define RSTATS_DEF(desc, statname) \
-    strncpy(stats->statname##_pair.name, #statname, \
-            BUFFER_SIZE_ELEMENTS(stats->statname##_pair.name)); \
-    NULL_TERMINATE_BUFFER(stats->statname##_pair.name);
+#    define RSTATS_DEF(desc, statname)                              \
+        strncpy(stats->statname##_pair.name, #statname,             \
+                BUFFER_SIZE_ELEMENTS(stats->statname##_pair.name)); \
+        NULL_TERMINATE_BUFFER(stats->statname##_pair.name);
 #endif
-# include "statsx.h"
+#include "statsx.h"
 #undef STATS_DEF
 #undef RSTATS_DEF
 }
@@ -376,7 +379,7 @@ dr_pre_smp_init(dr_exports_t *exports, const char *options)
 {
     exports->stats_data = &nonshared_stats;
     exports->stats_size = sizeof(dr_statistics_t);
-    kernel_setenv(DYNAMORIO_VAR_OPTIONS, options); 
+    kernel_setenv(DYNAMORIO_VAR_OPTIONS, options);
     barrier_init(&before_dynamo_app_init, get_num_processors());
     barrier_init(&after_dynamo_app_init, get_num_processors());
     barrier_init(&before_dynamorio_app_take_over, get_num_processors());
@@ -387,17 +390,17 @@ dr_pre_smp_init(dr_exports_t *exports, const char *options)
 void
 cpu_exports_init(dcontext_t *dcontext, dr_cpu_exports_t *exports)
 {
-# ifdef KSTATS
+#    ifdef KSTATS
     if (DYNAMO_OPTION(kstats)) {
         exports->kstats_data = &dcontext->thread_kstats->vars_kstats;
         exports->kstats_size = sizeof(dcontext->thread_kstats->vars_kstats);
     } else {
-# endif
+#    endif
         exports->kstats_data = NULL;
         exports->kstats_size = 0;
-# ifdef KSTATS
+#    ifdef KSTATS
     }
-# endif
+#    endif
 }
 
 void
@@ -417,7 +420,7 @@ dr_smp_init(dr_cpu_exports_t *exports)
          */
         dynamo_thread_init(NULL, NULL _IF_CLIENT_INTERFACE(false));
         ENTERING_DR();
-        //instrument_thread_init(get_thread_private_dcontext(), false, false);
+        // instrument_thread_init(get_thread_private_dcontext(), false, false);
     }
     os_warm_fcache(get_thread_private_dcontext());
     cpu_exports_init(get_thread_private_dcontext(), exports);
@@ -440,22 +443,23 @@ dr_smp_exit(void)
         barrier_destroy(&before_dynamorio_app_take_over);
         barrier_destroy(&main_thread_exit);
         barrier_destroy(&other_threads_exit);
-        IF_DEBUG(res = ) dr_app_cleanup();
+        IF_DEBUG(res =) dr_app_cleanup();
         ASSERT(res == SUCCESS);
         asm volatile("mfence");
         main_thread_exited = true;
     } else {
-        IF_DEBUG(res = ) dynamo_thread_exit();
+        IF_DEBUG(res =) dynamo_thread_exit();
         ASSERT(res == SUCCESS);
         barrier_wait(&other_threads_exit);
     }
-    while (!main_thread_exited) {}
+    while (!main_thread_exited) {
+    }
 }
 #endif
 
 /* initialize per-process dynamo state; this must be called before any
  * threads are created and before any other API calls are made;
- * returns zero on success, non-zero on failure 
+ * returns zero on success, non-zero on failure
  */
 DYNAMORIO_EXPORT int
 dynamorio_app_init(void)
@@ -474,10 +478,10 @@ dynamorio_app_init(void)
         DODEBUG(starttime = query_time_seconds(););
 
 #ifndef LINUX_KERNEL
-#ifdef LINUX
+#    ifdef LINUX
         if (getenv(DYNAMORIO_VAR_EXECVE) != NULL) {
             post_execve = true;
-# ifdef VMX86_SERVER
+#        ifdef VMX86_SERVER
             /* PR 458917: our gdt slot was not cleared on exec so we need to
              * clear it now to ensure we don't leak it and eventually run out of
              * slots.  We could alternatively call os_tls_exit() prior to
@@ -486,25 +490,25 @@ dynamorio_app_init(void)
              * TLS index we had.
              */
             os_tls_pre_init(atoi(getenv(DYNAMORIO_VAR_EXECVE)));
-# endif
+#        endif
             /* important to remove it, don't want to propagate to forked children, etc. */
             unsetenv(DYNAMORIO_VAR_EXECVE);
             /* check that it's gone: we've had problems with unsetenv */
             ASSERT(getenv(DYNAMORIO_VAR_EXECVE) == NULL);
         } else
             post_execve = false;
-#endif
+#    endif
 #endif
 
-        /* default non-zero dynamo settings (options structure is
-         * initialized to 0 automatically)
-         */
+            /* default non-zero dynamo settings (options structure is
+             * initialized to 0 automatically)
+             */
 #ifdef DEBUG
-# ifndef INTERNAL
+#    ifndef INTERNAL
         nonshared_stats.logmask = LOG_ALL_RELEASE;
-# else
+#    else
         nonshared_stats.logmask = LOG_ALL;
-# endif
+#    endif
         statistics_pre_init();
 #endif
 
@@ -529,19 +533,18 @@ dynamorio_app_init(void)
              * N.B.: when checking for no logdir, we check for empty string or
              * first char '<'!
              */
-            strncpy(stats->logdir, "<none (loglevel was 0 on startup)>", MAXIMUM_PATH-1);
-            stats->logdir[MAXIMUM_PATH-1]  = '\0'; /* if max no null */
+            strncpy(stats->logdir, "<none (loglevel was 0 on startup)>",
+                    MAXIMUM_PATH - 1);
+            stats->logdir[MAXIMUM_PATH - 1] = '\0'; /* if max no null */
             main_logfile = INVALID_FILE;
         }
 
-# ifdef PAPI
+#    ifdef PAPI
         /* setup hardware performance counting */
         hardware_perfctr_init();
-# endif
+#    endif
 
-        DOLOG(1, LOG_TOP, {
-            print_version_and_app_info(GLOBAL);
-        });
+        DOLOG(1, LOG_TOP, { print_version_and_app_info(GLOBAL); });
 
         /* now exit if nullcalls, now that perfctrs are set up */
         if (INTERNAL_OPTION(nullcalls)) {
@@ -550,8 +553,8 @@ dynamorio_app_init(void)
             return SUCCESS;
         }
 
-        LOG(GLOBAL, LOG_TOP, 1, PRODUCT_NAME"'s stack size: %d Kb\n",
-            DYNAMORIO_STACK_SIZE/1024);
+        LOG(GLOBAL, LOG_TOP, 1, PRODUCT_NAME "'s stack size: %d Kb\n",
+            DYNAMORIO_STACK_SIZE / 1024);
 #endif /* !DEBUG */
 
         /* set up exported statistics struct */
@@ -568,7 +571,7 @@ dynamorio_app_init(void)
         /* PR 200207: load the client lib before callback_interception_init
          * since the client library load would hit our own hooks (xref hotpatch
          * cases about that) -- though -private_loader removes that issue. */
-        /* Must be before [vmm_]heap_init() so we can register the client lib as 
+        /* Must be before [vmm_]heap_init() so we can register the client lib as
          * reachable from the dr heap. Xref PR 215395. */
         instrument_load_client_libs();
 #endif
@@ -584,21 +587,20 @@ dynamorio_app_init(void)
          */
         SYSLOG(SYSLOG_INFORMATION,
                IF_CLIENT_INTERFACE_ELSE(INFO_PROCESS_START_CLIENT, INFO_PROCESS_START),
-               IF_CLIENT_INTERFACE_ELSE(3, 2),
-               get_application_name(), get_application_pid()
-               _IF_NOT_CLIENT_INTERFACE(get_application_md5()));
+               IF_CLIENT_INTERFACE_ELSE(3, 2), get_application_name(),
+               get_application_pid() _IF_NOT_CLIENT_INTERFACE(get_application_md5()));
 
 #ifdef PROCESS_CONTROL
-        if (IS_PROCESS_CONTROL_ON())    /* Case 8594. */
+        if (IS_PROCESS_CONTROL_ON()) /* Case 8594. */
             process_control_init();
 #endif
-                    
+
         dynamo_vm_areas_init();
         proc_init();
         modules_init(); /* before vm_areas_init() */
         os_init();
 #ifdef WINDOWS
-        /* loader initialization, finalize the private lib load. 
+        /* loader initialization, finalize the private lib load.
          * FIXME i#338: this must be before arch_init() for Windows, but Linux
          * wants it later.
          */
@@ -614,7 +616,7 @@ dynamorio_app_init(void)
         fcache_init();
         link_init();
         fragment_init();
-        moduledb_init(); /* before vm_areas_init, after heap_init */
+        moduledb_init();  /* before vm_areas_init, after heap_init */
         perscache_init(); /* before vm_areas_init */
 
         if (!DYNAMO_OPTION(thin_client)) {
@@ -628,8 +630,8 @@ dynamorio_app_init(void)
 #ifdef INTERNAL
         {
             char initial_options[MAX_OPTIONS_STRING];
-            get_dynamo_options_string(&dynamo_options, 
-                                      initial_options, sizeof(initial_options), true);
+            get_dynamo_options_string(&dynamo_options, initial_options,
+                                      sizeof(initial_options), true);
             SYSLOG_INTERNAL_INFO("Initial options = %s", initial_options);
             DOLOG(1, LOG_TOP, {
                 get_pcache_dynamo_options_string(&dynamo_options, initial_options,
@@ -641,28 +643,29 @@ dynamorio_app_init(void)
         }
 #endif /* INTERNAL */
 
-        /* initial stack so we don't have to use app's 
+        /* initial stack so we don't have to use app's
          * N.B.: we never de-allocate initstack (see comments in app_exit)
          */
-        initstack = (byte *) stack_alloc(DYNAMORIO_STACK_SIZE);
+        initstack = (byte *)stack_alloc(DYNAMORIO_STACK_SIZE);
 
 #if defined(WINDOWS) && defined(STACK_GUARD_PAGE)
         /* PR203701: separate stack for error reporting when the
          * dstack is exhausted
          */
-        exception_stack = (byte *) stack_alloc(EXCEPTION_STACK_SIZE);
+        exception_stack = (byte *)stack_alloc(EXCEPTION_STACK_SIZE);
 #endif
         LOG(GLOBAL, LOG_TOP, 1, "\n");
 
         /* initialize thread hashtable */
         /* Note: for thin_client, this isn't needed if it is only going to
-         * look for spawned processes; however, if we plan to promote from 
+         * look for spawned processes; however, if we plan to promote from
          * thin_client to hotp_only mode (highly likely), this would be needed.
-         * For now, leave it in there unless thin_client footprint becomes an 
+         * For now, leave it in there unless thin_client footprint becomes an
          * issue.
          */
-        size = HASHTABLE_SIZE(ALL_THREADS_HASH_BITS) * sizeof(thread_record_t*);
-        all_threads = (thread_record_t**) global_heap_alloc(size HEAPACCT(ACCT_THREAD_MGT));
+        size = HASHTABLE_SIZE(ALL_THREADS_HASH_BITS) * sizeof(thread_record_t *);
+        all_threads =
+            (thread_record_t **)global_heap_alloc(size HEAPACCT(ACCT_THREAD_MGT));
         memset(all_threads, 0, size);
 
 #ifdef SIDELINE
@@ -679,10 +682,10 @@ dynamorio_app_init(void)
          */
         dynamo_thread_init(NULL, NULL, false);
 #ifdef LINUX
-# ifndef LINUX_KERNEL
+#    ifndef LINUX_KERNEL
         /* i#27: we need to special-case the 1st thread */
         signal_thread_inherit(get_thread_private_dcontext(), NULL);
-# endif
+#    endif
 #endif
 
         /* We move vm_areas_init() below dynamo_thread_init() so we can have
@@ -738,8 +741,8 @@ dynamorio_app_init(void)
 #endif
 
         if (SELF_PROTECT_ON_CXT_SWITCH) {
-            protect_info = (protect_info_t *)
-                global_unprotected_heap_alloc(sizeof(protect_info_t) HEAPACCT(ACCT_OTHER));
+            protect_info = (protect_info_t *)global_unprotected_heap_alloc(
+                sizeof(protect_info_t) HEAPACCT(ACCT_OTHER));
             ASSIGN_INIT_LOCK_FREE(protect_info->lock, protect_info);
             protect_info->num_threads_unprot = 0; /* ENTERING_DR() below will inc to 1 */
             protect_info->num_threads_suspended = 0;
@@ -793,7 +796,7 @@ dynamorio_app_init(void)
 }
 
 #ifndef LINUX_KERNEL
-#ifdef LINUX
+#    ifdef LINUX
 void
 dynamorio_fork_init(dcontext_t *dcontext)
 {
@@ -802,9 +805,9 @@ dynamorio_fork_init(dcontext_t *dcontext)
      */
     thread_record_t **threads;
     int i, num_threads;
-# ifdef DEBUG
+#        ifdef DEBUG
     char parent_logdir[MAXIMUM_PATH];
-# endif
+#        endif
 
     /* re-cache app name, etc. that are using parent pid before we
      * create log dirs (xref i#189/PR 452168)
@@ -817,14 +820,14 @@ dynamorio_fork_init(dcontext_t *dcontext)
     post_execve = (getenv(DYNAMORIO_VAR_EXECVE) != NULL);
     ASSERT(!post_execve);
 
-# ifdef DEBUG
+#        ifdef DEBUG
     /* copy stats->logdir
      * stats->logdir is static, so current copy is fine, don't need
      * frozen copy
      */
-    strncpy(parent_logdir, stats->logdir, MAXIMUM_PATH-1);
-    stats->logdir[MAXIMUM_PATH-1]  = '\0'; /* if max no null */
-# endif
+    strncpy(parent_logdir, stats->logdir, MAXIMUM_PATH - 1);
+    stats->logdir[MAXIMUM_PATH - 1] = '\0'; /* if max no null */
+#        endif
 
     if (get_log_dir(PROCESS_DIR, NULL, NULL)) {
         /* we want brand new log dir  */
@@ -832,7 +835,7 @@ dynamorio_fork_init(dcontext_t *dcontext)
         create_log_dir(PROCESS_DIR);
     }
 
-# ifdef DEBUG
+#        ifdef DEBUG
     /* just like dynamorio_app_init, create main_logfile before stats */
     if (stats->loglevel > 0) {
         /* we want brand new log files */
@@ -848,49 +851,49 @@ dynamorio_fork_init(dcontext_t *dcontext)
     if (stats->loglevel > 0) {
         /* FIXME: share these few lines of code w/ dynamorio_app_init? */
         LOG(GLOBAL, LOG_TOP, 1, "Running: %s\n", stats->process_name);
-#  ifndef  _WIN32_WCE
+#            ifndef _WIN32_WCE
         LOG(GLOBAL, LOG_TOP, 1, "DYNAMORIO_OPTIONS: %s\n", option_string);
-#  endif
+#            endif
     }
-# endif /* DEBUG */
+#        endif /* DEBUG */
 
     /* must re-hash parent entry in threads table, plus no longer have any
      * other threads (fork -> we're alone in address space), so clear
      * out entire thread table, then add child
      */
-    /* we could have forked right when another thread held this lock 
+    /* we could have forked right when another thread held this lock
      * FIXME i#239/PR 498752: need to free ALL locks held!
      * We can't call ASSIGN_INIT_LOCK_FREE as that clobbers any contention event
      * (=> leak) and the debug-build lock lists (=> asserts like PR 504594).
      */
     mutex_fork_reset(&thread_initexit_lock);
     mutex_lock(&thread_initexit_lock);
-    get_list_of_threads_ex(&threads, &num_threads, true/*include execve*/);
-    for (i=0; i<num_threads; i++) {
+    get_list_of_threads_ex(&threads, &num_threads, true /*include execve*/);
+    for (i = 0; i < num_threads; i++) {
         if (threads[i] == dcontext->thread_record)
             remove_thread(threads[i]->id);
         else
             dynamo_other_thread_exit(threads[i]);
     }
     mutex_unlock(&thread_initexit_lock);
-    global_heap_free(threads, num_threads*sizeof(thread_record_t*)
-                     HEAPACCT(ACCT_THREAD_MGT));
+    global_heap_free(threads,
+                     num_threads * sizeof(thread_record_t *) HEAPACCT(ACCT_THREAD_MGT));
 
-    add_thread(get_process_id(), get_thread_id(), true/*under dynamo control*/,
+    add_thread(get_process_id(), get_thread_id(), true /*under dynamo control*/,
                dcontext);
 
     GLOBAL_STAT(num_threads) = 1;
-# ifdef DEBUG
+#        ifdef DEBUG
     if (stats->loglevel > 0) {
         /* need a new thread-local logfile */
         dcontext->logfile = open_log_file(thread_logfile_name(), NULL, 0);
         print_file(dcontext->logfile, "%s\n", dynamorio_version_string);
         print_file(dcontext->logfile, "New log file for child %d forked by parent %d\n",
                    get_thread_id(), get_parent_id());
-        LOG(THREAD, LOG_TOP|LOG_THREADS, 1,
-            "THREAD %d (dcontext "PFX")\n\n", get_thread_id(), dcontext);
+        LOG(THREAD, LOG_TOP | LOG_THREADS, 1, "THREAD %d (dcontext " PFX ")\n\n",
+            get_thread_id(), dcontext);
     }
-# endif
+#        endif
     num_threads = 1;
 
     /* FIXME: maybe should have a callback list for who wants to be notified
@@ -900,20 +903,20 @@ dynamorio_fork_init(dcontext_t *dcontext)
     /* this must be called after dynamo_other_thread_exit() above */
     signal_fork_init(dcontext);
 
-# ifdef CLIENT_INTERFACE
+#        ifdef CLIENT_INTERFACE
     if (!IS_INTERNAL_STRING_OPTION_EMPTY(client_lib)) {
         instrument_fork_init(dcontext);
     }
-# endif
+#        endif
 }
-#endif /* LINUX */
-#endif /* LINUX_KERNEL */
+#    endif /* LINUX */
+#endif     /* LINUX_KERNEL */
 
 #if defined(CLIENT_INTERFACE) || defined(STANDALONE_UNIT_TEST)
 /* To make DynamoRIO useful as a library for a standalone client
  * application (as opposed to a client library that works with
  * DynamoRIO in executing a target application).  This makes DynamoRIO
- * useful as an IA-32 disassembly library, etc.  
+ * useful as an IA-32 disassembly library, etc.
  */
 dcontext_t *
 standalone_init(void)
@@ -926,10 +929,10 @@ standalone_init(void)
      * Nothing else should fail, unless client calls something that's
      * not initialized...for now we blame client if that happens.
      */
-#ifdef WINDOWS
+#    ifdef WINDOWS
     /* MUST do this before making any system calls */
     syscalls_init();
-#endif
+#    endif
     config_init();
     options_init();
     vmm_heap_init();
@@ -940,13 +943,13 @@ standalone_init(void)
     os_init();
 
     os_tls_init();
-    dcontext = create_new_dynamo_context(true/*initial*/, NULL);
+    dcontext = create_new_dynamo_context(true /*initial*/, NULL);
     set_thread_private_dcontext(dcontext);
     /* sanity check */
     ASSERT(get_thread_private_dcontext() == dcontext);
 
     heap_thread_init(dcontext);
-#ifdef STANDALONE_UNIT_TEST
+#    ifdef STANDALONE_UNIT_TEST
     /* FIXME: share code w/ main init routine? */
     nonshared_stats.logmask = LOG_ALL;
     options_init();
@@ -955,12 +958,12 @@ standalone_init(void)
         main_logfile = open_log_file(main_logfile_name(), NULL, 0);
         print_file(main_logfile, "%s\n", dynamorio_version_string);
         print_file(main_logfile, "Log file for standalone unit test\n");
-        get_dynamo_options_string(&dynamo_options, 
-                                  initial_options, sizeof(initial_options), true);
+        get_dynamo_options_string(&dynamo_options, initial_options,
+                                  sizeof(initial_options), true);
         SYSLOG_INTERNAL_INFO("Initial options = %s", initial_options);
         print_file(main_logfile, "\n");
     }
-#endif
+#    endif
     dynamo_initialized = true;
 
     return dcontext;
@@ -985,7 +988,7 @@ dynamo_process_exit_with_thread_info(void)
 
 /* shared between app_exit and detach */
 int
-dynamo_shared_exit(IF_WINDOWS_ELSE_NP(bool detach_stacked_callbacks, void)) 
+dynamo_shared_exit(IF_WINDOWS_ELSE_NP(bool detach_stacked_callbacks, void))
 {
     DEBUG_DECLARE(uint endtime);
     /* set this now, could already be set */
@@ -994,24 +997,22 @@ dynamo_shared_exit(IF_WINDOWS_ELSE_NP(bool detach_stacked_callbacks, void))
     /* avoid time() for libc independence */
     DODEBUG(endtime = query_time_seconds(););
     LOG(GLOBAL, LOG_STATS, 1, "\n#### Statistics for entire process:\n");
-    LOG(GLOBAL, LOG_STATS, 1, "Total running time: %d seconds\n",
-        endtime - starttime);
-    
+    LOG(GLOBAL, LOG_STATS, 1, "Total running time: %d seconds\n", endtime - starttime);
+
 #ifdef PAPI
     hardware_perfctr_exit();
 #endif
 #ifdef DEBUG
-#  ifdef INTERNAL
+#    ifdef INTERNAL
     print_optimization_stats();
-#  endif
-    DOLOG(1, LOG_STATS, {
-        dump_global_stats(false);
-    });
+#    endif
+    DOLOG(1, LOG_STATS, { dump_global_stats(false); });
 #endif
-    
+
     if (SELF_PROTECT_ON_CXT_SWITCH) {
         DELETE_LOCK(protect_info->lock);
-        global_unprotected_heap_free(protect_info, sizeof(protect_info_t) HEAPACCT(ACCT_OTHER));
+        global_unprotected_heap_free(protect_info,
+                                     sizeof(protect_info_t) HEAPACCT(ACCT_OTHER));
     }
 
     dynamo_exited_and_cleaned = true;
@@ -1020,7 +1021,7 @@ dynamo_shared_exit(IF_WINDOWS_ELSE_NP(bool detach_stacked_callbacks, void))
 
     DELETE_RECURSIVE_LOCK(thread_in_DR_exclusion);
     DOSTATS({
-        LOG(GLOBAL, LOG_TOP|LOG_THREADS, 1,
+        LOG(GLOBAL, LOG_TOP | LOG_THREADS, 1,
             "fcache_stats_exit: before fragment cleanup\n");
         DOLOG(1, LOG_CACHE, fcache_stats_exit(););
     });
@@ -1041,7 +1042,7 @@ dynamo_shared_exit(IF_WINDOWS_ELSE_NP(bool detach_stacked_callbacks, void))
     if (IF_WINDOWS_ELSE(!detach_stacked_callbacks, true)) {
         /* We don't fully free cur thread until after client exit event (PR 536058) */
         if (thread_lookup(get_thread_id()) == NULL) {
-            LOG(GLOBAL, LOG_TOP|LOG_THREADS, 1,
+            LOG(GLOBAL, LOG_TOP | LOG_THREADS, 1,
                 "Current thread never under DynamoRIO control, not exiting it\n");
         } else {
             /* call thread_exit even if !under_dynamo_control, could have
@@ -1057,15 +1058,14 @@ dynamo_shared_exit(IF_WINDOWS_ELSE_NP(bool detach_stacked_callbacks, void))
     /* now that the final thread is exited, free the all_threads memory */
     mutex_lock(&all_threads_lock);
     global_heap_free(all_threads,
-                     HASHTABLE_SIZE(ALL_THREADS_HASH_BITS) * sizeof(thread_record_t*)
-                     HEAPACCT(ACCT_THREAD_MGT));
+                     HASHTABLE_SIZE(ALL_THREADS_HASH_BITS) *
+                         sizeof(thread_record_t *) HEAPACCT(ACCT_THREAD_MGT));
     all_threads = NULL;
     mutex_unlock(&all_threads_lock);
-   
+
 #ifdef WINDOWS
     /* for -private_loader we do this here to catch more exit-time crashes */
-    if (!INTERNAL_OPTION(noasynch)
-        IF_CLIENT_INTERFACE(&& INTERNAL_OPTION(private_loader)))
+    if (!INTERNAL_OPTION(noasynch) IF_CLIENT_INTERFACE(&&INTERNAL_OPTION(private_loader)))
         callback_interception_unintercept();
     /* callback_interception_exit must be after fragment exit for CLIENT_INTERFACE so
      * that fragment_exit->frees fragments->instrument_fragment_deleted->
@@ -1089,9 +1089,9 @@ dynamo_shared_exit(IF_WINDOWS_ELSE_NP(bool detach_stacked_callbacks, void))
     os_slow_exit();
     vm_areas_exit();
     perscache_slow_exit(); /* fast called in dynamo_process_exit_with_thread_info() */
-    modules_exit(); /* after aslr_exit() from os_slow_exit(),
-                     * after vm_areas & perscache exits */
-    moduledb_exit(); /* before heap_exit */
+    modules_exit();        /* after aslr_exit() from os_slow_exit(),
+                            * after vm_areas & perscache exits */
+    moduledb_exit();       /* before heap_exit */
 #ifdef HOT_PATCHING_INTERFACE
     if (DYNAMO_OPTION(hot_patching))
         hotp_exit();
@@ -1129,9 +1129,9 @@ dynamo_shared_exit(IF_WINDOWS_ELSE_NP(bool detach_stacked_callbacks, void))
 
     statistics_exit();
 #ifdef DEBUG
-# ifdef DEADLOCK_AVOIDANCE
+#    ifdef DEADLOCK_AVOIDANCE
     ASSERT(locks_not_closed() == 0);
-# endif
+#    endif
     dynamo_exited_log_and_stats = true;
     if (main_logfile != STDERR) {
         /* do it this way just in case someone tries to log to the global file
@@ -1141,9 +1141,9 @@ dynamo_shared_exit(IF_WINDOWS_ELSE_NP(bool detach_stacked_callbacks, void))
         os_close(file_temp);
     }
 #else
-# ifdef DEADLOCK_AVOIDANCE
+#    ifdef DEADLOCK_AVOIDANCE
     ASSERT(locks_not_closed() == 0);
-# endif
+#    endif
 #endif /* DEBUG */
 
     dynamo_initialized = false;
@@ -1166,7 +1166,7 @@ synch_with_threads_at_exit(thread_synch_result_t synch_res)
     int num_threads;
     thread_record_t **threads;
     DEBUG_DECLARE(bool ok;)
-    LOG(GLOBAL, LOG_TOP|LOG_THREADS, 1,
+    LOG(GLOBAL, LOG_TOP | LOG_THREADS, 1,
         "\nsynch_with_threads_at_exit: cleaning up %d un-terminated threads\n",
         get_num_threads());
 
@@ -1177,7 +1177,7 @@ synch_with_threads_at_exit(thread_synch_result_t synch_res)
 
     /* xref case 8747, requesting suspended is preferable to terminated and it
      * doesn't make a difference here which we use (since the process is about
-     * to die).  
+     * to die).
      * On Linux, however, we do not have dependencies on OS thread
      * properties like we do on Windows (TEB, etc.), and our suspended
      * threads use their sigstacks and ostd data structs, making cleanup
@@ -1190,25 +1190,24 @@ synch_with_threads_at_exit(thread_synch_result_t synch_res)
      */
     IF_LINUX(dynamo_exiting = true;) /* include execve-exited vfork threads */
     DEBUG_DECLARE(ok =)
-        synch_with_all_threads(synch_res,
-                               &threads, &num_threads, 
-                               /* Case 6821: other synch-all-thread uses that
-                                * only care about threads carrying fcache
-                                * state can ignore us
-                                */
-                               THREAD_SYNCH_NO_LOCKS_NO_XFER,
-                               /* if we fail to suspend a thread (e.g., privilege
-                                * problems) ignore it. FIXME: retry instead? */
-                               THREAD_SYNCH_SUSPEND_FAILURE_IGNORE);
+    synch_with_all_threads(synch_res, &threads, &num_threads,
+                           /* Case 6821: other synch-all-thread uses that
+                            * only care about threads carrying fcache
+                            * state can ignore us
+                            */
+                           THREAD_SYNCH_NO_LOCKS_NO_XFER,
+                           /* if we fail to suspend a thread (e.g., privilege
+                            * problems) ignore it. FIXME: retry instead? */
+                           THREAD_SYNCH_SUSPEND_FAILURE_IGNORE);
     ASSERT(ok);
     ASSERT(threads == NULL && num_threads == 0); /* We asked for CLEANED */
-    /* the synch_with_all_threads function grabbed the 
+    /* the synch_with_all_threads function grabbed the
      * thread_initexit_lock for us! */
-    /* do this now after all threads we know about are killed and 
-     * while we hold the thread_initexit_lock so any new threads that 
+    /* do this now after all threads we know about are killed and
+     * while we hold the thread_initexit_lock so any new threads that
      * are waiting on it won't get in our way (see thread_init()) */
     dynamo_exited = true;
-    end_synch_with_all_threads(threads, num_threads, false/*don't resume*/);
+    end_synch_with_all_threads(threads, num_threads, false /*don't resume*/);
 }
 
 #ifdef DEBUG
@@ -1231,16 +1230,16 @@ dynamo_process_exit_cleanup(void)
          * is there a better solution besides assuming the app stack?
          */
 
-#ifdef SIDELINE
+#    ifdef SIDELINE
         if (dynamo_options.sideline) {
             /* exit now to make thread cleanup simpler */
             sideline_exit();
         }
-#endif
+#    endif
 
         /* perform exit tasks that require full thread data structs */
         dynamo_process_exit_with_thread_info();
-    
+
         if (INTERNAL_OPTION(single_privileged_thread)) {
             mutex_unlock(&thread_initexit_lock);
         }
@@ -1253,17 +1252,16 @@ dynamo_process_exit_cleanup(void)
              * all have gone through dynamo_thread_exit, so clean them up now
              * so we can get stats about them
              */
-            synch_with_threads_at_exit(IF_WINDOWS_ELSE
-                                       (THREAD_SYNCH_SUSPENDED_AND_CLEANED,
-                                        THREAD_SYNCH_TERMINATED_AND_CLEANED));
+            synch_with_threads_at_exit(IF_WINDOWS_ELSE(
+                THREAD_SYNCH_SUSPENDED_AND_CLEANED, THREAD_SYNCH_TERMINATED_AND_CLEANED));
         }
-        /* now that APC interception point is unpatched and 
+        /* now that APC interception point is unpatched and
          * dynamorio_exited is set and we've killed all the theads we know
-         * about, assumption is that no other threads will be running in 
+         * about, assumption is that no other threads will be running in
          * dynamorio code from here on out (esp. when we get into shared exit)
          * that will do anything that could be dangerous (could possibly be
-         * a thread in the APC interception code prior to reaching thread_init 
-         * but it will only global log and do thread_lookup which should be 
+         * a thread in the APC interception code prior to reaching thread_init
+         * but it will only global log and do thread_lookup which should be
          * safe throughout) */
 
         /* In order to pass the client a dcontext in the process exit event
@@ -1274,7 +1272,7 @@ dynamo_process_exit_cleanup(void)
          */
         dynamo_thread_exit_pre_client(get_thread_private_dcontext(), get_thread_id());
 
-#ifdef WINDOWS
+#    ifdef WINDOWS
         /* FIXME : our call un-interception isn't atomic so (miniscule) chance
          * of something going wrong if new thread is just hitting its init APC
          */
@@ -1283,12 +1281,12 @@ dynamo_process_exit_cleanup(void)
          * exit crashes): xref PR 200207.
          */
         if (!INTERNAL_OPTION(noasynch)
-            IF_CLIENT_INTERFACE(&& !INTERNAL_OPTION(private_loader))) {
+                IF_CLIENT_INTERFACE(&&!INTERNAL_OPTION(private_loader))) {
             callback_interception_unintercept();
         }
-#else /* LINUX */
+#    else  /* LINUX */
         unhook_vsyscall();
-#endif /* LINUX */
+#    endif /* LINUX */
 
         return dynamo_shared_exit(IF_WINDOWS(false /* not detaching */));
     }
@@ -1327,8 +1325,8 @@ dynamo_process_exit(void)
 #endif
     SELF_UNPROTECT_DATASEC(DATASEC_RARELY_PROT);
     synchronize_dynamic_options();
-    SYSLOG(SYSLOG_INFORMATION, INFO_PROCESS_STOP, 
-           2, get_application_name(), get_application_pid());
+    SYSLOG(SYSLOG_INFORMATION, INFO_PROCESS_STOP, 2, get_application_name(),
+           get_application_pid());
 #ifdef DEBUG
     if (!dynamo_exited) {
         if (INTERNAL_OPTION(nullcalls)) {
@@ -1336,8 +1334,7 @@ dynamo_process_exit(void)
              * the only place we can print them out and exit
              */
             dynamo_nullcalls_exit();
-        }
-        else {
+        } else {
             /* we don't check automatic_startup -- even if the app_
              * interface is used, we are about to be gone from the process
              * address space, so we clean up now
@@ -1359,27 +1356,28 @@ dynamo_process_exit(void)
      * we didn't create any IPC objects or anything that might be persistent
      * beyond our death, we're not holding any systemwide locks, etc.
      */
- 
-    /* It is not clear whether the Event Log service can handle well unterminated connections */
+
+    /* It is not clear whether the Event Log service can handle well unterminated
+     * connections */
 
     /* Do we need profile data for each thread?
      * Note that windows prof_pcs duplicates the thread walk in os_exit()
      * FIXME: should combine that thread walk with this one
      */
     each_thread = TRACEDUMP_ENABLED();
-# ifdef LINUX
+#    ifdef LINUX
     each_thread = each_thread || INTERNAL_OPTION(profile_pcs);
-# endif
-# ifdef KSTATS
+#    endif
+#    ifdef KSTATS
     each_thread = each_thread || DYNAMO_OPTION(kstats);
-# endif
-# ifdef CLIENT_INTERFACE
+#    endif
+#    ifdef CLIENT_INTERFACE
     each_thread = each_thread ||
         /* If we don't need a thread exit event, avoid the possibility of
          * racy crashes (PR 470957) by not calling instrument_thread_exit()
          */
         (!INTERNAL_OPTION(nullcalls) && dr_thread_exit_hook_exists());
-# endif
+#    endif
 
     if (DYNAMO_OPTION(synch_at_exit)) {
         /* needed primarily for CLIENT_INTERFACE but technically all configurations
@@ -1395,16 +1393,16 @@ dynamo_process_exit(void)
         mutex_lock(&thread_initexit_lock);
         get_list_of_threads(&threads, &num);
 
-# ifdef CLIENT_INTERFACE
+#    ifdef CLIENT_INTERFACE
         /* try to prevent any other thread from executing after its exit
          * event callback is invoked (PR 470957): if guarantee is needed
          * -synch_at_exit should be used.
          */
         if (!DYNAMO_OPTION(synch_at_exit) && num > 1 && dr_thread_exit_hook_exists()) {
-#  ifdef WINDOWS
+#        ifdef WINDOWS
             /* 0 as first arg means "terminate all other threads but this one" */
             nt_terminate_process_for_app(0, 0);
-#  else
+#        else
             thread_id_t my_tid = get_thread_id();
             for (i = 0; i < num; i++) {
                 if (threads[i]->id != my_tid) {
@@ -1420,9 +1418,9 @@ dynamo_process_exit(void)
                     remove_thread(threads[i]->id);
                 }
             }
-#  endif
+#        endif
         }
-# endif /* CLIENT_INTERFACE */
+#    endif /* CLIENT_INTERFACE */
 
         for (i = 0; i < num; i++) {
             /* FIXME: separate trace dump from rest of fragment cleanup code */
@@ -1431,22 +1429,22 @@ dynamo_process_exit(void)
                  * dr_fragment_deleted() callbacks.
                  */
                 fragment_thread_exit(threads[i]->dcontext);
-# ifdef LINUX
+#    ifdef LINUX
             if (INTERNAL_OPTION(profile_pcs))
                 pcprofile_thread_exit(threads[i]->dcontext);
-# endif
-# ifdef KSTATS
+#    endif
+#    ifdef KSTATS
             if (DYNAMO_OPTION(kstats))
                 kstat_thread_exit(threads[i]->dcontext);
-# endif
-# ifdef CLIENT_INTERFACE
+#    endif
+#    ifdef CLIENT_INTERFACE
             /* Inform client of all thread exits */
             if (!INTERNAL_OPTION(nullcalls))
                 instrument_thread_exit_event(threads[i]->dcontext);
-# endif
+#    endif
         }
-        global_heap_free(threads, num*sizeof(thread_record_t*) 
-                         HEAPACCT(ACCT_THREAD_MGT));
+        global_heap_free(threads,
+                         num * sizeof(thread_record_t *) HEAPACCT(ACCT_THREAD_MGT));
         mutex_unlock(&thread_initexit_lock);
     }
 
@@ -1459,38 +1457,38 @@ dynamo_process_exit(void)
     dynamo_process_exit_with_thread_info();
 
     /* Inform client of process exit */
-#ifdef CLIENT_INTERFACE
+#    ifdef CLIENT_INTERFACE
     if (!INTERNAL_OPTION(nullcalls)) {
-# ifdef WINDOWS
+#        ifdef WINDOWS
         /* instrument_exit() unloads the client library, so make sure
          * LdrUnloadDll isn't hooked if using the app loader.
          */
         if (!INTERNAL_OPTION(noasynch)
-            IF_CLIENT_INTERFACE(&& !INTERNAL_OPTION(private_loader))) {
+                IF_CLIENT_INTERFACE(&&!INTERNAL_OPTION(private_loader))) {
             callback_interception_unintercept();
         }
-# endif
+#        endif
         /* Must be after fragment_exit() so that the client gets all the
          * fragment_deleted() callbacks (xref PR 228156).  FIXME - might be issues
          * with the client trying to use api routines that depend on fragment state.
          */
         instrument_exit();
         /* for -private_loader we do this here to catch more exit-time crashes */
-# ifdef WINDOWS
+#        ifdef WINDOWS
         if (!INTERNAL_OPTION(noasynch)
-            IF_CLIENT_INTERFACE(&& INTERNAL_OPTION(private_loader)))
+                IF_CLIENT_INTERFACE(&&INTERNAL_OPTION(private_loader)))
             callback_interception_unintercept();
-# endif
+#        endif
     }
-#endif
- 
-#ifdef CALL_PROFILE
+#    endif
+
+#    ifdef CALL_PROFILE
     profile_callers_exit();
-#endif
-# ifdef KSTATS
+#    endif
+#    ifdef KSTATS
     if (DYNAMO_OPTION(kstats))
         kstat_exit();
-# endif
+#    endif
     /* so make sure eventlog connection is terminated (if present)  */
     os_fast_exit();
     /* make sure to delete .1config */
@@ -1505,20 +1503,22 @@ create_new_dynamo_context(bool initial, byte *dstack_in)
 {
     dcontext_t *dcontext;
     size_t alloc = sizeof(dcontext_t) + proc_get_cache_line_size();
-    void *alloc_start = (void *) 
-        ((TEST(SELFPROT_GLOBAL, dynamo_options.protect_mask) &&
-          !TEST(SELFPROT_DCONTEXT, dynamo_options.protect_mask)) ?
-         /* if protecting global but not dcontext, put whole thing in unprot mem */
-         global_unprotected_heap_alloc(alloc HEAPACCT(ACCT_OTHER)) :
-         global_heap_alloc(alloc HEAPACCT(ACCT_OTHER)));
-    dcontext = (dcontext_t*) proc_bump_to_end_of_cache_line((ptr_uint_t)alloc_start);
+    void *alloc_start =
+        (void *)((TEST(SELFPROT_GLOBAL, dynamo_options.protect_mask) &&
+                  !TEST(SELFPROT_DCONTEXT, dynamo_options.protect_mask))
+                     ?
+                     /* if protecting global but not dcontext, put whole thing in unprot
+                        mem */
+                     global_unprotected_heap_alloc(alloc HEAPACCT(ACCT_OTHER))
+                     : global_heap_alloc(alloc HEAPACCT(ACCT_OTHER)));
+    dcontext = (dcontext_t *)proc_bump_to_end_of_cache_line((ptr_uint_t)alloc_start);
     ASSERT(proc_is_cache_aligned(dcontext));
     /* 264138: ensure xmm0-5 are aligned so we can use movdqa */
     ASSERT(ALIGNED(get_mcontext(dcontext)->xmm, 16));
     /* also ensure we don't have extra padding beyond x86.asm defines */
-    ASSERT(sizeof(dr_mcontext_t) == IF_X64_ELSE(18,10)*sizeof(reg_t) + XMM_SLOTS_SIZE);
+    ASSERT(sizeof(dr_mcontext_t) == IF_X64_ELSE(18, 10) * sizeof(reg_t) + XMM_SLOTS_SIZE);
 
-    /* Put here all one-time dcontext field initialization 
+    /* Put here all one-time dcontext field initialization
      * Make sure to update create_callback_dcontext to shared
      * fields across callback dcontexts for the same thread.
      */
@@ -1529,23 +1529,23 @@ create_new_dynamo_context(bool initial, byte *dstack_in)
     /* we share a single dstack across all callbacks */
     if (initial) {
         if (dstack_in == NULL)
-            dcontext->dstack = (byte *) stack_alloc(DYNAMORIO_STACK_SIZE);
+            dcontext->dstack = (byte *)stack_alloc(DYNAMORIO_STACK_SIZE);
         else
-            dcontext->dstack = dstack_in;   /* xref i#149/PR 403015 */
+            dcontext->dstack = dstack_in; /* xref i#149/PR 403015 */
     } else {
         /* dstack may be pre-allocated only at thread init, not at callback */
         ASSERT(dstack_in == NULL);
     }
 #ifdef RETURN_STACK
-    dcontext->rstack = (byte *) stack_alloc(DYNAMORIO_STACK_SIZE);
+    dcontext->rstack = (byte *)stack_alloc(DYNAMORIO_STACK_SIZE);
     /* Cannot have RETURN_STACK with inlined IBLs */
     ASSERT_NOT_IMPLEMENTED(false == DYNAMO_OPTION(inline_trace_ibl));
 #endif
     if (TEST(SELFPROT_DCONTEXT, dynamo_options.protect_mask)) {
-        dcontext->upcontext.separate_upcontext =
-            global_unprotected_heap_alloc(sizeof(unprotected_context_t) HEAPACCT(ACCT_OTHER));
+        dcontext->upcontext.separate_upcontext = global_unprotected_heap_alloc(
+            sizeof(unprotected_context_t) HEAPACCT(ACCT_OTHER));
         /* don't need to initialize upcontext */
-        LOG(GLOBAL, LOG_TOP, 2, "new dcontext="PFX", dcontext->upcontext="PFX"\n",
+        LOG(GLOBAL, LOG_TOP, 2, "new dcontext=" PFX ", dcontext->upcontext=" PFX "\n",
             dcontext, dcontext->upcontext.separate_upcontext);
         dcontext->upcontext_ptr = dcontext->upcontext.separate_upcontext;
     } else
@@ -1556,12 +1556,12 @@ create_new_dynamo_context(bool initial, byte *dstack_in)
 #endif
     ASSERT(dcontext->try_except_state == NULL);
 
-    DODEBUG({dcontext->logfile = INVALID_FILE;});
+    DODEBUG({ dcontext->logfile = INVALID_FILE; });
     dcontext->owning_thread = get_thread_id();
 #ifndef LINUX_KERNEL
-#ifdef LINUX
+#    ifdef LINUX
     dcontext->owning_process = get_process_id();
-#endif
+#    endif
 #endif
     /* thread_record is set in add_thread */
     /* all of the thread-private fcache and hashtable fields are shared
@@ -1600,12 +1600,12 @@ delete_dynamo_context(dcontext_t *dcontext, bool free_stack)
         !TEST(SELFPROT_DCONTEXT, dynamo_options.protect_mask)) {
         /* if protecting global but not dcontext, we put whole thing in unprot mem */
         global_unprotected_heap_free(dcontext->allocated_start,
-                                     sizeof(dcontext_t) + proc_get_cache_line_size()
-                                     HEAPACCT(ACCT_OTHER));
+                                     sizeof(dcontext_t) +
+                                         proc_get_cache_line_size() HEAPACCT(ACCT_OTHER));
     } else {
         global_heap_free(dcontext->allocated_start,
-                         sizeof(dcontext_t) + proc_get_cache_line_size()
-                         HEAPACCT(ACCT_OTHER));
+                         sizeof(dcontext_t) +
+                             proc_get_cache_line_size() HEAPACCT(ACCT_OTHER));
     }
 }
 
@@ -1617,7 +1617,8 @@ void
 initialize_dynamo_context(dcontext_t *dcontext)
 {
     /* we can't just zero out the whole thing b/c we have persistent state
-     * (fields kept across callbacks, like dstack, module-private fields, next & prev, etc.)
+     * (fields kept across callbacks, like dstack, module-private fields, next & prev,
+     * etc.)
      */
     memset(dcontext->upcontext_ptr, 0, sizeof(unprotected_context_t));
     dcontext->initialized = true;
@@ -1641,9 +1642,9 @@ initialize_dynamo_context(dcontext_t *dcontext)
     dcontext->aslr_context.randomized_section_handle = INVALID_HANDLE_VALUE;
     dcontext->aslr_context.original_image_section_handle = INVALID_HANDLE_VALUE;
     dcontext->aslr_context.original_section_base = ASLR_INVALID_SECTION_BASE;
-# ifdef DEBUG
+#    ifdef DEBUG
     dcontext->aslr_context.last_app_section_handle = INVALID_HANDLE_VALUE;
-# endif
+#    endif
     /* note that aslr_context.last_child_padded is preserved across callbacks */
     dcontext->ignore_enterexit = false;
 #else
@@ -1661,24 +1662,24 @@ initialize_dynamo_context(dcontext_t *dcontext)
      * in those two cases
      */
 
-    set_last_exit(dcontext, (linkstub_t *) get_starting_linkstub());
+    set_last_exit(dcontext, (linkstub_t *)get_starting_linkstub());
 
 #ifdef NATIVE_RETURN
-# ifdef NATIVE_RETURN_CALLDEPTH
+#    ifdef NATIVE_RETURN_CALLDEPTH
     dcontext->call_depth = 0;
-# endif
+#    endif
     dcontext->last_retaddr = NULL;
     dcontext->num_calls_in_trace = 0;
 #endif
 #ifdef PROFILE_RDTSC
-    dcontext->start_time = (uint64) 0;
+    dcontext->start_time = (uint64)0;
     dcontext->prev_fragment = NULL;
-    dcontext->cache_frag_count = (uint64) 0;
+    dcontext->cache_frag_count = (uint64)0;
     {
         int i;
-        for (i=0; i<10; i++) {
-            dcontext->cache_time[i] = (uint64) 0;
-            dcontext->cache_count[i] = (uint64) 0;
+        for (i = 0; i < 10; i++) {
+            dcontext->cache_time[i] = (uint64)0;
+            dcontext->cache_count[i] = (uint64)0;
         }
     }
 #endif
@@ -1698,18 +1699,18 @@ initialize_dynamo_context(dcontext_t *dcontext)
     dcontext->valid = true;
 #endif
 #ifdef HOT_PATCHING_INTERFACE
-    dcontext->nudge_thread = false;     /* Fix for case 5367. */
+    dcontext->nudge_thread = false; /* Fix for case 5367. */
 #endif
 #ifdef CHECK_RETURNS_SSE2
     /* initialize sse2 index with 0
      * go ahead and use eax, it's dead (about to return)
      */
-# ifdef LINUX
+#    ifdef LINUX
     asm("movl $0, %eax");
     asm("pinsrw $7,%eax,%xmm7");
-# else
-# error NYI
-# endif
+#    else
+#        error NYI
+#    endif
 #endif
     /* We don't need to initialize dcontext->coarse_exit as it is only
      * read when last_exit indicates a coarse exit, which sets the fields.
@@ -1725,16 +1726,16 @@ create_callback_dcontext(dcontext_t *old_dcontext)
     new_dcontext->valid = false;
     /* all of these fields are shared among all dcontexts of a thread: */
     new_dcontext->owning_thread = old_dcontext->owning_thread;
-#ifdef LINUX
+#    ifdef LINUX
     new_dcontext->owning_process = old_dcontext->owning_process;
-#endif
+#    endif
     new_dcontext->thread_record = old_dcontext->thread_record;
     /* now that we have clean stack usage we can share a single stack */
     ASSERT(old_dcontext->dstack != NULL);
     new_dcontext->dstack = old_dcontext->dstack;
-#ifdef X64
+#    ifdef X64
     new_dcontext->x86_mode = old_dcontext->x86_mode;
-#endif
+#    endif
     new_dcontext->link_field = old_dcontext->link_field;
     new_dcontext->monitor_field = old_dcontext->monitor_field;
     new_dcontext->fcache_field = old_dcontext->fcache_field;
@@ -1747,33 +1748,33 @@ create_callback_dcontext(dcontext_t *old_dcontext)
      * from within a callback.
      */
     new_dcontext->win32_start_addr = old_dcontext->win32_start_addr;
-#ifdef CLIENT_INTERFACE
+#    ifdef CLIENT_INTERFACE
     /* FlsData is persistent across callbacks */
     new_dcontext->app_fls_data = old_dcontext->app_fls_data;
     new_dcontext->priv_fls_data = old_dcontext->priv_fls_data;
     new_dcontext->app_nt_rpc = old_dcontext->app_nt_rpc;
     new_dcontext->priv_nt_rpc = old_dcontext->priv_nt_rpc;
     new_dcontext->teb_base = old_dcontext->teb_base;
-#endif
-#ifdef LINUX
+#    endif
+#    ifdef LINUX
     new_dcontext->signal_field = old_dcontext->signal_field;
     new_dcontext->pcprofile_field = old_dcontext->pcprofile_field;
-#endif
+#    endif
     new_dcontext->private_code = old_dcontext->private_code;
-#ifdef CLIENT_INTERFACE
+#    ifdef CLIENT_INTERFACE
     new_dcontext->client_data = old_dcontext->client_data;
-#endif
-#ifdef DEBUG
+#    endif
+#    ifdef DEBUG
     new_dcontext->logfile = old_dcontext->logfile;
     new_dcontext->thread_stats = old_dcontext->thread_stats;
-#endif
-#ifdef DEADLOCK_AVOIDANCE
+#    endif
+#    ifdef DEADLOCK_AVOIDANCE
     new_dcontext->thread_owned_locks = old_dcontext->thread_owned_locks;
-#endif
-#ifdef KSTATS
+#    endif
+#    ifdef KSTATS
     new_dcontext->thread_kstats = old_dcontext->thread_kstats;
-#endif
-    /* at_syscall is real time based, not app context based, so shared 
+#    endif
+    /* at_syscall is real time based, not app context based, so shared
      *
      * FIXME: Yes need to share when swapping at NtCallbackReturn, but
      * want to keep old so when return from cb will do post-syscall for
@@ -1783,30 +1784,30 @@ create_callback_dcontext(dcontext_t *old_dcontext)
      * that we do post-syscall processing on.
      */
     new_dcontext->upcontext_ptr->at_syscall = old_dcontext->upcontext_ptr->at_syscall;
-#ifdef HOT_PATCHING_INTERFACE   /* Fix for case 5367. */
+#    ifdef HOT_PATCHING_INTERFACE /* Fix for case 5367. */
     /* hotp_excpt_state should be unused at this point.  If it is used, it can
-     * be only because a hot patch made a system call with a callback.  This is 
-     * a bug because hot patches can't do system calls, let alone one with 
+     * be only because a hot patch made a system call with a callback.  This is
+     * a bug because hot patches can't do system calls, let alone one with
      * callbacks.
      */
     DODEBUG({
         dr_jmp_buf_t empty;
         memset(&empty, -1, sizeof(dr_jmp_buf_t));
-        ASSERT(memcmp(&old_dcontext->hotp_excpt_state, &empty,
-                      sizeof(dr_jmp_buf_t)) == 0);
+        ASSERT(memcmp(&old_dcontext->hotp_excpt_state, &empty, sizeof(dr_jmp_buf_t)) ==
+               0);
     });
     new_dcontext->nudge_thread = old_dcontext->nudge_thread;
-#endif
+#    endif
     /* our exceptions should be handled within one DR context switch */
     ASSERT(old_dcontext->try_except_state == NULL);
     new_dcontext->local_state = old_dcontext->local_state;
-#ifdef WINDOWS
+#    ifdef WINDOWS
     new_dcontext->aslr_context.last_child_padded =
         old_dcontext->aslr_context.last_child_padded;
-#endif
+#    endif
 
-    LOG(new_dcontext->logfile, LOG_TOP, 2,
-        "made new dcontext "PFX" (old="PFX")\n", new_dcontext, old_dcontext);
+    LOG(new_dcontext->logfile, LOG_TOP, 2, "made new dcontext " PFX " (old=" PFX ")\n",
+        new_dcontext, old_dcontext);
     return new_dcontext;
 }
 #endif
@@ -1824,7 +1825,6 @@ is_thread_initialized(void)
 #endif
     return (get_thread_private_dcontext() != NULL);
 }
-
 
 bool
 is_thread_known(thread_id_t tid)
@@ -1859,14 +1859,13 @@ mark_thread_execve(thread_record_t *tr, bool execve)
 int
 get_num_threads(void)
 {
-    return num_known_threads IF_LINUX(- num_execve_threads);
+    return num_known_threads IF_LINUX(-num_execve_threads);
 }
 
 bool
 is_last_app_thread(void)
 {
-    return (get_num_threads() ==
-            IF_CLIENT_INTERFACE(get_num_client_threads() +) 1);
+    return (get_num_threads() == IF_CLIENT_INTERFACE(get_num_client_threads() +) 1);
 }
 
 /* This routine takes a snapshot of all the threads known to DR,
@@ -1879,8 +1878,8 @@ is_last_app_thread(void)
  * can occur (unless the caller is the one flushing)
  */
 static void
-get_list_of_threads_common(thread_record_t ***list, int *num
-                           _IF_LINUX(bool include_execve))
+get_list_of_threads_common(thread_record_t ***list,
+                           int *num _IF_LINUX(bool include_execve))
 {
     int i, cur = 0, max_num;
     thread_record_t *tr;
@@ -1896,11 +1895,11 @@ get_list_of_threads_common(thread_record_t ***list, int *num
 
     mutex_lock(&all_threads_lock);
     /* Do not include vfork threads that exited via execve, unless we're exiting */
-    max_num = IF_LINUX_ELSE((include_execve || dynamo_exiting) ?
-                            num_known_threads : get_num_threads(),
+    max_num = IF_LINUX_ELSE((include_execve || dynamo_exiting) ? num_known_threads
+                                                               : get_num_threads(),
                             get_num_threads());
-    mylist = (thread_record_t **) global_heap_alloc(max_num*sizeof(thread_record_t*)
-                                                 HEAPACCT(ACCT_THREAD_MGT));
+    mylist = (thread_record_t **)global_heap_alloc(
+        max_num * sizeof(thread_record_t *) HEAPACCT(ACCT_THREAD_MGT));
     for (i = 0; i < HASHTABLE_SIZE(ALL_THREADS_HASH_BITS); i++) {
         for (tr = all_threads[i]; tr != NULL; tr = tr->next) {
             /* include those for which !tr->under_dynamo_control */
@@ -1917,9 +1916,8 @@ get_list_of_threads_common(thread_record_t ***list, int *num
     ASSERT(cur > 0);
     IF_WINDOWS(ASSERT(cur == max_num));
     if (cur < max_num) {
-        mylist = (thread_record_t **)
-            global_heap_realloc(mylist, max_num, cur, sizeof(thread_record_t*)
-                                HEAPACCT(ACCT_THREAD_MGT));
+        mylist = (thread_record_t **)global_heap_realloc(
+            mylist, max_num, cur, sizeof(thread_record_t *) HEAPACCT(ACCT_THREAD_MGT));
     }
 
     *num = cur;
@@ -1944,7 +1942,7 @@ get_list_of_threads_ex(thread_record_t ***list, int *num, bool include_execve)
 /* assumes caller can ensure that thread is either suspended or self to
  * avoid races
  */
-thread_record_t * 
+thread_record_t *
 thread_lookup(thread_id_t tid)
 {
     thread_record_t *tr;
@@ -1957,9 +1955,9 @@ thread_lookup(thread_id_t tid)
 
     hindex = HASH_FUNC_BITS(tid, ALL_THREADS_HASH_BITS);
     mutex_lock(&all_threads_lock);
-    if (all_threads == NULL) { 
+    if (all_threads == NULL) {
         tr = NULL;
-    } else { 
+    } else {
         tr = all_threads[hindex];
     }
     while (tr != NULL) {
@@ -1987,9 +1985,8 @@ get_thread_num(thread_id_t tid)
 }
 
 void
-add_thread(IF_WINDOWS_ELSE_NP(HANDLE hthread, process_id_t pid),
-           thread_id_t tid, bool under_dynamo_control,
-           dcontext_t *dcontext)
+add_thread(IF_WINDOWS_ELSE_NP(HANDLE hthread, process_id_t pid), thread_id_t tid,
+           bool under_dynamo_control, dcontext_t *dcontext)
 {
     thread_record_t *tr;
     uint hindex;
@@ -1997,8 +1994,8 @@ add_thread(IF_WINDOWS_ELSE_NP(HANDLE hthread, process_id_t pid),
     ASSERT(all_threads != NULL);
 
     /* add entry to thread hashtable */
-    tr = (thread_record_t *) global_heap_alloc(sizeof(thread_record_t)
-                                            HEAPACCT(ACCT_THREAD_MGT));
+    tr = (thread_record_t *)global_heap_alloc(sizeof(thread_record_t)
+                                                  HEAPACCT(ACCT_THREAD_MGT));
 #ifdef WINDOWS
     /* we duplicate the thread pseudo-handle, this should give us full rights
      * Note that instead asking explicitly for THREAD_ALL_ACCESS or just for
@@ -2006,22 +2003,21 @@ add_thread(IF_WINDOWS_ELSE_NP(HANDLE hthread, process_id_t pid),
      * does not seem able to acquire more rights than simply duplicating the
      * app handle gives.
      */
-    LOG(GLOBAL, LOG_THREADS, 1, "Thread %d app handle rights: "PFX"\n",
-        tid, nt_get_handle_access_rights(hthread));
-    duplicate_handle(NT_CURRENT_PROCESS, hthread, NT_CURRENT_PROCESS,
-                     &tr->handle, 0, 0, 
-                     DUPLICATE_SAME_ACCESS|DUPLICATE_SAME_ATTRIBUTES);
+    LOG(GLOBAL, LOG_THREADS, 1, "Thread %d app handle rights: " PFX "\n", tid,
+        nt_get_handle_access_rights(hthread));
+    duplicate_handle(NT_CURRENT_PROCESS, hthread, NT_CURRENT_PROCESS, &tr->handle, 0, 0,
+                     DUPLICATE_SAME_ACCESS | DUPLICATE_SAME_ATTRIBUTES);
     /* We prob. only need TERMINATE (for kill thread), SUSPEND/RESUME/GET_CONTEXT
-     * (for synchronizing), and SET_CONTEXT (+ synchronizing requirements, for 
+     * (for synchronizing), and SET_CONTEXT (+ synchronizing requirements, for
      * detach).  All access includes this and quite a bit more. */
-# if 0
+#    if 0
     /* eventually should be a real assert, but until we have a story for the
      * injected detach threads, have to ifdef out even the ASSERT_CURIOSITY 
      * (even a syslog internal warning is prob. to noisy for QA) */
     ASSERT_CURIOSITY(TESTALL(THREAD_ALL_ACCESS, nt_get_handle_access_rights(tr->handle)));
-# endif
-    LOG(GLOBAL, LOG_THREADS, 1, "Thread %d our handle rights: "PFX"\n",
-        tid, nt_get_handle_access_rights(tr->handle));
+#    endif
+    LOG(GLOBAL, LOG_THREADS, 1, "Thread %d our handle rights: " PFX "\n", tid,
+        nt_get_handle_access_rights(tr->handle));
 #else
     tr->pid = pid;
     tr->execve = false;
@@ -2084,15 +2080,15 @@ remove_thread(IF_WINDOWS_(HANDLE hthread) thread_id_t tid)
 /* this bool is protected by reset_pending_lock */
 DECLARE_FREQPROT_VAR(static bool reset_at_nth_thread_triggered, false);
 
-/* thread-specific initialization 
- * if dstack_in is NULL, then a dstack is allocated; else dstack_in is used 
+/* thread-specific initialization
+ * if dstack_in is NULL, then a dstack is allocated; else dstack_in is used
  * as the thread's dstack
  * mc can be NULL for the initial thread
  * returns -1 if current thread has already been initialized
  */
 int
-dynamo_thread_init(byte *dstack_in, dr_mcontext_t *mc
-                   _IF_CLIENT_INTERFACE(bool client_thread))
+dynamo_thread_init(byte *dstack_in,
+                   dr_mcontext_t *mc _IF_CLIENT_INTERFACE(bool client_thread))
 {
     dcontext_t *dcontext;
     /* due to lock issues (see below) we need another var */
@@ -2104,8 +2100,8 @@ dynamo_thread_init(byte *dstack_in, dr_mcontext_t *mc
      */
 #ifndef LINUX_KERNEL
     APP_EXPORT_ASSERT(dynamo_initialized || dynamo_exited ||
-                      get_num_threads() == 0 IF_CLIENT_INTERFACE(|| client_thread),
-                      PRODUCT_NAME" not initialized");
+                          get_num_threads() == 0 IF_CLIENT_INTERFACE(|| client_thread),
+                      PRODUCT_NAME " not initialized");
 #endif
 
     if (INTERNAL_OPTION(nullcalls))
@@ -2119,24 +2115,24 @@ dynamo_thread_init(byte *dstack_in, dr_mcontext_t *mc
     mutex_lock(&thread_initexit_lock);
 
     /* The assumption is that if dynamo_exited, then we are about to exit and
-     * clean up, initializing this thread then would be dangerous, better to 
-     * wait here for the app to die.  Is safe with detach, since a thread 
+     * clean up, initializing this thread then would be dangerous, better to
+     * wait here for the app to die.  Is safe with detach, since a thread
      * should never reach here when dynamo_exited is true during detach */
     /* under current implementation of process exit, can happen only under
      * debug build, or app_start app_exit interface */
     while (dynamo_exited) {
         /* logging should be safe, though might not actually result in log
          * message */
-        DODEBUG_ONCE(LOG(GLOBAL, LOG_THREADS, 1, 
+        DODEBUG_ONCE(LOG(GLOBAL, LOG_THREADS, 1,
                          "Thread %d reached initialization point while dynamo exiting, "
-                         "waiting for app to exit\n", get_thread_id());); 
+                         "waiting for app to exit\n",
+                         get_thread_id()););
         mutex_unlock(&thread_initexit_lock);
         thread_yield();
-        /* just in case we want to support exited and then restarted at some 
+        /* just in case we want to support exited and then restarted at some
          * point */
         mutex_lock(&thread_initexit_lock);
     }
-
 
     if (is_thread_initialized()) {
         mutex_unlock(&thread_initexit_lock);
@@ -2144,7 +2140,7 @@ dynamo_thread_init(byte *dstack_in, dr_mcontext_t *mc
     }
 
     os_tls_init();
-    dcontext = create_new_dynamo_context(true/*initial*/, dstack_in);
+    dcontext = create_new_dynamo_context(true /*initial*/, dstack_in);
     initialize_dynamo_context(dcontext);
     set_thread_private_dcontext(dcontext);
     /* sanity check */
@@ -2158,7 +2154,7 @@ dynamo_thread_init(byte *dstack_in, dr_mcontext_t *mc
         *get_mcontext(dcontext) = *mc;
 
     /* For hotp_only, the thread should run native, not under dr.  However,
-     * the core should still get control of the thread at hook points to track 
+     * the core should still get control of the thread at hook points to track
      * what the application is doing & at patched points to execute hot patches.
      * It is the same for thin_client except that there are fewer hooks, only to
      * follow children.
@@ -2173,17 +2169,16 @@ dynamo_thread_init(byte *dstack_in, dr_mcontext_t *mc
      * is held.  CHECK: is this always correct?  thread_lookup does have an assert
      * to try and enforce but cannot tell who has the lock.
      */
-    add_thread(IF_WINDOWS_ELSE(NT_CURRENT_THREAD, get_process_id()), get_thread_id(), 
+    add_thread(IF_WINDOWS_ELSE(NT_CURRENT_THREAD, get_process_id()), get_thread_id(),
                under_dynamo_control, dcontext);
 
-    LOG(GLOBAL, LOG_TOP|LOG_THREADS, 1,
-        "\ndynamo_thread_init: %d thread(s) now, dcontext="PFX", #=%d, id=%d, pid=%d\n\n",
+    LOG(GLOBAL, LOG_TOP | LOG_THREADS, 1,
+        "\ndynamo_thread_init: %d thread(s) now, dcontext=" PFX
+        ", #=%d, id=%d, pid=%d\n\n",
         GLOBAL_STAT(num_threads), dcontext, get_thread_num(get_thread_id()),
         get_thread_id(), get_process_id());
 
-    DOLOG(1, LOG_STATS, {
-        dump_global_stats(false);
-    });
+    DOLOG(1, LOG_STATS, { dump_global_stats(false); });
 #ifdef DEBUG
     if (stats->loglevel > 0) {
         dcontext->logfile = open_log_file(thread_logfile_name(), NULL, 0);
@@ -2191,17 +2186,18 @@ dynamo_thread_init(byte *dstack_in, dr_mcontext_t *mc
     } else {
         dcontext->logfile = INVALID_FILE;
     }
-    DOLOG(1, LOG_TOP|LOG_THREADS, {
-        LOG(THREAD, LOG_TOP|LOG_THREADS, 1, PRODUCT_NAME" built with: %s\n", DYNAMORIO_DEFINES);
-        LOG(THREAD, LOG_TOP|LOG_THREADS, 1, PRODUCT_NAME" built on: %s\n", dynamorio_buildmark);
+    DOLOG(1, LOG_TOP | LOG_THREADS, {
+        LOG(THREAD, LOG_TOP | LOG_THREADS, 1, PRODUCT_NAME " built with: %s\n",
+            DYNAMORIO_DEFINES);
+        LOG(THREAD, LOG_TOP | LOG_THREADS, 1, PRODUCT_NAME " built on: %s\n",
+            dynamorio_buildmark);
     });
 
-    LOG(THREAD, LOG_TOP|LOG_THREADS, 1,
-        "%sTHREAD %d (dcontext "PFX")\n\n",
-        IF_CLIENT_INTERFACE_ELSE(client_thread ? "CLIENT " : "", ""),
-        get_thread_id(), dcontext);
-    LOG(THREAD, LOG_TOP|LOG_THREADS, 1,
-        "DR stack is "PFX"-"PFX"\n", dcontext->dstack - DYNAMORIO_STACK_SIZE, dcontext->dstack);
+    LOG(THREAD, LOG_TOP | LOG_THREADS, 1, "%sTHREAD %d (dcontext " PFX ")\n\n",
+        IF_CLIENT_INTERFACE_ELSE(client_thread ? "CLIENT " : "", ""), get_thread_id(),
+        dcontext);
+    LOG(THREAD, LOG_TOP | LOG_THREADS, 1, "DR stack is " PFX "-" PFX "\n",
+        dcontext->dstack - DYNAMORIO_STACK_SIZE, dcontext->dstack);
 #endif
 
 #ifdef DEADLOCK_AVOIDANCE
@@ -2251,8 +2247,8 @@ dynamo_thread_init(byte *dstack_in, dr_mcontext_t *mc
      * rank order of reset_pending_lock which we must also hold -- so we
      * set a local bool reset_at_nth_thread_pending
      */
-    if (DYNAMO_OPTION(reset_at_nth_thread) != 0 && !reset_at_nth_thread_triggered
-        && (uint) get_num_threads() == DYNAMO_OPTION(reset_at_nth_thread)) {
+    if (DYNAMO_OPTION(reset_at_nth_thread) != 0 && !reset_at_nth_thread_triggered &&
+        (uint)get_num_threads() == DYNAMO_OPTION(reset_at_nth_thread)) {
         mutex_lock(&reset_pending_lock);
         if (!reset_at_nth_thread_triggered) {
             reset_at_nth_thread_triggered = true;
@@ -2262,9 +2258,7 @@ dynamo_thread_init(byte *dstack_in, dr_mcontext_t *mc
     }
 
     mutex_unlock(&thread_initexit_lock);
-    DOLOG(1, LOG_STATS, {
-        dump_thread_stats(dcontext, false);
-    });
+    DOLOG(1, LOG_STATS, { dump_thread_stats(dcontext, false); });
 
     if (reset_at_nth_thread_pending) {
         mutex_lock(&reset_pending_lock);
@@ -2322,7 +2316,7 @@ dynamo_thread_exit_common(dcontext_t *dcontext, thread_id_t id,
 
     /* synch point so thread exiting can be prevented for critical periods */
     /* see comment at start of method for other thread exit */
-    if (!other_thread) 
+    if (!other_thread)
         mutex_lock(&thread_initexit_lock);
 
     ASSERT_OWN_MUTEX(true, &thread_initexit_lock);
@@ -2363,32 +2357,30 @@ dynamo_thread_exit_common(dcontext_t *dcontext, thread_id_t id,
     }
 #endif
 
-    LOG(GLOBAL, LOG_TOP|LOG_THREADS, 1,
+    LOG(GLOBAL, LOG_TOP | LOG_THREADS, 1,
         "\ndynamo_thread_exit (thread #%d id=%d): %d thread(s) now\n\n",
-        get_thread_num(id), id, GLOBAL_STAT(num_threads)-1);
+        get_thread_num(id), id, GLOBAL_STAT(num_threads) - 1);
 
-    DOLOG(1, LOG_STATS, {
-        dump_global_stats(false);
-    });
+    DOLOG(1, LOG_STATS, { dump_global_stats(false); });
 
-    LOG(THREAD, LOG_STATS|LOG_THREADS, 1, "\n## Statistics for this thread:\n");
+    LOG(THREAD, LOG_STATS | LOG_THREADS, 1, "\n## Statistics for this thread:\n");
 
 #ifdef PROFILE_RDTSC
     if (dynamo_options.profile_times) {
         int i;
         ASSERT(dcontext);
-        LOG(THREAD, LOG_STATS|LOG_THREADS, 1, "\nTop ten cache times:\n");
-        for (i=0; i<10; i++) {
-            if (dcontext->cache_time[i] > (uint64) 0) {
+        LOG(THREAD, LOG_STATS | LOG_THREADS, 1, "\nTop ten cache times:\n");
+        for (i = 0; i < 10; i++) {
+            if (dcontext->cache_time[i] > (uint64)0) {
                 uint top_part, bottom_part;
-                divide_int64_print(dcontext->cache_time[i], kilo_hertz, false, 
-                                   3, &top_part, &bottom_part);
-                LOG(THREAD, LOG_STATS|LOG_THREADS, 1, 
-                    "\t#%2d = %6u.%.3u ms, %9d hits\n", 
-                    i+1, top_part, bottom_part, (int)dcontext->cache_count[i]);
+                divide_int64_print(dcontext->cache_time[i], kilo_hertz, false, 3,
+                                   &top_part, &bottom_part);
+                LOG(THREAD, LOG_STATS | LOG_THREADS, 1,
+                    "\t#%2d = %6u.%.3u ms, %9d hits\n", i + 1, top_part, bottom_part,
+                    (int)dcontext->cache_count[i]);
             }
         }
-        LOG(THREAD, LOG_STATS|LOG_THREADS, 1, "\n");
+        LOG(THREAD, LOG_STATS | LOG_THREADS, 1, "\n");
     }
 #endif
 
@@ -2428,9 +2420,7 @@ dynamo_thread_exit_common(dcontext_t *dcontext, thread_id_t id,
     synch_thread_exit(dcontext);
     arch_thread_exit(dcontext _IF_WINDOWS(detach_stacked_callbacks));
     os_thread_exit(dcontext);
-    DOLOG(1, LOG_STATS, {
-        dump_thread_stats(dcontext, false);
-    });
+    DOLOG(1, LOG_STATS, { dump_thread_stats(dcontext, false); });
 #ifdef KSTATS
     kstat_thread_exit(dcontext);
 #endif
@@ -2454,29 +2444,28 @@ dynamo_thread_exit_common(dcontext_t *dcontext, thread_id_t id,
 #ifdef WINDOWS
     /* clean up all the dcs */
     num_dcontext = 0;
-# ifdef DCONTEXT_IN_EDI
+#    ifdef DCONTEXT_IN_EDI
     /* go to one end of list */
     while (dcontext_tmp->next_saved)
         dcontext_tmp = dcontext_tmp->next_saved;
-# else
+#    else
     /* already at one end of list */
-# endif
+#    endif
 
     /* delete through to other end */
     while (dcontext_tmp) {
         num_dcontext++;
         dcontext_next = dcontext_tmp->prev_unused;
         delete_dynamo_context(dcontext_tmp,
-                              dcontext_tmp == dcontext/*do not free dup cb stacks*/
-                              && !on_dstack/*do not free own stack*/);
+                              dcontext_tmp == dcontext /*do not free dup cb stacks*/
+                                  && !on_dstack /*do not free own stack*/);
         dcontext_tmp = dcontext_next;
     }
-    LOG(GLOBAL, LOG_STATS|LOG_THREADS, 1, "\tdynamo contexts used: %d\n",
-        num_dcontext);
-#else /* LINUX */
+    LOG(GLOBAL, LOG_STATS | LOG_THREADS, 1, "\tdynamo contexts used: %d\n", num_dcontext);
+#else  /* LINUX */
     if (!other_thread)
         set_thread_private_dcontext(NULL);
-    delete_dynamo_context(dcontext_tmp, !on_dstack/*do not free own stack*/);
+    delete_dynamo_context(dcontext_tmp, !on_dstack /*do not free own stack*/);
 #endif /* LINUX */
     os_tls_exit(local_state, other_thread);
 
@@ -2501,7 +2490,7 @@ dynamo_thread_exit_common(dcontext_t *dcontext, thread_id_t id,
              * probably via dynamo_thread_stack_free_and_exit(), as the stack free
              * must be done before the exit
              */
-        } 
+        }
     }
 
     return SUCCESS;
@@ -2543,7 +2532,8 @@ dynamo_thread_stack_free_and_exit(byte *stack)
 }
 
 /* defined in x86/x86_code.c */
-extern void dynamo_start(dr_mcontext_t *mc);
+extern void
+dynamo_start(dr_mcontext_t *mc);
 
 #ifdef DR_APP_EXPORTS
 /* API routine to initialize DR */
@@ -2568,7 +2558,7 @@ dr_app_cleanup(void)
 void
 dr_app_start_helper(dr_mcontext_t *mc)
 {
-    apicheck(dynamo_initialized, PRODUCT_NAME" not initialized");
+    apicheck(dynamo_initialized, PRODUCT_NAME " not initialized");
     if (!INTERNAL_OPTION(nullcalls)) {
         dynamo_start(mc);
         /* the interpreter takes over from here */
@@ -2609,7 +2599,7 @@ void
 dynamo_thread_not_under_dynamo(dcontext_t *dcontext)
 {
 #ifdef LINUX
-    /* FIXME : on windows this only matters when using the app_start app_stop 
+    /* FIXME : on windows this only matters when using the app_start app_stop
      * interface, and it screws up the thread lookup and synch routines
      * undefining for windows for SAV alpha, revisit later with better model
      */
@@ -2622,16 +2612,16 @@ dynamo_thread_not_under_dynamo(dcontext_t *dcontext)
      * and we mark it no longer under our control when do we exit it?
      */
     os_thread_not_under_dynamo(dcontext);
-# ifdef SIDELINE
+#    ifdef SIDELINE
     /* FIXME: if # active threads is 0, then put sideline thread to sleep! */
     if (dynamo_options.sideline) {
         /* put sideline thread to sleep */
         sideline_stop();
     }
-# endif
-# ifdef DEBUG
+#    endif
+#    ifdef DEBUG
     os_flush(dcontext->logfile);
-# endif
+#    endif
 #endif /* LINUX */
 }
 
@@ -2640,20 +2630,20 @@ void
 dynamorio_app_take_over_helper(dr_mcontext_t *mc)
 {
 #ifndef LINUX_KERNEL
-	static bool have_taken_over = false; /* ASSUMPTION: not an actual write */
+    static bool have_taken_over = false; /* ASSUMPTION: not an actual write */
 #endif
     SELF_UNPROTECT_DATASEC(DATASEC_RARELY_PROT);
-    APP_EXPORT_ASSERT(dynamo_initialized, PRODUCT_NAME" not initialized");
+    APP_EXPORT_ASSERT(dynamo_initialized, PRODUCT_NAME " not initialized");
 #ifdef LINUX_KERNEL
     control_all_threads = true;
     dynamo_start(mc);
 #else
-# ifdef RETURN_AFTER_CALL
+#    ifdef RETURN_AFTER_CALL
     /* FIXME : this is set after dynamo_initialized, so a slight race with
      * an injected thread turning on .C protection before the main thread
      * sets this. */
-    dr_preinjected = true;      /* currently only relevant on Win32 */
-# endif
+    dr_preinjected = true; /* currently only relevant on Win32 */
+#    endif
 
     if (!INTERNAL_OPTION(nullcalls) && !have_taken_over) {
         have_taken_over = true;
@@ -2670,10 +2660,10 @@ dynamorio_app_take_over_helper(dr_mcontext_t *mc)
         control_all_threads = automatic_startup;
         SELF_PROTECT_DATASEC(DATASEC_RARELY_PROT);
 
-        /* For hotp_only and thin_client, the app should run native, except 
-         * for our hooks. 
+        /* For hotp_only and thin_client, the app should run native, except
+         * for our hooks.
          * This is where apps hooked using appinit key are let go native.
-         * Even though control is going to native app code, we want 
+         * Even though control is going to native app code, we want
          * automatic_startup and control_all_threads set.
          */
         if (!RUNNING_WITHOUT_CODE_CACHE())
@@ -2684,12 +2674,12 @@ dynamorio_app_take_over_helper(dr_mcontext_t *mc)
 #endif
 }
 
-
 #ifdef WINDOWS
-extern app_pc parent_early_inject_address; /* from os.c */ 
+extern app_pc parent_early_inject_address; /* from os.c */
 
 /* in arch-specific assembly file */
-void dynamorio_app_take_over(void);
+void
+dynamorio_app_take_over(void);
 
 DYNAMORIO_EXPORT void
 dynamorio_app_init_and_early_takeover(uint inject_location, void *restore_code)
@@ -2795,7 +2785,7 @@ dynamorio_protect(void)
             ASSERT(num == protect_info->num_threads_suspended);
             protect_info->num_threads_suspended = 0;
         }
-        
+
         /* thread init/exit can proceed now */
         mutex_unlock(&thread_initexit_lock);
     }
@@ -2810,7 +2800,7 @@ dynamorio_protect(void)
     mutex_unlock(&protect_info->lock);
 }
 
-static void 
+static void
 dynamorio_unprotect(void)
 {
     ASSERT(SELF_PROTECT_ON_CXT_SWITCH);
@@ -2832,7 +2822,7 @@ dynamorio_unprotect(void)
              * and can't do that without setting a lock => need data segment!
              */
             mutex_lock(&thread_initexit_lock);
-        
+
             if (get_num_threads() > 1) {
                 thread_record_t *tr;
                 int i;
@@ -2847,7 +2837,7 @@ dynamorio_unprotect(void)
                     for (tr = all_threads[i]; tr; tr = tr->next) {
                         if (tr->under_dynamo_control) {
                             DEBUG_DECLARE(bool ok =)
-                                thread_suspend(all_threads[i]);
+                            thread_suspend(all_threads[i]);
                             ASSERT(ok);
                             protect_info->num_threads_suspended++;
                         }
@@ -2871,7 +2861,7 @@ const char *
 get_data_section_name(app_pc pc)
 {
     uint i;
-    for (i=0; i<DATASEC_NUM; i++) {
+    for (i = 0; i < DATASEC_NUM; i++) {
         if (pc >= datasec_start[i] && pc < datasec_end[i])
             return DATASEC_NAMES[i];
     }
@@ -2891,12 +2881,12 @@ check_should_be_protected(uint sec)
          * syscall_while_native before DR is initialized.
          */
         !dynamo_initialized ||
-#ifdef WINDOWS
+#    ifdef WINDOWS
         /* case 8113: detach currently unprots .data prior to its
          * thread synch, so don't count anything after that
          */
         doing_detach ||
-#endif
+#    endif
         !TEST(DATASEC_SELFPROT[sec], DYNAMO_OPTION(protect_mask)) ||
         DATASEC_PROTECTED(sec))
         return true;
@@ -2913,7 +2903,7 @@ check_should_be_protected(uint sec)
     return true;
 }
 
-# ifdef WINDOWS
+#    ifdef WINDOWS
 /* Assumed to only be called about DR dll writable regions */
 bool
 data_sections_enclose_region(app_pc start, app_pc end)
@@ -2922,23 +2912,23 @@ data_sections_enclose_region(app_pc start, app_pc end)
      * where .data|.fspdata|.cspdata|.nspdata form the only writable region,
      * and 64-bit, where .pdata is between .data and .fspdata.
      */
-#  ifdef X64
+#        ifdef X64
     return ((datasec_start[DATASEC_RARELY_PROT] == start &&
              datasec_end[DATASEC_RARELY_PROT] == end) ||
             (datasec_start[DATASEC_FREQ_PROT] == start &&
              datasec_end[DATASEC_FREQ_PROT] == datasec_start[DATASEC_CXTSW_PROT] &&
              datasec_end[DATASEC_CXTSW_PROT] == datasec_start[DATASEC_NEVER_PROT] &&
              datasec_end[DATASEC_NEVER_PROT] == end));
-#  else
+#        else
     return (datasec_start[DATASEC_RARELY_PROT] == start &&
             datasec_end[DATASEC_RARELY_PROT] == datasec_start[DATASEC_FREQ_PROT] &&
             datasec_end[DATASEC_FREQ_PROT] == datasec_start[DATASEC_CXTSW_PROT] &&
             datasec_end[DATASEC_CXTSW_PROT] == datasec_start[DATASEC_NEVER_PROT] &&
             datasec_end[DATASEC_NEVER_PROT] == end);
-#  endif
+#        endif
 }
-# endif /* WINDOWS */
-#endif /* DEBUG */
+#    endif /* WINDOWS */
+#endif     /* DEBUG */
 
 static void
 get_data_section_bounds(uint sec)
@@ -2952,10 +2942,10 @@ get_data_section_bounds(uint sec)
      * don't protect subsequent guys.
      * On win32 there are no other rw sections, fortunately.
      */
-    ASSERT(sec >=0 && sec < DATASEC_NUM);
+    ASSERT(sec >= 0 && sec < DATASEC_NUM);
     /* for DEBUG we use for data_sections_enclose_region() */
     ASSERT(IF_WINDOWS(IF_DEBUG(true ||))
-           TEST(DATASEC_SELFPROT[sec], dynamo_options.protect_mask));
+               TEST(DATASEC_SELFPROT[sec], dynamo_options.protect_mask));
     mutex_lock(&datasec_lock[sec]);
     ASSERT(datasec_start[sec] == NULL);
     get_named_section_bounds(get_dynamorio_dll_start(), DATASEC_NAMES[sec],
@@ -2988,7 +2978,7 @@ static void
 data_section_init(void)
 {
     uint i;
-    for (i=0; i<DATASEC_NUM; i++) {
+    for (i = 0; i < DATASEC_NUM; i++) {
         if (datasec_start[i] != NULL) {
             /* We were called early due to an early syslog.
              * We still retain our slightly later normal init position so we can
@@ -2999,15 +2989,15 @@ data_section_init(void)
         ASSIGN_INIT_LOCK_FREE(datasec_lock[i], datasec_selfprot_lock);
         /* for DEBUG we use for data_sections_enclose_region() */
         if (IF_WINDOWS(IF_DEBUG(true ||))
-            TEST(DATASEC_SELFPROT[i], dynamo_options.protect_mask)) {
+                TEST(DATASEC_SELFPROT[i], dynamo_options.protect_mask)) {
             get_data_section_bounds(i);
         }
     }
     DODEBUG({
         /* ensure no overlaps */
         uint j;
-        for (i=0; i<DATASEC_NUM; i++) {
-            for (j=i+1; j<DATASEC_NUM; j++) {
+        for (i = 0; i < DATASEC_NUM; i++) {
+            for (j = i + 1; j < DATASEC_NUM; j++) {
                 ASSERT(datasec_start[i] >= datasec_end[j] ||
                        datasec_start[j] >= datasec_end[i]);
             }
@@ -3026,15 +3016,18 @@ data_section_exit(void)
          */
         ASSERT_CURIOSITY(GLOBAL_STAT(datasec_not_prot) < 40);
     });
-    for (i=0; i<DATASEC_NUM; i++)
+    for (i = 0; i < DATASEC_NUM; i++)
         DELETE_LOCK(datasec_lock[i]);
 }
 
-#define DATASEC_WRITABLE_MOD(which, op) \
-    ((which) == DATASEC_RARELY_PROT ? (datasec_writable_rareprot op) : \
-     ((which) == DATASEC_CXTSW_PROT ? (datasec_writable_cxtswprot op) : \
-      ((which) == DATASEC_FREQ_PROT ? (datasec_writable_freqprot op) : \
-       (ASSERT_NOT_REACHED(), datasec_writable_neverprot))))
+#define DATASEC_WRITABLE_MOD(which, op)                 \
+    ((which) == DATASEC_RARELY_PROT                     \
+         ? (datasec_writable_rareprot op)               \
+         : ((which) == DATASEC_CXTSW_PROT               \
+                ? (datasec_writable_cxtswprot op)       \
+                : ((which) == DATASEC_FREQ_PROT         \
+                       ? (datasec_writable_freqprot op) \
+                       : (ASSERT_NOT_REACHED(), datasec_writable_neverprot))))
 
 /* WARNING: any DO_ONCE will call this routine, so don't call anything here
  * that has a DO_ONCE, to avoid deadlock!
@@ -3042,7 +3035,7 @@ data_section_exit(void)
 void
 protect_data_section(uint sec, bool writable)
 {
-    ASSERT(sec >=0 && sec < DATASEC_NUM);
+    ASSERT(sec >= 0 && sec < DATASEC_NUM);
     ASSERT(TEST(DATASEC_SELFPROT[sec], dynamo_options.protect_mask));
     /* We can be called very early before data_section_init() so init here
      * (data_section_init() has no dependences).
@@ -3054,7 +3047,7 @@ protect_data_section(uint sec, bool writable)
     }
     mutex_lock(&datasec_lock[sec]);
     ASSERT(datasec_start[sec] != NULL);
-    /* if using libc, we cannot print while data segment is read-only! 
+    /* if using libc, we cannot print while data segment is read-only!
      * thus, if making it writable, do that first, otherwise do it last.
      * w/ ntdll this is not a problem.
      */
@@ -3079,8 +3072,8 @@ protect_data_section(uint sec, bool writable)
     LOG(TEST(DATASEC_SELFPROT[sec], SELFPROT_ON_CXT_SWITCH) ? THREAD_GET : GLOBAL,
         LOG_VMAREAS, TEST(DATASEC_SELFPROT[sec], SELFPROT_ON_CXT_SWITCH) ? 3U : 2U,
         "protect_data_section: %s %s %s %d\n",
-        DATASEC_WRITABLE(sec) == 1 ? "changing" : "nop",
-        DATASEC_NAMES[sec], writable ? "rw" : "r", DATASEC_WRITABLE(sec));
+        DATASEC_WRITABLE(sec) == 1 ? "changing" : "nop", DATASEC_NAMES[sec],
+        writable ? "rw" : "r", DATASEC_WRITABLE(sec));
     if (!writable) {
         ASSERT(DATASEC_WRITABLE(sec) > 0);
         DATASEC_WRITABLE_MOD(sec, --);
@@ -3109,7 +3102,7 @@ entering_dynamorio(void)
     }
 }
 
-void 
+void
 exiting_dynamorio(void)
 {
     ASSERT(HOOK_ENABLED);
@@ -3136,8 +3129,7 @@ is_on_initstack(byte *esp)
 bool
 is_on_dstack(dcontext_t *dcontext, byte *esp)
 {
-    return (esp <= dcontext->dstack && 
-            esp > dcontext->dstack - DYNAMORIO_STACK_SIZE);
+    return (esp <= dcontext->dstack && esp > dcontext->dstack - DYNAMORIO_STACK_SIZE);
 }
 
 bool

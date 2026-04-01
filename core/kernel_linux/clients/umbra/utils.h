@@ -23,7 +23,7 @@
  * OTHER DEALINGS IN THE SOFTWARE.                                   *
  *********************************************************************/
 
-/* 
+/*
  * Utility functions
  *
  * Author:
@@ -36,8 +36,8 @@
 #include "umbra.h"
 #include "global.h"
 
-#ifdef   assert
-#  undef assert
+#ifdef assert
+#    undef assert
 #endif
 
 #define TESTALL(mask, var) (((mask) & (var)) == (mask))
@@ -48,36 +48,25 @@
     ((((ptr_uint_t)x) + ((alignment)-1)) & (~((ptr_uint_t)(alignment)-1)))
 #define SET_TO_NOPS(addr, size) memset(addr, 0x90, size)
 
-
 /* save reg before where in ilist */
 void
-umbra_save_reg(void         *drcontext,
-               umbra_info_t *info,
-               instrlist_t  *ilist,
-               instr_t      *where,
-               reg_id_t      reg);
+umbra_save_reg(void *drcontext, umbra_info_t *info, instrlist_t *ilist, instr_t *where,
+               reg_id_t reg);
 
 /* restore reg before where in ilist */
 void
-umbra_restore_reg(void         *drcontext,
-                  umbra_info_t *info,
-                  instrlist_t  *ilist,
-                  instr_t      *where,
-                  reg_id_t      reg);
+umbra_restore_reg(void *drcontext, umbra_info_t *info, instrlist_t *ilist, instr_t *where,
+                  reg_id_t reg);
 
 /* save aflags from eax */
 void
-umbra_save_eax_aflags(void        *drcontext,
-                     umbra_info_t *info,
-                     instrlist_t *ilist,
-                     instr_t     *where);
+umbra_save_eax_aflags(void *drcontext, umbra_info_t *info, instrlist_t *ilist,
+                      instr_t *where);
 
 /* restore aflags into eax */
 void
-umbra_restore_eax_aflags(void        *drcontext,
-                        umbra_info_t *info,
-                        instrlist_t *ilist,
-                        instr_t     *where);
+umbra_restore_eax_aflags(void *drcontext, umbra_info_t *info, instrlist_t *ilist,
+                         instr_t *where);
 
 /*
  * IR Manipulation Utility Function
@@ -85,7 +74,8 @@ umbra_restore_eax_aflags(void        *drcontext,
 void
 instrlist_truncate(void *drcontext, instrlist_t *ilist, instr_t *instr);
 
-bool instr_writes_to_aflags(instr_t *instr);
+bool
+instr_writes_to_aflags(instr_t *instr);
 
 bool
 instr_uses_aflags(instr_t *instr);
@@ -99,7 +89,7 @@ instr_writes_to_all_aflags(instr_t *instr);
 bool
 instr_reads_from_aflags(instr_t *instr);
 
-bool 
+bool
 isntr_writes_to_aflags(instr_t *instr);
 
 instr_t *

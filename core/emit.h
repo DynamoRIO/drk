@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -46,14 +46,12 @@
  * links it as a new fragment.
  */
 fragment_t *
-emit_fragment(dcontext_t *dcontext, app_pc tag,
-              instrlist_t *ilist, uint flags, void *vmlist,
-              bool link);
+emit_fragment(dcontext_t *dcontext, app_pc tag, instrlist_t *ilist, uint flags,
+              void *vmlist, bool link);
 
 fragment_t *
-emit_fragment_ex(dcontext_t *dcontext, app_pc tag,
-                 instrlist_t *ilist, uint flags, void *vmlist,
-                 bool link, bool visible);
+emit_fragment_ex(dcontext_t *dcontext, app_pc tag, instrlist_t *ilist, uint flags,
+                 void *vmlist, bool link, bool visible);
 
 /* Emits code for ilist into the fcache, returns the created fragment.
  * Does not add the fragment to the ftable, leaving it as an "invisible"
@@ -62,17 +60,17 @@ emit_fragment_ex(dcontext_t *dcontext, app_pc tag,
  * The fragment is also not linked, to give the caller more flexibility.
  */
 fragment_t *
-emit_invisible_fragment(dcontext_t *dcontext, app_pc tag,
-                        instrlist_t *ilist, uint flags, void *vmlist);
+emit_invisible_fragment(dcontext_t *dcontext, app_pc tag, instrlist_t *ilist, uint flags,
+                        void *vmlist);
 
 fragment_t *
 emit_fragment_as_replacement(dcontext_t *dcontext, app_pc tag, instrlist_t *ilist,
                              uint flags, void *vmlist, fragment_t *replace);
 
-# ifdef INTERNAL
-void stress_test_recreate(dcontext_t *dcontext, fragment_t *f, 
-                          instrlist_t *ilist);
-# endif
+#ifdef INTERNAL
+void
+stress_test_recreate(dcontext_t *dcontext, fragment_t *f, instrlist_t *ilist);
+#endif
 
 bool
 final_exit_shares_prev_stub(dcontext_t *dcontext, instrlist_t *ilist, uint frag_flags);
@@ -83,7 +81,7 @@ final_exit_shares_prev_stub(dcontext_t *dcontext, instrlist_t *ilist, uint frag_
  * increments stats for new fragments, and returns the final pc after all encodings.
  */
 cache_pc
-set_linkstub_fields(dcontext_t *dcontext, fragment_t *f, instrlist_t *ilist, 
+set_linkstub_fields(dcontext_t *dcontext, fragment_t *f, instrlist_t *ilist,
                     uint num_direct_stubs, uint num_indirect_stubs, bool emit);
 
 #endif /* _EMIT_H_ */

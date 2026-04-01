@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -43,7 +43,7 @@
 
 #ifdef HEAP_ACCOUNTING
 typedef enum {
-    ACCT_FRAGMENT=0,
+    ACCT_FRAGMENT = 0,
     ACCT_COARSE_LINK,
     ACCT_FRAG_FUTURE,
     ACCT_FRAG_TABLE,
@@ -55,9 +55,9 @@ typedef enum {
     ACCT_AFTER_CALL,
     ACCT_VMAREAS,
     ACCT_SYMBOLS,
-# ifdef SIDELINE
+#    ifdef SIDELINE
     ACCT_SIDELINE,
-# endif
+#    endif
     ACCT_THCOUNTER,
     ACCT_TOMBSTONE, /* N.B.: leaks in this category are not reported;
                      * not currently used */
@@ -67,24 +67,24 @@ typedef enum {
     ACCT_MEM_MGT,
     ACCT_STATS,
     ACCT_SPECIAL,
-# ifdef CLIENT_INTERFACE
+#    ifdef CLIENT_INTERFACE
     ACCT_CLIENT,
-# endif
+#    endif
     ACCT_LIBDUP, /* private copies of system libs => may leak */
     /* NOTE: Also update the whichheap_name in heap.c when adding here */
     ACCT_OTHER,
     ACCT_LAST
 } which_heap_t;
 
-# define HEAPACCT(x) , x
-# define IF_HEAPACCT_ELSE(x, y) x
+#    define HEAPACCT(x) , x
+#    define IF_HEAPACCT_ELSE(x, y) x
 #else
-# define HEAPACCT(x)
-# define IF_HEAPACCT_ELSE(x, y) y
+#    define HEAPACCT(x)
+#    define IF_HEAPACCT_ELSE(x, y) y
 #endif
 
-typedef byte * heap_pc;
-#define HEAP_ALIGNMENT sizeof(heap_pc*)
+typedef byte *heap_pc;
+#define HEAP_ALIGNMENT sizeof(heap_pc *)
 extern vm_area_vector_t *landing_pad_areas;
 
 /* Request that the supplied region be 32bit offset reachable from the DR heap.  Should
@@ -95,44 +95,68 @@ void
 request_region_be_heap_reachable(byte *start, size_t size);
 
 /* virtual heap manager */
-void vmm_heap_init(void);
-void vmm_heap_exit(void);
-void print_vmm_heap_data(file_t outf);
-void get_vmm_heap_bounds(byte **heap_start/*OUT*/, byte **heap_end/*OUT*/);
+void
+vmm_heap_init(void);
+void
+vmm_heap_exit(void);
+void
+print_vmm_heap_data(file_t outf);
+void
+get_vmm_heap_bounds(byte **heap_start /*OUT*/, byte **heap_end /*OUT*/);
 
-bool heap_check_option_compatibility(void);
+bool
+heap_check_option_compatibility(void);
 
-bool is_vmm_reserved_address(byte *pc, size_t size);
-bool rel32_reachable_from_heap(byte *target);
+bool
+is_vmm_reserved_address(byte *pc, size_t size);
+bool
+rel32_reachable_from_heap(byte *target);
 
 /* heap management */
-void heap_init(void);
-void heap_exit(void);
-void heap_reset_init(void);
-void heap_reset_free(void);
-void heap_thread_init(dcontext_t *dcontext);
-void heap_thread_exit(dcontext_t *dcontext);
+void
+heap_init(void);
+void
+heap_exit(void);
+void
+heap_reset_init(void);
+void
+heap_reset_free(void);
+void
+heap_thread_init(dcontext_t *dcontext);
+void
+heap_thread_exit(dcontext_t *dcontext);
 
 /* re-initializes non-persistent memory */
-void heap_thread_reset_init(dcontext_t *dcontext);
+void
+heap_thread_reset_init(dcontext_t *dcontext);
 /* frees all non-persistent memory */
-void heap_thread_reset_free(dcontext_t *dcontext);
+void
+heap_thread_reset_free(dcontext_t *dcontext);
 
 /* these functions use the global heap instead of a thread's heap: */
-void *global_heap_alloc(size_t size HEAPACCT(which_heap_t which));
-void global_heap_free(void *p, size_t size HEAPACCT(which_heap_t which));
-void *global_heap_realloc(void *ptr, size_t old_num, size_t new_num,
-                          size_t element_size HEAPACCT(which_heap_t which));
+void *
+global_heap_alloc(size_t size HEAPACCT(which_heap_t which));
+void
+global_heap_free(void *p, size_t size HEAPACCT(which_heap_t which));
+void *
+global_heap_realloc(void *ptr, size_t old_num, size_t new_num,
+                    size_t element_size HEAPACCT(which_heap_t which));
 
-bool lockwise_safe_to_allocate_memory(void);
+bool
+lockwise_safe_to_allocate_memory(void);
 
 /* use heap_mmap to allocate large chunks of executable memory */
-void *heap_mmap(size_t size);
-void heap_munmap(void *p, size_t size);
-void *heap_mmap_reserve(size_t reserve_size, size_t commit_size);
+void *
+heap_mmap(size_t size);
+void
+heap_munmap(void *p, size_t size);
+void *
+heap_mmap_reserve(size_t reserve_size, size_t commit_size);
 
-void *heap_mmap_ex(size_t reserve_size, size_t commit_size, uint prot, bool guarded);
-void heap_munmap_ex(void *p, size_t size, bool guarded);
+void *
+heap_mmap_ex(size_t reserve_size, size_t commit_size, uint prot, bool guarded);
+void
+heap_munmap_ex(void *p, size_t size, bool guarded);
 
 /* updates dynamo_areas and calls the os_ versions */
 byte *
@@ -145,8 +169,8 @@ unmap_file(byte *map, size_t size);
  * stack, to save address space (case 9474).
  */
 void *
-heap_mmap_reserve_post_stack(dcontext_t *dcontext,
-                             size_t reserve_size, size_t commit_size);
+heap_mmap_reserve_post_stack(dcontext_t *dcontext, size_t reserve_size,
+                             size_t commit_size);
 void
 heap_munmap_post_stack(dcontext_t *dcontext, void *p, size_t reserve_size);
 
@@ -160,37 +184,49 @@ void
 heap_mmap_retract_commitment(void *retract_start, size_t decommit_size);
 
 /* use stack_alloc to build a stack -- it returns TOS */
-void *stack_alloc(size_t size);
-void stack_free(void *p, size_t size);
+void *
+stack_alloc(size_t size);
+void
+stack_free(void *p, size_t size);
 
 #ifdef STACK_GUARD_PAGE
 /* checks if pc is in guard page on stack */
-bool is_stack_overflow(dcontext_t *dcontext, byte *sp);
+bool
+is_stack_overflow(dcontext_t *dcontext, byte *sp);
 #endif
 
 /* these are for thread-local allocs
  * passing dcontext == GLOBAL_DCONTEXT will end up calling global_heap_{alloc,free}
  */
-void *heap_alloc(dcontext_t *dcontext, size_t size HEAPACCT(which_heap_t which));
-void heap_free(dcontext_t *dcontext, void *p, size_t size HEAPACCT(which_heap_t which));
+void *
+heap_alloc(dcontext_t *dcontext, size_t size HEAPACCT(which_heap_t which));
+void
+heap_free(dcontext_t *dcontext, void *p, size_t size HEAPACCT(which_heap_t which));
 
 #ifdef HEAP_ACCOUNTING
-void print_heap_statistics(void);
+void
+print_heap_statistics(void);
 #endif
 
 /* FIXME: persistence is yet another dimension here
  * let's clean all these up and have a single alloc routine?
  */
-void *nonpersistent_heap_alloc(dcontext_t *dcontext, size_t size
-                               HEAPACCT(which_heap_t which));
-void nonpersistent_heap_free(dcontext_t *dcontext, void *p, size_t size
-                             HEAPACCT(which_heap_t which));
+void *
+nonpersistent_heap_alloc(dcontext_t *dcontext, size_t size HEAPACCT(which_heap_t which));
+void
+nonpersistent_heap_free(dcontext_t *dcontext, void *p,
+                        size_t size HEAPACCT(which_heap_t which));
 
-bool local_heap_protected(dcontext_t *dcontext);
-void protect_local_heap(dcontext_t *dcontext, bool writable);
-void protect_global_heap(bool writable);
-void *global_unprotected_heap_alloc(size_t size HEAPACCT(which_heap_t which));
-void global_unprotected_heap_free(void *p, size_t size HEAPACCT(which_heap_t which));
+bool
+local_heap_protected(dcontext_t *dcontext);
+void
+protect_local_heap(dcontext_t *dcontext, bool writable);
+void
+protect_global_heap(bool writable);
+void *
+global_unprotected_heap_alloc(size_t size HEAPACCT(which_heap_t which));
+void
+global_unprotected_heap_free(void *p, size_t size HEAPACCT(which_heap_t which));
 
 #define UNPROTECTED_LOCAL_ALLOC(dc, ...) global_unprotected_heap_alloc(__VA_ARGS__)
 #define UNPROTECTED_LOCAL_FREE(dc, ...) global_unprotected_heap_free(__VA_ARGS__)
@@ -207,43 +243,49 @@ void global_unprotected_heap_free(void *p, size_t size HEAPACCT(which_heap_t whi
  */
 #define PROTECTED true
 #define UNPROTECTED false
-#define HEAP_ARRAY_ALLOC(dc, type, num, which, protected) \
-    ((protected) ? \
-        (type *) heap_alloc(dc, sizeof(type)*(num) HEAPACCT(which)) : \
-        (type *) UNPROTECTED_LOCAL_ALLOC(dc, sizeof(type)*(num) HEAPACCT(which)))
+#define HEAP_ARRAY_ALLOC(dc, type, num, which, protected)              \
+    ((protected)                                                       \
+         ? (type *)heap_alloc(dc, sizeof(type) * (num)HEAPACCT(which)) \
+         : (type *)UNPROTECTED_LOCAL_ALLOC(dc, sizeof(type) * (num)HEAPACCT(which)))
 #define HEAP_TYPE_ALLOC(dc, type, which, protected) \
     HEAP_ARRAY_ALLOC(dc, type, 1, which, protected)
-#define HEAP_ARRAY_ALLOC_MEMSET(dc, type, num, which, protected, val)   \
-    memset(HEAP_ARRAY_ALLOC(dc, type, num, which, protected), (val),    \
-           sizeof(type)*(num));
+#define HEAP_ARRAY_ALLOC_MEMSET(dc, type, num, which, protected, val) \
+    memset(HEAP_ARRAY_ALLOC(dc, type, num, which, protected), (val),  \
+           sizeof(type) * (num));
 
-#define HEAP_ARRAY_FREE(dc, p, type, num, which, protected) \
-    ((protected) ? \
-        heap_free(dc, (type*)p, sizeof(type)*(num) HEAPACCT(which)) : \
-        UNPROTECTED_LOCAL_FREE(dc, (type*)p, sizeof(type)*(num) HEAPACCT(which)))
+#define HEAP_ARRAY_FREE(dc, p, type, num, which, protected)              \
+    ((protected)                                                         \
+         ? heap_free(dc, (type *)p, sizeof(type) * (num)HEAPACCT(which)) \
+         : UNPROTECTED_LOCAL_FREE(dc, (type *)p, sizeof(type) * (num)HEAPACCT(which)))
 #define HEAP_TYPE_FREE(dc, p, type, which, protected) \
     HEAP_ARRAY_FREE(dc, p, type, 1, which, protected)
 
 /* nonpersistent heap is assumed to be protected */
 #define NONPERSISTENT_HEAP_ARRAY_ALLOC(dc, type, num, which) \
-    (type *) nonpersistent_heap_alloc(dc, sizeof(type)*(num) HEAPACCT(which))
+    (type *)nonpersistent_heap_alloc(dc, sizeof(type) * (num)HEAPACCT(which))
 #define NONPERSISTENT_HEAP_TYPE_ALLOC(dc, type, which) \
     NONPERSISTENT_HEAP_ARRAY_ALLOC(dc, type, 1, which)
 #define NONPERSISTENT_HEAP_ARRAY_FREE(dc, p, type, num, which) \
-    nonpersistent_heap_free(dc, (type*)p, sizeof(type)*(num) HEAPACCT(which))
+    nonpersistent_heap_free(dc, (type *)p, sizeof(type) * (num)HEAPACCT(which))
 #define NONPERSISTENT_HEAP_TYPE_FREE(dc, p, type, which) \
     NONPERSISTENT_HEAP_ARRAY_FREE(dc, p, type, 1, which)
 
 /* special heap of same-sized blocks that avoids global locks */
-void *special_heap_init(uint block_size, bool use_lock, bool executable,
-                        bool persistent);
-void special_heap_exit(void *special);
-void *special_heap_alloc(void *special);
-void *special_heap_calloc(void *special, uint num);
-void special_heap_free(void *special, void *p);
-void special_heap_cfree(void *special, void *p, uint num);
+void *
+special_heap_init(uint block_size, bool use_lock, bool executable, bool persistent);
+void
+special_heap_exit(void *special);
+void *
+special_heap_alloc(void *special);
+void *
+special_heap_calloc(void *special, uint num);
+void
+special_heap_free(void *special, void *p);
+void
+special_heap_cfree(void *special, void *p, uint num);
 #if defined(WINDOWS_PC_SAMPLE) && !defined(DEBUG)
-void special_heap_profile_exit(void);
+void
+special_heap_profile_exit(void);
 #endif
 
 /* iterator over units in a special heap */
@@ -288,37 +330,39 @@ special_heap_set_vector_data(void *special, void *vector_data);
 bool
 special_heap_set_unit_end(void *special, byte *end_pc);
 
-void heap_vmareas_synch_units(void);
+void
+heap_vmareas_synch_units(void);
 
 /* Utility routine to delete special heap locks; needed for case 9593. */
-void special_heap_delete_lock(void *special);
+void
+special_heap_delete_lock(void *special);
 
 #ifdef DEBUG_MEMORY
-# define HEAP_TO_BYTE_EX(hex) 0x##hex
-# define HEAP_TO_BYTE(hex) HEAP_TO_BYTE_EX(hex)
-# define HEAP_TO_UINT_EX(hex) 0x##hex##hex##hex##hex
-# define HEAP_TO_UINT(hex) HEAP_TO_UINT_EX(hex)
-# ifdef X64
-#  define HEAP_TO_PTR_UINT_EX(hex) 0x##hex##hex##hex##hex##hex##hex##hex##hex
-# else
-#  define HEAP_TO_PTR_UINT_EX(hex) 0x##hex##hex##hex##hex
-# endif
-# define HEAP_TO_PTR_UINT(hex) HEAP_TO_PTR_UINT_EX(hex)
+#    define HEAP_TO_BYTE_EX(hex) 0x##hex
+#    define HEAP_TO_BYTE(hex) HEAP_TO_BYTE_EX(hex)
+#    define HEAP_TO_UINT_EX(hex) 0x##hex##hex##hex##hex
+#    define HEAP_TO_UINT(hex) HEAP_TO_UINT_EX(hex)
+#    ifdef X64
+#        define HEAP_TO_PTR_UINT_EX(hex) 0x##hex##hex##hex##hex##hex##hex##hex##hex
+#    else
+#        define HEAP_TO_PTR_UINT_EX(hex) 0x##hex##hex##hex##hex
+#    endif
+#    define HEAP_TO_PTR_UINT(hex) HEAP_TO_PTR_UINT_EX(hex)
 
-# define HEAP_UNALLOCATED cd
-# define HEAP_UNALLOCATED_BYTE HEAP_TO_BYTE(HEAP_UNALLOCATED)
-# define HEAP_UNALLOCATED_UINT HEAP_TO_UINT(HEAP_UNALLOCATED)
-# define HEAP_UNALLOCATED_PTR_UINT HEAP_TO_PTR_UINT(HEAP_UNALLOCATED)
+#    define HEAP_UNALLOCATED cd
+#    define HEAP_UNALLOCATED_BYTE HEAP_TO_BYTE(HEAP_UNALLOCATED)
+#    define HEAP_UNALLOCATED_UINT HEAP_TO_UINT(HEAP_UNALLOCATED)
+#    define HEAP_UNALLOCATED_PTR_UINT HEAP_TO_PTR_UINT(HEAP_UNALLOCATED)
 
-# define HEAP_ALLOCATED ab
-# define HEAP_ALLOCATED_BYTE HEAP_TO_BYTE(HEAP_ALLOCATED)
-# define HEAP_ALLOCATED_UINT HEAP_TO_UINT(HEAP_ALLOCATED)
-# define HEAP_ALLOCATED_PTR_UINT HEAP_TO_PTR_UINT(HEAP_ALLOCATED)
+#    define HEAP_ALLOCATED ab
+#    define HEAP_ALLOCATED_BYTE HEAP_TO_BYTE(HEAP_ALLOCATED)
+#    define HEAP_ALLOCATED_UINT HEAP_TO_UINT(HEAP_ALLOCATED)
+#    define HEAP_ALLOCATED_PTR_UINT HEAP_TO_PTR_UINT(HEAP_ALLOCATED)
 
-# define HEAP_PAD bc
-# define HEAP_PAD_BYTE HEAP_TO_BYTE(HEAP_PAD)
-# define HEAP_PAD_UINT HEAP_TO_UINT(HEAP_PAD)
-# define HEAP_PAD_PTR_UINT HEAP_TO_PTR_UINT(HEAP_PAD)
+#    define HEAP_PAD bc
+#    define HEAP_PAD_BYTE HEAP_TO_BYTE(HEAP_PAD)
+#    define HEAP_PAD_UINT HEAP_TO_UINT(HEAP_PAD)
+#    define HEAP_PAD_PTR_UINT HEAP_TO_PTR_UINT(HEAP_PAD)
 #endif
 
 #endif /* _HEAP_H_ */

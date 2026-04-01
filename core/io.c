@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -44,43 +44,41 @@
 #include "globals.h"
 #include "string_wrapper.h"
 #include <linux/kernel.h> // for vsscanf
-#include <stdarg.h> /* for varargs */
+#include <stdarg.h>       /* for varargs */
 
 #define VA_ARG_CHAR2INT
 #define BUF_SIZE 64
 
-const static char base_letters[] = {
-    '0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f'
-};
-const static char base_letters_cap[] = {
-    '0','1','2','3','4','5','6','7','8','9','A','B','C','D','E','F'
-};
+const static char base_letters[] = { '0', '1', '2', '3', '4', '5', '6', '7',
+                                     '8', '9', 'a', 'b', 'c', 'd', 'e', 'f' };
+const static char base_letters_cap[] = { '0', '1', '2', '3', '4', '5', '6', '7',
+                                         '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
 
 #ifdef LINUX
-const static double pos_inf = 1.0/0.0;
-const static double neg_inf = -1.0/0.0;
+const static double pos_inf = 1.0 / 0.0;
+const static double neg_inf = -1.0 / 0.0;
 #else
 /* Windows says "error C2099: initializer is not a constant", or
  * "error C2124: divide or mod by zero", for the above.
  */
-# pragma warning(disable : 4723) /* warning C4723: potential divide by 0 */
+#    pragma warning(disable : 4723) /* warning C4723: potential divide by 0 */
 const static double zerof = 0.0;
-# define pos_inf (1.0/zerof)
-# define neg_inf (-1.0/zerof)
+#    define pos_inf (1.0 / zerof)
+#    define neg_inf (-1.0 / zerof)
 #endif
 
 /* convert uint64 to a string */
 static char *
-uint64_to_str(uint64 num, int base, char * buf, int decimal, bool caps)
+uint64_to_str(uint64 num, int base, char *buf, int decimal, bool caps)
 {
-    int    cnt;
-    char   *p = buf;
-    int    end = (43 > decimal ? 43 : decimal);
+    int cnt;
+    char *p = buf;
+    int end = (43 > decimal ? 43 : decimal);
     ASSERT(decimal < BUF_SIZE - 1); /* so don't overflow buf */
 
     buf[end] = '\0';
     for (cnt = end - 1; cnt >= 0; cnt--) {
-        buf[cnt] = caps ? base_letters_cap[(num %base)] : base_letters[(num % base)];
+        buf[cnt] = caps ? base_letters_cap[(num % base)] : base_letters[(num % base)];
         num /= base;
     }
 
@@ -88,7 +86,7 @@ uint64_to_str(uint64 num, int base, char * buf, int decimal, bool caps)
         p++;
         decimal++;
     }
-    
+
     return p;
 }
 
@@ -96,18 +94,18 @@ uint64_to_str(uint64 num, int base, char * buf, int decimal, bool caps)
 static char *
 ulong_to_str(ulong num, int base, char *buf, int decimal, bool caps)
 {
-    int    cnt;
-    char   *p = buf;
-    int    end = (22 > decimal ? 22 : decimal); /* room for 64 bits octal */
-    ASSERT(decimal < BUF_SIZE - 1); /* so don't overflow buf */
+    int cnt;
+    char *p = buf;
+    int end = (22 > decimal ? 22 : decimal); /* room for 64 bits octal */
+    ASSERT(decimal < BUF_SIZE - 1);          /* so don't overflow buf */
 
     buf[end] = '\0';
     for (cnt = end - 1; cnt >= 0; cnt--) {
-        buf[cnt] = caps ? base_letters_cap[(num %base)] : base_letters[(num % base)];
+        buf[cnt] = caps ? base_letters_cap[(num % base)] : base_letters[(num % base)];
         num /= base;
     }
 
-    while (*p && *p == '0' && end - decimal> 0) {
+    while (*p && *p == '0' && end - decimal > 0) {
         p++;
         decimal++;
     }
@@ -122,7 +120,7 @@ double2int(double d)
 {
     long i = (long)d;
     if ((d - (double)i) >= 0.5)
-        return i+1;
+        return i + 1;
     else
         return i;
 }
@@ -143,7 +141,7 @@ double_to_str(double d, int decimal, char *buf, bool force_dot, bool suppress_ze
     else
         predot = double2int(d);
     sub = 1;
-    for (i=0; i<decimal; i++)
+    for (i = 0; i < decimal; i++)
         sub *= 10;
     postdot = double2int((d - (long)d) * (double)sub);
     if (postdot == sub) {
@@ -153,7 +151,7 @@ double_to_str(double d, int decimal, char *buf, bool force_dot, bool suppress_ze
     }
 
     pre = ulong_to_str((ulong)predot, 10, tmpbuf, 1, false);
-    for (i=0, c = pre; *c; c++)
+    for (i = 0, c = pre; *c; c++)
         buf[i++] = *c;
     if (force_dot || !(decimal == 0 || (suppress_zeros && postdot == 0))) {
         buf[i++] = '.';
@@ -162,26 +160,27 @@ double_to_str(double d, int decimal, char *buf, bool force_dot, bool suppress_ze
             buf[i++] = *c;
         /* remove trailing zeros */
         if (suppress_zeros) {
-            while (buf[i-1] == '0')
-                i--; 
+            while (buf[i - 1] == '0')
+                i--;
         }
     }
 
     buf[i] = '\0';
-    ASSERT(i<BUF_SIZE);  /* make sure don't overflow buffer */
+    ASSERT(i < BUF_SIZE); /* make sure don't overflow buffer */
     return buf;
 }
 #endif
 
 #ifndef LINUX_KERNEL
 static char *
-double_to_exp_str(double d, int exp, int decimal, char * buf, bool force_dot, bool suppress_zeros, bool caps)
+double_to_exp_str(double d, int exp, int decimal, char *buf, bool force_dot,
+                  bool suppress_zeros, bool caps)
 {
     char tmp_buf[BUF_SIZE];
     char *tc;
     int i = 0;
     uint abval;
-    
+
     tc = double_to_str(d, decimal, tmp_buf, force_dot, suppress_zeros);
     while (*tc) {
         buf[i++] = *tc++;
@@ -208,26 +207,25 @@ double_to_exp_str(double d, int exp, int decimal, char * buf, bool force_dot, bo
 }
 #endif
 
-
 int
 our_vsnprintf(char *s, size_t max, const char *fmt, va_list ap)
 {
     const char *c;
-    char     *str = NULL;
-    char     *start = s;
-    char     buf[BUF_SIZE];
-    
+    char *str = NULL;
+    char *start = s;
+    char buf[BUF_SIZE];
+
     if (fmt == NULL)
         return 0;
-    
+
     c = fmt;
     while (*c) {
         if (*c == '%') {
-            int  fill = 0;
+            int fill = 0;
             char filler = ' ';
             int decimal = -1; /* codes defaults (6 int, 1 float, all string) */
-            char charbuf[2] = {'\0','\0'};
-            char prefixbuf[3] = {'\0','\0','\0'};
+            char charbuf[2] = { '\0', '\0' };
+            char prefixbuf[3] = { '\0', '\0', '\0' };
             char *prefix;
             bool minus_flag = false;
             bool plus_flag = false;
@@ -242,24 +240,24 @@ our_vsnprintf(char *s, size_t max, const char *fmt, va_list ap)
 
             /* Collect flags -, +, #, 0,  */
             while (*c == '0' || *c == '-' || *c == '#' || *c == '+' || *c == ' ') {
-                if (*c == '0') 
+                if (*c == '0')
                     filler = '0';
-                if (*c == '-') 
+                if (*c == '-')
                     minus_flag = true;
-                if (*c == '+') 
+                if (*c == '+')
                     plus_flag = true;
-                if (*c == '#') 
+                if (*c == '#')
                     pound_flag = true;
-                if (*c == ' ') 
+                if (*c == ' ')
                     space_flag = true;
                 c++;
                 ASSERT(*c);
             }
-            if (minus_flag) 
+            if (minus_flag)
                 filler = ' ';
-            if (plus_flag) 
+            if (plus_flag)
                 space_flag = false;
-        
+
             /* get field width */
             if (*c == '*') {
                 fill = va_arg(ap, int);
@@ -299,9 +297,9 @@ our_vsnprintf(char *s, size_t max, const char *fmt, va_list ap)
 
             /* get size modifiers l, h, ll/L */
             if (*c == 'l' || *c == 'L' || *c == 'h') {
-                if (*c == 'L') 
+                if (*c == 'L')
                     ll_type = true;
-                if (*c == 'h') 
+                if (*c == 'h')
                     h_type = true;
                 if (*c == 'l') {
                     c++;
@@ -326,47 +324,45 @@ our_vsnprintf(char *s, size_t max, const char *fmt, va_list ap)
                 str = charbuf;
                 break;
             case 'd':
-            case 'i':
-                {
-                    long val;
-                    ulong abval;
-                    if (decimal == -1) 
-                        decimal = 1;  /* defaults */
-                    else
-                        filler = ' ';
-                    if (l_type) 
-                        val = va_arg(ap, long);  /* get arg */
-                    else if (h_type) 
-                        val = (long)va_arg(ap, int); /* short is promoted to int */
-                    else
-                        val = (long)va_arg(ap, int);
-                    if (val >= 0 && space_flag) 
-                        prefixbuf[0] = ' ';  /* set prefix */
-                    if (val >= 0 && plus_flag) 
-                        prefixbuf[0] = '+';
-                    if (val < 0) {
-                        prefixbuf[0] = '-';
-                        abval = -val;
-                    } else {
-                        abval = val;
-                    }
-                    str = ulong_to_str(abval, 10, buf, decimal, false); /* generate string */
-                    break;
+            case 'i': {
+                long val;
+                ulong abval;
+                if (decimal == -1)
+                    decimal = 1; /* defaults */
+                else
+                    filler = ' ';
+                if (l_type)
+                    val = va_arg(ap, long); /* get arg */
+                else if (h_type)
+                    val = (long)va_arg(ap, int); /* short is promoted to int */
+                else
+                    val = (long)va_arg(ap, int);
+                if (val >= 0 && space_flag)
+                    prefixbuf[0] = ' '; /* set prefix */
+                if (val >= 0 && plus_flag)
+                    prefixbuf[0] = '+';
+                if (val < 0) {
+                    prefixbuf[0] = '-';
+                    abval = -val;
+                } else {
+                    abval = val;
                 }
-            case 'I': 
-                { /* %I64, to match Win32 */
-                    uint64 val;
-                    /* must be %I64u */
-                    ASSERT(*(c+1)=='6' && *(c+2)=='4' && *(c+3)=='u');
-                    if (decimal == -1)
-                        decimal = 1;
-                    else
-                        filler = ' ';
-                    c += 3;
-                    val = (uint64)va_arg(ap, uint64);
-                    str = uint64_to_str(val, 10, buf, decimal, false);
-                    break;
-                }
+                str = ulong_to_str(abval, 10, buf, decimal, false); /* generate string */
+                break;
+            }
+            case 'I': { /* %I64, to match Win32 */
+                uint64 val;
+                /* must be %I64u */
+                ASSERT(*(c + 1) == '6' && *(c + 2) == '4' && *(c + 3) == 'u');
+                if (decimal == -1)
+                    decimal = 1;
+                else
+                    filler = ' ';
+                c += 3;
+                val = (uint64)va_arg(ap, uint64);
+                str = uint64_to_str(val, 10, buf, decimal, false);
+                break;
+            }
             case 'u':
                 /* handle long long u type */
                 if (decimal == -1)
@@ -374,66 +370,65 @@ our_vsnprintf(char *s, size_t max, const char *fmt, va_list ap)
                 else
                     filler = ' ';
                 if (ll_type) {
-                    str = uint64_to_str((uint64)va_arg(ap, uint64), 10, buf, decimal, false);
+                    str = uint64_to_str((uint64)va_arg(ap, uint64), 10, buf, decimal,
+                                        false);
                     break;
                 }
                 /* note no break */
             case 'x':
             case 'X':
             case 'o':
-            case 'p':
-                {
-                    ptr_uint_t val;
-                    bool caps = *c == 'X';
-                    int base = 10;
-                    if (decimal == -1)
-                        decimal = 1; /* defaults */
-                    else
-                        filler = ' ';
-                    if (*c == 'p')
-                        decimal = 2 * sizeof(void *); /* pointer precision */
-                    if ((pound_flag && *c != 'u') || (*c == 'p')) {  /* generate prefix */
-                        prefixbuf[0] = '0';
-                        if (*c == 'x' || *c == 'p')
-                            prefixbuf[1] = 'x';
-                        if (*c == 'X')
-                            prefixbuf[1] = 'X';
-                    }
-                    if (*c == 'o')
-                        base = 8;    /* determine base */
-                    if (*c == 'x' || *c == 'X' || *c == 'p')
-                        base = 16;
-                    ASSERT(sizeof(void *) == sizeof(val));
-                    if (*c == 'p')
-                        val = (ptr_uint_t) va_arg(ap, void *);  /* get val */
-                    else if (l_type)
-                        val = (ptr_uint_t) va_arg(ap, ulong);
-                    else if (h_type)
-                        val = (ptr_uint_t) va_arg(ap, uint); /* ushort promoted */
-                    else if (ll_type) {
-                        str = uint64_to_str((uint64)va_arg(ap, uint64), base, buf,
-                                            decimal, caps);
-                        break;
-                    } else
-                        val = (ptr_uint_t) va_arg(ap, uint);
-                    ASSERT(sizeof(val) == sizeof(ulong));
-                    str = ulong_to_str((ulong)val, base, buf, decimal, caps);  /* generate string */
-                    break;
+            case 'p': {
+                ptr_uint_t val;
+                bool caps = *c == 'X';
+                int base = 10;
+                if (decimal == -1)
+                    decimal = 1; /* defaults */
+                else
+                    filler = ' ';
+                if (*c == 'p')
+                    decimal = 2 * sizeof(void *);               /* pointer precision */
+                if ((pound_flag && *c != 'u') || (*c == 'p')) { /* generate prefix */
+                    prefixbuf[0] = '0';
+                    if (*c == 'x' || *c == 'p')
+                        prefixbuf[1] = 'x';
+                    if (*c == 'X')
+                        prefixbuf[1] = 'X';
                 }
+                if (*c == 'o')
+                    base = 8; /* determine base */
+                if (*c == 'x' || *c == 'X' || *c == 'p')
+                    base = 16;
+                ASSERT(sizeof(void *) == sizeof(val));
+                if (*c == 'p')
+                    val = (ptr_uint_t)va_arg(ap, void *); /* get val */
+                else if (l_type)
+                    val = (ptr_uint_t)va_arg(ap, ulong);
+                else if (h_type)
+                    val = (ptr_uint_t)va_arg(ap, uint); /* ushort promoted */
+                else if (ll_type) {
+                    str = uint64_to_str((uint64)va_arg(ap, uint64), base, buf, decimal,
+                                        caps);
+                    break;
+                } else
+                    val = (ptr_uint_t)va_arg(ap, uint);
+                ASSERT(sizeof(val) == sizeof(ulong));
+                str = ulong_to_str((ulong)val, base, buf, decimal,
+                                   caps); /* generate string */
+                break;
+            }
             case 'c':
                 /* FIXME: using int instead of char seems to work for RH7.2 as
                  * well as 8.0, but using char crashes 8.0 but not 7.2
                  */
 #ifdef VA_ARG_CHAR2INT
-                charbuf[0] = (char) va_arg(ap, int); /* char -> int in va_list */
+                charbuf[0] = (char)va_arg(ap, int); /* char -> int in va_list */
 #else
                 charbuf[0] = va_arg(ap, char);
 #endif
                 str = charbuf;
                 break;
-            case 's':
-                str = va_arg(ap, char*);
-                break;
+            case 's': str = va_arg(ap, char *); break;
             case 'g':
             case 'G':
                 if (decimal == 0 || decimal == -1)
@@ -441,95 +436,93 @@ our_vsnprintf(char *s, size_t max, const char *fmt, va_list ap)
                 /* no break */
             case 'e':
             case 'E':
-            case 'f':
-                {
+            case 'f': {
 #ifdef LINUX_KERNEL
-                  ASSERT_NOT_REACHED();
-                  str = "FLOATING POINT NOT SUPPORTED.";
+                ASSERT_NOT_REACHED();
+                str = "FLOATING POINT NOT SUPPORTED.";
 #else
-                    bool caps = (*c == 'E') || (*c == 'G');
-                    /* pretty sure will always be promoted to a double in arg list */
-                    double val = va_arg(ap, double);
-                    double d = val;
-                    int exp = 0;
-                    bool is_g = (*c == 'g' || *c == 'G'); 
-                    /* check for NaN */
-                    if (val != val) {
-                        if (caps)
-                            str = "NAN";
-                        else
-                            str = "nan";
-                        if (space_flag)
-                            prefixbuf[0] = ' ';
-                        break;
-                    }
-                    if (decimal == -1)
-                        decimal = 6; /* default */
-                    if (val >= 0 && space_flag)
-                        prefixbuf[0] = ' '; /* get prefix */
-                    if (val >= 0 && plus_flag)
-                        prefixbuf[0] = '+';
-                    if (val < 0)
-                        prefixbuf[0] = '-';
-                    /* check for inf */
-                    if (val == pos_inf || val == neg_inf) {
-                        if (caps)
-                            str = "INF";
-                        else
-                            str = "inf";
-                        break;
-                    }
-                    if (*c == 'f') { /* ready to generate string now for f */
-                        str = double_to_str(val, decimal, buf, pound_flag, false);
-                        break;
-                    }
-                    /* get exponent value */
-                    while (d >= 10.0 || d <= -10.0) {
-                        exp++;
-                        d = d / 10.0;
-                    }
-                    while (d < 1.0 && d > -1.0 && d != 0.0) {
-                        exp--;
-                        d = d * 10.0;
-                    }
+                bool caps = (*c == 'E') || (*c == 'G');
+                /* pretty sure will always be promoted to a double in arg list */
+                double val = va_arg(ap, double);
+                double d = val;
+                int exp = 0;
+                bool is_g = (*c == 'g' || *c == 'G');
+                /* check for NaN */
+                if (val != val) {
+                    if (caps)
+                        str = "NAN";
+                    else
+                        str = "nan";
+                    if (space_flag)
+                        prefixbuf[0] = ' ';
+                    break;
+                }
+                if (decimal == -1)
+                    decimal = 6; /* default */
+                if (val >= 0 && space_flag)
+                    prefixbuf[0] = ' '; /* get prefix */
+                if (val >= 0 && plus_flag)
+                    prefixbuf[0] = '+';
+                if (val < 0)
+                    prefixbuf[0] = '-';
+                /* check for inf */
+                if (val == pos_inf || val == neg_inf) {
+                    if (caps)
+                        str = "INF";
+                    else
+                        str = "inf";
+                    break;
+                }
+                if (*c == 'f') { /* ready to generate string now for f */
+                    str = double_to_str(val, decimal, buf, pound_flag, false);
+                    break;
+                }
+                /* get exponent value */
+                while (d >= 10.0 || d <= -10.0) {
+                    exp++;
+                    d = d / 10.0;
+                }
+                while (d < 1.0 && d > -1.0 && d != 0.0) {
+                    exp--;
+                    d = d * 10.0;
+                }
 
-                    if (is_g)
-                        decimal--; /* g/G precision is number of signifigant digits */
-                    if (is_g && exp >= -4 && exp <= decimal) {
-                        /* exp is small enough for f, print without exponent */
-                        str = double_to_str(val, decimal, buf, pound_flag, !pound_flag);
-                        break;
-                    }
-                    /* print with exponent */
-                    str = double_to_exp_str(d, exp, decimal, buf, pound_flag, is_g && !pound_flag, caps);
-                    #endif
+                if (is_g)
+                    decimal--; /* g/G precision is number of signifigant digits */
+                if (is_g && exp >= -4 && exp <= decimal) {
+                    /* exp is small enough for f, print without exponent */
+                    str = double_to_str(val, decimal, buf, pound_flag, !pound_flag);
                     break;
                 }
-            case 'n':
-                {
-                    /* save num of chars printed so far in address specified */
-                    uint num_char = (uint) (s - start);
-                    /* yes, snprintf on all platforms returns int, not ssize_t */
-                    IF_X64(ASSERT(CHECK_TRUNCATE_TYPE_int(s - start)));
-                    if (l_type) {
-                        long * val = va_arg(ap, long *);
-                        *val = (long) num_char;
-                    } else if (h_type) {
-                        short * val = va_arg(ap, short *);
-                        *val = (short) num_char;
-                    } else {
-                        int * val = va_arg(ap, int *);
-                        *val = num_char;
-                    }
-                    buf[0] = '\0';
-                    str = buf;
-                    break;
+                /* print with exponent */
+                str = double_to_exp_str(d, exp, decimal, buf, pound_flag,
+                                        is_g && !pound_flag, caps);
+#endif
+                break;
+            }
+            case 'n': {
+                /* save num of chars printed so far in address specified */
+                uint num_char = (uint)(s - start);
+                /* yes, snprintf on all platforms returns int, not ssize_t */
+                IF_X64(ASSERT(CHECK_TRUNCATE_TYPE_int(s - start)));
+                if (l_type) {
+                    long *val = va_arg(ap, long *);
+                    *val = (long)num_char;
+                } else if (h_type) {
+                    short *val = va_arg(ap, short *);
+                    *val = (short)num_char;
+                } else {
+                    int *val = va_arg(ap, int *);
+                    *val = num_char;
                 }
+                buf[0] = '\0';
+                str = buf;
+                break;
+            }
                 /* FIXME : support the following? */
             case 'a':
             case 'A':
-            default:
-                ASSERT_NOT_REACHED();
+            default: ASSERT_NOT_REACHED();
             }
 
             /* if filler is 0 fill after prefix, else fill before prefix */
@@ -538,7 +531,7 @@ our_vsnprintf(char *s, size_t max, const char *fmt, va_list ap)
             /* calculate number of fill characters */
             if (fill > 0) {
                 IF_X64(ASSERT(CHECK_TRUNCATE_TYPE_uint(strlen(str) + strlen(prefix))));
-                fill -= (uint) (strlen(str) + strlen(prefix));
+                fill -= (uint)(strlen(str) + strlen(prefix));
             }
             /* insert prefix if filler is 0, filler won't be 0 if - flag is set */
             if (filler == '0') {
@@ -575,7 +568,7 @@ our_vsnprintf(char *s, size_t max, const char *fmt, va_list ap)
                 if (max > 0 && (size_t)(s - start) >= max)
                     goto max_reached;
                 if (*c == 's' && decimal == 0)
-                    break;  /* check string precision */
+                    break; /* check string precision */
                 decimal--;
                 *s = *str;
                 s++;
@@ -592,10 +585,9 @@ our_vsnprintf(char *s, size_t max, const char *fmt, va_list ap)
                 }
             }
             c++;
-        }
-        else {
+        } else {
             const char *cstart = c;
-            int  nbytes = 0;
+            int nbytes = 0;
             while (*c && *c != '%') {
                 nbytes++;
                 c++;
@@ -611,12 +603,12 @@ our_vsnprintf(char *s, size_t max, const char *fmt, va_list ap)
     }
 
     if (max == 0 || (size_t)(s - start) < max)
-      *s = '\0';
+        *s = '\0';
 
- max_reached:
+max_reached:
     /* yes, snprintf on all platforms returns int, not ssize_t */
     IF_X64(ASSERT(CHECK_TRUNCATE_TYPE_int(s - start)));
-    return (int) (s - start);
+    return (int)(s - start);
 }
 
 int
@@ -632,7 +624,7 @@ our_snprintf(char *s, size_t max, const char *fmt, ...)
 }
 
 #ifdef LINUX
-# ifndef LINUX_KERNEL
+#    ifndef LINUX_KERNEL
 /* i#238/PR 499179: avoid touching errno: our __errno_location doesn't
  * affect libc and we're using libc's sscanf.
  *
@@ -653,6 +645,5 @@ our_sscanf(const char *str, const char *fmt, ...)
     va_end(ap);
     return res;
 }
-# endif
+#    endif
 #endif
-

@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -39,55 +39,60 @@
 /////////////////////////////////////////////////////////////////////////////
 
 #if !defined(AFX_DYNAMORIODOC_H__832A85FF_15EB_41D0_86C5_BE2CDD746729__INCLUDED_)
-#define AFX_DYNAMORIODOC_H__832A85FF_15EB_41D0_86C5_BE2CDD746729__INCLUDED_
+#    define AFX_DYNAMORIODOC_H__832A85FF_15EB_41D0_86C5_BE2CDD746729__INCLUDED_
 
-#if _MSC_VER > 1000
-#pragma once
-#endif // _MSC_VER > 1000
+#    if _MSC_VER > 1000
+#        pragma once
+#    endif // _MSC_VER > 1000
 
-#define DYNAMORIO_SHARED_MEMORY_KEY "DynamoRIOStatistics" 
+#    define DYNAMORIO_SHARED_MEMORY_KEY "DynamoRIOStatistics"
 
-class CDynamoRIODoc : public CDocument
-{
+class CDynamoRIODoc : public CDocument {
 protected: // create from serialization only
     CDynamoRIODoc();
     DECLARE_DYNCREATE(CDynamoRIODoc)
 
     // Attributes
 public:
-
     // Operations
 public:
-
     // Overrides
     // ClassWizard generated virtual function overrides
     //{{AFX_VIRTUAL(CDynamoRIODoc)
 public:
-    virtual BOOL OnNewDocument();
-    virtual void Serialize(CArchive& ar);
+    virtual BOOL
+    OnNewDocument();
+    virtual void
+    Serialize(CArchive &ar);
+
 protected:
-    virtual BOOL SaveModified();
+    virtual BOOL
+    SaveModified();
     //}}AFX_VIRTUAL
 
     // Implementation
 public:
-#ifndef DRGUI_DEMO
-    void InitPaths();
+#    ifndef DRGUI_DEMO
+    void
+    InitPaths();
     TCHAR m_dynamorio_home[_MAX_DIR];
     TCHAR m_injector_path[MAX_PATH];
     TCHAR m_logs_dir[MAX_PATH];
-#endif
+#    endif
 
-    BOOL OnOpenDocument(LPCTSTR lpszPathName);
-    BOOL RunApplication(LPCTSTR lpszPathName);
+    BOOL
+    OnOpenDocument(LPCTSTR lpszPathName);
+    BOOL
+    RunApplication(LPCTSTR lpszPathName);
     virtual ~CDynamoRIODoc();
-#ifdef _DEBUG
-    virtual void AssertValid() const;
-    virtual void Dump(CDumpContext& dc) const;
-#endif
+#    ifdef _DEBUG
+    virtual void
+    AssertValid() const;
+    virtual void
+    Dump(CDumpContext &dc) const;
+#    endif
 
 protected:
-
     // Generated message map functions
 protected:
     //{{AFX_MSG(CDynamoRIODoc)
@@ -100,6 +105,7 @@ protected:
 /////////////////////////////////////////////////////////////////////////////
 
 //{{AFX_INSERT_LOCATION}}
-// Microsoft Visual C++ will insert additional declarations immediately before the previous line.
+// Microsoft Visual C++ will insert additional declarations immediately before the
+// previous line.
 
 #endif // !defined(AFX_DYNAMORIODOC_H__832A85FF_15EB_41D0_86C5_BE2CDD746729__INCLUDED_)

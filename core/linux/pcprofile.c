@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -44,7 +44,7 @@
 #include "../fcache.h"
 #include "string_wrapper.h" /* for memset */
 #ifdef CLIENT_INTERFACE
-# include "instrument.h"
+#    include "instrument.h"
 #endif
 #include "disassemble.h"
 #include <sys/time.h> /* ITIMER_VIRTUAL */
@@ -56,7 +56,7 @@
  */
 #define USE_SYMTAB 0
 #if USE_SYMTAB
-#include "symtab.h"
+#    include "symtab.h"
 static bool valid_symtab;
 #endif
 
@@ -71,17 +71,17 @@ static bool valid_symtab;
  * the same pc.
  */
 typedef struct _pc_profile_entry_t {
-    void *                  pc;      /* the pc */
-    app_pc                 tag;      /* if in fragment, tag */
+    void *pc;   /* the pc */
+    app_pc tag; /* if in fragment, tag */
 #ifdef DEBUG
-    int                     id;      /* if in fragment, id */
+    int id; /* if in fragment, id */
 #endif
-    ushort              offset;      /* if in fragment, offset from start pc */
-    where_am_i_t    whereami:8;      /* location of pc */
-    bool               trace:1;      /* if in fragment, is it a trace? */
-    bool             retired:1;      /* owning fragment was deleted */
-    int                counter;      /* execution counter */
-    struct _pc_profile_entry_t *next;  /* for chaining entries */
+    ushort offset;                    /* if in fragment, offset from start pc */
+    where_am_i_t whereami : 8;        /* location of pc */
+    bool trace : 1;                   /* if in fragment, is it a trace? */
+    bool retired : 1;                 /* owning fragment was deleted */
+    int counter;                      /* execution counter */
+    struct _pc_profile_entry_t *next; /* for chaining entries */
 } pc_profile_entry_t;
 
 #define HASH_BITS 14
@@ -98,18 +98,23 @@ typedef struct _thread_pc_info_t {
 #define ALARM_FREQUENCY 10 /* milliseconds */
 
 /* forward declarations for static functions */
-static pc_profile_entry_t *pcprofile_add_entry(thread_pc_info_t *info, void *pc, int whereami);
-static pc_profile_entry_t *pcprofile_lookup(thread_pc_info_t *info, void *pc);
-static void pcprofile_reset(thread_pc_info_t *info);
-static void pcprofile_results(thread_pc_info_t *info);
-static void pcprofile_alarm(dcontext_t *dcontext, dr_mcontext_t *mcontext);
+static pc_profile_entry_t *
+pcprofile_add_entry(thread_pc_info_t *info, void *pc, int whereami);
+static pc_profile_entry_t *
+pcprofile_lookup(thread_pc_info_t *info, void *pc);
+static void
+pcprofile_reset(thread_pc_info_t *info);
+static void
+pcprofile_results(thread_pc_info_t *info);
+static void
+pcprofile_alarm(dcontext_t *dcontext, dr_mcontext_t *mcontext);
 
 /* initialization */
 void
 pcprofile_thread_init(dcontext_t *dcontext, bool shared_itimer, void *parent_info)
 {
     int i;
-    int size = HASHTABLE_SIZE(HASH_BITS) * sizeof(pc_profile_entry_t*);
+    int size = HASHTABLE_SIZE(HASH_BITS) * sizeof(pc_profile_entry_t *);
     thread_pc_info_t *info;
 
     if (shared_itimer) {
@@ -119,18 +124,18 @@ pcprofile_thread_init(dcontext_t *dcontext, bool shared_itimer, void *parent_inf
          * and we block subsequent while in the handler.
          */
         ASSERT(parent_info != NULL);
-        info = (thread_pc_info_t *) parent_info;
+        info = (thread_pc_info_t *)parent_info;
         ASSERT(info->thread_shared);
         return;
     }
 
     /* we use global heap so we can share with child threads */
     info = global_heap_alloc(sizeof(thread_pc_info_t) HEAPACCT(ACCT_OTHER));
-    dcontext->pcprofile_field = (void *) info;
+    dcontext->pcprofile_field = (void *)info;
     memset(info, 0, sizeof(thread_pc_info_t));
     info->thread_shared = shared_itimer;
 
-    info->htable = (pc_profile_entry_t**) global_heap_alloc(size HEAPACCT(ACCT_OTHER));
+    info->htable = (pc_profile_entry_t **)global_heap_alloc(size HEAPACCT(ACCT_OTHER));
     memset(info->htable, 0, size);
 #if USE_SYMTAB
     valid_symtab = symtab_init();
@@ -142,9 +147,9 @@ pcprofile_thread_init(dcontext_t *dcontext, bool shared_itimer, void *parent_inf
      * and creating a new one acquires global locks and can deadlock:
      * we should allocate many units up front or something
      */
-    info->special_heap = special_heap_init(sizeof(pc_profile_entry_t),
-                                           false /* no locks */,
-                                           false /* -x */, true /* persistent */);
+    info->special_heap =
+        special_heap_init(sizeof(pc_profile_entry_t), false /* no locks */,
+                          false /* -x */, true /* persistent */);
 
     set_itimer_callback(dcontext, ITIMER_VIRTUAL, ALARM_FREQUENCY, pcprofile_alarm);
 }
@@ -154,14 +159,14 @@ void
 pcprofile_thread_exit(dcontext_t *dcontext)
 {
     int size;
-    thread_pc_info_t *info = (thread_pc_info_t *) dcontext->pcprofile_field;
+    thread_pc_info_t *info = (thread_pc_info_t *)dcontext->pcprofile_field;
     /* don't want any alarms while holding lock for printing results
      * (see notes under pcprofile_cache_flush below)
      */
     set_itimer_callback(dcontext, ITIMER_VIRTUAL, 0, NULL);
 
     pcprofile_results(info);
-    size = HASHTABLE_SIZE(HASH_BITS) * sizeof(pc_profile_entry_t*);
+    size = HASHTABLE_SIZE(HASH_BITS) * sizeof(pc_profile_entry_t *);
     pcprofile_reset(info); /* special heap so no fast path */
 #ifdef DEBUG
     /* for non-debug we do fast exit path and don't free local heap */
@@ -185,7 +190,7 @@ pcprofile_fork_init(dcontext_t *dcontext)
     /* itimers are not inherited across fork */
     /* FIXME: hmmm...I guess a forked child will just start from scratch?
      */
-    thread_pc_info_t *info = (thread_pc_info_t *) dcontext->pcprofile_field;
+    thread_pc_info_t *info = (thread_pc_info_t *)dcontext->pcprofile_field;
     info->thread_shared = false;
     pcprofile_reset(info);
     info->file = open_log_file("pcsamples", NULL, 0);
@@ -227,19 +232,19 @@ pcprof_dump_callstack(dcontext_t *dcontext, app_pc cur_pc, app_pc ebp, file_t ou
  */
 static void
 pcprofile_alarm(dcontext_t *dcontext, dr_mcontext_t *mcontext)
-{               
-    thread_pc_info_t *info = (thread_pc_info_t *) dcontext->pcprofile_field;
+{
+    thread_pc_info_t *info = (thread_pc_info_t *)dcontext->pcprofile_field;
     pc_profile_entry_t *entry;
     fragment_t *fragment;
     fragment_t wrapper;
-    void *pc = (void *) mcontext->pc;
+    void *pc = (void *)mcontext->pc;
 
     entry = pcprofile_lookup(info, pc);
 
 #if 0
-# ifdef DEBUG
+#    ifdef DEBUG
     print_file(info->file, "\nalarm "PFX"\n", pc);
-# endif
+#    endif
     pcprof_dump_callstack(dcontext, pc, (app_pc) mcontext->xbp, info->file);
 #endif
 
@@ -268,8 +273,7 @@ pcprofile_alarm(dcontext_t *dcontext, dr_mcontext_t *mcontext)
                      */
                     if (in_context_switch_code(dcontext, (cache_pc)pc)) {
                         entry->whereami = WHERE_CONTEXT_SWITCH;
-                    } else if (in_indirect_branch_lookup_code(dcontext,
-                                                              (cache_pc)pc)) {
+                    } else if (in_indirect_branch_lookup_code(dcontext, (cache_pc)pc)) {
                         entry->whereami = WHERE_IBL;
                     } else {
                         entry->whereami = WHERE_UNKNOWN;
@@ -281,7 +285,7 @@ pcprofile_alarm(dcontext_t *dcontext, dr_mcontext_t *mcontext)
 #endif
                 entry->tag = fragment->tag;
                 ASSERT(CHECK_TRUNCATE_TYPE_int((byte *)pc - fragment->start_pc));
-                entry->offset = (int) ((byte *)pc - fragment->start_pc);
+                entry->offset = (int)((byte *)pc - fragment->start_pc);
                 entry->trace = (fragment->flags & FRAG_IS_TRACE) != 0;
             }
         }
@@ -299,7 +303,7 @@ pcprofile_add_entry(thread_pc_info_t *info, void *pc, int whereami)
     pc_profile_entry_t *e;
 
     /* special_heap is hardcoded for sizeof(pc_profile_entry_t) */
-    e = (pc_profile_entry_t*) special_heap_alloc(info->special_heap);
+    e = (pc_profile_entry_t *)special_heap_alloc(info->special_heap);
     e->pc = pc;
     e->counter = 1;
     e->whereami = whereami;
@@ -320,7 +324,7 @@ pcprofile_add_entry(thread_pc_info_t *info, void *pc, int whereami)
     return e;
 }
 
-/* Lookup an entry by pc and return a pointer to the corresponding entry 
+/* Lookup an entry by pc and return a pointer to the corresponding entry
  * Returns NULL if no such entry exists */
 static pc_profile_entry_t *
 pcprofile_lookup(thread_pc_info_t *info, void *pc)
@@ -352,7 +356,7 @@ pcprofile_fragment_deleted(dcontext_t *dcontext, fragment_t *f)
         ASSERT(dynamo_exited);
         return;
     }
-    info = (thread_pc_info_t *) dcontext->pcprofile_field;
+    info = (thread_pc_info_t *)dcontext->pcprofile_field;
     for (i = 0; i < HASHTABLE_SIZE(HASH_BITS); i++) {
         for (e = info->htable[i]; e; e = e->next) {
             if (e->tag == f->tag) {
@@ -404,7 +408,7 @@ pcprofile_reset(thread_pc_info_t *info)
         info->where[i] = 0;
 }
 
-/* Print the profile results 
+/* Print the profile results
  * FIXME: It would be nice to print counts integrated with fragment listings
  * That would require re-ordering *_exit() sequence (fragments are deleted first)
  * Instead of doing that, can use a script to combine these tag+offsets with
@@ -418,68 +422,68 @@ pcprofile_results(thread_pc_info_t *info)
     int i, total = 0;
     pc_profile_entry_t *e;
 
-    for (i = 0; i < WHERE_LAST; i++) 
+    for (i = 0; i < WHERE_LAST; i++)
         total += info->where[i];
-    
-    print_file(info->file, "DynamoRIO library base: "PFX"\n",
+
+    print_file(info->file, "DynamoRIO library base: " PFX "\n",
                get_dynamorio_dll_start());
 #ifdef CLIENT_INTERFACE
-    print_file(info->file, "client base: "PFX"\n", get_client_base(0));
+    print_file(info->file, "client base: " PFX "\n", get_client_base(0));
 #endif
     print_file(info->file, "ITIMER distribution (%d):\n", total);
     if (info->where[WHERE_APP] > 0) {
         print_file(info->file, "  %5.1f%% of time in APPLICATION (%d)\n",
-                   (float)info->where[WHERE_APP]/(float)total * 100.0,
+                   (float)info->where[WHERE_APP] / (float)total * 100.0,
                    info->where[WHERE_APP]);
     }
     if (info->where[WHERE_INTERP] > 0) {
         print_file(info->file, "  %5.1f%% of time in INTERPRETER (%d)\n",
-                   (float)info->where[WHERE_INTERP]/(float)total * 100.0,
+                   (float)info->where[WHERE_INTERP] / (float)total * 100.0,
                    info->where[WHERE_INTERP]);
     }
     if (info->where[WHERE_DISPATCH] > 0) {
         print_file(info->file, "  %5.1f%% of time in DISPATCH (%d)\n",
-                   (float)info->where[WHERE_DISPATCH]/(float)total * 100.0,
+                   (float)info->where[WHERE_DISPATCH] / (float)total * 100.0,
                    info->where[WHERE_DISPATCH]);
     }
     if (info->where[WHERE_MONITOR] > 0) {
         print_file(info->file, "  %5.1f%% of time in MONITOR (%d)\n",
-                   (float)info->where[WHERE_MONITOR]/(float)total * 100.0,
+                   (float)info->where[WHERE_MONITOR] / (float)total * 100.0,
                    info->where[WHERE_MONITOR]);
     }
     if (info->where[WHERE_SYSCALL_HANDLER] > 0) {
         print_file(info->file, "  %5.1f%% of time in SYSCALL HANDLER (%d)\n",
-                   (float)info->where[WHERE_SYSCALL_HANDLER]/(float)total * 100.0,
+                   (float)info->where[WHERE_SYSCALL_HANDLER] / (float)total * 100.0,
                    info->where[WHERE_SYSCALL_HANDLER]);
     }
     if (info->where[WHERE_SIGNAL_HANDLER] > 0) {
         print_file(info->file, "  %5.1f%% of time in SIGNAL HANDLER (%d)\n",
-                   (float)info->where[WHERE_SIGNAL_HANDLER]/(float)total * 100.0,
+                   (float)info->where[WHERE_SIGNAL_HANDLER] / (float)total * 100.0,
                    info->where[WHERE_SIGNAL_HANDLER]);
     }
     if (info->where[WHERE_TRAMPOLINE] > 0) {
         print_file(info->file, "  %5.1f%% of time in TRAMPOLINES (%d)\n",
-                   (float)info->where[WHERE_TRAMPOLINE]/(float)total * 100.0,
+                   (float)info->where[WHERE_TRAMPOLINE] / (float)total * 100.0,
                    info->where[WHERE_TRAMPOLINE]);
     }
     if (info->where[WHERE_CONTEXT_SWITCH] > 0) {
         print_file(info->file, "  %5.1f%% of time in CONTEXT SWITCH (%d)\n",
-                   (float)info->where[WHERE_CONTEXT_SWITCH]/(float)total * 100.0,
+                   (float)info->where[WHERE_CONTEXT_SWITCH] / (float)total * 100.0,
                    info->where[WHERE_CONTEXT_SWITCH]);
     }
     if (info->where[WHERE_IBL] > 0) {
         print_file(info->file, "  %5.1f%% of time in INDIRECT BRANCH LOOKUP (%d)\n",
-                   (float)info->where[WHERE_IBL]/(float)total * 100.0,
+                   (float)info->where[WHERE_IBL] / (float)total * 100.0,
                    info->where[WHERE_IBL]);
     }
     if (info->where[WHERE_FCACHE] > 0) {
         print_file(info->file, "  %5.1f%% of time in FRAGMENT CACHE (%d)\n",
-                   (float)info->where[WHERE_FCACHE]/(float)total * 100.0,
+                   (float)info->where[WHERE_FCACHE] / (float)total * 100.0,
                    info->where[WHERE_FCACHE]);
     }
     if (info->where[WHERE_UNKNOWN] > 0) {
         print_file(info->file, "  %5.1f%% of time in UNKNOWN (%d)\n",
-                   (float)info->where[WHERE_UNKNOWN]/(float)total * 100.0,
+                   (float)info->where[WHERE_UNKNOWN] / (float)total * 100.0,
                    info->where[WHERE_UNKNOWN]);
     }
 
@@ -496,79 +500,77 @@ pcprofile_results(thread_pc_info_t *info)
                     type = "fragment";
                 print_file(info->file,
 #ifdef DEBUG
-                        "pc="PFX"\t#=%d\tin %s #%6d @"PFX" w/ offs "PFX"\n",
-                        e->pc, e->counter, type, e->id, e->tag, e->offset);
+                           "pc=" PFX "\t#=%d\tin %s #%6d @" PFX " w/ offs " PFX "\n",
+                           e->pc, e->counter, type, e->id, e->tag, e->offset);
 #else
-                        "pc="PFX"\t#=%d\tin %s @"PFX" w/ offs "PFX"\n",
-                        e->pc, e->counter, type, e->tag, e->offset);
+                           "pc=" PFX "\t#=%d\tin %s @" PFX " w/ offs " PFX "\n", e->pc,
+                           e->counter, type, e->tag, e->offset);
 #endif
 #if USE_SYMTAB
                 /* FIXME: this only works for fragments whose tags are app pc's! */
                 if (valid_symtab) {
-                    print_file(info->file,
-                            "\tin app = %s\n",
-                            symtab_lookup_pc((void *)(e->tag+e->offset)));
+                    print_file(info->file, "\tin app = %s\n",
+                               symtab_lookup_pc((void *)(e->tag + e->offset)));
                 }
 #endif
             } else if (e->whereami == WHERE_APP) {
 #if USE_SYMTAB
                 if (valid_symtab) {
-                    print_file(info->file, "pc="PFX"\t#=%d\tin the app = %s\n",
-                               e->pc, e->counter, symtab_lookup_pc(e->pc));
+                    print_file(info->file, "pc=" PFX "\t#=%d\tin the app = %s\n", e->pc,
+                               e->counter, symtab_lookup_pc(e->pc));
                 } else {
 #else
-                    print_file(info->file, "pc="PFX"\t#=%d\tin the app\n",
-                               e->pc, e->counter);
+                print_file(info->file, "pc=" PFX "\t#=%d\tin the app\n", e->pc,
+                           e->counter);
 #endif
 #if USE_SYMTAB
                 }
 #endif
             } else if (e->whereami == WHERE_UNKNOWN) {
                 if (is_dynamo_address(e->pc)) {
-                    print_file(info->file, "pc="PFX"\t#=%d\tin DynamoRIO <SOMEWHERE> | ",
-                               e->pc, e->counter);
+                    print_file(info->file,
+                               "pc=" PFX "\t#=%d\tin DynamoRIO <SOMEWHERE> | ", e->pc,
+                               e->counter);
                 } else {
                     char *comment = NULL;
                     DODEBUG({ comment = get_address_comment(e->pc); });
-                    print_file(info->file, "pc="PFX"\t#=%d\tin uncategorized: %s | ",
+                    print_file(info->file, "pc=" PFX "\t#=%d\tin uncategorized: %s | ",
                                e->pc, e->counter,
-                               (comment==NULL)?"<UNKNOWN>":comment);
+                               (comment == NULL) ? "<UNKNOWN>" : comment);
                 }
 #if defined(INTERNAL) || defined(DEBUG) || defined(CLIENT_INTERFACE)
                 disassemble_with_info(GLOBAL_DCONTEXT, e->pc, info->file,
-                                      false/*show pc*/, false/*show bytes*/);
+                                      false /*show pc*/, false /*show bytes*/);
 #else
                 print_file(info->file, "\n");
 #endif
             } else {
 #if USE_SYMTAB
                 if (valid_symtab) {
-                    print_file(info->file,
-                               "pc="PFX"\t#=%d\tin DynamoRIO = %s\n",
-                               e->pc, e->counter, symtab_lookup_pc(e->pc));
+                    print_file(info->file, "pc=" PFX "\t#=%d\tin DynamoRIO = %s\n", e->pc,
+                               e->counter, symtab_lookup_pc(e->pc));
                 } else {
 #else
-                    print_file(info->file, "pc="PFX"\t#=%d\tin DynamoRIO",
-                               e->pc, e->counter);
-                    if (e->whereami == WHERE_INTERP) {
-                        print_file(info->file, " interpreter\n");
-                    } else if (e->whereami == WHERE_DISPATCH) {
-                        print_file(info->file, " dispatch\n");
-                    } else if (e->whereami == WHERE_MONITOR) {
-                        print_file(info->file, " monitor\n");
-                    } else if (e->whereami == WHERE_SIGNAL_HANDLER) {
-                        print_file(info->file, " signal handler\n");
-                    } else if (e->whereami == WHERE_SYSCALL_HANDLER) {
-                        print_file(info->file, " syscall handler\n");
-                    } else if (e->whereami == WHERE_CONTEXT_SWITCH) {
-                        print_file(info->file, " context switch\n");
-                    } else if (e->whereami == WHERE_IBL) {
-                        print_file(info->file, " indirect_branch_lookup\n");
-                    } else {
-                        print_file(STDERR, "ERROR: unknown whereAmI %d\n",
-                                e->whereami);
-                        ASSERT_NOT_REACHED();
-                    }
+                print_file(info->file, "pc=" PFX "\t#=%d\tin DynamoRIO", e->pc,
+                           e->counter);
+                if (e->whereami == WHERE_INTERP) {
+                    print_file(info->file, " interpreter\n");
+                } else if (e->whereami == WHERE_DISPATCH) {
+                    print_file(info->file, " dispatch\n");
+                } else if (e->whereami == WHERE_MONITOR) {
+                    print_file(info->file, " monitor\n");
+                } else if (e->whereami == WHERE_SIGNAL_HANDLER) {
+                    print_file(info->file, " signal handler\n");
+                } else if (e->whereami == WHERE_SYSCALL_HANDLER) {
+                    print_file(info->file, " syscall handler\n");
+                } else if (e->whereami == WHERE_CONTEXT_SWITCH) {
+                    print_file(info->file, " context switch\n");
+                } else if (e->whereami == WHERE_IBL) {
+                    print_file(info->file, " indirect_branch_lookup\n");
+                } else {
+                    print_file(STDERR, "ERROR: unknown whereAmI %d\n", e->whereami);
+                    ASSERT_NOT_REACHED();
+                }
 #endif
 #if USE_SYMTAB
                 }
@@ -576,5 +578,5 @@ pcprofile_results(thread_pc_info_t *info)
             }
             e = e->next;
         }
-    }    
+    }
 }

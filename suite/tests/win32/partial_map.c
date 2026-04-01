@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -41,7 +41,7 @@
 char sysroot[MAX_PATH];
 
 static void
-myload(char* lib, bool append_to_sysroot) 
+myload(char *lib, bool append_to_sysroot)
 {
     HANDLE file, mapping;
     SIZE_T size = 0, size_to_map;
@@ -51,22 +51,22 @@ myload(char* lib, bool append_to_sysroot)
     char *file_name = lib;
 
     if (append_to_sysroot) {
-        _snprintf(file_name_buf, BUFFER_SIZE_ELEMENTS(file_name_buf),
-                  "%s%s", sysroot, lib);
+        _snprintf(file_name_buf, BUFFER_SIZE_ELEMENTS(file_name_buf), "%s%s", sysroot,
+                  lib);
         file_name = file_name_buf;
     }
 
-    file = CreateFileA(file_name, GENERIC_READ, FILE_SHARE_READ, NULL,
-                       OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    file = CreateFileA(file_name, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
+                       FILE_ATTRIBUTE_NORMAL, NULL);
     if (file == INVALID_HANDLE_VALUE) {
         print("error opening file \"%s\", code=%d\n", file_name, GetLastError());
         return;
     }
 
-    mapping = CreateFileMapping(file, NULL, PAGE_WRITECOPY|SEC_IMAGE, 0, 0, NULL);
+    mapping = CreateFileMapping(file, NULL, PAGE_WRITECOPY | SEC_IMAGE, 0, 0, NULL);
     if (mapping == NULL) {
-        print("error creating mapping for file \"%s\", code=%d\n",
-              file_name, GetLastError());
+        print("error creating mapping for file \"%s\", code=%d\n", file_name,
+              GetLastError());
         return;
     }
 
@@ -82,15 +82,15 @@ myload(char* lib, bool append_to_sysroot)
      * doesn't work on a image.  We'll just walk instead (what we really want is
      * NtQuerySection:SectionBasicInformation but the API routines don't appear to
      * expose that). */
-    while (VirtualQuery(map_addr+size, &mbi, sizeof(mbi)) == sizeof(mbi) &&
+    while (VirtualQuery(map_addr + size, &mbi, sizeof(mbi)) == sizeof(mbi) &&
            mbi.State != MEM_FREE && mbi.AllocationBase == map_addr) {
         size += mbi.RegionSize;
     }
 #if VERBOSE
-    print("mapping size = "PFX"\n", size);
+    print("mapping size = " PFX "\n", size);
 #endif
     UnmapViewOfFile(map_addr);
-    
+
     /* FIXME - for additional tests we could call into the section, we could also map
      * at offset and call into as well.  FIXME - check what happes when we ask for
      * non-page multiple (esp if file and/or section alignment is < page. */
@@ -100,21 +100,19 @@ myload(char* lib, bool append_to_sysroot)
     }
 }
 
-int main()
+int
+main()
 {
     /* Note - if not part of session 0 requires SeCreateGlobalPrivilege for XPsp2
      * 2ksp4 and 2k3 (and presumably Vista). */
     HANDLE hToken = NULL;
     TOKEN_PRIVILEGES Priv;
     DWORD res;
-    if  (!OpenThreadToken(GetCurrentThread(), 
-                          TOKEN_QUERY|TOKEN_ADJUST_PRIVILEGES, 
-                          FALSE, 
-                          &hToken)) {
+    if (!OpenThreadToken(GetCurrentThread(), TOKEN_QUERY | TOKEN_ADJUST_PRIVILEGES, FALSE,
+                         &hToken)) {
         /* can't get thread token, try process token instead */
-        if(!OpenProcessToken(GetCurrentProcess(), 
-                             TOKEN_QUERY|TOKEN_ADJUST_PRIVILEGES, 
-                             &hToken)) {
+        if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY | TOKEN_ADJUST_PRIVILEGES,
+                              &hToken)) {
             print("error opening token, code=%d\n", GetLastError());
         }
     }

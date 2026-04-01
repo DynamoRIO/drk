@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -36,7 +36,7 @@
 #include "tools.h"
 
 #ifdef USE_DYNAMO
-#include "dynamorio.h"
+#    include "dynamorio.h"
 #endif
 
 #define PROC_NAME "detach_test.exe"
@@ -45,16 +45,19 @@
 static HWND hwnd = NULL;
 static BOOL thread_ready = FALSE;
 
-void CALLBACK SendAsyncProc(HWND hwnd, UINT uMsg, ULONG *dwData, LRESULT lResult);
-void do_test(int count);
+void CALLBACK
+SendAsyncProc(HWND hwnd, UINT uMsg, ULONG *dwData, LRESULT lResult);
+void
+do_test(int count);
 
-int do_busy_work(int c)
+int
+do_busy_work(int c)
 {
     int i, t;
     for (i = 0, t = 0; i < c; i++)
         t = (i * c) - t;
-    if (t != c*((c+1)/2))
-        print("Failure %d != %d\n", t, c*((c+1)/2));
+    if (t != c * ((c + 1) / 2))
+        print("Failure %d != %d\n", t, c * ((c + 1) / 2));
     return t;
 }
 
@@ -103,20 +106,34 @@ ThreadProcBusyBuild(LPVOID param)
 
 /* see win32/tls.c test for alt. method of starting a detach, this way is preferable
  * since we may at some point disallow the process from detaching itself */
-void detach()
+void
+detach()
 {
-    char buf[2*MAX_PATH] = "\"";
+    char buf[2 * MAX_PATH] = "\"";
     char *tools = getenv("DYNAMORIO_WINTOOLS");
     int size;
-    STARTUPINFO sinfo = {sizeof(sinfo), NULL, "", 0, 0, 0, 0, 0, 0, 0, 0,
-                         STARTF_USESTDHANDLES, 0, 0, NULL,
-                         GetStdHandle(STD_INPUT_HANDLE),
-                         GetStdHandle(STD_OUTPUT_HANDLE),
-                         GetStdHandle(STD_ERROR_HANDLE)};
+    STARTUPINFO sinfo = { sizeof(sinfo),
+                          NULL,
+                          "",
+                          0,
+                          0,
+                          0,
+                          0,
+                          0,
+                          0,
+                          0,
+                          0,
+                          STARTF_USESTDHANDLES,
+                          0,
+                          0,
+                          NULL,
+                          GetStdHandle(STD_INPUT_HANDLE),
+                          GetStdHandle(STD_OUTPUT_HANDLE),
+                          GetStdHandle(STD_ERROR_HANDLE) };
     PROCESS_INFORMATION pinfo;
     strncat(buf, tools == NULL ? "" : tools, BUFFER_ROOM_LEFT(buf));
     NULL_TERMINATE_BUFFER(buf);
-    strncat(buf, "\\DRcontrol.exe\" -detachexe "PROC_NAME, BUFFER_ROOM_LEFT(buf));
+    strncat(buf, "\\DRcontrol.exe\" -detachexe " PROC_NAME, BUFFER_ROOM_LEFT(buf));
     NULL_TERMINATE_BUFFER(buf);
     print("Detaching\n");
     if (CreateProcess(NULL, buf, NULL, NULL, TRUE, 0, NULL, NULL, &sinfo, &pinfo)) {
@@ -133,7 +150,9 @@ void detach()
 static BOOL did_send_callback[MAX_COUNT];
 static BOOL action_detach = FALSE;
 static BOOL action_exit = FALSE;
-void CALLBACK SendAsyncProc(HWND hwnd, UINT uMsg, ULONG *dwData, LRESULT lResult) {
+void CALLBACK
+SendAsyncProc(HWND hwnd, UINT uMsg, ULONG *dwData, LRESULT lResult)
+{
     int count = (int)dwData;
     did_send_callback[count] = TRUE;
     if (count > 0) {
@@ -170,7 +189,8 @@ void CALLBACK SendAsyncProc(HWND hwnd, UINT uMsg, ULONG *dwData, LRESULT lResult
  * up a callback stack. This routine will end up being recursively called count times
  * building up count stacked callbacks. */
 #define MAX_SLEEP 30000
-void do_test(int count)
+void
+do_test(int count)
 {
     MSG msg;
     int total_slept = 0;
@@ -216,19 +236,21 @@ wnd_callback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 }
 
 int WINAPI
-window_func(void * arg)
+window_func(void *arg)
 {
     MSG msg;
     char *winName = "foobar";
-    WNDCLASS wndclass = {0, wnd_callback, 0, 0, NULL/* WinMain hwnd would be here */,
-                         NULL, NULL, NULL, NULL, winName};
-    
+    WNDCLASS wndclass = {
+        0,    wnd_callback, 0,    0,    NULL /* WinMain hwnd would be here */,
+        NULL, NULL,         NULL, NULL, winName
+    };
+
     if (!RegisterClass(&wndclass)) {
         print("Unable to create window class\n");
         return 0;
     }
     hwnd = CreateWindow(winName, winName, 0, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-                        CW_USEDEFAULT, NULL, NULL, NULL/* WinMain hwnd would be here */,
+                        CW_USEDEFAULT, NULL, NULL, NULL /* WinMain hwnd would be here */,
                         NULL);
     if (hwnd == NULL) {
         print("Error creating window\n");
@@ -261,7 +283,7 @@ main()
 
     print("creating window\n");
     ht_window = CreateThread(NULL, 0, window_func, NULL, 0, &tid);
-    if (ht_window == NULL) { 
+    if (ht_window == NULL) {
         print("Error creating window thread\n");
         return -1;
     }
@@ -271,7 +293,7 @@ main()
     print("detach_callback start\n");
 
     ht_selfsuspend = CreateThread(NULL, 0, &ThreadProcSelfSuspend, NULL, 0, &tid);
-    if (ht_selfsuspend == NULL) { 
+    if (ht_selfsuspend == NULL) {
         print("Error creating self-suspend thread\n");
         return -1;
     }
@@ -292,7 +314,7 @@ main()
 
     action_exit = TRUE;
     ht_exit = CreateThread(NULL, 0, &ThreadProcDoTest, (void *)2, 0, &tid);
-    if (ht_exit == NULL) { 
+    if (ht_exit == NULL) {
         print("Error creating exit thread\n");
         return -1;
     }

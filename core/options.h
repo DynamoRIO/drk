@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -43,18 +43,17 @@
 #define _OPTIONS_H_
 
 #ifdef __cplusplus
-extern "C"
-{
+extern "C" {
 #endif
 
 /* Security policy flags.  Note that if the off flag is not explicitly
  * used in an option default value definition, then the option doesn't
  * support that flag.
-*/
+ */
 typedef enum {
     /* security mechanism needed for detection can be completely disabled */
-    OPTION_ENABLED     = 0x1,   /* if set, security mechanism is on */
-    OPTION_DISABLED    = 0x0,   /* if not set, security mechanism is off  */
+    OPTION_ENABLED = 0x1,  /* if set, security mechanism is on */
+    OPTION_DISABLED = 0x0, /* if not set, security mechanism is off  */
 
     /* security policy can be built on top.  For stateless policies
      * all flags can be dynamic options.  For stateful security mechanisms as
@@ -67,35 +66,35 @@ typedef enum {
     /* If set, app action (i.e., bad behavior) is disallowed and remediation
      * action (kill thread, kill process, throw exception) is performed.
      * Note: detect_mode will override this flag.
-     * FIXME: app_thread_policy_helper seems to be the one place where 
+     * FIXME: app_thread_policy_helper seems to be the one place where
      * detect_mode doesn't override this; case 9088 tracks this; xref case 8451
      * for an explanation of why this seemed to leave as such.
      */
-    OPTION_BLOCK       = 0x2,
-    OPTION_NO_BLOCK    = 0x0,
+    OPTION_BLOCK = 0x2,
+    OPTION_NO_BLOCK = 0x0,
 
     /* policies that lend themselves to standard attack handling may use this flag */
-    OPTION_HANDLING    = 0x4,   /* if set, overrides default attack handling */
-    OPTION_NO_HANDLING = 0x0,   /* when not set, default attack handling is used */
+    OPTION_HANDLING = 0x4,    /* if set, overrides default attack handling */
+    OPTION_NO_HANDLING = 0x0, /* when not set, default attack handling is used */
 
     /* report or stay silent */
-    OPTION_REPORT      = 0x8,   /* if set, report action is being taken */
-    OPTION_NO_REPORT   = 0x0,   /* if not set, action is taken silently */
+    OPTION_REPORT = 0x8,    /* if set, report action is being taken */
+    OPTION_NO_REPORT = 0x0, /* if not set, action is taken silently */
 
     /* Block ignoring detect_mode; to handle case 10610. */
-    OPTION_BLOCK_IGNORE_DETECT  = 0x20,
+    OPTION_BLOCK_IGNORE_DETECT = 0x20,
 
     /* modifications in security policy or detection mechanism are controlled with */
-    OPTION_CUSTOM      = 0x100, /* alternative policy bit - custom meaning per option */
-    OPTION_NO_CUSTOM   = 0x0,   /* alternative policy bit - custom meaning per option */
+    OPTION_CUSTOM = 0x100,  /* alternative policy bit - custom meaning per option */
+    OPTION_NO_CUSTOM = 0x0, /* alternative policy bit - custom meaning per option */
 } security_option_t;
 
 /* values taken by the option hook_conflict */
 enum {
     /* these are mutually exclusive */
-    HOOKED_TRAMPOLINE_DIE    = 0, /* throw a fatal error if chained */
-    HOOKED_TRAMPOLINE_SQUASH = 1, /* modify any existing chains with a good guess */
-    HOOKED_TRAMPOLINE_CHAIN  = 2, /* rerelativize and mangle to support chaining */
+    HOOKED_TRAMPOLINE_DIE = 0,         /* throw a fatal error if chained */
+    HOOKED_TRAMPOLINE_SQUASH = 1,      /* modify any existing chains with a good guess */
+    HOOKED_TRAMPOLINE_CHAIN = 2,       /* rerelativize and mangle to support chaining */
     HOOKED_TRAMPOLINE_HOOK_DEEPER = 3, /* move our hook deeper into the function */
     HOOKED_TRAMPOLINE_MAX = 3,
 };
@@ -121,8 +120,8 @@ enum {
 
 /* Does this option affect persistent cache formation? */
 typedef enum {
-    OP_PCACHE_NOP    = 0, /* No effect on pcaches */
-    OP_PCACHE_LOCAL  = 1, /* Can only relax (not tighten), and when it relaxes any
+    OP_PCACHE_NOP = 0,    /* No effect on pcaches */
+    OP_PCACHE_LOCAL = 1,  /* Can only relax (not tighten), and when it relaxes any
                            * module that module is marked via
                            * os_module_set_flag(MODULE_WAS_EXEMPTED).
                            */
@@ -140,21 +139,19 @@ typedef enum {
  * never actually storing these values?
  */
 #define OPTION_STRING(x) 0 /* no string in enum */
-#define EMPTY_STRING     0 /* no string in enum */
+#define EMPTY_STRING 0     /* no string in enum */
 #define OPTION_COMMAND(type, name, default_value, command_line_option, statement, \
                        description, flag, pcache)                                 \
-    OPTION_DEFAULT_VALUE_##name = (ptr_uint_t) default_value, \
-    OPTION_IS_INTERNAL_##name = false, \
-    OPTION_IS_STRING_##name = ISSTRING_##type, \
+    OPTION_DEFAULT_VALUE_##name = (ptr_uint_t)default_value,                      \
+    OPTION_IS_INTERNAL_##name = false, OPTION_IS_STRING_##name = ISSTRING_##type, \
     OPTION_AFFECTS_PCACHE_##name = pcache,
-#define OPTION_COMMAND_INTERNAL(type, name, default_value, command_line_option, \
-                                statement, description, flag, pcache)           \
-    OPTION_DEFAULT_VALUE_##name = (ptr_uint_t) default_value, \
-    OPTION_IS_INTERNAL_##name = true, \
-    OPTION_IS_STRING_##name = ISSTRING_##type, \
+#define OPTION_COMMAND_INTERNAL(type, name, default_value, command_line_option,  \
+                                statement, description, flag, pcache)            \
+    OPTION_DEFAULT_VALUE_##name = (ptr_uint_t)default_value,                     \
+    OPTION_IS_INTERNAL_##name = true, OPTION_IS_STRING_##name = ISSTRING_##type, \
     OPTION_AFFECTS_PCACHE_##name = pcache,
 enum option_is_internal {
-#   include "optionsx.h"
+#include "optionsx.h"
 };
 #undef OPTION_COMMAND
 #undef OPTION_COMMAND_INTERNAL
@@ -163,23 +160,26 @@ enum option_is_internal {
 
 /* for all other option uses */
 #define OPTION_STRING(x) x
-#define EMPTY_STRING {0}        /* fills the constant char structure with zeroes */
+#define EMPTY_STRING \
+    {                \
+        0            \
+    } /* fills the constant char structure with zeroes */
 
 /* the Option struct typedef */
 #ifdef EXPOSE_INTERNAL_OPTIONS
-#  define OPTION_COMMAND_INTERNAL(type, name, default_value, command_line_option, \
-                                  statement, description, flag, pcache)           \
-    type name;
-#else 
-#  define OPTION_COMMAND_INTERNAL(type, name, default_value, command_line_option, \
-                                  statement, description, flag, pcache) /* nothing */
+#    define OPTION_COMMAND_INTERNAL(type, name, default_value, command_line_option, \
+                                    statement, description, flag, pcache)           \
+        type name;
+#else
+#    define OPTION_COMMAND_INTERNAL(type, name, default_value, command_line_option, \
+                                    statement, description, flag, pcache) /* nothing */
 #endif
 
 #define OPTION_COMMAND(type, name, default_value, command_line_option, statement, \
                        description, flag, pcache)                                 \
     type name;
 typedef struct _options_t {
-#   include "optionsx.h"
+#include "optionsx.h"
 } options_t;
 
 #undef OPTION_COMMAND
@@ -187,16 +187,16 @@ typedef struct _options_t {
 
 #ifndef EXPOSE_INTERNAL_OPTIONS
 /* special struct for internal option default values */
-#  define OPTION_COMMAND(type, name, default_value, command_line_option, statement, \
-                         description, flag, pcache) /* nothing */
-#  define OPTION_COMMAND_INTERNAL(type, name, default_value, command_line_option, \
-                                  statement, description, flag, pcache)           \
-    const type name;
+#    define OPTION_COMMAND(type, name, default_value, command_line_option, statement, \
+                           description, flag, pcache) /* nothing */
+#    define OPTION_COMMAND_INTERNAL(type, name, default_value, command_line_option, \
+                                    statement, description, flag, pcache)           \
+        const type name;
 typedef struct _internal_options_t {
-#   include "optionsx.h"
+#    include "optionsx.h"
 } internal_options_t;
-#  undef OPTION_COMMAND
-#  undef OPTION_COMMAND_INTERNAL
+#    undef OPTION_COMMAND
+#    undef OPTION_COMMAND_INTERNAL
 #endif
 
 #undef uint_size
@@ -220,31 +220,30 @@ extern const internal_options_t default_internal_options;
 #define IS_OPTION_STRING(name) (OPTION_IS_STRING_##name)
 /* FIXME : figure out a way to handle types here so that we don't have to cast
  * strings to ints to avoid compiler warnings */
-#define DEFAULT_OPTION_VALUE(name) (IS_OPTION_STRING(name) ? (int)default_options.name : \
-                                    OPTION_DEFAULT_VALUE_##name)
+#define DEFAULT_OPTION_VALUE(name) \
+    (IS_OPTION_STRING(name) ? (int)default_options.name : OPTION_DEFAULT_VALUE_##name)
 #ifdef EXPOSE_INTERNAL_OPTIONS
-#  define DEFAULT_INTERNAL_OPTION_VALUE DEFAULT_OPTION_VALUE
+#    define DEFAULT_INTERNAL_OPTION_VALUE DEFAULT_OPTION_VALUE
 #else
-#  define DEFAULT_INTERNAL_OPTION_VALUE(name) (IS_OPTION_STRING(name) ? \
-                                               default_internal_options.name : \
-                                               OPTION_DEFAULT_VALUE_##name)
+#    define DEFAULT_INTERNAL_OPTION_VALUE(name)                 \
+        (IS_OPTION_STRING(name) ? default_internal_options.name \
+                                : OPTION_DEFAULT_VALUE_##name)
 #endif
 /* for non-internal builds we don't support setting the default value
  * since they are all constants
  */
 #define SET_DEFAULT_VALUE(name) (dynamo_options.name = DEFAULT_OPTION_VALUE(name))
 
-
 /* checks for incompatible option values */
 /* max==0 means no max and 0 is an ok value */
 /* if option is incompatible, will try to touch up the option
- * by assigning min to make it valid returns true if changed the 
- * option value 
+ * by assigning min to make it valid returns true if changed the
+ * option value
  */
 bool
 check_param_bounds(uint *val, uint min, uint max, char *name);
 
-int 
+int
 options_init(void);
 
 /* only frees a lock, does not destroy any options info other exit
@@ -261,14 +260,13 @@ const options_t *
 get_process_options(HANDLE process_handle);
 #endif
 
-#define SYNCHRONIZE_DYNAMIC_OPTION(x) (                                         \
-        (dynamo_options.dynamic_options && synchronize_dynamic_options()),      \
-         dynamo_options.x)
+#define SYNCHRONIZE_DYNAMIC_OPTION(x) \
+    ((dynamo_options.dynamic_options && synchronize_dynamic_options()), dynamo_options.x)
 
-/* 
+/*
  * if minimal then the options string only contains values different than
  *  the defaults, otherwise it explicitly lists all options being used
-*/
+ */
 void
 get_dynamo_options_string(options_t *options, char *opstr, int len, bool minimal);
 
@@ -291,11 +289,11 @@ int
 set_dynamo_options(options_t *options, char *optstr);
 #else /* !NOT_DYNAMORIO_CORE */
 
-#include "utils.h"
+#    include "utils.h"
 
 /* are any fragments (potentially) shared? */
-#define SHARED_FRAGMENTS_ENABLED() \
-    (DYNAMO_OPTION(shared_bbs) || DYNAMO_OPTION(shared_traces))
+#    define SHARED_FRAGMENTS_ENABLED() \
+        (DYNAMO_OPTION(shared_bbs) || DYNAMO_OPTION(shared_traces))
 
 /* PR 244737: for x64 we use a "unified" scheme were thread-shared and
  * thread-private code always uses TLS for scratch space, eliminating
@@ -303,16 +301,16 @@ set_dynamo_options(options_t *options, char *optstr);
  * as for SHARED_FRAGMENTS_ENABLED and use that option to also
  * cover non-ib scratch space.
  */
-#define SCRATCH_ALWAYS_TLS() (DYNAMO_OPTION(private_ib_in_tls))
+#    define SCRATCH_ALWAYS_TLS() (DYNAMO_OPTION(private_ib_in_tls))
 
 /* are any traces (potentially) private? */
 /* FIXME Fix this if we permit private & shared traces to co-exist */
-#define PRIVATE_TRACES_ENABLED() \
-    (!DYNAMO_OPTION(disable_traces) && !DYNAMO_OPTION(shared_traces))
+#    define PRIVATE_TRACES_ENABLED() \
+        (!DYNAMO_OPTION(disable_traces) && !DYNAMO_OPTION(shared_traces))
 
 /* are shared BBs ibl targets? */
-#define SHARED_BB_IB_TARGETS() \
-     (DYNAMO_OPTION(shared_bbs) && DYNAMO_OPTION(bb_ibl_targets))
+#    define SHARED_BB_IB_TARGETS() \
+        (DYNAMO_OPTION(shared_bbs) && DYNAMO_OPTION(bb_ibl_targets))
 
 /* What this answers is
  * "Are only shared BBs being created and are they valid IB targets?"
@@ -321,25 +319,23 @@ set_dynamo_options(options_t *options, char *optstr);
  * building is active, even if traces are not being added to the
  * lookup tables.
  */
-#define SHARED_BB_ONLY_IB_TARGETS() \
-    (SHARED_BB_IB_TARGETS() && DYNAMO_OPTION(disable_traces))
+#    define SHARED_BB_ONLY_IB_TARGETS() \
+        (SHARED_BB_IB_TARGETS() && DYNAMO_OPTION(disable_traces))
 
 /* are any shared fragments ibl targets? */
-#define SHARED_IB_TARGETS() \
-    (DYNAMO_OPTION(shared_traces) || SHARED_BB_IB_TARGETS())
+#    define SHARED_IB_TARGETS() (DYNAMO_OPTION(shared_traces) || SHARED_BB_IB_TARGETS())
 
 /* are any IBT tables (potentially) shared? */
-#define SHARED_IBT_TABLES_ENABLED() \
-    (DYNAMO_OPTION(shared_bb_ibt_tables) || DYNAMO_OPTION(shared_trace_ibt_tables))
- 
-#define TRACEDUMP_ENABLED()                 \
-     (!DYNAMO_OPTION(disable_traces) &&     \
-      (INTERNAL_OPTION(tracedump_text) ||   \
-       INTERNAL_OPTION(tracedump_binary) || \
-       INTERNAL_OPTION(tracedump_origins)))
+#    define SHARED_IBT_TABLES_ENABLED() \
+        (DYNAMO_OPTION(shared_bb_ibt_tables) || DYNAMO_OPTION(shared_trace_ibt_tables))
 
-#define RUNNING_WITHOUT_CODE_CACHE()        \
-    (IF_HOTP(DYNAMO_OPTION(hotp_only) ||) DYNAMO_OPTION(thin_client))
+#    define TRACEDUMP_ENABLED()                                                   \
+        (!DYNAMO_OPTION(disable_traces) &&                                        \
+         (INTERNAL_OPTION(tracedump_text) || INTERNAL_OPTION(tracedump_binary) || \
+          INTERNAL_OPTION(tracedump_origins)))
+
+#    define RUNNING_WITHOUT_CODE_CACHE() \
+        (IF_HOTP(DYNAMO_OPTION(hotp_only) ||) DYNAMO_OPTION(thin_client))
 
 extern char option_string[];
 extern options_t dynamo_options;
@@ -349,36 +345,39 @@ extern read_write_lock_t options_lock;
  * this takes the field name only, and not {DYNAMO,INTERNAL}_OPTION macro,
  * since those macros will ASSERT_OWN_READWRITE_LOCK(<is_stringtype>, &options_lock)
  */
-#define IS_STRING_OPTION_EMPTY(op) ((dynamo_options.op)[0] == '\0')
+#    define IS_STRING_OPTION_EMPTY(op) ((dynamo_options.op)[0] == '\0')
 
 /* single character check for ALL is considered safe w/o the read lock
  * similarly to IS_STRING_OPTION_EMPTY see above
  */
-#define IS_LISTSTRING_OPTION_FORALL(op) ((dynamo_options.op)[0] == '*')
+#    define IS_LISTSTRING_OPTION_FORALL(op) ((dynamo_options.op)[0] == '*')
 
-#ifdef EXPOSE_INTERNAL_OPTIONS
-#  define IS_INTERNAL_STRING_OPTION_EMPTY(op) IS_STRING_OPTION_EMPTY(op)
-#else
-#  define IS_INTERNAL_STRING_OPTION_EMPTY(op) ((default_internal_options.op)[0] == '\0')
-#endif
+#    ifdef EXPOSE_INTERNAL_OPTIONS
+#        define IS_INTERNAL_STRING_OPTION_EMPTY(op) IS_STRING_OPTION_EMPTY(op)
+#    else
+#        define IS_INTERNAL_STRING_OPTION_EMPTY(op) \
+            ((default_internal_options.op)[0] == '\0')
+#    endif
 
 /* 0=ret => 1, 1=call* => 2, 2=jmp* => 4 */
-#define COARSE_FILL_IBL_MASK(branch_type) (1 << (branch_type))
+#    define COARSE_FILL_IBL_MASK(branch_type) (1 << (branch_type))
 
 /* full access to string requires read lock */
 static inline void
-string_option_read_lock(void) { 
-    read_lock(&options_lock); 
+string_option_read_lock(void)
+{
+    read_lock(&options_lock);
 }
 static inline void
-string_option_read_unlock(void) { 
-    read_unlock(&options_lock); 
+string_option_read_unlock(void)
+{
+    read_unlock(&options_lock);
 }
 
 typedef enum {
-    LIST_NO_MATCH   = 0, /* ensure can use as bool */
+    LIST_NO_MATCH = 0, /* ensure can use as bool */
     LIST_ON_DEFAULT = 1,
-    LIST_ON_APPEND  = 2,
+    LIST_ON_APPEND = 2,
 } list_default_or_append_t;
 
 /* compare short_name, usually module name, against a list option of the combined
@@ -387,7 +386,6 @@ typedef enum {
 list_default_or_append_t
 check_list_default_and_append(liststring_t default_list, liststring_t append_list,
                               const char *short_name);
-
 
 void
 options_make_writable(void);

@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -37,14 +37,14 @@
 
 /* DR_API EXPORT TOFILE dr_config.h */
 /* DR_API EXPORT BEGIN */
-#ifdef WINDOWS
+#    ifdef WINDOWS
 /****************************************************************************
  * Deployment API
  */
 /**
  * @file dr_config.h
  * @brief Deployment API for Windows.  Use these functions to register
- * processes to run under DynamoRIO, unregister processes, obtain existing 
+ * processes to run under DynamoRIO, unregister processes, obtain existing
  * registration information, and nudge running processes.
  * \note The dr_config library is currently not multi-thread safe. Users of
  * the library should ensure that no more then one thread accesses the library
@@ -52,34 +52,34 @@
  */
 
 /** Maximum length of a registered process's options string */
-#define DR_MAX_OPTIONS_LENGTH 512
+#        define DR_MAX_OPTIONS_LENGTH 512
 
 /** Specifies DynamoRIO's operation mode. */
 typedef enum {
 
-    /** 
+    /**
      * No mode.  Clients should not attempt to register a process in
      * this mode.
      */
     DR_MODE_NONE = 0,
 
-    /** Run DynamoRIO in Code Manipulation mode. */
-#ifdef HOT_PATCHING_INTERFACE
-    /** Note that this mode also supports the Probe API. */
-#endif
+/** Run DynamoRIO in Code Manipulation mode. */
+#        ifdef HOT_PATCHING_INTERFACE
+/** Note that this mode also supports the Probe API. */
+#        endif
     DR_MODE_CODE_MANIPULATION = 1,
 
-#ifdef HOT_PATCHING_INTERFACE
+#        ifdef HOT_PATCHING_INTERFACE
     /** Run DynamoRIO in Probe mode.  This mode has no code cache. */
     DR_MODE_PROBE = 2,
 
-#endif
+#        endif
 
-#ifdef PROGRAM_SHEPHERDING
+#        ifdef PROGRAM_SHEPHERDING
     /** Run DynamoRIO in Memory Firewall mode. */
     DR_MODE_MEMORY_FIREWALL = 3,
 
-#endif
+#        endif
 
 } dr_operation_mode_t;
 
@@ -127,9 +127,9 @@ typedef enum {
  * under DynamoRIO.  To register one or more clients, call
  * dr_register_client() subsequently.
  *
- * \param[in]   process_name    A NULL-terminated string specifying the name 
- *                              of the target process.  The string should 
- *                              identify the base name of the process, not the 
+ * \param[in]   process_name    A NULL-terminated string specifying the name
+ *                              of the target process.  The string should
+ *                              identify the base name of the process, not the
  *                              full path of the executable (e.g., calc.exe).
  *
  * \param[in]   pid             A process id of a target process, typically just
@@ -140,7 +140,7 @@ typedef enum {
  *
  * \param[in]   global          Whether global config files, stored in a dir pointed
  *                              at by the DYNAMORIO_HOME registry key, should be
- *                              used, or local config files private to the current 
+ *                              used, or local config files private to the current
  *                              user.  Administrative privileges may be needed if
  *                              global is true.  Note that DynamoRIO gives local
  *                              config files precedence when both exist.  The caller
@@ -150,7 +150,7 @@ typedef enum {
  *                              path to a valid DynamoRIO root directory.
  *                              The string length cannot exceed MAX_PATH.
  *
- * \param[in]   dr_mode         Specifies the mode under which DynamoRIO should 
+ * \param[in]   dr_mode         Specifies the mode under which DynamoRIO should
  *                              operate.  See dr_operation_mode_t.
  *
  * \param[in]   debug           If true, a DynamoRIO debug build will be used;
@@ -166,9 +166,9 @@ typedef enum {
  *                              not need to specify options.  The total
  *                              string length cannot exceed #DR_MAX_OPTIONS_LENGTH.
  *
- * \return      A dr_config_status_t code indicating the result of 
+ * \return      A dr_config_status_t code indicating the result of
  *              registration.  Note that registration fails if the requested
- *              process is already registered.  To modify a process's 
+ *              process is already registered.  To modify a process's
  *              registration, first call dr_unregister_process() to remove an
  *              existing registration.
  *
@@ -179,22 +179,17 @@ typedef enum {
  * pid (i.e., if pid == 0) persists across reboots until explicitly
  * unregistered.
  */
-dr_config_status_t 
-dr_register_process(const char *process_name,
-                    process_id_t pid,
-                    bool global,
-                    const char *dr_root_dir,
-                    dr_operation_mode_t dr_mode,
-                    bool debug,
-                    dr_platform_t dr_platform,
-                    const char *dr_options);
+dr_config_status_t
+dr_register_process(const char *process_name, process_id_t pid, bool global,
+                    const char *dr_root_dir, dr_operation_mode_t dr_mode, bool debug,
+                    dr_platform_t dr_platform, const char *dr_options);
 
 /**
  * Unregister a process from running under DynamoRIO.
  *
- * \param[in]   process_name    A NULL-terminated string specifying the name 
- *                              of the target process.  The string should 
- *                              identify the base name of the process, not the 
+ * \param[in]   process_name    A NULL-terminated string specifying the name
+ *                              of the target process.  The string should
+ *                              identify the base name of the process, not the
  *                              full path of the executable (e.g., calc.exe).
  *
  * \param[in]   pid             A process id of a target process, typically just
@@ -205,7 +200,7 @@ dr_register_process(const char *process_name,
  *
  * \param[in]   global          Whether global config files, stored in a dir pointed
  *                              at by the DYNAMORIO_HOME registry key, should be
- *                              used, or local config files private to the current 
+ *                              used, or local config files private to the current
  *                              user.  Administrative privileges may be needed if
  *                              global is true.  Note that DynamoRIO gives local
  *                              config files precedence when both exist.  The caller
@@ -216,14 +211,12 @@ dr_register_process(const char *process_name,
  *                              This parameter allows selecting which of those
  *                              configurations to unset.
  *
- * \return      A dr_config_status_t code indicating the result of 
- *              unregistration.  Note that unregistration fails if the process 
+ * \return      A dr_config_status_t code indicating the result of
+ *              unregistration.  Note that unregistration fails if the process
  *              is not currently registered to run under DynamoRIO.
  */
 dr_config_status_t
-dr_unregister_process(const char *process_name,
-                      process_id_t pid,
-                      bool global,
+dr_unregister_process(const char *process_name, process_id_t pid, bool global,
                       dr_platform_t dr_platform);
 
 /**
@@ -241,7 +234,7 @@ dr_unregister_process(const char *process_name,
  * \param[in]   dr_root_dir     The root DynamoRIO directory (used to locate
  *                              drpreinject.dll).
  *
- * \return      A dr_config_status_t code indicating the result of 
+ * \return      A dr_config_status_t code indicating the result of
  *              the operation.  The operation will fail if the caller does
  *              not have sufficient privileges.
  *
@@ -254,8 +247,7 @@ dr_unregister_process(const char *process_name,
  * non-graphical applications do not link with user32.dll.
  */
 dr_config_status_t
-dr_register_syswide(dr_platform_t dr_platform,
-                    const char *dr_root_dir);
+dr_register_syswide(dr_platform_t dr_platform, const char *dr_root_dir);
 
 /**
  * Disables systemwide injection.  Registered applications will not run
@@ -271,13 +263,12 @@ dr_register_syswide(dr_platform_t dr_platform,
  * \param[in]   dr_root_dir     The root DynamoRIO directory (used to locate
  *                              drpreinject.dll).
  *
- * \return      A dr_config_status_t code indicating the result of 
+ * \return      A dr_config_status_t code indicating the result of
  *              the operation.  The operation will fail if the caller does
  *              not have sufficient privileges.
  */
 dr_config_status_t
-dr_unregister_syswide(dr_platform_t dr_platform,
-                      const char *dr_root_dir);
+dr_unregister_syswide(dr_platform_t dr_platform, const char *dr_root_dir);
 
 /**
  * Returns whether systemwide injection is enabled.
@@ -293,16 +284,15 @@ dr_unregister_syswide(dr_platform_t dr_platform,
  * \return      Whether systemwide injection is enabled.
  */
 bool
-dr_syswide_is_on(dr_platform_t dr_platform,
-                 const char *dr_root_dir);
+dr_syswide_is_on(dr_platform_t dr_platform, const char *dr_root_dir);
 
 /**
  * Check if a process is registered to run under DynamoRIO.  To obtain client
  * information, use dr_get_client_info().
  *
- * \param[in]   process_name    A NULL-terminated string specifying the name 
- *                              of the target process.  The string should 
- *                              identify the base name of the process, not the 
+ * \param[in]   process_name    A NULL-terminated string specifying the name
+ *                              of the target process.  The string should
+ *                              identify the base name of the process, not the
  *                              full path of the executable (e.g., calc.exe).
  *
  * \param[in]   pid             A process id of a target process, typically just
@@ -313,7 +303,7 @@ dr_syswide_is_on(dr_platform_t dr_platform,
  *
  * \param[in]   global          Whether global config files, stored in a dir pointed
  *                              at by the DYNAMORIO_HOME registry key, should be
- *                              used, or local config files private to the current 
+ *                              used, or local config files private to the current
  *                              user.  Administrative privileges may be needed if
  *                              global is true.  Note that DynamoRIO gives local
  *                              config files precedence when both exist.  The caller
@@ -326,8 +316,8 @@ dr_syswide_is_on(dr_platform_t dr_platform,
  *
  * \param[out]  dr_root_dir     If the process is registered, the root DynamoRIO
  *                              directory provided at registration.  Callers can
- *                              pass NULL if this value is not needed.  Otherwise, 
- *                              the parameter must be a caller-allocated array of 
+ *                              pass NULL if this value is not needed.  Otherwise,
+ *                              the parameter must be a caller-allocated array of
  *                              length MAX_PATH.
  *
  * \param[out]  dr_mode         If the process is registered, the mode provided
@@ -347,20 +337,16 @@ dr_syswide_is_on(dr_platform_t dr_platform,
  * \return      true if the process is registered for the given platform.
  */
 bool
-dr_process_is_registered(const char *process_name,
-                         process_id_t pid,
-                         bool global,
-                         dr_platform_t dr_platform,
-                         char *dr_root_dir              /* OUT */,
-                         dr_operation_mode_t *dr_mode   /* OUT */,
-                         bool *debug                    /* OUT */,
-                         char *dr_options               /* OUT */);
+dr_process_is_registered(const char *process_name, process_id_t pid, bool global,
+                         dr_platform_t dr_platform, char *dr_root_dir /* OUT */,
+                         dr_operation_mode_t *dr_mode /* OUT */, bool *debug /* OUT */,
+                         char *dr_options /* OUT */);
 
 typedef struct _dr_registered_process_iterator_t dr_registered_process_iterator_t;
 
 /**
  * Creates and starts an iterator for iterating over all processes registered for
- * the given platform and given global or local parameter. 
+ * the given platform and given global or local parameter.
  *
  * \param[in]   dr_platform     Configurations are kept separate on 64-bit Windows
  *                              for 32-bit (WOW64) processes and 64-bit processes.
@@ -369,19 +355,18 @@ typedef struct _dr_registered_process_iterator_t dr_registered_process_iterator_
  *
  * \param[in]   global          Whether global config files, stored in a dir pointed
  *                              at by the DYNAMORIO_HOME registry key, should be
- *                              used, or local config files private to the current 
+ *                              used, or local config files private to the current
  *                              user.  Administrative privileges may be needed if
  *                              global is true.  Note that DynamoRIO gives local
  *                              config files precedence when both exist.  The caller
  *                              must separately create the global directory.
  *
- * \return      iterator for use with dr_registered_process_iterator_hasnext()and 
+ * \return      iterator for use with dr_registered_process_iterator_hasnext()and
  *              dr_registered_process_iterator_next().  Must be freed
  *              with dr_registered_process_iterator_stop()
  */
 dr_registered_process_iterator_t *
-dr_registered_process_iterator_start(dr_platform_t dr_platform,
-                                     bool global);
+dr_registered_process_iterator_start(dr_platform_t dr_platform, bool global);
 
 /**
  * \param[in]    iter           A registered process iterator created with
@@ -429,8 +414,7 @@ dr_registered_process_iterator_next(dr_registered_process_iterator_t *iter,
                                     char *process_name /* OUT */,
                                     char *dr_root_dir /* OUT */,
                                     dr_operation_mode_t *dr_mode /* OUT */,
-                                    bool *debug /* OUT */,
-                                    char *dr_options /* OUT */);
+                                    bool *debug /* OUT */, char *dr_options /* OUT */);
 
 /**
  * Stops and frees a registered process iterator.
@@ -445,9 +429,9 @@ dr_registered_process_iterator_stop(dr_registered_process_iterator_t *iter);
  * Register a client for a particular process.  Note that the process must first
  * be registered via dr_register_process() before calling this routine.
  *
- * \param[in]   process_name    A NULL-terminated string specifying the name 
- *                              of the target process.  The string should 
- *                              identify the base name of the process, not the 
+ * \param[in]   process_name    A NULL-terminated string specifying the name
+ *                              of the target process.  The string should
+ *                              identify the base name of the process, not the
  *                              full path of the executable (e.g., calc.exe).
  *
  * \param[in]   pid             A process id of a target process, typically just
@@ -458,7 +442,7 @@ dr_registered_process_iterator_stop(dr_registered_process_iterator_t *iter);
  *
  * \param[in]   global          Whether global config files, stored in a dir pointed
  *                              at by the DYNAMORIO_HOME registry key, should be
- *                              used, or local config files private to the current 
+ *                              used, or local config files private to the current
  *                              user.  Administrative privileges may be needed if
  *                              global is true.  Note that DynamoRIO gives local
  *                              config files precedence when both exist.  The caller
@@ -479,8 +463,8 @@ dr_registered_process_iterator_stop(dr_registered_process_iterator_t *iter);
  * \param[in]   client_pri      The client number, or priority.  Client registration
  *                              includes a value indicating the priority of a client
  *                              relative to other clients.  In multi-client settings,
- *                              a client's priority influences event callback 
- *                              ordering.  That is, higher priority clients can 
+ *                              a client's priority influences event callback
+ *                              ordering.  That is, higher priority clients can
  *                              register their callbacks first; DynamoRIO then calls
  *                              these routines last.  Client priorities range
  *                              consecutively from 0 to N-1, where N is the number
@@ -500,21 +484,16 @@ dr_registered_process_iterator_stop(dr_registered_process_iterator_t *iter);
  * \return      A dr_config_status_t code indicating the result of registration.
  */
 dr_config_status_t
-dr_register_client(const char *process_name,
-                   process_id_t pid,
-                   bool global,
-                   dr_platform_t dr_platform,
-                   client_id_t client_id,
-                   size_t client_pri,
-                   const char *client_path,
-                   const char *client_options);
+dr_register_client(const char *process_name, process_id_t pid, bool global,
+                   dr_platform_t dr_platform, client_id_t client_id, size_t client_pri,
+                   const char *client_path, const char *client_options);
 
 /**
  * Unregister a client for a particular process.
  *
- * \param[in]   process_name    A NULL-terminated string specifying the name 
- *                              of the target process.  The string should 
- *                              identify the base name of the process, not the 
+ * \param[in]   process_name    A NULL-terminated string specifying the name
+ *                              of the target process.  The string should
+ *                              identify the base name of the process, not the
  *                              full path of the executable (e.g., calc.exe).
  *
  * \param[in]   pid             A process id of a target process, typically just
@@ -525,7 +504,7 @@ dr_register_client(const char *process_name,
  *
  * \param[in]   global          Whether global config files, stored in a dir pointed
  *                              at by the DYNAMORIO_HOME registry key, should be
- *                              used, or local config files private to the current 
+ *                              used, or local config files private to the current
  *                              user.  Administrative privileges may be needed if
  *                              global is true.  Note that DynamoRIO gives local
  *                              config files precedence when both exist.  The caller
@@ -542,19 +521,16 @@ dr_register_client(const char *process_name,
  * \return      A dr_config_status_t code indicating the result of unregistration.
  */
 dr_config_status_t
-dr_unregister_client(const char *process_name,
-                     process_id_t pid,
-                     bool global,
-                     dr_platform_t dr_platform,
-                     client_id_t client_id);
+dr_unregister_client(const char *process_name, process_id_t pid, bool global,
+                     dr_platform_t dr_platform, client_id_t client_id);
 
 /**
  * Retrieve the number of clients registered for a particular process for
  * the current user.
  *
- * \param[in]   process_name    A NULL-terminated string specifying the name 
- *                              of the target process.  The string should 
- *                              identify the base name of the process, not the 
+ * \param[in]   process_name    A NULL-terminated string specifying the name
+ *                              of the target process.  The string should
+ *                              identify the base name of the process, not the
  *                              full path of the executable (e.g., calc.exe).
  *
  * \param[in]   pid             A process id of a target process, typically just
@@ -565,7 +541,7 @@ dr_unregister_client(const char *process_name,
  *
  * \param[in]   global          Whether global config files, stored in a dir pointed
  *                              at by the DYNAMORIO_HOME registry key, should be
- *                              used, or local config files private to the current 
+ *                              used, or local config files private to the current
  *                              user.  Administrative privileges may be needed if
  *                              global is true.  Note that DynamoRIO gives local
  *                              config files precedence when both exist.  The caller
@@ -579,18 +555,16 @@ dr_unregister_client(const char *process_name,
  * \return      The number of clients registered for the given process and platform.
  */
 size_t
-dr_num_registered_clients(const char *process_name,
-                          process_id_t pid,
-                          bool global,
+dr_num_registered_clients(const char *process_name, process_id_t pid, bool global,
                           dr_platform_t dr_platform);
 
 /**
  * Retrieve client registration information for a particular process for
  * the current user.
  *
- * \param[in]   process_name    A NULL-terminated string specifying the name 
- *                              of the target process.  The string should 
- *                              identify the base name of the process, not the 
+ * \param[in]   process_name    A NULL-terminated string specifying the name
+ *                              of the target process.  The string should
+ *                              identify the base name of the process, not the
  *                              full path of the executable (e.g., calc.exe).
  *
  * \param[in]   pid             A process id of a target process, typically just
@@ -601,7 +575,7 @@ dr_num_registered_clients(const char *process_name,
  *
  * \param[in]   global          Whether global config files, stored in a dir pointed
  *                              at by the DYNAMORIO_HOME registry key, should be
- *                              used, or local config files private to the current 
+ *                              used, or local config files private to the current
  *                              user.  Administrative privileges may be needed if
  *                              global is true.  Note that DynamoRIO gives local
  *                              config files precedence when both exist.  The caller
@@ -630,13 +604,10 @@ dr_num_registered_clients(const char *process_name,
  * \return      A dr_config_status_t code indicating the result of the call.
  */
 dr_config_status_t
-dr_get_client_info(const char *process_name,
-                   process_id_t pid,
-                   bool global,
-                   dr_platform_t dr_platform,
-                   client_id_t client_id,
-                   size_t *client_pri,  /* OUT */
-                   char *client_path,   /* OUT */
+dr_get_client_info(const char *process_name, process_id_t pid, bool global,
+                   dr_platform_t dr_platform, client_id_t client_id,
+                   size_t *client_pri, /* OUT */
+                   char *client_path,  /* OUT */
                    char *client_options /* OUT */);
 
 typedef struct _dr_client_iterator_t dr_client_iterator_t;
@@ -645,9 +616,9 @@ typedef struct _dr_client_iterator_t dr_client_iterator_t;
  * Creates and starts an iterator for iterating over all clients registered for
  * the given process.
  *
- * \param[in]   process_name    A NULL-terminated string specifying the name 
- *                              of the target process.  The string should 
- *                              identify the base name of the process, not the 
+ * \param[in]   process_name    A NULL-terminated string specifying the name
+ *                              of the target process.  The string should
+ *                              identify the base name of the process, not the
  *                              full path of the executable (e.g., calc.exe).
  *
  * \param[in]   pid             A process id of a target process, typically just
@@ -658,7 +629,7 @@ typedef struct _dr_client_iterator_t dr_client_iterator_t;
  *
  * \param[in]   global          Whether global config files, stored in a dir pointed
  *                              at by the DYNAMORIO_HOME registry key, should be
- *                              used, or local config files private to the current 
+ *                              used, or local config files private to the current
  *                              user.  Administrative privileges may be needed if
  *                              global is true.  Note that DynamoRIO gives local
  *                              config files precedence when both exist.  The caller
@@ -674,9 +645,7 @@ typedef struct _dr_client_iterator_t dr_client_iterator_t;
  *              dr_client_iterator_stop()
  */
 dr_client_iterator_t *
-dr_client_iterator_start(const char *process_name,
-                         process_id_t pid,
-                         bool global,
+dr_client_iterator_start(const char *process_name, process_id_t pid, bool global,
                          dr_platform_t dr_platform);
 
 /**
@@ -707,11 +676,10 @@ dr_client_iterator_hasnext(dr_client_iterator_t *iter);
  *                              array of length #DR_MAX_OPTIONS_LENGTH.
  */
 void
-dr_client_iterator_next(dr_client_iterator_t *iter,
-                        client_id_t *client_id, /* OUT */
-                        size_t *client_pri,     /* OUT */
-                        char *client_path,      /* OUT */
-                        char *client_options    /* OUT */);
+dr_client_iterator_next(dr_client_iterator_t *iter, client_id_t *client_id, /* OUT */
+                        size_t *client_pri,                                 /* OUT */
+                        char *client_path,                                  /* OUT */
+                        char *client_options /* OUT */);
 
 /**
  * Stops and frees a client iterator.
@@ -721,19 +689,18 @@ dr_client_iterator_next(dr_client_iterator_t *iter,
 void
 dr_client_iterator_stop(dr_client_iterator_t *iter);
 
-
 /**
  * Provides a mechanism for an external entity on the guest OS to
  * communicate with a client.  Requires administrative privileges.  A
  * process 'nudge' causes a client event handler to be invoked (use
  * dr_register_nudge_event() to register the handler function).  A
  * nudge is ignored if the process is not running under DynamoRIO,
- * the specified client is not loaded, or if the client does not 
+ * the specified client is not loaded, or if the client does not
  * provide a handler.
  *
- * \param[in]   process_name    A NULL-terminated string specifying the name 
- *                              of the target process.  The string should 
- *                              identify the base name of the process, not the 
+ * \param[in]   process_name    A NULL-terminated string specifying the name
+ *                              of the target process.  The string should
+ *                              identify the base name of the process, not the
  *                              full path of the executable.
  *
  * \param[in]   client_id       The unique client ID provided at client
@@ -768,11 +735,8 @@ dr_client_iterator_stop(dr_client_iterator_t *iter);
  * \note Nudging 64-bit processes is not yet supported.
  */
 dr_config_status_t
-dr_nudge_process(const char *process_name,
-                 client_id_t client_id,
-                 uint64 arg,
-                 uint timeout_ms,
-                 int *nudge_count /*OUT */);
+dr_nudge_process(const char *process_name, client_id_t client_id, uint64 arg,
+                 uint timeout_ms, int *nudge_count /*OUT */);
 
 /**
  * Provides a mechanism for an external entity on the guest OS to
@@ -780,7 +744,7 @@ dr_nudge_process(const char *process_name,
  * process 'nudge' causes a client event handler to be invoked (use
  * dr_register_nudge_event() to register the handler function).  A
  * nudge is ignored if the process is not running under DynamoRIO,
- * the specified client is not loaded, or if the client does not 
+ * the specified client is not loaded, or if the client does not
  * provide a handler.
  *
  * \param[in]   process_id      The system id of the process to nudge
@@ -810,10 +774,7 @@ dr_nudge_process(const char *process_name,
  * \note Nudging 64-bit processes is not yet supported.
  */
 dr_config_status_t
-dr_nudge_pid(process_id_t process_id,
-             client_id_t client_id,
-             uint64 arg,
-             uint timeout_ms);
+dr_nudge_pid(process_id_t process_id, client_id_t client_id, uint64 arg, uint timeout_ms);
 
 /**
  * Provides a mechanism for an external entity on the guest OS to
@@ -821,7 +782,7 @@ dr_nudge_pid(process_id_t process_id,
  * process 'nudge' causes a client event handler to be invoked (use
  * dr_register_nudge_event() to register the handler function).  A
  * nudge is ignored if the process is not running under DynamoRIO,
- * the specified client is not loaded, or if the client does not 
+ * the specified client is not loaded, or if the client does not
  * provide a handler.  Nudges are attempted to all processes running
  * on the system.
  *
@@ -853,12 +814,10 @@ dr_nudge_pid(process_id_t process_id,
  * \note Nudging 64-bit processes is not yet supported.
  */
 dr_config_status_t
-dr_nudge_all(client_id_t client_id,
-             uint64 arg,
-             uint timeout_ms,
+dr_nudge_all(client_id_t client_id, uint64 arg, uint timeout_ms,
              int *nudge_count /*OUT */);
 
-#endif /* WINDOWS */
+#    endif /* WINDOWS */
 
 /* DR_API EXPORT END */
 

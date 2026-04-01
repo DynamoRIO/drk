@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -37,9 +37,8 @@
 
 #define MINSERT instrlist_meta_preinsert
 
-static
-dr_emit_flags_t bb_event(void* drcontext, void *tag, instrlist_t* bb,
-                         bool for_trace, bool translating)
+static dr_emit_flags_t
+bb_event(void *drcontext, void *tag, instrlist_t *bb, bool for_trace, bool translating)
 {
     instr_t *instr;
     instr_t *next_instr;
@@ -50,10 +49,9 @@ dr_emit_flags_t bb_event(void* drcontext, void *tag, instrlist_t* bb,
         if (instr_get_opcode(instr) == OP_mov_imm &&
             opnd_get_reg(instr_get_dst(instr, 0)) == REG_EAX)
             in_eax = opnd_get_immed_int(instr_get_src(instr, 0));
-        if (instr_is_syscall(instr) &&
-            in_eax == SYS_getpid) {
-            instr_t *myval = INSTR_CREATE_mov_imm
-                (drcontext, opnd_create_reg(REG_EAX), OPND_CREATE_INT32(-7));
+        if (instr_is_syscall(instr) && in_eax == SYS_getpid) {
+            instr_t *myval = INSTR_CREATE_mov_imm(drcontext, opnd_create_reg(REG_EAX),
+                                                  OPND_CREATE_INT32(-7));
             instr_set_translation(myval, instr_get_app_pc(instr));
             instrlist_preinsert(bb, instr, myval);
             instrlist_remove(bb, instr);
@@ -64,7 +62,8 @@ dr_emit_flags_t bb_event(void* drcontext, void *tag, instrlist_t* bb,
 }
 
 DR_EXPORT
-void dr_init(client_id_t id)
+void
+dr_init(client_id_t id)
 {
     dr_register_bb_event(bb_event);
 }

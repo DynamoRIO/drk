@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -36,19 +36,19 @@
 /***************************************************************************/
 #ifdef LINUX
 
-#define WINAPI
+#    define WINAPI
 
-#include <sys/types.h> /* for wait and mmap */
-#include <sys/wait.h>  /* for wait */
-#include <sched.h>     /* for __clone */
-#include <sys/mman.h>  /* for mmap */
-#include <unistd.h>    /* for sleep */
+#    include <sys/types.h> /* for wait and mmap */
+#    include <sys/wait.h>  /* for wait */
+#    include <sched.h>     /* for __clone */
+#    include <sys/mman.h>  /* for mmap */
+#    include <unistd.h>    /* for sleep */
 
 typedef pid_t thread_t;
 
-#define thread_sleep sleep
+#    define thread_sleep sleep
 
-#define THREAD_STACK_SIZE   (32*1024)
+#    define THREAD_STACK_SIZE (32 * 1024)
 
 /* allocate stack storage on the app's heap */
 void *
@@ -56,30 +56,30 @@ stack_alloc(int size)
 {
     void *q, *p;
 
-#if STACK_OVERFLOW_PROTECT
+#    if STACK_OVERFLOW_PROTECT
     /* allocate an extra page and mark it non-accessible to trap stack overflow */
-    q = mmap(0, PAGE_SIZE, PROT_NONE, MAP_ANON|MAP_PRIVATE, -1, 0);
+    q = mmap(0, PAGE_SIZE, PROT_NONE, MAP_ANON | MAP_PRIVATE, -1, 0);
     assert(q);
-    stack_redzone_start = (size_t) q;
-#endif 
+    stack_redzone_start = (size_t)q;
+#    endif
 
-    p = mmap(q, size, PROT_READ|PROT_WRITE, MAP_ANON|MAP_PRIVATE, -1, 0);
+    p = mmap(q, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0);
     assert(p);
     /* stack grows from high to low addresses, so return a ptr to the top of the
        allocated region */
-    return (void *) ((size_t)p + size);
+    return (void *)((size_t)p + size);
 }
 
 /* free memory-mapped stack storage */
 void
 stack_free(void *p, int size)
 {
-    void *sp = (void *) ((size_t)p - size);
+    void *sp = (void *)((size_t)p - size);
     munmap(sp, size);
-#if STACK_OVERFLOW_PROTECT
+#    if STACK_OVERFLOW_PROTECT
     sp = sp - PAGE_SIZE;
     munmap(sp, PAGE_SIZE);
-#endif 
+#    endif
 }
 
 /* Create a new thread. It should be passed "run_func", a function which
@@ -90,10 +90,10 @@ stack_free(void *p, int size)
 thread_t
 create_thread(int (*run_func)(void *), void *arg, void **stack)
 {
-    thread_t newpid; 
+    thread_t newpid;
     int flags;
     void *my_stack;
-    
+
     if (*stack == NULL)
         my_stack = stack_alloc(THREAD_STACK_SIZE);
     else
@@ -102,11 +102,11 @@ create_thread(int (*run_func)(void *), void *arg, void **stack)
      * else have errors doing a wait */
     flags = SIGCHLD | CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND;
     newpid = __clone(run_func, my_stack, flags, arg);
-  
+
     if (newpid == -1) {
-	print("smp.c: Error calling __clone\n");
-	stack_free(my_stack, THREAD_STACK_SIZE);
-	return -1;
+        print("smp.c: Error calling __clone\n");
+        stack_free(my_stack, THREAD_STACK_SIZE);
+        return -1;
     }
 
     if (*stack == NULL)
@@ -115,7 +115,7 @@ create_thread(int (*run_func)(void *), void *arg, void **stack)
     return newpid;
 }
 
-void 
+void
 delete_thread(thread_t pid, void *stack)
 {
     thread_t result;
@@ -124,24 +124,24 @@ delete_thread(thread_t pid, void *stack)
     result = waitpid(pid, NULL, 0);
     VERBOSE_PRINT("Child has exited\n");
     if (result == -1 || result != pid)
-	perror("delete_thread waitpid");
+        perror("delete_thread waitpid");
     stack_free(stack, THREAD_STACK_SIZE);
 }
 
 /***************************************************************************/
 #else /* WINDOWS */
 
-#include <windows.h>
-#include <process.h> /* for _beginthreadex */
+#    include <windows.h>
+#    include <process.h> /* for _beginthreadex */
 
 typedef HANDLE thread_t;
 
 /* make it easier to write portable code --
  * we'll just ignore the stack stuff
  */
-#define stack_alloc(s) NULL
-#define stack_free(p, s) NULL
-#define THREAD_STACK_SIZE   (32*1024)
+#    define stack_alloc(s) NULL
+#    define stack_free(p, s) NULL
+#    define THREAD_STACK_SIZE (32 * 1024)
 
 /* Create a new thread. It should be passed "run_func", a function which
  * takes one argument ("arg"), for the thread to execute.
@@ -149,13 +149,13 @@ typedef HANDLE thread_t;
  * Returns the tid of the new thread.
  */
 thread_t
-create_thread(int (WINAPI *run_func)(void *), void *arg, void **stack)
+create_thread(int(WINAPI *run_func)(void *), void *arg, void **stack)
 {
     int tid;
-    return (thread_t) _beginthreadex(NULL, 0, run_func, NULL, 0, &tid);
+    return (thread_t)_beginthreadex(NULL, 0, run_func, NULL, 0, &tid);
 }
 
-void 
+void
 delete_thread(thread_t thread, void *stack)
 {
     VERBOSE_PRINT("Waiting for child to exit\n");
@@ -166,7 +166,7 @@ delete_thread(thread_t thread, void *stack)
 void
 thread_sleep(int s)
 {
-    Sleep(1000*s);
+    Sleep(1000 * s);
 }
 
 #endif /* WINDOWS */

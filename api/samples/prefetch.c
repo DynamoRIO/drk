@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -43,14 +43,15 @@
 
 #include "dr_api.h"
 
-static void event_exit(void);
-static dr_emit_flags_t event_bb(void *drcontext, void *tag, instrlist_t *bb,
-                                bool for_trace, bool translating);
+static void
+event_exit(void);
+static dr_emit_flags_t
+event_bb(void *drcontext, void *tag, instrlist_t *bb, bool for_trace, bool translating);
 
-static void *count_mutex;  /* for multithread support */
+static void *count_mutex; /* for multithread support */
 static int prefetches_removed = 0, prefetchws_removed = 0;
 
-DR_EXPORT void 
+DR_EXPORT void
 dr_init(client_id_t id)
 {
     dr_register_exit_event(event_exit);
@@ -66,7 +67,7 @@ dr_init(client_id_t id)
     count_mutex = dr_mutex_create();
 }
 
-static void 
+static void
 event_exit(void)
 {
     dr_log(NULL, LOG_ALL, 1, "Removed %d prefetches and %d prefetchws.\n",
@@ -82,9 +83,9 @@ event_bb(void *drcontext, void *tag, instrlist_t *bb, bool for_trace, bool trans
 
     /* look for and remove prefetch[w] instructions */
     for (instr = instrlist_first(bb); instr != NULL; instr = next_instr) {
-	next_instr = instr_get_next(instr);
-	opcode = instr_get_opcode(instr);
-	if (opcode == OP_prefetch || opcode == OP_prefetchw) {
+        next_instr = instr_get_next(instr);
+        opcode = instr_get_opcode(instr);
+        if (opcode == OP_prefetch || opcode == OP_prefetchw) {
             instrlist_remove(bb, instr);
             instr_destroy(drcontext, instr);
             if (!translating) {
@@ -96,7 +97,7 @@ event_bb(void *drcontext, void *tag, instrlist_t *bb, bool for_trace, bool trans
                     prefetchws_removed++;
                 dr_mutex_unlock(count_mutex);
             }
-	}
+        }
     }
     return DR_EMIT_DEFAULT;
 }

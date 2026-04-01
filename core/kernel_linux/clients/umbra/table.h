@@ -30,7 +30,7 @@
  * Description:
  *     Manage internal data sturcture.
  *
- * Author: 
+ * Author:
  *     Qin Zhao
  *
  */
@@ -41,26 +41,26 @@
 #include "global.h"
 #include "umbra.h"
 
-#define INIT_BB_TABLE_SIZE      8192
-#define INIT_EDGE_TABLE_SIZE    (INIT_BB_TABLE_SIZE * 2)
-#define INIT_REF_TABLE_SIZE     INIT_EDGE_TABLE_SIZE
-#define INIT_FUNC_TABLE_SIZE    1024
-#define INIT_REF_CACHE_SIZE     INIT_REF_TABLE_SIZE
-#define INIT_HASH_TABLE_SIZE    4096
-#define MAX_BYTES_TABLE_SIZE    (1 << 20)
+#define INIT_BB_TABLE_SIZE 8192
+#define INIT_EDGE_TABLE_SIZE (INIT_BB_TABLE_SIZE * 2)
+#define INIT_REF_TABLE_SIZE INIT_EDGE_TABLE_SIZE
+#define INIT_FUNC_TABLE_SIZE 1024
+#define INIT_REF_CACHE_SIZE INIT_REF_TABLE_SIZE
+#define INIT_HASH_TABLE_SIZE 4096
+#define MAX_BYTES_TABLE_SIZE (1 << 20)
 
 #define CODE_HASH_FUNC(val, mask) ((val) & (mask))
 
-void 
+void
 table_init(void);
 
-void 
+void
 table_exit(void);
 
-void 
+void
 table_thread_init(void *drcontext, umbra_info_t *info);
 
-void 
+void
 table_thread_exit(void *drcontext, umbra_info_t *info);
 
 basic_block_t *
@@ -93,7 +93,7 @@ table_get_func(umbra_info_t *info, int id);
 basic_block_t *
 table_bb_tag_lookup(umbra_info_t *info, app_pc tag);
 
-void 
+void
 table_bb_add_to_hashtable(void *drcontext, umbra_info_t *info, basic_block_t *bb);
 
 link_edge_t *
@@ -108,5 +108,4 @@ table_edge_lookup_remove(void *drcontext, umbra_info_t *info, app_pc tag);
 bool
 addr_in_ref_cache(umbra_info_t *info, void *addr);
 
-#endif  /* _TABLE_H_ */
-
+#endif /* _TABLE_H_ */

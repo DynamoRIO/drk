@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -44,22 +44,22 @@
 #include <stdio.h>
 
 #ifdef USE_DYNAMO
-#include "dynamorio.h"
+#    include "dynamorio.h"
 #endif
 
 /* FIXME: our toolchain headers are too old for these so hardcoding: */
 /* linux/sched.h is hard to include properly */
-#define CLONE_THREAD	0x00010000	/* Same thread group? */
-#define CLONE_CHILD_CLEARTID 0x00200000      /* clear the TID in the child */
+#define CLONE_THREAD 0x00010000         /* Same thread group? */
+#define CLONE_CHILD_CLEARTID 0x00200000 /* clear the TID in the child */
 
 #ifdef __i386__
-# define __NR_set_tid_address 258
-# define __NR_gettid 224
-# define __NR_exit 1
+#    define __NR_set_tid_address 258
+#    define __NR_gettid 224
+#    define __NR_exit 1
 #else
-# define __NR_set_tid_address 218
-# define __NR_gettid 186
-# define __NR_exit 60
+#    define __NR_set_tid_address 218
+#    define __NR_gettid 186
+#    define __NR_exit 60
 #endif
 #define SYS_set_tid_address __NR_set_tid_address
 #define SYS_gettid __NR_gettid
@@ -68,14 +68,19 @@
 #define false (0)
 #define true (1)
 typedef int bool;
-#define THREAD_STACK_SIZE   (32*1024)
+#define THREAD_STACK_SIZE (32 * 1024)
 
 /* forward declarations */
-static pid_t create_thread(int (*fcn)(void *), void *arg, void **stack);
-static void delete_thread(pid_t pid, void *stack);
-int run(void *arg);
-static void* stack_alloc(int size);
-static void stack_free(void *p, int size);
+static pid_t
+create_thread(int (*fcn)(void *), void *arg, void **stack);
+static void
+delete_thread(pid_t pid, void *stack);
+int
+run(void *arg);
+static void *
+stack_alloc(int size);
+static void
+stack_free(void *p, int size);
 
 /* vars for child thread */
 static pid_t child;
@@ -89,7 +94,8 @@ static volatile bool child_done;
 
 static struct timespec sleeptime;
 
-int main()
+int
+main()
 {
 #ifdef USE_DYNAMO
     dynamorio_app_init();
@@ -97,7 +103,7 @@ int main()
 #endif
 
     sleeptime.tv_sec = 0;
-    sleeptime.tv_nsec = 10*1000*1000; /* 10ms */
+    sleeptime.tv_nsec = 10 * 1000 * 1000; /* 10ms */
 
     child_exit = false;
     child_done = false;
@@ -106,7 +112,7 @@ int main()
 
     /* waste some time */
     nanosleep(&sleeptime, NULL);
-    
+
     child_exit = true;
     /* we want deterministic printf ordering */
     while (!child_done)
@@ -121,22 +127,23 @@ int main()
 
 /* Procedure executed by sideline threads
  */
-int run(void *arg)
+int
+run(void *arg)
 {
     int i = 0;
     /* for CLONE_CHILD_CLEARTID for signaling parent.  if we used raw
-     * clone system call we could get kernel to do this for us. 
+     * clone system call we could get kernel to do this for us.
      */
     child = syscall(SYS_gettid);
     syscall(SYS_set_tid_address, &child);
     fprintf(stderr, "Sideline thread started\n");
     while (true) {
-	/* do nothing for now */
-	i++;
-	if (i % 2500000 == 0)
-	    fprintf(stderr, "i = %d\n", i);
-	if (i % 25000000 == 0)
-	    break;
+        /* do nothing for now */
+        i++;
+        if (i % 2500000 == 0)
+            fprintf(stderr, "i = %d\n", i);
+        if (i % 25000000 == 0)
+            break;
     }
     while (!child_exit)
         nanosleep(&sleeptime, NULL);
@@ -158,10 +165,10 @@ int run(void *arg)
 static pid_t
 create_thread(int (*fcn)(void *), void *arg, void **stack)
 {
-    pid_t newpid; 
+    pid_t newpid;
     int flags;
     void *my_stack;
-    
+
     my_stack = stack_alloc(THREAD_STACK_SIZE);
     /* need SIGCHLD so parent will get that signal when child dies,
      * else have errors doing a wait */
@@ -170,22 +177,21 @@ create_thread(int (*fcn)(void *), void *arg, void **stack)
          * CLONE_CHILD_CLEARTID to get that.  Since we're using library call
          * instead of raw system call we don't have child_tidptr argument,
          * so we set the location in the child itself via set_tid_address(). */
-        CLONE_CHILD_CLEARTID | 
-        CLONE_FS | CLONE_FILES | CLONE_SIGHAND;
+        CLONE_CHILD_CLEARTID | CLONE_FS | CLONE_FILES | CLONE_SIGHAND;
     newpid = __clone(fcn, my_stack, flags, arg);
     /* this is really a tid since we passed CLONE_THREAD: child has same pid as us */
-  
+
     if (newpid == -1) {
-	fprintf(stderr, "smp.c: Error calling __clone\n");
-	stack_free(my_stack, THREAD_STACK_SIZE);
-	return -1;
+        fprintf(stderr, "smp.c: Error calling __clone\n");
+        stack_free(my_stack, THREAD_STACK_SIZE);
+        return -1;
     }
 
     *stack = my_stack;
     return newpid;
 }
 
-static void 
+static void
 delete_thread(pid_t pid, void *stack)
 {
     pid_t result;
@@ -203,7 +209,7 @@ delete_thread(pid_t pid, void *stack)
 }
 
 /* allocate stack storage on the app's heap */
-void*
+void *
 stack_alloc(int size)
 {
     size_t sp;
@@ -212,22 +218,22 @@ stack_alloc(int size)
 
 #if STACK_OVERFLOW_PROTECT
     /* allocate an extra page and mark it non-accessible to trap stack overflow */
-    q = mmap(0, PAGE_SIZE, PROT_NONE, MAP_ANON|MAP_PRIVATE, -1, 0);
+    q = mmap(0, PAGE_SIZE, PROT_NONE, MAP_ANON | MAP_PRIVATE, -1, 0);
     assert(q);
-    stack_redzone_start = (size_t) q;
-#endif 
+    stack_redzone_start = (size_t)q;
+#endif
 
-    p = mmap(q, size, PROT_READ|PROT_WRITE, MAP_ANON|MAP_PRIVATE, -1, 0);
+    p = mmap(q, size, PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0);
     assert(p);
 #ifdef DEBUG
     memset(p, 0xab, size);
-#endif 
+#endif
 
     /* stack grows from high to low addresses, so return a ptr to the top of the
        allocated region */
     sp = (size_t)p + size;
 
-    return (void*) sp;
+    return (void *)sp;
 }
 
 /* free memory-mapped stack storage */
@@ -238,12 +244,11 @@ stack_free(void *p, int size)
 
 #ifdef DEBUG
     memset((void *)sp, 0xcd, size);
-#endif 
+#endif
     munmap((void *)sp, size);
 
 #if STACK_OVERFLOW_PROTECT
     sp = sp - PAGE_SIZE;
-    munmap((void*) sp, PAGE_SIZE);
-#endif 
+    munmap((void *)sp, PAGE_SIZE);
+#endif
 }
-

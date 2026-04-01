@@ -16,10 +16,15 @@ typedef struct {
     unsigned long stats_size;
 } dr_exports_t;
 
-extern void dr_pre_smp_init(dr_exports_t *exports, const char* options);
-extern void dr_smp_init(dr_cpu_exports_t *cpu_exports);
-extern void dr_smp_exit(void);
-extern void dynamorio_app_take_over(void);
-extern void dr_terminate(const char* reason);
+extern void
+dr_pre_smp_init(dr_exports_t *exports, const char *options);
+extern void
+dr_smp_init(dr_cpu_exports_t *cpu_exports);
+extern void
+dr_smp_exit(void);
+extern void
+dynamorio_app_take_over(void);
+extern void
+dr_terminate(const char *reason);
 
 #endif

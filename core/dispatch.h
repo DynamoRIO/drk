@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -54,27 +54,28 @@ void
 transfer_to_dispatch(dcontext_t *dcontext, int app_errno, dr_mcontext_t *mc);
 
 /* hooks on entry/exit to/from DR */
-#define NO_HOOK ((void (*)(void)) NULL)
+#define NO_HOOK ((void (*)(void))NULL)
 
 #define HOOK_ENABLED_HELPER SELF_PROTECT_ON_CXT_SWITCH
 
 #define HOOK_ENABLED (HOOK_ENABLED_HELPER || INTERNAL_OPTION(single_thread_in_DR))
 
 #define ENTER_DR_HOOK (HOOK_ENABLED ? entering_dynamorio : NO_HOOK)
-#define EXIT_DR_HOOK  (HOOK_ENABLED ? exiting_dynamorio : NO_HOOK)
+#define EXIT_DR_HOOK (HOOK_ENABLED ? exiting_dynamorio : NO_HOOK)
 
-#define ENTERING_DR() do {   \
+#define ENTERING_DR()        \
+    do {                     \
         if (HOOK_ENABLED)    \
             ENTER_DR_HOOK(); \
     } while (0);
 
-#define EXITING_DR() do {    \
-        if (HOOK_ENABLED)    \
-            EXIT_DR_HOOK();  \
+#define EXITING_DR()        \
+    do {                    \
+        if (HOOK_ENABLED)   \
+            EXIT_DR_HOOK(); \
     } while (0);
 
-
 /* magic value to set next_tag to, to indicate a return to native_exec */
-#define BACK_TO_NATIVE_AFTER_SYSCALL ((app_pc)(ptr_uint_t) -1)
+#define BACK_TO_NATIVE_AFTER_SYSCALL ((app_pc)(ptr_uint_t)-1)
 
 #endif /* _DISPATCH_H_ */

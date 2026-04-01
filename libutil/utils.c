@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -30,23 +30,21 @@
  * DAMAGE.
  */
 
-
 #include "share.h"
 #include "config.h"
 #include "elm.h"
-#include "events.h" /* for canary */
+#include "events.h"    /* for canary */
 #include "processes.h" /* for canary */
 
 #include <stdio.h>
-#include <io.h> /* for canary */
+#include <io.h>    /* for canary */
 #include <Fcntl.h> /* for canary */
 
 #include <aclapi.h>
 
 #ifndef UNIT_TEST
 
-
-# ifdef _DEBUG
+#    ifdef _DEBUG
 
 int debuglevel = DL_FATAL;
 int abortlevel = DL_FATAL;
@@ -63,32 +61,28 @@ set_abortlevel(int level)
     abortlevel = level;
 }
 
-#define CONFIG_MAX 8192
+#        define CONFIG_MAX 8192
 
-#define HEADER_SNIPPET(defsfile) \
-                       "POLICY_VERSION=30000\n"                             \
-                       "BEGIN_BLOCK\n"                                      \
-                       "GLOBAL\n"                                           \
-                       "DYNAMORIO_OPTIONS=\n"                               \
-                       "DYNAMORIO_RUNUNDER=1\n"                             \
-                       "DYNAMORIO_AUTOINJECT=\\lib\\dynamorio.dll\n"        \
-                       "DYNAMORIO_HOT_PATCH_POLICIES=" defsfile "\n"        \
-                       "DYNAMORIO_UNSUPPORTED=\n"                           \
-                       "END_BLOCK\n"
+#        define HEADER_SNIPPET(defsfile)                  \
+            "POLICY_VERSION=30000\n"                      \
+            "BEGIN_BLOCK\n"                               \
+            "GLOBAL\n"                                    \
+            "DYNAMORIO_OPTIONS=\n"                        \
+            "DYNAMORIO_RUNUNDER=1\n"                      \
+            "DYNAMORIO_AUTOINJECT=\\lib\\dynamorio.dll\n" \
+            "DYNAMORIO_HOT_PATCH_POLICIES=" defsfile "\n" \
+            "DYNAMORIO_UNSUPPORTED=\n"                    \
+            "END_BLOCK\n"
 
 DWORD
 load_test_config(const char *snippet, BOOL use_hotpatch_defs)
 {
     char buf[CONFIG_MAX];
-    _snprintf(buf, CONFIG_MAX, "%s%s", 
-              use_hotpatch_defs ? 
-              HEADER_SNIPPET("\\conf") : HEADER_SNIPPET(""), 
-              snippet);
+    _snprintf(buf, CONFIG_MAX, "%s%s",
+              use_hotpatch_defs ? HEADER_SNIPPET("\\conf") : HEADER_SNIPPET(""), snippet);
     NULL_TERMINATE_BUFFER(buf);
     DO_ASSERT(strlen(buf) < CONFIG_MAX - 2);
-    DO_DEBUG(DL_VERB,
-             printf("importing %s\n", buf);
-             );
+    DO_DEBUG(DL_VERB, printf("importing %s\n", buf););
     CHECKED_OPERATION(policy_import(buf, FALSE, NULL, NULL));
     return ERROR_SUCCESS;
 }
@@ -100,36 +94,30 @@ get_testdir(WCHAR *buf, UINT maxchars)
     WCHAR tmp[MAX_PATH];
     DWORD len;
 
-    len = GetEnvironmentVariable(L"DYNAMORIO_WINDIR", 
-                                 tmp, maxchars);
+    len = GetEnvironmentVariable(L"DYNAMORIO_WINDIR", tmp, maxchars);
     if (len == 0) {
-        len = GetEnvironmentVariable(L_DYNAMORIO_VAR_HOME, 
-                                     tmp, maxchars);
+        len = GetEnvironmentVariable(L_DYNAMORIO_VAR_HOME, tmp, maxchars);
         /* check for cygwin paths on windows */
         if (!file_exists(buf))
             len = 0;
 
-        DO_DEBUG(DL_INFO,
-                 printf("ignoring invalid-looking DYNAMORIO_HOME=%S\n", tmp);
-                 );
+        DO_DEBUG(DL_INFO, printf("ignoring invalid-looking DYNAMORIO_HOME=%S\n", tmp););
     }
-    
+
     if (len == 0) {
         wcsncpy(tmp, L"..", MAX_PATH);
     }
 
     len = GetFullPathName(tmp, maxchars, buf, &filePart);
 
-    DO_DEBUG(DL_INFO,
-             printf("using drhome: %S\n", buf);
-             );
+    DO_DEBUG(DL_INFO, printf("using drhome: %S\n", buf););
 
     DO_ASSERT(len != 0);
 
     return;
 }
 
-void 
+void
 error_cb(unsigned int errcode, WCHAR *message)
 {
     if (errcode || !errcode || message) {
@@ -152,7 +140,7 @@ typedef struct evthelp__ {
 evthelp *cb_eh = NULL;
 int last_record = -1;
 
-void 
+void
 check_event_cb(EVENTLOGRECORD *record)
 {
     const WCHAR *strings;
@@ -164,7 +152,7 @@ check_event_cb(EVENTLOGRECORD *record)
 
     if (record->EventID == cb_eh->type) {
 
-        if (cb_eh->exename != NULL && 
+        if (cb_eh->exename != NULL &&
             0 != wcscmp(get_event_exename(record), cb_eh->exename))
             return;
 
@@ -178,7 +166,7 @@ check_event_cb(EVENTLOGRECORD *record)
             cb_eh->s3[0] = L'\0';
             if (strings != NULL) {
                 wcsncpy(cb_eh->s3, strings, cb_eh->maxchars);
-                cb_eh->s3[cb_eh->maxchars-1] = L'\0';
+                cb_eh->s3[cb_eh->maxchars - 1] = L'\0';
             }
         }
         if (cb_eh->s4 != NULL) {
@@ -186,7 +174,7 @@ check_event_cb(EVENTLOGRECORD *record)
             strings = next_message_string(strings);
             if (strings != NULL) {
                 wcsncpy(cb_eh->s4, strings, cb_eh->maxchars);
-                cb_eh->s4[cb_eh->maxchars-1] = L'\0';
+                cb_eh->s4[cb_eh->maxchars - 1] = L'\0';
             }
         }
         cb_eh->found = TRUE;
@@ -201,11 +189,11 @@ reset_last_event()
 
 /* checks for events matching type, exename (if not null), and pid (if
  *  not 0). fills in s3 and s4 with 3rd and 4th message strings of
- *  match, if not null. 
+ *  match, if not null.
  * next search will start with event after matched event. */
 BOOL
-check_for_event(DWORD type, WCHAR *exename, ULONG pid, 
-                WCHAR *s3, WCHAR *s4, UINT maxchars)
+check_for_event(DWORD type, WCHAR *exename, ULONG pid, WCHAR *s3, WCHAR *s4,
+                UINT maxchars)
 {
     evthelp eh;
 
@@ -219,27 +207,22 @@ check_for_event(DWORD type, WCHAR *exename, ULONG pid,
 
     cb_eh = &eh;
 
-
     /* backdoor */
     do_once = TRUE;
-    
-    CHECKED_OPERATION(start_eventlog_monitor(FALSE, NULL, check_event_cb, 
-                                             error_cb, last_record));
-    DO_ASSERT(WAIT_OBJECT_0 == 
-              WaitForSingleObject(get_eventlog_monitor_thread_handle(), 
-                                  10000));
+
+    CHECKED_OPERATION(
+        start_eventlog_monitor(FALSE, NULL, check_event_cb, error_cb, last_record));
+    DO_ASSERT(WAIT_OBJECT_0 ==
+              WaitForSingleObject(get_eventlog_monitor_thread_handle(), 10000));
     stop_eventlog_monitor();
 
-    return eh.found;    
+    return eh.found;
 }
 
 FILE *event_list_fp;
 
-void 
-show_event_cb(unsigned int mID, 
-              unsigned int type,
-              WCHAR *message,
-              DWORD timestamp)
+void
+show_event_cb(unsigned int mID, unsigned int type, WCHAR *message, DWORD timestamp)
 {
     /* fool the compiler */
     DO_ASSERT(type == 0 || type != 0 || timestamp == 0);
@@ -249,32 +232,29 @@ show_event_cb(unsigned int mID,
 void
 show_all_events(FILE *fp)
 {
-    DO_ASSERT (fp != NULL);
+    DO_ASSERT(fp != NULL);
 
     event_list_fp = fp;
     /* backdoor */
     do_once = TRUE;
-    CHECKED_OPERATION(start_eventlog_monitor(TRUE, show_event_cb, NULL,
-                                             error_cb, (DWORD) -1));
-    DO_ASSERT(WAIT_OBJECT_0 == 
-              WaitForSingleObject(get_eventlog_monitor_thread_handle(), 
-                                  10000));
+    CHECKED_OPERATION(
+        start_eventlog_monitor(TRUE, show_event_cb, NULL, error_cb, (DWORD)-1));
+    DO_ASSERT(WAIT_OBJECT_0 ==
+              WaitForSingleObject(get_eventlog_monitor_thread_handle(), 10000));
     stop_eventlog_monitor();
 
     return;
 }
 
-# endif
+#    endif
 
-
-# include "options.h" //from src module
-
+#    include "options.h" //from src module
 
 void
 wcstolower(WCHAR *str)
 {
     UINT i;
-    for (i=0; i < wcslen(str); i++)
+    for (i = 0; i < wcslen(str); i++)
         str[i] = towlower(str[i]);
 }
 
@@ -283,7 +263,7 @@ get_exename_from_path(const WCHAR *path)
 {
     WCHAR *name = wcsrchr(path, L'\\');
     if (name == NULL)
-        name = (WCHAR *) path;
+        name = (WCHAR *)path;
     else
         name += 1;
     return name;
@@ -295,15 +275,12 @@ acquire_shutdown_privilege()
     HANDLE hToken = NULL;
     TOKEN_PRIVILEGES Priv;
 
-    // get current thread token 
-    if  (!OpenThreadToken(GetCurrentThread(), 
-                          TOKEN_QUERY|TOKEN_ADJUST_PRIVILEGES, 
-                          FALSE, 
-                          &hToken)) {
+    // get current thread token
+    if (!OpenThreadToken(GetCurrentThread(), TOKEN_QUERY | TOKEN_ADJUST_PRIVILEGES, FALSE,
+                         &hToken)) {
         // can't get thread token, try process token instead
-        if(!OpenProcessToken(GetCurrentProcess(), 
-                             TOKEN_QUERY|TOKEN_ADJUST_PRIVILEGES, 
-                             &hToken)) {
+        if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY | TOKEN_ADJUST_PRIVILEGES,
+                              &hToken)) {
             return GetLastError();
         }
     }
@@ -312,23 +289,23 @@ acquire_shutdown_privilege()
     Priv.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
     LookupPrivilegeValue(NULL, SE_SHUTDOWN_NAME, &Priv.Privileges[0].Luid);
     // try to enable the privilege
-    if(!AdjustTokenPrivileges(hToken, FALSE, &Priv, sizeof(Priv), NULL, 0))
+    if (!AdjustTokenPrivileges(hToken, FALSE, &Priv, sizeof(Priv), NULL, 0))
         return GetLastError();
-    
+
     return ERROR_SUCCESS;
 }
 
 /*
- * FIXME: shutdown reason. we should probably use this, BUT 
+ * FIXME: shutdown reason. we should probably use this, BUT
  *  InitiateSystemShutdownEx is not included in VS6.0, so we'll have
- *  to dynamically link it in. 
+ *  to dynamically link it in.
  *
  * from msdn:
  *  SHTDN_REASON_FLAG_PLANNED: The shutdown was planned. On Windows .NET
  *   Server, the system generates a state snapshot. For more information,
  *   see the help for Shutdown Event Tracker.
  *
- *  various combinations of major/minor flags are "recognized by the 
+ *  various combinations of major/minor flags are "recognized by the
  *   system"; the APPLICATION|RECONFIG is NOT one of these. However,
  *   "You can also define your own shutdown reasons and add them to the
  *    the registry." we should probably do this at installation, once
@@ -344,25 +321,24 @@ reboot_system()
         return res;
 
     /* do we need to harden this at all?
-     * "If the the system is not ready to handle the request, the last 
-     *  error code is ERROR_NOT_READY. The application should wait a 
-     *  short while and retry the call." 
+     * "If the the system is not ready to handle the request, the last
+     *  error code is ERROR_NOT_READY. The application should wait a
+     *  short while and retry the call."
      * also ERROR_MACHINE_LOCKED, ERROR_SHUTDOWN_IN_PROGRESS, etc. */
 
-    res = InitiateSystemShutdown(NULL, L"A System Restart was requested.", 
-                                 30, TRUE, TRUE);
-    //                                SHTDN_REASON_MAJOR_APPLICATION | 
+    res =
+        InitiateSystemShutdown(NULL, L"A System Restart was requested.", 30, TRUE, TRUE);
+    //                                SHTDN_REASON_MAJOR_APPLICATION |
     //                                SHTDN_REASON_MINOR_RECONFIG);
 
     return res;
 }
 
-
-#define LAST_WCHAR(wstr) wstr[wcslen(wstr) - 1]
+#    define LAST_WCHAR(wstr) wstr[wcslen(wstr) - 1]
 
 /* this sucks.
  * i can't believe this is best way to implement this in Win32...
- *  but i can't seem to find a better way. 
+ *  but i can't seem to find a better way.
  * msdn suggests using CreateFile() with CREATE_NEW or OPEN_EXISTING,
  *   and then checking error codes; but the problem there is that C:\\
  *   returns PATH_NOT_FOUND regardless. */
@@ -375,42 +351,38 @@ file_exists(const WCHAR *fn)
     DO_ASSERT(fn != NULL);
 
     search = FindFirstFile(fn, &fd);
-    
+
     if (search == INVALID_HANDLE_VALUE) {
 
         /* special handling for e.g. C:\\ */
         if (LAST_WCHAR(fn) == L'\\' || LAST_WCHAR(fn) == L':') {
             WCHAR buf[MAX_PATH];
-            _snwprintf(buf, MAX_PATH, L"%S%S*", 
-                       fn, LAST_WCHAR(fn) == L'\\' ? L"" : L"\\");
+            _snwprintf(buf, MAX_PATH, L"%S%S*", fn,
+                       LAST_WCHAR(fn) == L'\\' ? L"" : L"\\");
             NULL_TERMINATE_BUFFER(buf);
             search = FindFirstFile(buf, &fd);
             if (search != INVALID_HANDLE_VALUE) {
                 FindClose(search);
                 return TRUE;
             } else {
-                DO_DEBUG(DL_VERB,
-                         printf("%S: even though we tried hard, %d\n", 
-                                buf, GetLastError());
-                         );
+                DO_DEBUG(
+                    DL_VERB,
+                    printf("%S: even though we tried hard, %d\n", buf, GetLastError()););
             }
         }
 
         DO_DEBUG(DL_VERB,
-                 printf("%S doesn't exist because of: %d\n", 
-                        fn, GetLastError());
-                 );
+                 printf("%S doesn't exist because of: %d\n", fn, GetLastError()););
         return FALSE;
-    }
-    else {
+    } else {
         FindClose(search);
         return TRUE;
     }
-} 
+}
 
-#define MAX_COUNTER 999999
+#    define MAX_COUNTER 999999
 
-/* grokked from the core. 
+/* grokked from the core.
  * FIXME: shareme!
  * if NULL is passed for directory, then it is ignored and no directory
  *  check is done, and filename_base is assumed to be absolute.
@@ -418,27 +390,23 @@ file_exists(const WCHAR *fn)
  *  opened, eg, do a create/delete on the filename to be returned.
  */
 BOOL
-get_unique_filename(const WCHAR* directory,
-                    const WCHAR* filename_base,
-                    const WCHAR* file_type,
-                    WCHAR* filename_buffer, 
-                    UINT maxlen)
+get_unique_filename(const WCHAR *directory, const WCHAR *filename_base,
+                    const WCHAR *file_type, WCHAR *filename_buffer, UINT maxlen)
 {
     UINT counter = 0;
-    
+
     if (directory != NULL && !file_exists(directory))
         return FALSE;
 
     do {
         if (directory == NULL)
-            _snwprintf(filename_buffer, maxlen, L"%s.%.8d%s", 
+            _snwprintf(filename_buffer, maxlen, L"%s.%.8d%s", filename_base, counter,
+                       file_type);
+        else
+            _snwprintf(filename_buffer, maxlen, L"%s\\%s.%.8d%s", directory,
                        filename_base, counter, file_type);
-        else 
-            _snwprintf(filename_buffer, maxlen, L"%s\\%s.%.8d%s", 
-                       directory, filename_base, counter, file_type);
-        filename_buffer[maxlen-1] = L'\0';
-    }
-    while (file_exists(filename_buffer) && (++counter < MAX_COUNTER));
+        filename_buffer[maxlen - 1] = L'\0';
+    } while (file_exists(filename_buffer) && (++counter < MAX_COUNTER));
 
     return (counter < MAX_COUNTER);
 }
@@ -447,12 +415,11 @@ DWORD
 delete_file_on_boot(WCHAR *filename)
 {
     DWORD res;
-    bool success = 
-        MoveFileEx(filename, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
+    bool success = MoveFileEx(filename, NULL, MOVEFILE_DELAY_UNTIL_REBOOT);
 
     /* reboot removal adds an entry to
-     * HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\PendingFileRenameOperations
-     * and smss.exe will delete the file on next boot
+     * HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session
+     * Manager\PendingFileRenameOperations and smss.exe will delete the file on next boot
      */
     if (success)
         res = ERROR_SUCCESS;
@@ -471,7 +438,7 @@ delete_file_rename_in_use(WCHAR *filename)
         return ERROR_SUCCESS;
 
     /* xref case 4512: if we leave a dll in a process after we're done
-     *  using it, we won't be able to delete it; however, hopefully 
+     *  using it, we won't be able to delete it; however, hopefully
      *  we can rename it so there won't be issues replacing it later. */
     res = GetLastError();
     if (res != ERROR_SUCCESS) {
@@ -492,30 +459,29 @@ delete_file_rename_in_use(WCHAR *filename)
     return res;
 }
 
-#ifndef PROTECTED_DACL_SECURITY_INFORMATION
-# define PROTECTED_DACL_SECURITY_INFORMATION (0x80000000L)
-#endif
+#    ifndef PROTECTED_DACL_SECURITY_INFORMATION
+#        define PROTECTED_DACL_SECURITY_INFORMATION (0x80000000L)
+#    endif
 
 /*
- * quick permissions xfer workaround for updating permissions 
+ * quick permissions xfer workaround for updating permissions
  *  on upgrade.
  */
 DWORD
 copy_file_permissions(WCHAR *filedst, WCHAR *filesrc)
 {
     DWORD res = ERROR_SUCCESS;
-    SECURITY_DESCRIPTOR *sd  = NULL;
+    SECURITY_DESCRIPTOR *sd = NULL;
     ACL *dacl = NULL;
-    res = GetNamedSecurityInfo(filesrc, SE_FILE_OBJECT, 
-                               DACL_SECURITY_INFORMATION,
-                               NULL, NULL, &dacl, NULL, &sd);
+    res = GetNamedSecurityInfo(filesrc, SE_FILE_OBJECT, DACL_SECURITY_INFORMATION, NULL,
+                               NULL, &dacl, NULL, &sd);
 
     if (res != ERROR_SUCCESS)
         return res;
 
     res = SetNamedSecurityInfo(filedst, SE_FILE_OBJECT,
                                DACL_SECURITY_INFORMATION |
-                               PROTECTED_DACL_SECURITY_INFORMATION,
+                                   PROTECTED_DACL_SECURITY_INFORMATION,
                                NULL, NULL, dacl, NULL);
 
     LocalFree(sd);
@@ -523,12 +489,11 @@ copy_file_permissions(WCHAR *filedst, WCHAR *filesrc)
     return res;
 }
 
-
-/* NOTE: for now we only consider the major/minor versions and 
- *  platform id. 
- * 
+/* NOTE: for now we only consider the major/minor versions and
+ *  platform id.
+ *
  * the osinfo.szCSDVersion string contains service pack information,
- *  which could be used to distinguish e.g. XPSP2, 2K3SP1, if 
+ *  which could be used to distinguish e.g. XPSP2, 2K3SP1, if
  *  necessary.
  */
 
@@ -539,15 +504,11 @@ get_platform(DWORD *platform)
     OSVERSIONINFO osinfo = { sizeof(OSVERSIONINFO) };
     if (GetVersionEx(&osinfo)) {
 
-        DO_DEBUG(DL_VERB,
-                 WCHAR verbuf[MAX_PATH];
-                 _snwprintf(verbuf, MAX_PATH, 
-                            L"Major=%d, Minor=%d, Build=%d, SPinfo=%s",
+        DO_DEBUG(DL_VERB, WCHAR verbuf[MAX_PATH];
+                 _snwprintf(verbuf, MAX_PATH, L"Major=%d, Minor=%d, Build=%d, SPinfo=%s",
                             osinfo.dwMajorVersion, osinfo.dwMinorVersion,
                             osinfo.dwBuildNumber, osinfo.szCSDVersion);
-                 NULL_TERMINATE_BUFFER(verbuf);
-                 printf("%S\n", verbuf);
-                 );
+                 NULL_TERMINATE_BUFFER(verbuf); printf("%S\n", verbuf););
 
         if (osinfo.dwPlatformId != VER_PLATFORM_WIN32_NT)
             return ERROR_UNSUPPORTED_OS;
@@ -557,27 +518,22 @@ get_platform(DWORD *platform)
                 *platform = PLATFORM_WIN_NT_4;
                 return ERROR_SUCCESS;
             }
-        }
-        else if (osinfo.dwMajorVersion == 5) {
+        } else if (osinfo.dwMajorVersion == 5) {
             if (osinfo.dwMinorVersion == 0) {
                 *platform = PLATFORM_WIN_2000;
                 return ERROR_SUCCESS;
-            } 
-            else if (osinfo.dwMinorVersion == 1) {
+            } else if (osinfo.dwMinorVersion == 1) {
                 *platform = PLATFORM_WIN_XP;
                 return ERROR_SUCCESS;
-            } 
-            else if (osinfo.dwMinorVersion == 2) {
+            } else if (osinfo.dwMinorVersion == 2) {
                 *platform = PLATFORM_WIN_2003;
                 return ERROR_SUCCESS;
             }
-        }
-        else if (osinfo.dwMajorVersion == 6) {
+        } else if (osinfo.dwMajorVersion == 6) {
             if (osinfo.dwMinorVersion == 0) {
                 *platform = PLATFORM_VISTA;
                 return ERROR_SUCCESS;
-            }
-            else if (osinfo.dwMinorVersion == 1) {
+            } else if (osinfo.dwMinorVersion == 1) {
                 *platform = PLATFORM_WIN_7;
                 return ERROR_SUCCESS;
             }
@@ -592,15 +548,14 @@ BOOL
 is_wow64(HANDLE hProcess)
 {
     /* IsWow64Pocess is only available on XP+ */
-    typedef DWORD (WINAPI *IsWow64Process_Type)(HANDLE hProcess,
-                                               PBOOL isWow64Process);
+    typedef DWORD(WINAPI * IsWow64Process_Type)(HANDLE hProcess, PBOOL isWow64Process);
     static HANDLE kernel32_handle;
     static IsWow64Process_Type IsWow64Process;
     if (kernel32_handle == NULL)
         kernel32_handle = GetModuleHandle(L"kernel32.dll");
     if (IsWow64Process == NULL && kernel32_handle != NULL) {
-        IsWow64Process = (IsWow64Process_Type)
-            GetProcAddress(kernel32_handle, "IsWow64Process");
+        IsWow64Process =
+            (IsWow64Process_Type)GetProcAddress(kernel32_handle, "IsWow64Process");
     }
     if (IsWow64Process == NULL) {
         /* should be NT or 2K */
@@ -630,8 +585,8 @@ get_dynamorio_home_helper(BOOL reset)
     if (dynamorio_home[0] != L'\0')
         return dynamorio_home;
 
-    res = get_config_parameter(L_PRODUCT_NAME, FALSE,
-                               L_DYNAMORIO_VAR_HOME, dynamorio_home, MAX_PATH);
+    res = get_config_parameter(L_PRODUCT_NAME, FALSE, L_DYNAMORIO_VAR_HOME,
+                               dynamorio_home, MAX_PATH);
 
     if (res == ERROR_SUCCESS && dynamorio_home[0] != L'\0')
         return dynamorio_home;
@@ -640,7 +595,7 @@ get_dynamorio_home_helper(BOOL reset)
 }
 
 const WCHAR *
-get_dynamorio_home() 
+get_dynamorio_home()
 {
     return get_dynamorio_home_helper(FALSE);
 }
@@ -657,8 +612,8 @@ get_dynamorio_logdir_helper(BOOL reset)
     if (dynamorio_logdir[0] != L'\0')
         return dynamorio_logdir;
 
-    res = get_config_parameter(L_PRODUCT_NAME, FALSE,
-                               L_DYNAMORIO_VAR_LOGDIR, dynamorio_logdir, MAX_PATH);
+    res = get_config_parameter(L_PRODUCT_NAME, FALSE, L_DYNAMORIO_VAR_LOGDIR,
+                               dynamorio_logdir, MAX_PATH);
 
     if (res == ERROR_SUCCESS && dynamorio_logdir[0] != L'\0')
         return dynamorio_logdir;
@@ -667,7 +622,7 @@ get_dynamorio_logdir_helper(BOOL reset)
 }
 
 const WCHAR *
-get_dynamorio_logdir() 
+get_dynamorio_logdir()
 {
     return get_dynamorio_logdir_helper(FALSE);
 }
@@ -683,25 +638,24 @@ using_system32_for_preinject(const WCHAR *preinject)
     get_platform(&platform);
     if (platform == PLATFORM_WIN_NT_4) {
         return TRUE;
-    }
-    else {
+    } else {
         /* case 7586: we need to check if the system has disabled
          *  8.3 names; if so, we need to use the system32 for
-         *  preinject (since spaces are not allowed in AppInitDLLs) 
-         */ 
+         *  preinject (since spaces are not allowed in AppInitDLLs)
+         */
         WCHAR short_path[MAX_PATH];
         WCHAR long_path[MAX_PATH];
         if (preinject == NULL) {
             /* note: with force_local_path == TRUE, we don't have
              *  to worry about get_preinject_path() calling this
-             *  method back, and it will always return success. 
-             */  
+             *  method back, and it will always return success.
+             */
             get_preinject_path(short_path, MAX_PATH, TRUE, TRUE);
-            wcsncat(short_path, L"\\" L_EXPAND_LEVEL(INJECT_DLL_8_3_NAME), 
+            wcsncat(short_path, L"\\" L_EXPAND_LEVEL(INJECT_DLL_8_3_NAME),
                     MAX_PATH - wcslen(short_path));
             NULL_TERMINATE_BUFFER(short_path);
             get_preinject_path(long_path, MAX_PATH, TRUE, FALSE);
-            wcsncat(long_path, L"\\" L_EXPAND_LEVEL(INJECT_DLL_8_3_NAME), 
+            wcsncat(long_path, L"\\" L_EXPAND_LEVEL(INJECT_DLL_8_3_NAME),
                     MAX_PATH - wcslen(long_path));
             NULL_TERMINATE_BUFFER(long_path);
         } else {
@@ -720,9 +674,9 @@ using_system32_for_preinject(const WCHAR *preinject)
 
 /* if force_local_path, then this returns the in-installation
  *  path regardless of using_system32_for_preinject().
- * otherwise, this returns the path to the actuall DLL that 
- *  will be injected, which depends on 
- *  using_system32_for_preinject() 
+ * otherwise, this returns the path to the actuall DLL that
+ *  will be injected, which depends on
+ *  using_system32_for_preinject()
  * if short_path, calls GetShortPathName() on the path before returning it.
  *  for a canonical preinject path, this parameter should be TRUE.
  */
@@ -735,8 +689,7 @@ get_preinject_path(WCHAR *buf, int nchars, BOOL force_local_path, BOOL short_pat
 
         if (len == 0)
             return GetLastError();
-    }
-    else {
+    } else {
         const WCHAR *home = get_dynamorio_home();
         /* using_system32_for_preinject() assumes we always succeed */
         _snwprintf(buf, nchars, L"%s\\lib", home == NULL ? L"" : home);
@@ -756,13 +709,11 @@ get_preinject_name(WCHAR *buf, int nchars)
 
     if (using_system32_for_preinject(NULL)) {
         wcsncpy(buf, L_EXPAND_LEVEL(INJECT_DLL_NAME), nchars);
-    }
-    else {
+    } else {
         res = get_preinject_path(buf, nchars, FALSE, TRUE);
         if (res != ERROR_SUCCESS)
             return res;
-        wcsncat(buf, L"\\" L_EXPAND_LEVEL(INJECT_DLL_8_3_NAME), 
-                nchars - wcslen(buf));
+        wcsncat(buf, L"\\" L_EXPAND_LEVEL(INJECT_DLL_8_3_NAME), nchars - wcslen(buf));
     }
 
     buf[nchars - 1] = L'\0';
@@ -778,11 +729,11 @@ set_dr_platform(dr_platform_t platform)
     registry_view = platform;
 }
 
-dr_platform_t 
+dr_platform_t
 get_dr_platform()
 {
-    if (registry_view == DR_PLATFORM_64BIT
-        IF_X64(|| registry_view == DR_PLATFORM_DEFAULT))
+    if (registry_view ==
+        DR_PLATFORM_64BIT IF_X64(|| registry_view == DR_PLATFORM_DEFAULT))
         return DR_PLATFORM_64BIT;
     return DR_PLATFORM_32BIT;
 }
@@ -806,15 +757,15 @@ platform_key_flags()
         return 0;
     else {
         switch (registry_view) {
-        case DR_PLATFORM_DEFAULT:  return 0;
-        case DR_PLATFORM_32BIT:    return KEY_WOW64_32KEY;
-        case DR_PLATFORM_64BIT:    return KEY_WOW64_64KEY;
+        case DR_PLATFORM_DEFAULT: return 0;
+        case DR_PLATFORM_32BIT: return KEY_WOW64_32KEY;
+        case DR_PLATFORM_64BIT: return KEY_WOW64_64KEY;
         default: DO_ASSERT(false); return 0;
         }
     }
 }
 
-/* PR 244206: use this instead of RegDeleteKey for deleting redirected keys 
+/* PR 244206: use this instead of RegDeleteKey for deleting redirected keys
  * (most of HKLM\Software)
  */
 DWORD
@@ -826,17 +777,15 @@ delete_product_key(HKEY hkey, LPCWSTR subkey)
      * We could instead use NtDeleteKey and first open the subkey HKEY:
      * we could link with the core's ntdll.c, and also use is_wow64_process().
      */
-    typedef DWORD (WINAPI *RegDeleteKeyExW_Type)(HKEY hKey,
-                                                      LPCWSTR lpSubKey,
-                                                      REGSAM samDesired,
-                                                      DWORD Reserved);
+    typedef DWORD(WINAPI * RegDeleteKeyExW_Type)(HKEY hKey, LPCWSTR lpSubKey,
+                                                 REGSAM samDesired, DWORD Reserved);
     static HANDLE advapi32_handle;
     static RegDeleteKeyExW_Type RegDeleteKeyExW;
     if (advapi32_handle == NULL)
         advapi32_handle = GetModuleHandle(L"advapi32.dll");
     if (RegDeleteKeyExW == NULL && advapi32_handle != NULL) {
-        RegDeleteKeyExW = (RegDeleteKeyExW_Type)
-            GetProcAddress(advapi32_handle, "RegDeleteKeyExW");
+        RegDeleteKeyExW =
+            (RegDeleteKeyExW_Type)GetProcAddress(advapi32_handle, "RegDeleteKeyExW");
     }
     if (RegDeleteKeyExW == NULL) {
         /* should be NT or 2K */
@@ -856,15 +805,10 @@ create_root_key()
     int res;
     HKEY hkroot;
 
-    res = RegCreateKeyEx(DYNAMORIO_REGISTRY_HIVE,
-                         L_DYNAMORIO_REGISTRY_KEY,
-                         0,
-                         NULL,
+    res = RegCreateKeyEx(DYNAMORIO_REGISTRY_HIVE, L_DYNAMORIO_REGISTRY_KEY, 0, NULL,
                          REG_OPTION_NON_VOLATILE,
-                         platform_key_flags()|KEY_WRITE|KEY_ENUMERATE_SUB_KEYS,
-                         NULL,
-                         &hkroot, 
-                         NULL);
+                         platform_key_flags() | KEY_WRITE | KEY_ENUMERATE_SUB_KEYS, NULL,
+                         &hkroot, NULL);
     RegCloseKey(hkroot);
 
     return res;
@@ -910,9 +854,7 @@ setup_installation(const WCHAR *path, BOOL overwrite)
     if (!overwrite && get_dynamorio_home() != NULL)
         return ERROR_SUCCESS;
 
-    DO_DEBUG(DL_INFO,
-             printf("setting up installation at: %S\n", path);
-             );
+    DO_DEBUG(DL_INFO, printf("setting up installation at: %S\n", path););
 
     mkdir_with_parents(path);
 
@@ -922,9 +864,7 @@ setup_installation(const WCHAR *path, BOOL overwrite)
     _snwprintf(buf, MAX_PATH, L"%s\\%s", path, L"conf");
     NULL_TERMINATE_BUFFER(buf);
 
-    DO_DEBUG(DL_INFO,
-             printf("making config dir: %S\n", buf);
-             );
+    DO_DEBUG(DL_INFO, printf("making config dir: %S\n", buf););
 
     mkdir_with_parents(buf);
 
@@ -934,9 +874,7 @@ setup_installation(const WCHAR *path, BOOL overwrite)
     _snwprintf(buf, MAX_PATH, L"%s\\%s", path, L"logs");
     NULL_TERMINATE_BUFFER(buf);
 
-    DO_DEBUG(DL_INFO,
-             printf("making logdir: %S\n", buf);
-             );
+    DO_DEBUG(DL_INFO, printf("making logdir: %S\n", buf););
 
     mkdir_with_parents(buf);
 
@@ -945,11 +883,11 @@ setup_installation(const WCHAR *path, BOOL overwrite)
 
     CHECKED_OPERATION(create_root_key());
 
-    CHECKED_OPERATION(set_config_parameter(L_PRODUCT_NAME, FALSE, 
-                                           L_DYNAMORIO_VAR_HOME, path));
+    CHECKED_OPERATION(
+        set_config_parameter(L_PRODUCT_NAME, FALSE, L_DYNAMORIO_VAR_HOME, path));
 
-    CHECKED_OPERATION(set_config_parameter(L_PRODUCT_NAME, FALSE, 
-                                           L_DYNAMORIO_VAR_LOGDIR, buf));
+    CHECKED_OPERATION(
+        set_config_parameter(L_PRODUCT_NAME, FALSE, L_DYNAMORIO_VAR_LOGDIR, buf));
 
     /* reset the DR_HOME cache */
     get_dynamorio_home_helper(TRUE);
@@ -965,7 +903,7 @@ setup_cache_permissions(WCHAR *cacheRootDirectory)
 {
     DWORD result = ERROR_UNSUPPORTED_OS;
 
-#define NUM_ACES 2
+#    define NUM_ACES 2
     /* in C const int isn't good enough */
     EXPLICIT_ACCESS ea[NUM_ACES];
 
@@ -974,15 +912,13 @@ setup_cache_permissions(WCHAR *cacheRootDirectory)
     PACL pACL = NULL;
     PACL pOldDACL = NULL;
 
-    SID_IDENTIFIER_AUTHORITY SIDAuthWorld =
-            SECURITY_WORLD_SID_AUTHORITY;
-    SID_IDENTIFIER_AUTHORITY SIDAuthCreator = 
-        SECURITY_CREATOR_SID_AUTHORITY;
+    SID_IDENTIFIER_AUTHORITY SIDAuthWorld = SECURITY_WORLD_SID_AUTHORITY;
+    SID_IDENTIFIER_AUTHORITY SIDAuthCreator = SECURITY_CREATOR_SID_AUTHORITY;
     DWORD dwRes;
 
-    SECURITY_DESCRIPTOR *pSD  = NULL;
+    SECURITY_DESCRIPTOR *pSD = NULL;
 
-    DWORD platform = 0;         /* accomodating NT permissions */
+    DWORD platform = 0; /* accomodating NT permissions */
     get_platform(&platform);
 
     /* Note that we prefer to not create ACLs from scratch, so that we
@@ -991,9 +927,9 @@ setup_cache_permissions(WCHAR *cacheRootDirectory)
      * start with a known ACL and just edit the new ACEs
      */
 
-    dwRes = GetNamedSecurityInfo(cacheRootDirectory, SE_FILE_OBJECT, 
-                                 DACL_SECURITY_INFORMATION,
-                                 NULL, NULL, &pOldDACL, NULL, &pSD);
+    dwRes = GetNamedSecurityInfo(cacheRootDirectory, SE_FILE_OBJECT,
+                                 DACL_SECURITY_INFORMATION, NULL, NULL, &pOldDACL, NULL,
+                                 &pSD);
 
     if (dwRes != ERROR_SUCCESS)
         return dwRes;
@@ -1005,27 +941,17 @@ setup_cache_permissions(WCHAR *cacheRootDirectory)
      */
 
     // Create a SID for the Everyone group.
-    if (!AllocateAndInitializeSid(&SIDAuthWorld, 1,
-                                  SECURITY_WORLD_RID,
-                                  0,
-                                  0, 0, 0, 0, 0, 0,
-                                  &pSIDEveryone)) {
-        DO_DEBUG(DL_VERB,
-                 printf("AllocateAndInitializeSid (Everyone).\n");
-                 );
+    if (!AllocateAndInitializeSid(&SIDAuthWorld, 1, SECURITY_WORLD_RID, 0, 0, 0, 0, 0, 0,
+                                  0, &pSIDEveryone)) {
+        DO_DEBUG(DL_VERB, printf("AllocateAndInitializeSid (Everyone).\n"););
 
         goto cleanup;
     }
 
     // Create a SID for the CREATOR OWNER group
-    if (!AllocateAndInitializeSid(&SIDAuthCreator, 1,
-                                  SECURITY_CREATOR_OWNER_RID,
-                                  0,
-                                  0, 0, 0, 0, 0, 0,
-                                  &pSIDCreatorOwner)) {
-        DO_DEBUG(DL_VERB,
-                 printf("AllocateAndInitializeSid (CreatorOwner).\n");
-                 );
+    if (!AllocateAndInitializeSid(&SIDAuthCreator, 1, SECURITY_CREATOR_OWNER_RID, 0, 0, 0,
+                                  0, 0, 0, 0, &pSIDCreatorOwner)) {
+        DO_DEBUG(DL_VERB, printf("AllocateAndInitializeSid (CreatorOwner).\n"););
 
         goto cleanup;
     }
@@ -1037,11 +963,11 @@ setup_cache_permissions(WCHAR *cacheRootDirectory)
      * with.
      */
     ea[0].grfAccessPermissions = FILE_ADD_SUBDIRECTORY;
-    ea[0].grfAccessMode = GRANT_ACCESS; /* not SET_ACCESS */
+    ea[0].grfAccessMode = GRANT_ACCESS;    /* not SET_ACCESS */
     ea[0].grfInheritance = NO_INHERITANCE; /* ONLY in cache\ folder! */
     ea[0].Trustee.TrusteeForm = TRUSTEE_IS_SID;
     ea[0].Trustee.TrusteeType = TRUSTEE_IS_WELL_KNOWN_GROUP;
-    ea[0].Trustee.ptstrName = (LPTSTR) pSIDEveryone;
+    ea[0].Trustee.ptstrName = (LPTSTR)pSIDEveryone;
 
     /* Set full control for CREATOR OWNER on any subfolders */
     ea[1].grfAccessPermissions = GENERIC_ALL;
@@ -1052,18 +978,17 @@ setup_cache_permissions(WCHAR *cacheRootDirectory)
          * already created (and also trusted), so adding it there
          * doesn't affect anything.
          */
-        ea[1].grfInheritance = 
-            OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE;
+        ea[1].grfInheritance = OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE;
     } else {
         /* not using the same as NT, since Creator Owner may already
          * have this ACE (and normally does) so we'll clutter with a
          * new incomplete one */
-        ea[1].grfInheritance = INHERIT_ONLY_ACE | 
-            OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE;
+        ea[1].grfInheritance =
+            INHERIT_ONLY_ACE | OBJECT_INHERIT_ACE | CONTAINER_INHERIT_ACE;
     }
     ea[1].Trustee.TrusteeForm = TRUSTEE_IS_SID;
     ea[1].Trustee.TrusteeType = TRUSTEE_IS_WELL_KNOWN_GROUP;
-    ea[1].Trustee.ptstrName = (LPTSTR) pSIDCreatorOwner;
+    ea[1].Trustee.ptstrName = (LPTSTR)pSIDCreatorOwner;
 
     /* FIXME: we may want to disable the default group maybe should
      * set CREATOR GROUP to no access otherwise we get the default
@@ -1078,47 +1003,39 @@ setup_cache_permissions(WCHAR *cacheRootDirectory)
      * on NT for which we don't need this to work and can return
      * ERROR_UNSUPPORTED_OS
      */
-    if (ERROR_SUCCESS != SetEntriesInAcl(NUM_ACES,
-                                         ea,
-                                         pOldDACL, /* original DACL */
-                                         &pACL))
-    {
-        DO_DEBUG(DL_VERB,
-                 printf("SetEntriesInAcl 0x%x\n", GetLastError());
-                 );
+    if (ERROR_SUCCESS !=
+        SetEntriesInAcl(NUM_ACES, ea, pOldDACL, /* original DACL */
+                        &pACL)) {
+        DO_DEBUG(DL_VERB, printf("SetEntriesInAcl 0x%x\n", GetLastError()););
         goto cleanup;
     }
 
     // Try to modify the object's DACL.
-    result = 
-        SetNamedSecurityInfo(cacheRootDirectory,          // name of the object
-                             SE_FILE_OBJECT,              // type of object
-                             DACL_SECURITY_INFORMATION |
-                             PROTECTED_DACL_SECURITY_INFORMATION
-                             ,   // change only the object's DACL
-                             NULL, NULL,                  // do not change owner or group
-                             pACL,                        // new DACL specified
-                             NULL);                       // do not change SACL
+    result = SetNamedSecurityInfo(
+        cacheRootDirectory, // name of the object
+        SE_FILE_OBJECT,     // type of object
+        DACL_SECURITY_INFORMATION |
+            PROTECTED_DACL_SECURITY_INFORMATION, // change only the object's DACL
+        NULL, NULL,                              // do not change owner or group
+        pACL,                                    // new DACL specified
+        NULL);                                   // do not change SACL
 
-    if (ERROR_SUCCESS == result) 
-    {
-        DO_DEBUG(DL_VERB,
-                 printf("Successfully changed DACL\n");
-                 );
+    if (ERROR_SUCCESS == result) {
+        DO_DEBUG(DL_VERB, printf("Successfully changed DACL\n"););
     }
 
- cleanup:
+cleanup:
     if (pSIDEveryone)
-        FreeSid(pSIDEveryone); 
+        FreeSid(pSIDEveryone);
     if (pSIDCreatorOwner)
-        FreeSid(pSIDCreatorOwner); 
-    if (pACL) 
+        FreeSid(pSIDCreatorOwner);
+    if (pACL)
         LocalFree(pACL);
     if (pSD)
         LocalFree(pSD);
 
     return result;
-#undef NUM_ACES
+#    undef NUM_ACES
 }
 
 /* cache_root should normally be get_dynamorio_home() */
@@ -1127,7 +1044,7 @@ setup_cache_shared_directories(const WCHAR *cache_root)
 {
     DWORD res;
 
-    /* support for new-in-4.2 directories, update the permissions 
+    /* support for new-in-4.2 directories, update the permissions
      * on the cache/ to be the same as those on lib/, and the
      * cache/shared/ folder to be the same as those on logs/
      *
@@ -1175,30 +1092,25 @@ setup_cache_shared_directories(const WCHAR *cache_root)
 
 /* cache_root should normally be get_dynamorio_home() */
 DWORD
-setup_cache_shared_registry(const WCHAR *cache_root, 
-                            ConfigGroup *policy)
+setup_cache_shared_registry(const WCHAR *cache_root, ConfigGroup *policy)
 {
     /* note that nodemgr doesn't need to do call this routine,
      * since the registry keys are added to the node policies in
      * controller/servlets/PolicyUpdateResponseHandler.java in the controller. but
      * anyway we expect these to be forever the same, and in any
-     * case not configurable from the controller. 
+     * case not configurable from the controller.
      */
-    WCHAR wpathbuf [MAX_PATH];
+    WCHAR wpathbuf[MAX_PATH];
 
     /* set up cache\ shared\ registry keys */
     _snwprintf(wpathbuf, MAX_PATH, L"%s\\cache", cache_root);
     NULL_TERMINATE_BUFFER(wpathbuf);
-    set_config_group_parameter(policy, 
-                               L_IF_WIN(DYNAMORIO_VAR_CACHE_ROOT),
-                               wpathbuf);
+    set_config_group_parameter(policy, L_IF_WIN(DYNAMORIO_VAR_CACHE_ROOT), wpathbuf);
 
     /* set up cache\ shared\ registry keys */
     _snwprintf(wpathbuf, MAX_PATH, L"%s\\cache\\shared", cache_root);
     NULL_TERMINATE_BUFFER(wpathbuf);
-    set_config_group_parameter(policy, 
-                               L_IF_WIN(DYNAMORIO_VAR_CACHE_SHARED),
-                               wpathbuf);
+    set_config_group_parameter(policy, L_IF_WIN(DYNAMORIO_VAR_CACHE_SHARED), wpathbuf);
     return ERROR_SUCCESS;
 }
 
@@ -1211,23 +1123,22 @@ check_opstring(const WCHAR *opstring)
     char *cbuf;
     options_t ops;
     int res;
-    size_t cbuf_size =  wcslen(opstring) + 1;
+    size_t cbuf_size = wcslen(opstring) + 1;
     cbuf = (char *)malloc(cbuf_size);
     /* FIXME: if malloc fails, do something */
     _snprintf(cbuf, cbuf_size, "%S", opstring);
-    cbuf[cbuf_size-1] = '\0';
+    cbuf[cbuf_size - 1] = '\0';
     res = set_dynamo_options(&ops, cbuf);
     free(cbuf);
     return !res;
 }
 
-
 HANDLE hToken = NULL;
 TOKEN_PRIVILEGES Priv, OldPriv;
 DWORD PrivSize = sizeof(OldPriv);
 
-DWORD 
-acquire_privileges() 
+DWORD
+acquire_privileges()
 {
     /* if the privileges are already acquired, don't bother.
        this almost certainly will cause failures if multiple
@@ -1237,15 +1148,12 @@ acquire_privileges()
     if (hToken != NULL)
         return ERROR_ALREADY_INITIALIZED;
 
-    // get current thread token 
-    if  (!OpenThreadToken(GetCurrentThread(), 
-                          TOKEN_QUERY|TOKEN_ADJUST_PRIVILEGES, 
-                          FALSE, 
-                          &hToken)) {
+    // get current thread token
+    if (!OpenThreadToken(GetCurrentThread(), TOKEN_QUERY | TOKEN_ADJUST_PRIVILEGES, FALSE,
+                         &hToken)) {
         // can't get thread token, try process token instead
-        if(!OpenProcessToken(GetCurrentProcess(), 
-                             TOKEN_QUERY|TOKEN_ADJUST_PRIVILEGES, 
-                             &hToken)) {
+        if (!OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY | TOKEN_ADJUST_PRIVILEGES,
+                              &hToken)) {
             return GetLastError();
         }
     }
@@ -1254,8 +1162,7 @@ acquire_privileges()
     Priv.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
     LookupPrivilegeValue(NULL, SE_DEBUG_NAME, &Priv.Privileges[0].Luid);
     // try to enable the privilege
-    if(!AdjustTokenPrivileges(hToken, FALSE, &Priv, sizeof(Priv), 
-                              &OldPriv, &PrivSize)) {
+    if (!AdjustTokenPrivileges(hToken, FALSE, &Priv, sizeof(Priv), &OldPriv, &PrivSize)) {
         return GetLastError();
     }
 
@@ -1263,17 +1170,12 @@ acquire_privileges()
 }
 
 DWORD
-release_privileges() 
+release_privileges()
 {
-    if(hToken == NULL)
+    if (hToken == NULL)
         return ERROR_NO_SUCH_PRIVILEGE;
 
-    AdjustTokenPrivileges(hToken, 
-                          FALSE, 
-                          &OldPriv, 
-                          sizeof(OldPriv), 
-                          NULL, 
-                          NULL);
+    AdjustTokenPrivileges(hToken, FALSE, &OldPriv, sizeof(OldPriv), NULL, NULL);
     CloseHandle(hToken);
     hToken = NULL;
 
@@ -1291,7 +1193,7 @@ wstr_replace(WCHAR *str, WCHAR orig, WCHAR new)
 }
 
 /* FIXME: should return error code if the directory wasn't created and
- * doesn't exist already 
+ * doesn't exist already
  */
 void
 mkdir_with_parents(const WCHAR *dirname)
@@ -1311,13 +1213,11 @@ mkdir_with_parents(const WCHAR *dirname)
         if (temp_subdir != NULL)
             *temp_subdir = L'\0';
 
-        DO_DEBUG(DL_VERB,
-                 printf("trying to make: %S\n", buf);
-                 );
-        
+        DO_DEBUG(DL_VERB, printf("trying to make: %S\n", buf););
+
         /* ok if this fails, eg the first time it will be C: */
         CreateDirectory(buf, NULL);
-        
+
         if (temp_subdir != NULL) {
             *temp_subdir = L'\\';
             temp_subdir = temp_subdir + 1;
@@ -1364,28 +1264,20 @@ write_file_contents(WCHAR *path, char *contents, BOOL overwrite)
     }
 
     fp = _wfopen(path, L"w");
-    if(fp == NULL) {
+    if (fp == NULL) {
         res = delete_file_rename_in_use(path);
         if (res != ERROR_SUCCESS || (fp = _wfopen(path, L"w")) == NULL) {
-            DO_DEBUG(DL_ERROR,
-                     printf("Unable to open file: %S (%d)\n", path, errno);
-                     );
+            DO_DEBUG(DL_ERROR, printf("Unable to open file: %S (%d)\n", path, errno););
             return res;
         }
     }
-    
-    if(strlen(contents) != 
-       fwrite(contents, 1, strlen(contents), fp)) {
-        DO_DEBUG(DL_ERROR, 
-                 printf("Write failed to file: %S (errno=%d)\n", 
-                        path, errno);
-                 );
+
+    if (strlen(contents) != fwrite(contents, 1, strlen(contents), fp)) {
+        DO_DEBUG(DL_ERROR, printf("Write failed to file: %S (errno=%d)\n", path, errno););
         res = ERROR_WRITE_FAULT;
     }
 
-    DO_DEBUG(DL_INFO, 
-             printf("wrote file %S\n", path);
-             );
+    DO_DEBUG(DL_INFO, printf("wrote file %S\n", path););
 
     fclose(fp);
     return res;
@@ -1407,8 +1299,7 @@ write_file_contents_if_different(WCHAR *path, char *contents, BOOL *changed)
     if (res == ERROR_SUCCESS && 0 == strcmp(contents, existing)) {
         *changed = FALSE;
         res = ERROR_SUCCESS;
-    }
-    else {
+    } else {
         *changed = TRUE;
         res = write_file_contents(path, contents, TRUE);
     }
@@ -1418,12 +1309,10 @@ write_file_contents_if_different(WCHAR *path, char *contents, BOOL *changed)
     return res;
 }
 
-
-#define READ_BUF_SZ 1024
+#    define READ_BUF_SZ 1024
 
 DWORD
-read_file_contents(WCHAR *path, char *contents, 
-                   SIZE_T maxchars, SIZE_T *needed)
+read_file_contents(WCHAR *path, char *contents, SIZE_T maxchars, SIZE_T *needed)
 {
     FILE *fp = NULL;
     DWORD res = ERROR_SUCCESS;
@@ -1437,34 +1326,28 @@ read_file_contents(WCHAR *path, char *contents,
 
     fp = _wfopen(path, L"r");
     if (fp == NULL) {
-        DO_DEBUG(DL_INFO,
-                 printf("Not found: %S\n", path);
-                 );
+        DO_DEBUG(DL_INFO, printf("Not found: %S\n", path););
         return ERROR_FILE_NOT_FOUND;
     }
 
     if (contents != NULL) {
-       n_read = fread(contents, 1, maxchars, fp);
+        n_read = fread(contents, 1, maxchars, fp);
 
         /* NULL terminate string. */
         contents[n_read == maxchars ? n_read - 1 : n_read] = '\0';
 
         DO_DEBUG(DL_FINEST,
-                 printf("*Read %d bytes from %S (max=%d)\n", 
-                        n_read, path, maxchars);
-                 );
+                 printf("*Read %d bytes from %S (max=%d)\n", n_read, path, maxchars););
     }
-    
+
     n_needed = n_read;
 
     while (!feof(fp)) {
         res = ERROR_MORE_DATA;
-        
+
         n_read = fread(buf, 1, READ_BUF_SZ, fp);
 
-        DO_DEBUG(DL_FINEST,
-                 printf("  Read an additional %d bytes\n", n_read);
-                 );
+        DO_DEBUG(DL_FINEST, printf("  Read an additional %d bytes\n", n_read););
 
         if (n_read == 0 && !feof(fp)) {
             res = ERROR_READ_FAULT;
@@ -1483,20 +1366,15 @@ read_file_contents(WCHAR *path, char *contents,
     fclose(fp);
 
     if (res == ERROR_SUCCESS || res == ERROR_MORE_DATA) {
-        DO_DEBUG(DL_VERB,
-                 printf("file %S contents: (%d needed)\n\n%s\n", 
-                        path, n_needed, contents);
-                 );
-    }
-    else {
-        DO_DEBUG(DL_ERROR,
-                 printf("read failed, error %d\n", res);
-                 );
+        DO_DEBUG(
+            DL_VERB,
+            printf("file %S contents: (%d needed)\n\n%s\n", path, n_needed, contents););
+    } else {
+        DO_DEBUG(DL_ERROR, printf("read failed, error %d\n", res););
     }
 
     return res;
 }
-
 
 DWORD
 delete_tree(const WCHAR *path)
@@ -1515,12 +1393,9 @@ delete_tree(const WCHAR *path)
     if (hFind == INVALID_HANDLE_VALUE)
         return GetLastError();
 
-    DO_DEBUG(DL_VERB,
-             printf("dt working on %S\n", path);
-             );
+    DO_DEBUG(DL_VERB, printf("dt working on %S\n", path););
     do {
-        if (wcscmp(data.cFileName, L".") == 0 ||
-            wcscmp(data.cFileName, L"..") == 0)
+        if (wcscmp(data.cFileName, L".") == 0 || wcscmp(data.cFileName, L"..") == 0)
             continue;
 
         /* case 7407: FindNextFile on a FAT32 filesystem returns files in
@@ -1533,7 +1408,7 @@ delete_tree(const WCHAR *path)
          *
          * FIXME: temporary hack:  if filename has .tmp in its name
          * (first ocurrance), assume we just renamed it and skip.
-         * 
+         *
          * note we may want to doublecheck that the file is indeed not
          * deletable although we now add it to the
          * PendingFileRenameOperations so such unused files can't stay
@@ -1544,8 +1419,7 @@ delete_tree(const WCHAR *path)
 
         DO_DEBUG(DL_VERB,
                  printf("dt still working on %S, %d\n", data.cFileName,
-                        data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY);
-                 );
+                        data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY););
 
         _snwprintf(subdirbuf, MAX_PATH, L"%s\\%s", path, data.cFileName);
         NULL_TERMINATE_BUFFER(subdirbuf);
@@ -1556,8 +1430,7 @@ delete_tree(const WCHAR *path)
             delete_tree(subdirbuf);
         else
             delete_file_rename_in_use(subdirbuf);
-    }
-    while (FindNextFile(hFind, &data));
+    } while (FindNextFile(hFind, &data));
 
     if (!FindClose(hFind))
         return GetLastError();
@@ -1568,8 +1441,7 @@ delete_tree(const WCHAR *path)
     return ERROR_SUCCESS;
 }
 
-
-/* 
+/*
  * helper function for registry permissions workaround. stopgap until
  *  we can make a decent permissions api.
  *
@@ -1583,22 +1455,21 @@ getSID(WCHAR *user)
     DWORD dwSidLen = 0, dwDomainLen = 0;
     SID_NAME_USE SidNameUse;
     PSID pRet = NULL;
-    PSID pSid = NULL; 
+    PSID pSid = NULL;
     WCHAR *lpDomainName = NULL;
-    
+
     /* The function on the first call retives the length that we need
      * to initialize the SID & domain name pointers */
-    if(!LookupAccountName(NULL, user, NULL, &dwSidLen, 
-                          NULL, &dwDomainLen, &SidNameUse)) {
-        if(ERROR_INSUFFICIENT_BUFFER == GetLastError()) {
+    if (!LookupAccountName(NULL, user, NULL, &dwSidLen, NULL, &dwDomainLen,
+                           &SidNameUse)) {
+        if (ERROR_INSUFFICIENT_BUFFER == GetLastError()) {
 
             pSid = LocalAlloc(LMEM_ZEROINIT, dwSidLen);
-            lpDomainName = LocalAlloc(LMEM_ZEROINIT,
-                                      dwDomainLen*sizeof(WCHAR));
-            
-            if(pSid && lpDomainName &&
-               LookupAccountName(NULL, user, pSid, &dwSidLen,
-                                 lpDomainName, &dwDomainLen, &SidNameUse)) {
+            lpDomainName = LocalAlloc(LMEM_ZEROINIT, dwDomainLen * sizeof(WCHAR));
+
+            if (pSid && lpDomainName &&
+                LookupAccountName(NULL, user, pSid, &dwSidLen, lpDomainName, &dwDomainLen,
+                                  &SidNameUse)) {
                 pRet = pSid;
                 pSid = NULL;
             }
@@ -1613,21 +1484,18 @@ getSID(WCHAR *user)
 }
 
 BOOL
-make_acl(DWORD count,
-         WCHAR **userArray,
-         DWORD *maskArray,
-         ACL **acl)
+make_acl(DWORD count, WCHAR **userArray, DWORD *maskArray, ACL **acl)
 {
-    DWORD    dwLoop = 0;
-    DWORD    dwAclLen = 0;
-    PACL     pRetAcl = NULL;
-    PSID     *ppStoreSid = NULL;
-    BOOL     bRes = FALSE;
+    DWORD dwLoop = 0;
+    DWORD dwAclLen = 0;
+    PACL pRetAcl = NULL;
+    PSID *ppStoreSid = NULL;
+    BOOL bRes = FALSE;
 
-    if(acl == NULL)
+    if (acl == NULL)
         goto cleanup;
 
-    ppStoreSid = LocalAlloc(LMEM_ZEROINIT, count * sizeof(void*));
+    ppStoreSid = LocalAlloc(LMEM_ZEROINIT, count * sizeof(void *));
 
     if (ppStoreSid == NULL)
         goto cleanup;
@@ -1638,30 +1506,29 @@ make_acl(DWORD count,
 
         if (ppStoreSid[dwLoop] == NULL)
             goto cleanup;
-        
-        dwAclLen += GetLengthSid(ppStoreSid[dwLoop]) + 
-            sizeof(ACCESS_ALLOWED_ACE) - sizeof(DWORD);
 
+        dwAclLen +=
+            GetLengthSid(ppStoreSid[dwLoop]) + sizeof(ACCESS_ALLOWED_ACE) - sizeof(DWORD);
     }
 
     dwAclLen += sizeof(ACL);
     pRetAcl = LocalAlloc(LMEM_ZEROINIT, dwAclLen);
 
-    if(pRetAcl == NULL || !InitializeAcl(pRetAcl, dwAclLen, ACL_REVISION))
+    if (pRetAcl == NULL || !InitializeAcl(pRetAcl, dwAclLen, ACL_REVISION))
         goto cleanup;
-    
+
     for (dwLoop = 0; dwLoop < count; dwLoop++) {
         /* only adding access allowed ACE's */
-        if(!AddAccessAllowedAce(pRetAcl, ACL_REVISION, 
-                                maskArray[dwLoop], ppStoreSid[dwLoop]))
+        if (!AddAccessAllowedAce(pRetAcl, ACL_REVISION, maskArray[dwLoop],
+                                 ppStoreSid[dwLoop]))
             goto cleanup;
     }
-    
+
     *acl = pRetAcl;
     pRetAcl = NULL;
     bRes = TRUE;
 
- cleanup:
+cleanup:
 
     if (ppStoreSid != NULL) {
         for (dwLoop = 0; dwLoop < count; dwLoop++)
@@ -1671,11 +1538,11 @@ make_acl(DWORD count,
 
     /* if successful, was set to NULL and left in *acl */
     LocalFree(pRetAcl);
-    
+
     return bRes;
 }
 
-#define NUM_ACL_ENTRIES 4
+#    define NUM_ACL_ENTRIES 4
 
 DWORD
 set_registry_permissions_for_user(WCHAR *hklm_keyname, WCHAR *user)
@@ -1702,19 +1569,15 @@ set_registry_permissions_for_user(WCHAR *hklm_keyname, WCHAR *user)
 
     users[NUM_ACL_ENTRIES - 1] = user;
 
-    DO_DEBUG(DL_VERB,
-             printf("Starting acl..\n");
-             );
+    DO_DEBUG(DL_VERB, printf("Starting acl..\n"););
 
-    res = RegOpenKeyEx(HKEY_LOCAL_MACHINE, hklm_keyname,
-                       0, platform_key_flags()|KEY_ALL_ACCESS, &hkey);
+    res = RegOpenKeyEx(HKEY_LOCAL_MACHINE, hklm_keyname, 0,
+                       platform_key_flags() | KEY_ALL_ACCESS, &hkey);
 
     if (res != ERROR_SUCCESS)
         goto error_out;
 
-    DO_DEBUG(DL_VERB,
-             printf("Got key handle.\n");
-             );
+    DO_DEBUG(DL_VERB, printf("Got key handle.\n"););
 
     if (!InitializeSecurityDescriptor(&sd, SECURITY_DESCRIPTOR_REVISION)) {
         res = GetLastError();
@@ -1733,20 +1596,16 @@ set_registry_permissions_for_user(WCHAR *hklm_keyname, WCHAR *user)
         goto error_out;
     }
 
-    DO_DEBUG(DL_VERB,
-             printf("Set owner.\n");
-             );
+    DO_DEBUG(DL_VERB, printf("Set owner.\n"););
 
     if (!make_acl(NUM_ACL_ENTRIES, users, masks, &acl1)) {
         res = ERROR_ACCESS_DENIED;
         goto error_out;
     }
 
-    DO_DEBUG(DL_VERB,
-             printf("Made ACL.\n");
-             );
+    DO_DEBUG(DL_VERB, printf("Made ACL.\n"););
 
-    if(!SetSecurityDescriptorDacl(&sd, TRUE, acl1, FALSE)) {
+    if (!SetSecurityDescriptorDacl(&sd, TRUE, acl1, FALSE)) {
         res = GetLastError();
         goto error_out;
     }
@@ -1756,24 +1615,20 @@ set_registry_permissions_for_user(WCHAR *hklm_keyname, WCHAR *user)
         goto error_out;
     }
 
-    res = RegSetKeySecurity(hkey, 
-                            DACL_SECURITY_INFORMATION | 
-                            OWNER_SECURITY_INFORMATION,
+    res = RegSetKeySecurity(hkey, DACL_SECURITY_INFORMATION | OWNER_SECURITY_INFORMATION,
                             &sd);
 
-    DO_DEBUG(DL_VERB, 
-             printf("Set sacl.\n");
-             );
+    DO_DEBUG(DL_VERB, printf("Set sacl.\n"););
 
     goto cleanup;
 
- error_out:
+error_out:
 
     /* make sure to return an error */
     if (res == ERROR_SUCCESS)
         res = ERROR_ACCESS_DENIED;
 
- cleanup:
+cleanup:
 
     if (hkey != NULL)
         RegCloseKey(hkey);
@@ -1785,25 +1640,23 @@ set_registry_permissions_for_user(WCHAR *hklm_keyname, WCHAR *user)
 }
 
 /* will limit to 1 MB */
-#define MAX_INSERT_SIZE (1024 * 1024)
+#    define MAX_INSERT_SIZE (1024 * 1024)
 
 static void
 insert_file(FILE *file, wchar_t *file_src_name, BOOL delete)
 {
     /* 3rd arg not needed but older headers do not declare as optional */
-    int fd_src = _wopen(file_src_name, _O_RDONLY|_O_BINARY, 0);
+    int fd_src = _wopen(file_src_name, _O_RDONLY | _O_BINARY, 0);
     long length;
     int error;
-    
+
     if (fd_src == -1) {
-        fprintf(file, "Unable to open file \"%S\" for inserting\n",
-               file_src_name);
+        fprintf(file, "Unable to open file \"%S\" for inserting\n", file_src_name);
         return;
     }
     length = _filelength(fd_src);
     if (length == -1L) {
-        fprintf(file, "Unable to get file length for file \"%S\"\n",
-               file_src_name);
+        fprintf(file, "Unable to get file length for file \"%S\"\n", file_src_name);
         return;
     }
     if (length > MAX_INSERT_SIZE) {
@@ -1814,9 +1667,9 @@ insert_file(FILE *file, wchar_t *file_src_name, BOOL delete)
 
     fprintf(file, "Inserting file: name=\"%S\" length=%d\n", file_src_name, length);
     /* hmm, there's prob. a better way to do this ... */
-#define COPY_BUF_SIZE 4096
+#    define COPY_BUF_SIZE 4096
     {
-        char buf[COPY_BUF_SIZE] = {0};
+        char buf[COPY_BUF_SIZE] = { 0 };
         long i = 0;
         while (i + COPY_BUF_SIZE <= length) {
             _read(fd_src, buf, COPY_BUF_SIZE);
@@ -1850,32 +1703,32 @@ get_violation_info(EVENTLOGRECORD *pevlr, /* INOUT */ VIOLATION_INFO *info)
     info->report = get_forensics_filename(pevlr);
     if (file_exists(info->report))
         return ERROR_SUCCESS;
-    else 
+    else
         return ERROR_FILE_NOT_FOUND;
 }
 
-wchar_t *canary_process_names[] = {L"canary.exe", L"services.exe", L"iexplore.exe"};
-#define num_canary_processes BUFFER_SIZE_ELEMENTS(canary_process_names)
+wchar_t *canary_process_names[] = { L"canary.exe", L"services.exe", L"iexplore.exe" };
+#    define num_canary_processes BUFFER_SIZE_ELEMENTS(canary_process_names)
 /* how long to wait for an apparently hung canary process */
-#define CANARY_HANG_WAIT 20000
+#    define CANARY_HANG_WAIT 20000
 /* interval to wait for the canary process to do something */
-#define CANARY_SLEEP_WAIT 100
+#    define CANARY_SLEEP_WAIT 100
 
-#define OPTIONS_CANARY_NATIVE L" -list_modules -check_for_hooked_mods_list ntdll.dll"
-#define OPTIONS_CANARY_THIN_CLIENT L""
-#define OPTIONS_CANARY_CLIENT L""
-#define OPTIONS_CANARY_MF L""
-#define OPTIONS_CANARY_INJECT L"-wait"
+#    define OPTIONS_CANARY_NATIVE L" -list_modules -check_for_hooked_mods_list ntdll.dll"
+#    define OPTIONS_CANARY_THIN_CLIENT L""
+#    define OPTIONS_CANARY_CLIENT L""
+#    define OPTIONS_CANARY_MF L""
+#    define OPTIONS_CANARY_INJECT L"-wait"
 
 /* FIXME - could even get ldmps ... */
 /* FIXME - xref case 10322 on -syslog_mask 0, eventually should remove and verify
  * expected eventlog output (and get PE to ignore them). */
-#define OPTIONS_THIN_CLIENT L"-thin_client -syslog_mask 0"
-#define OPTIONS_CLIENT L"-client -syslog_mask 0"
+#    define OPTIONS_THIN_CLIENT L"-thin_client -syslog_mask 0"
+#    define OPTIONS_CLIENT L"-client -syslog_mask 0"
 /* FIXME - temporary hack so virus scan correctly identified by canary. Weird case
  * since this is considered a survivable violation by default (and so ignores kill proc).
  */
-#define OPTIONS_MF L"-apc_policy 0 -syslog_mask 0"
+#    define OPTIONS_MF L"-apc_policy 0 -syslog_mask 0"
 
 /* returns the appropriate canary fail code */
 static int
@@ -1883,17 +1736,17 @@ run_individual_canary_test(FILE *file, WCHAR *logbase, WCHAR *dr_options, int ex
                            ConfigGroup *policy, WCHAR *exe, WCHAR *exe_args,
                            BOOL inject_test, char *type, BOOL early_test)
 {
-    STARTUPINFO sinfo = {sizeof(sinfo), NULL, L"", 0, 0, 0, 0, 0, 0, 0, 0,
-                         0, 0, 0, NULL, NULL, NULL, NULL};
+    STARTUPINFO sinfo = { sizeof(sinfo), NULL, L"",  0,   0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                          NULL,          NULL, NULL, NULL };
     PROCESS_INFORMATION pinfo;
     int canary_code = CANARY_SUCCESS;
-    WCHAR logbuf[MAX_PATH] = {0};
+    WCHAR logbuf[MAX_PATH] = { 0 };
     WCHAR outfile[MAX_PATH];
-    WCHAR cmd_buf[5*MAX_PATH];
+    WCHAR cmd_buf[5 * MAX_PATH];
 
     /* set up registry */
-    get_unique_filename(logbase, L"canary_logs", L"",
-                        logbuf, BUFFER_SIZE_ELEMENTS(logbuf));
+    get_unique_filename(logbase, L"canary_logs", L"", logbuf,
+                        BUFFER_SIZE_ELEMENTS(logbuf));
     CreateDirectory(logbuf, NULL);
     set_config_group_parameter(get_child(canary_process_names[exe_index], policy),
                                L_DYNAMORIO_VAR_LOGDIR, logbuf);
@@ -1907,19 +1760,18 @@ run_individual_canary_test(FILE *file, WCHAR *logbase, WCHAR *dr_options, int ex
     if (early_test) {
         /* we get the canary_process to re-launch itself to run test with early inject */
         _snwprintf(cmd_buf, BUFFER_SIZE_ELEMENTS(cmd_buf),
-                   L"\"%s\" \"%s\" -launch_child %s%d \"\\\"%s\\\" %s\"",
-                   exe, outfile, inject_test ? L"-verify_inject " : L"",
-                   CANARY_HANG_WAIT / 2, outfile, exe_args);
+                   L"\"%s\" \"%s\" -launch_child %s%d \"\\\"%s\\\" %s\"", exe, outfile,
+                   inject_test ? L"-verify_inject " : L"", CANARY_HANG_WAIT / 2, outfile,
+                   exe_args);
     } else {
-        _snwprintf(cmd_buf, BUFFER_SIZE_ELEMENTS(cmd_buf), L"\"%s\" \"%s\" %s",
-                   exe, outfile, exe_args);
+        _snwprintf(cmd_buf, BUFFER_SIZE_ELEMENTS(cmd_buf), L"\"%s\" \"%s\" %s", exe,
+                   outfile, exe_args);
     }
     NULL_TERMINATE_BUFFER(cmd_buf);
 
-    fprintf(file, "Starting Canary Process \"%S\" core_ops=\"%S\" type=%s%s\n",
-            cmd_buf, dr_options, type, inject_test ? " inject" : "");
-    if (CreateProcess(NULL, cmd_buf, NULL, NULL, TRUE, 0, NULL, NULL,
-                      &sinfo, &pinfo)) {
+    fprintf(file, "Starting Canary Process \"%S\" core_ops=\"%S\" type=%s%s\n", cmd_buf,
+            dr_options, type, inject_test ? " inject" : "");
+    if (CreateProcess(NULL, cmd_buf, NULL, NULL, TRUE, 0, NULL, NULL, &sinfo, &pinfo)) {
         if (inject_test && !early_test) {
             DWORD sleep_count = 0, under_dr_code, ws, build = 0;
             do {
@@ -1953,7 +1805,7 @@ run_individual_canary_test(FILE *file, WCHAR *logbase, WCHAR *dr_options, int ex
                 /* FIXME - check return value, shouldn't ever fail though */
                 if (exit_code != CANARY_PROCESS_EXP_EXIT_CODE) {
                     /* FIXME - the -1 is based on the core value for kill
-                     * proc, should export that and use it, or really just check for 
+                     * proc, should export that and use it, or really just check for
                      * violations since we'll want the forensics anyways. Doesn't
                      * disambiguate between dr error and violation. */
                     if (exit_code == (DWORD)-1) {
@@ -1964,7 +1816,7 @@ run_individual_canary_test(FILE *file, WCHAR *logbase, WCHAR *dr_options, int ex
                         fprintf(file, "Canary Crashed 0x%08x\n", exit_code);
                     }
                 } else if (early_test && inject_test) {
-                    fprintf(file, "Verified Early Injection\n");   
+                    fprintf(file, "Verified Early Injection\n");
                 }
             }
         }
@@ -1998,19 +1850,20 @@ run_individual_canary_test(FILE *file, WCHAR *logbase, WCHAR *dr_options, int ex
     return canary_code;
 }
 
-#pragma warning( disable : 4127) //conditional expression is constant i.e while (FALSE)
+#    pragma warning(disable : 4127) // conditional expression is constant i.e while
+                                    // (FALSE)
 
 /* see utils.h for description */
 BOOL
-run_canary_test_ex(FILE *file, /* INOUT */ CANARY_INFO *info,
-                   const WCHAR *scratch_folder, const WCHAR *canary_process)
+run_canary_test_ex(FILE *file, /* INOUT */ CANARY_INFO *info, const WCHAR *scratch_folder,
+                   const WCHAR *canary_process)
 {
     ConfigGroup *policy, *save_policy;
     WCHAR exe_buf[num_canary_processes][MAX_PATH];
     WCHAR log_folder[MAX_PATH];
     DWORD i;
     BOOL autoinject_set = is_autoinjection_set();
-    
+
     info->canary_code = ERROR_SUCCESS;
     info->url = L"CFail";
     info->msg = L"Canary Failed";
@@ -2020,9 +1873,9 @@ run_canary_test_ex(FILE *file, /* INOUT */ CANARY_INFO *info,
     read_config_group(&policy, L_PRODUCT_NAME, TRUE);
     policy->should_clear = TRUE;
     remove_children(policy);
-    
-    _snwprintf(log_folder, BUFFER_SIZE_ELEMENTS(log_folder),
-               L"%s\\canary_logs", scratch_folder);
+
+    _snwprintf(log_folder, BUFFER_SIZE_ELEMENTS(log_folder), L"%s\\canary_logs",
+               scratch_folder);
     NULL_TERMINATE_BUFFER(log_folder);
     CreateDirectory(log_folder, NULL);
 
@@ -2031,8 +1884,8 @@ run_canary_test_ex(FILE *file, /* INOUT */ CANARY_INFO *info,
                    scratch_folder, canary_process_names[i]);
         NULL_TERMINATE_BUFFER(exe_buf[i]);
         if (CopyFile(canary_process, exe_buf[i], FALSE) == 0) {
-            fprintf(file, "Failed to copy canary file %S to %S\n",
-                    canary_process, exe_buf[i]);
+            fprintf(file, "Failed to copy canary file %S to %S\n", canary_process,
+                    exe_buf[i]);
             /* FIXME- continue if file exists from a previous run that didn't clean up */
             info->canary_code = CANARY_UNABLE_TO_TEST;
             goto canary_exit;
@@ -2042,67 +1895,68 @@ run_canary_test_ex(FILE *file, /* INOUT */ CANARY_INFO *info,
                                    L_DYNAMORIO_VAR_RUNUNDER, L"1");
     }
     write_config_group(policy);
-    
+
     /* FIXME - monitor eventlog though we should still detect via forensics and/or
      * exit code (crash/violation).  Xref 10322, for now we suppress eventlogs. */
     /* FIXME - the verify injection tests need work, should just talk to canary proc. */
     /* FIXME - verify canary output - necessary? not clear what action would be */
     /* Files are copied, begin runs */
 
-#define DO_RUN(run_flag, core_ops, canary_options, inject, run_name, test_type) do {  \
-    if (TEST(run_flag, info->run_flags)) {                                            \
-        WCHAR *canary_ops = TEST(run_flag, info->fault_run) ?                         \
-                            info->canary_fault_args : canary_options;                 \
-        for (i = 0; i < num_canary_processes; i++) {                                  \
-            int code =                                                                \
-                run_individual_canary_test(file, log_folder, core_ops, i, policy,     \
-                                           exe_buf[i], canary_ops, inject,            \
-                                           run_name, FALSE /* not early */);          \
-            if (code >= 0 && test_type != CANARY_TEST_TYPE_NATIVE) {                  \
-                code =                                                                \
-                    run_individual_canary_test(file, log_folder, core_ops, i, policy, \
-                                               exe_buf[i], canary_ops, inject,        \
-                                               run_name, TRUE /* early inject*/);     \
-            }                                                                         \
-            if (code < 0) {                                                           \
-                if (CANARY_RUN_REQUIRES_PASS(run_flag, info->run_flags)) {            \
-                    info->canary_code = GET_CANARY_CODE(test_type, code);             \
-                    goto canary_exit;                                                 \
-                }                                                                     \
-                break; /* skip remaining tests in run once first failure found */     \
-            }                                                                         \
-        }                                                                             \
-    }                                                                                 \
-} while (FALSE)
+#    define DO_RUN(run_flag, core_ops, canary_options, inject, run_name, test_type)    \
+        do {                                                                           \
+            if (TEST(run_flag, info->run_flags)) {                                     \
+                WCHAR *canary_ops = TEST(run_flag, info->fault_run)                    \
+                    ? info->canary_fault_args                                          \
+                    : canary_options;                                                  \
+                for (i = 0; i < num_canary_processes; i++) {                           \
+                    int code = run_individual_canary_test(                             \
+                        file, log_folder, core_ops, i, policy, exe_buf[i], canary_ops, \
+                        inject, run_name, FALSE /* not early */);                      \
+                    if (code >= 0 && test_type != CANARY_TEST_TYPE_NATIVE) {           \
+                        code = run_individual_canary_test(                             \
+                            file, log_folder, core_ops, i, policy, exe_buf[i],         \
+                            canary_ops, inject, run_name, TRUE /* early inject*/);     \
+                    }                                                                  \
+                    if (code < 0) {                                                    \
+                        if (CANARY_RUN_REQUIRES_PASS(run_flag, info->run_flags)) {     \
+                            info->canary_code = GET_CANARY_CODE(test_type, code);      \
+                            goto canary_exit;                                          \
+                        }                                                              \
+                        break; /* skip remaining tests in run once first failure found \
+                                */                                                     \
+                    }                                                                  \
+                }                                                                      \
+            }                                                                          \
+        } while (FALSE)
 
     /* First the native runs. */
     unset_autoinjection();
 
     /* native info gathering run. */
-    DO_RUN(CANARY_RUN_NATIVE, L"", OPTIONS_CANARY_NATIVE,
-           FALSE, "native", CANARY_TEST_TYPE_NATIVE);
+    DO_RUN(CANARY_RUN_NATIVE, L"", OPTIONS_CANARY_NATIVE, FALSE, "native",
+           CANARY_TEST_TYPE_NATIVE);
 
     set_autoinjection(); /* Going to do the non-native runs now */
-    
+
     /* Now the -thin_client inject run */
     DO_RUN(CANARY_RUN_THIN_CLIENT_INJECT, OPTIONS_THIN_CLIENT, OPTIONS_CANARY_INJECT,
            TRUE, "-thin_client", CANARY_TEST_TYPE_THIN_CLIENT);
 
     /* now the full -thin_client run */
-    DO_RUN(CANARY_RUN_THIN_CLIENT, OPTIONS_THIN_CLIENT, OPTIONS_CANARY_THIN_CLIENT,
-           FALSE, "-thin_client", CANARY_TEST_TYPE_THIN_CLIENT);
+    DO_RUN(CANARY_RUN_THIN_CLIENT, OPTIONS_THIN_CLIENT, OPTIONS_CANARY_THIN_CLIENT, FALSE,
+           "-thin_client", CANARY_TEST_TYPE_THIN_CLIENT);
 
     /* Now the -client run */
-    DO_RUN(CANARY_RUN_CLIENT, OPTIONS_CLIENT, OPTIONS_CANARY_CLIENT,
-           FALSE, "-client", CANARY_TEST_TYPE_CLIENT);
-    
+    DO_RUN(CANARY_RUN_CLIENT, OPTIONS_CLIENT, OPTIONS_CANARY_CLIENT, FALSE, "-client",
+           CANARY_TEST_TYPE_CLIENT);
+
     /* Now the MF run */
-    DO_RUN(CANARY_RUN_MF, OPTIONS_MF, OPTIONS_CANARY_MF,
-           FALSE, "MF", CANARY_TEST_TYPE_MF);
+    DO_RUN(CANARY_RUN_MF, OPTIONS_MF, OPTIONS_CANARY_MF, FALSE, "MF",
+           CANARY_TEST_TYPE_MF);
 
-#undef DO_RUN
+#    undef DO_RUN
 
- canary_exit:
+canary_exit:
     if (autoinject_set)
         set_autoinjection();
     else
@@ -2131,8 +1985,8 @@ run_canary_test(/* INOUT */ CANARY_INFO *info, WCHAR *version_msg)
     _snwprintf(canary_process, BUFFER_SIZE_ELEMENTS(canary_process),
                L"%s\\bin\\canary.exe", dynamorio_home);
     NULL_TERMINATE_BUFFER(canary_process);
-    _snwprintf(scratch_folder, BUFFER_SIZE_ELEMENTS(scratch_folder),
-               L"%s\\canary_test", dynamorio_logdir);
+    _snwprintf(scratch_folder, BUFFER_SIZE_ELEMENTS(scratch_folder), L"%s\\canary_test",
+               dynamorio_logdir);
     NULL_TERMINATE_BUFFER(scratch_folder);
     /* xref case 10157, let's try to make sure this stays clean */
     delete_tree(scratch_folder);
@@ -2141,28 +1995,26 @@ run_canary_test(/* INOUT */ CANARY_INFO *info, WCHAR *version_msg)
     /* Using get unique file name since we plan to run this more then once,
      * though only an issue if the caller doesn't cleanup the report file and
      * leaves it locked. */
-    get_unique_filename(dynamorio_logdir, L"canary_report", L".crep",
-                        info->buf_report, BUFFER_SIZE_ELEMENTS(info->buf_report));
+    get_unique_filename(dynamorio_logdir, L"canary_report", L".crep", info->buf_report,
+                        BUFFER_SIZE_ELEMENTS(info->buf_report));
     info->report = info->buf_report;
     report_file = _wfopen(info->report, L"wb");
     /* FIXME - verify file creation */
     fprintf(report_file, "%S\n", version_msg == NULL ? L"unknown version" : version_msg);
     result = run_canary_test_ex(report_file, info, scratch_folder, canary_process);
     res = delete_tree(scratch_folder);
-    fprintf(report_file, "Deleted scratch folder \"%S\", code %d\n",
-            scratch_folder, res);
+    fprintf(report_file, "Deleted scratch folder \"%S\", code %d\n", scratch_folder, res);
     fclose(report_file);
     return result;
 }
 
-#else //ifdef UNIT_TEST
+#else // ifdef UNIT_TEST
 
 int
 main()
 {
     set_debuglevel(DL_INFO);
     set_abortlevel(DL_WARN);
-
 
     /* read/write file */
     {
@@ -2176,19 +2028,17 @@ main()
         test2 = "foo\r\n";
 
         CHECKED_OPERATION(write_file_contents(fn, test1, TRUE));
-        
+
         DO_ASSERT(ERROR_MORE_DATA == read_file_contents(fn, NULL, 0, &needed));
         DO_ASSERT(strlen(test1) + 1 == needed);
 
         CHECKED_OPERATION(read_file_contents(fn, buffy, needed, NULL));
         DO_ASSERT(0 == strcmp(test1, buffy));
 
-        CHECKED_OPERATION(write_file_contents_if_different(fn, test1, 
-                                                           &changed));
+        CHECKED_OPERATION(write_file_contents_if_different(fn, test1, &changed));
         DO_ASSERT(!changed);
-        
-        CHECKED_OPERATION(write_file_contents_if_different(fn, test2, 
-                                                           &changed));
+
+        CHECKED_OPERATION(write_file_contents_if_different(fn, test2, &changed));
         DO_ASSERT(changed);
 
         CHECKED_OPERATION(read_file_contents(fn, buffy, 1024, NULL));
@@ -2246,7 +2096,6 @@ main()
     printf("All Test Passed\n");
 
     return 0;
-
 }
 
 #endif

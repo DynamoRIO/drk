@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -34,39 +34,35 @@
 /* Tests preservation of eflags across indirect branches
  */
 
-#include "tools.h"
+#    include "tools.h"
 
-#ifdef USE_DYNAMO
-# include "dynamorio.h"
-#endif
+#    ifdef USE_DYNAMO
+#        include "dynamorio.h"
+#    endif
 
-#define VERBOSE 0
+#    define VERBOSE 0
 
 /* asm routine */
-void test_eflags_pos(uint pos);
+void
+test_eflags_pos(uint pos);
 
 /*
  * eflags we care about:
  *  11 10  9  8  7  6  5  4  3  2  1  0
- *  OF DF       SF ZF    AF    PF    CF 
+ *  OF DF       SF ZF    AF    PF    CF
  */
-const char *flags[] = {
-    "CF", "", "PF", "", "AF", "", "ZF", "SF", "",  "", "DF", "OF"
-};
+const char *flags[] = { "CF", "", "PF", "", "AF", "", "ZF", "SF", "", "", "DF", "OF" };
 
-const uint eflag_pos[] = {
-    0, 2, 4, 6, 7, 10, 11
-};
-#define NUM_FLAGS (sizeof(eflag_pos)/sizeof(eflag_pos[0]))
+const uint eflag_pos[] = { 0, 2, 4, 6, 7, 10, 11 };
+#    define NUM_FLAGS (sizeof(eflag_pos) / sizeof(eflag_pos[0]))
 
 void
 test_flag(uint eflags, uint pos, bool set)
 {
-#if VERBOSE
-    print("eflags where %d should be %d: "PFX"\n", pos, set, eflags);
-#endif
-    if ((set && ((eflags & (1 << pos)) == 0)) ||
-        (!set && ((eflags & (1 << pos)) != 0)))
+#    if VERBOSE
+    print("eflags where %d should be %d: " PFX "\n", pos, set, eflags);
+#    endif
+    if ((set && ((eflags & (1 << pos)) == 0)) || (!set && ((eflags & (1 << pos)) != 0)))
         print("ERROR %d %s\n", set, flags[pos]);
     else
         print("OK %d %s\n", set, flags[pos]);
@@ -77,92 +73,67 @@ main()
 {
     uint i;
     INIT();
-    
-#ifdef USE_DYNAMO
+
+#    ifdef USE_DYNAMO
     dynamorio_app_init();
     dynamorio_app_start();
-#endif
+#    endif
 
-    for (i=0; i<NUM_FLAGS; i++) {
+    for (i = 0; i < NUM_FLAGS; i++) {
         test_eflags_pos(eflag_pos[i]);
     }
-    
-#ifdef USE_DYNAMO
+
+#    ifdef USE_DYNAMO
     dynamorio_app_stop();
     dynamorio_app_exit();
-#endif
+#    endif
 }
 
-
 #else /* asm code *************************************************************/
-#include "asm_defines.asm"
+#    include "asm_defines.asm"
 START_FILE
 
 DECL_EXTERN(test_flag)
 
-#define FUNCNAME test_eflags_pos
-        DECLARE_FUNC(FUNCNAME)
+#    define FUNCNAME test_eflags_pos
+DECLARE_FUNC(FUNCNAME)
 GLOBAL_LABEL(FUNCNAME:)
-        /* We don't bother w/ SEH64 directives, though we're an illegal leaf routine! */
-        mov      REG_XCX, ARG1
-        push     REG_XCX /* save */
-        CALLC1(set_flag, REG_XCX)
-        mov      REG_XCX, PTRSZ [REG_XSP]
-        PUSHF
-        pop      REG_XAX
+/* We don't bother w/ SEH64 directives, though we're an illegal leaf routine! */
+mov REG_XCX,
+    ARG1 push REG_XCX /* save */
+    CALLC1(set_flag, REG_XCX)
+mov REG_XCX,
+    PTRSZ[REG_XSP] PUSHF pop REG_XAX
         /* having DF set messes up printing for x64 */
-        push     0
-        POPF
+        push 0 POPF
         CALLC3(test_flag, REG_XAX, REG_XCX, 1)
 
-        mov      REG_XCX, PTRSZ [REG_XSP]
-        CALLC1(clear_flag, REG_XCX)
-        mov      REG_XCX, PTRSZ [REG_XSP]
-        PUSHF
-        pop      REG_XAX
-        /* having DF set messes up printing for x64 */
-        push     0
-        POPF
-        CALLC3(test_flag, REG_XAX, REG_XCX, 0)
+            mov REG_XCX,
+    PTRSZ[REG_XSP] CALLC1(clear_flag, REG_XCX) mov REG_XCX,
+    PTRSZ[REG_XSP] PUSHF pop REG_XAX
+    /* having DF set messes up printing for x64 */
+    push 0 POPF CALLC3(test_flag, REG_XAX, REG_XCX, 0)
 
-        pop      REG_XCX /* clean up */
-        ret
-        END_FUNC(FUNCNAME)
+        pop REG_XCX /* clean up */
+    ret END_FUNC(FUNCNAME)
 
-    /* void set_flag(uint pos) */
-#undef FUNCNAME
-#define FUNCNAME set_flag
-        DECLARE_FUNC(FUNCNAME)
-GLOBAL_LABEL(FUNCNAME:)
-        /* We don't bother w/ SEH64 directives, though we're an illegal leaf routine! */
-        PUSHF
-        pop      REG_XAX
-        mov      REG_XCX, ARG1
-        mov      REG_XDX, 1
-        shl      REG_XDX, cl
-        or       REG_XAX, REG_XDX
-        push     REG_XAX
-        POPF
-        ret
-        END_FUNC(FUNCNAME)
+/* void set_flag(uint pos) */
+#    undef FUNCNAME
+#    define FUNCNAME set_flag
+        DECLARE_FUNC(FUNCNAME) GLOBAL_LABEL(FUNCNAME:)
+    /* We don't bother w/ SEH64 directives, though we're an illegal leaf routine! */
+    PUSHF pop REG_XAX mov REG_XCX,
+    ARG1 mov REG_XDX, 1 shl REG_XDX, cl or REG_XAX,
+    REG_XDX push REG_XAX POPF ret END_FUNC(FUNCNAME)
 
-    /* void clear_flag(uint pos) */
-#undef FUNCNAME
-#define FUNCNAME clear_flag
-        DECLARE_FUNC(FUNCNAME)
-GLOBAL_LABEL(FUNCNAME:)
-        /* We don't bother w/ SEH64 directives, though we're an illegal leaf routine! */
-        PUSHF
-        pop      REG_XAX
-        mov      REG_XCX, ARG1
-        mov      REG_XDX, 1
-        shl      REG_XDX, cl
-        not      REG_XDX
-        and      REG_XAX, REG_XDX
-        push     REG_XAX
-        POPF
-        ret
-        END_FUNC(FUNCNAME)
+/* void clear_flag(uint pos) */
+#    undef FUNCNAME
+#    define FUNCNAME clear_flag
+        DECLARE_FUNC(FUNCNAME) GLOBAL_LABEL(FUNCNAME:)
+    /* We don't bother w/ SEH64 directives, though we're an illegal leaf routine! */
+    PUSHF pop REG_XAX mov REG_XCX,
+    ARG1 mov REG_XDX, 1 shl REG_XDX, cl not REG_XDX and REG_XAX,
+    REG_XDX push REG_XAX POPF ret END_FUNC(FUNCNAME)
 
-END_FILE
+        END_FILE
 #endif

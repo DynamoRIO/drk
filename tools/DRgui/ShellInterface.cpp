@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -40,21 +40,20 @@
 
 #ifndef DRGUI_DEMO /* around whole file */
 
-#include "stdafx.h"
-#include "DynamoRIO.h"
-#include "ShellInterface.h"
+#    include "stdafx.h"
+#    include "DynamoRIO.h"
+#    include "ShellInterface.h"
 
-#include <shlobj.h>
-#include <objbase.h>
-#include <shlwapi.h>
-#include <assert.h>
+#    include <shlobj.h>
+#    include <objbase.h>
+#    include <shlwapi.h>
+#    include <assert.h>
 
-
-#ifdef _DEBUG
-#undef THIS_FILE
-static char THIS_FILE[]=__FILE__;
-#define new DEBUG_NEW
-#endif
+#    ifdef _DEBUG
+#        undef THIS_FILE
+static char THIS_FILE[] = __FILE__;
+#        define new DEBUG_NEW
+#    endif
 
 //////////////////////////////////////////////////////////////////////
 // Construction/Destruction
@@ -62,15 +61,14 @@ static char THIS_FILE[]=__FILE__;
 
 CShellInterface::CShellInterface()
 {
-
 }
 
 CShellInterface::~CShellInterface()
 {
-
 }
 
-/*static */void CShellInterface::Initialize()
+/*static */ void
+CShellInterface::Initialize()
 {
     if (m_bInitialized)
         return;
@@ -79,7 +77,8 @@ CShellInterface::~CShellInterface()
     m_bInitialized = TRUE;
 }
 
-/*static */void CShellInterface::Uninitialize()
+/*static */ void
+CShellInterface::Uninitialize()
 {
     if (!m_bInitialized)
         return;
@@ -87,71 +86,70 @@ CShellInterface::~CShellInterface()
     m_bInitialized = FALSE;
 }
 
-/*static */BOOL CShellInterface::m_bInitialized = FALSE;
+/*static */ BOOL CShellInterface::m_bInitialized = FALSE;
 
-/*static */BOOL CShellInterface::ResolveLinkFile(TCHAR *name, TCHAR *resolution, 
-                                                 TCHAR *arguments, TCHAR *working_dir, HWND hwnd)
+/*static */ BOOL
+CShellInterface::ResolveLinkFile(TCHAR *name, TCHAR *resolution, TCHAR *arguments,
+                                 TCHAR *working_dir, HWND hwnd)
 {
     assert(m_bInitialized);
-    HRESULT hres; 
-    IShellLink* psl; 
-    WIN32_FIND_DATA wfd; 
- 
-    *resolution = 0; // assume failure 
- 
+    HRESULT hres;
+    IShellLink *psl;
+    WIN32_FIND_DATA wfd;
+
+    *resolution = 0; // assume failure
+
     // Get a pointer to the IShellLink interface.
-    hres = CoCreateInstance (CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER,
-                             IID_IShellLink, (void **)&psl);
-    if (SUCCEEDED (hres)) {
+    hres = CoCreateInstance(CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, IID_IShellLink,
+                            (void **)&psl);
+    if (SUCCEEDED(hres)) {
         IPersistFile *ppf;
-                
+
         // Get a pointer to the IPersistFile interface.
-        hres = psl->QueryInterface (IID_IPersistFile, (void **)&ppf);
-                
-        if (SUCCEEDED (hres)) {
-#ifndef UNICODE
-            WORD wsz [MAX_PATH]; // buffer for Unicode string
-                        
+        hres = psl->QueryInterface(IID_IPersistFile, (void **)&ppf);
+
+        if (SUCCEEDED(hres)) {
+#    ifndef UNICODE
+            WORD wsz[MAX_PATH]; // buffer for Unicode string
+
             // Ensure that the string consists of Unicode TCHARacters.
             MultiByteToWideChar(CP_ACP, 0, name, -1, wsz, MAX_PATH);
-#else
+#    else
             TCHAR *wsz = name;
-#endif
-                        
+#    endif
+
             // Load the shortcut.
             hres = ppf->Load(wsz, STGM_READ);
-                        
+
             if (SUCCEEDED(hres)) {
                 // Resolve the shortcut.
                 hres = psl->Resolve(hwnd, SLR_ANY_MATCH);
                 if (SUCCEEDED(hres)) {
                     _tcscpy(resolution, name);
                     // Get the path to the shortcut target.
-                    hres = psl->GetPath(resolution, MAX_PATH,
-                                        (WIN32_FIND_DATA *)&wfd, SLGP_SHORTPATH);
-                    if (! SUCCEEDED(hres))
+                    hres = psl->GetPath(resolution, MAX_PATH, (WIN32_FIND_DATA *)&wfd,
+                                        SLGP_SHORTPATH);
+                    if (!SUCCEEDED(hres))
                         goto cleanup;
                     hres = psl->GetArguments(arguments, MAX_PATH);
-                    if (! SUCCEEDED(hres))
+                    if (!SUCCEEDED(hres))
                         goto cleanup;
                     hres = psl->GetWorkingDirectory(working_dir, MAX_PATH);
-                    if (! SUCCEEDED(hres))
+                    if (!SUCCEEDED(hres))
                         goto cleanup;
                 }
             }
         cleanup:
             // Release the pointer to IPersistFile.
-            ppf->Release ();
+            ppf->Release();
         }
         // Release the pointer to IShellLink.
-        psl->Release ();
+        psl->Release();
     }
     return (SUCCEEDED(hres) ? TRUE : FALSE);
 }
 
-
-
-#if 0
+#    if 0
 // from "Shell Links" in MSDN library:
 /*
 The application-defined ResolveIt function in the following example
@@ -354,6 +352,6 @@ HRESULT ResolveShortCut::ResolveIt (HWND hwnd, LPCSTR pszShortcutFile)
     }
     return hres;
 }
-#endif /* 0 */
+#    endif /* 0 */
 
 #endif /* !DRGUI_DEMO */ /* around whole file */

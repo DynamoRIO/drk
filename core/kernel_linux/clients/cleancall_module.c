@@ -21,7 +21,7 @@ static void
 thread_init_event(void *drcontext)
 {
     instr_count_t *instr_count =
-        (instr_count_t*) dr_thread_alloc(drcontext, sizeof(instr_count_t));
+        (instr_count_t *)dr_thread_alloc(drcontext, sizeof(instr_count_t));
     memset(instr_count, 0, sizeof(instr_count_t));
     cpu_instr_count[dr_get_thread_id(drcontext)] = instr_count;
     dr_set_tls_field(drcontext, instr_count);
@@ -29,17 +29,15 @@ thread_init_event(void *drcontext)
 }
 
 static void
-thread_exit_event(void *drcontext) 
+thread_exit_event(void *drcontext)
 {
     cpu_instr_count[dr_get_thread_id(drcontext)] = NULL;
-    dr_thread_free(drcontext, dr_get_tls_field(drcontext),
-                   sizeof(instr_count_t));
+    dr_thread_free(drcontext, dr_get_tls_field(drcontext), sizeof(instr_count_t));
 }
 
-
 static dr_emit_flags_t
-bb_event(void *drcontext, void *tag, instrlist_t *bb, bool for_trace,
-         bool translating) {
+bb_event(void *drcontext, void *tag, instrlist_t *bb, bool for_trace, bool translating)
+{
     uint num_instrs = 0;
     instr_t *instr;
 
@@ -54,9 +52,9 @@ bb_event(void *drcontext, void *tag, instrlist_t *bb, bool for_trace,
         return DR_EMIT_DEFAULT;
     }
 
-    dr_insert_clean_call(drcontext, bb, instrlist_first(bb), clean_call, false,
-                         1, OPND_CREATE_INT32(num_instrs));
-    return DR_EMIT_DEFAULT;    
+    dr_insert_clean_call(drcontext, bb, instrlist_first(bb), clean_call, false, 1,
+                         OPND_CREATE_INT32(num_instrs));
+    return DR_EMIT_DEFAULT;
 }
 
 void
@@ -83,8 +81,7 @@ show_cpu_instr_count(int cpu, char *buf)
 static int __init
 instrcount_init(void)
 {
-    cpu_instr_count = kzalloc(dr_cpu_count() * sizeof(instr_count_t*),
-                              GFP_KERNEL);
+    cpu_instr_count = kzalloc(dr_cpu_count() * sizeof(instr_count_t *), GFP_KERNEL);
     if (!cpu_instr_count) {
         return -ENOMEM;
     }

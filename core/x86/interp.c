@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -56,35 +56,38 @@
 #include "instrument.h"
 #include "../hotpatch.h"
 #ifdef RETURN_AFTER_CALL
-# include "../rct.h"
+#    include "../rct.h"
 #endif
 #ifdef WINDOWS
-# include "ntdll.h" /* for EXCEPTION_REGISTRATION */
-# include "../nudge.h" /* for generic_nudge_target() address */
+#    include "ntdll.h"    /* for EXCEPTION_REGISTRATION */
+#    include "../nudge.h" /* for generic_nudge_target() address */
 #endif
 #include "../perscache.h"
 
 #ifdef CHECK_RETURNS_SSE2
-#include <setjmp.h> /* for warning when see libc setjmp */
+#    include <setjmp.h> /* for warning when see libc setjmp */
 #endif
 
 #ifdef VMX86_SERVER
-# include "vmkuw.h" /* VMKUW_SYSCALL_GATEWAY */
+#    include "vmkuw.h" /* VMKUW_SYSCALL_GATEWAY */
 #endif
 
 enum { DIRECT_XFER_LENGTH = 5 };
 
 /* forward declarations */
-static void process_nops_for_trace(dcontext_t *dcontext, instrlist_t *ilist, uint flags
-                                   _IF_DEBUG(bool recreating));
-static int fixup_last_cti(dcontext_t *dcontext, instrlist_t *trace,
-                          app_pc next_tag, uint next_flags, uint trace_flags,
-                          fragment_t *prev_f, linkstub_t *prev_l,
-                          bool record_translation, uint *num_exits_deleted/*OUT*/,
-                          /* If non-NULL, only looks inside trace between these two */
-                          instr_t *start_instr, instr_t *end_instr);
-static bool can_use_mangle_trace(void);
-bool mangle_trace(dcontext_t *dcontext, instrlist_t *ilist, monitor_data_t *md);
+static void
+process_nops_for_trace(dcontext_t *dcontext, instrlist_t *ilist,
+                       uint flags _IF_DEBUG(bool recreating));
+static int
+fixup_last_cti(dcontext_t *dcontext, instrlist_t *trace, app_pc next_tag, uint next_flags,
+               uint trace_flags, fragment_t *prev_f, linkstub_t *prev_l,
+               bool record_translation, uint *num_exits_deleted /*OUT*/,
+               /* If non-NULL, only looks inside trace between these two */
+               instr_t *start_instr, instr_t *end_instr);
+static bool
+can_use_mangle_trace(void);
+bool
+mangle_trace(dcontext_t *dcontext, instrlist_t *ilist, monitor_data_t *md);
 
 /* we use a branch limit of 1 to make it easier for the trace
  * creation mechanism to stitch basic blocks together
@@ -124,10 +127,10 @@ interp_init(void)
 }
 
 #ifdef CUSTOM_TRACES_RET_REMOVAL
-# ifdef DEBUG
+#    ifdef DEBUG
 /* don't bother with adding lock */
 static int num_rets_removed;
-# endif
+#    endif
 #endif
 
 /* cleanup */
@@ -141,13 +144,12 @@ interp_exit(void)
 #endif
     DELETE_LOCK(bb_building_lock);
 
-    LOG(GLOBAL, LOG_INTERP|LOG_STATS, 1, "Total application code seen: %d KB\n",
-        GLOBAL_STAT(app_code_seen)/1024);
+    LOG(GLOBAL, LOG_INTERP | LOG_STATS, 1, "Total application code seen: %d KB\n",
+        GLOBAL_STAT(app_code_seen) / 1024);
 #ifdef CUSTOM_TRACES_RET_REMOVAL
-# ifdef DEBUG
-    LOG(GLOBAL, LOG_INTERP|LOG_STATS, 1, "Total rets removed: %d\n",
-        num_rets_removed);
-# endif
+#    ifdef DEBUG
+    LOG(GLOBAL, LOG_INTERP | LOG_STATS, 1, "Total rets removed: %d\n", num_rets_removed);
+#    endif
 #endif
 }
 
@@ -163,21 +165,21 @@ interp_exit(void)
 typedef struct {
     /* in */
     app_pc start_pc;
-    bool app_interp;         /* building bb to interp app, as opposed to for pc
-                              * translation or figuring out what pages a bb touches? */
-    bool for_cache;          /* should vmareas be updated? */
-    bool mangle_ilist;       /* should bb ilist be mangled? */
-    bool record_translation; /* store translation info for each instr_t? */
+    bool app_interp;           /* building bb to interp app, as opposed to for pc
+                                * translation or figuring out what pages a bb touches? */
+    bool for_cache;            /* should vmareas be updated? */
+    bool mangle_ilist;         /* should bb ilist be mangled? */
+    bool record_translation;   /* store translation info for each instr_t? */
     bool has_bb_building_lock; /* usually ==for_cache; used for aborting bb building */
-    file_t outf;               /* send disassembly and notes to a file? 
-                              * we use this mainly for dumping trace origins */
+    file_t outf;               /* send disassembly and notes to a file?
+                                * we use this mainly for dumping trace origins */
 #ifdef CLIENT_INTERFACE
-    bool pass_to_client;     /* pass to client, if a bb hook exists;
-                              * we store this up front to avoid race conditions
-                              * between full_decode setting and hook calling time.
-                              */
-    bool post_client;        /* has the client already processed the bb? */
-    bool for_trace;          /* PR 299808: we tell client if building a trace */
+    bool pass_to_client; /* pass to client, if a bb hook exists;
+                          * we store this up front to avoid race conditions
+                          * between full_decode setting and hook calling time.
+                          */
+    bool post_client;    /* has the client already processed the bb? */
+    bool for_trace;      /* PR 299808: we tell client if building a trace */
 #endif
 
     /* in and out */
@@ -189,27 +191,27 @@ typedef struct {
     uint flags;
     void *vmlist;
     app_pc end_pc;
-    bool native_exec;        /* replace cur ilist with a native_exec version */
+    bool native_exec; /* replace cur ilist with a native_exec version */
 #ifdef CLIENT_INTERFACE
     instrlist_t **unmangled_ilist; /* PR 299808: clone ilist pre-mangling */
 #endif
 
     /* internal usage only */
-    bool full_decode;        /* decode every instruction into a separate instr_t? */
-    bool follow_direct;      /* elide unconditional branches? */
-    bool check_vm_area;      /* whether to call check_thread_vm_area() */
+    bool full_decode;   /* decode every instruction into a separate instr_t? */
+    bool follow_direct; /* elide unconditional branches? */
+    bool check_vm_area; /* whether to call check_thread_vm_area() */
     uint num_elide_jmp;
     uint num_elide_call;
     app_pc last_page;
     app_pc cur_pc;
     app_pc instr_start;
-    app_pc checked_end;       /* end of current vmarea checked */
-    cache_pc exit_target;     /* fall-through target of final instr */
-    uint exit_type;           /* indirect branch type  */
+    app_pc checked_end;   /* end of current vmarea checked */
+    cache_pc exit_target; /* fall-through target of final instr */
+    uint exit_type;       /* indirect branch type  */
 #ifdef LINUX
     bool invalid_instr_hack;
 #endif
-    instr_t *instr;             /* the current instr */
+    instr_t *instr; /* the current instr */
     int eflags;
     DEBUG_DECLARE(bool initialized;)
 } build_bb_t;
@@ -255,8 +257,8 @@ update_overlap_info(dcontext_t *dcontext, build_bb_t *bb, app_pc new_pc, bool jm
     if (new_pc > bb->overlap_info->max_pc)
         bb->overlap_info->max_pc = new_pc;
     /* we get called at end of all contiguous intervals, so ignore jmps */
-    LOG(THREAD, LOG_ALL, 5, "\t    app_bb_overlaps "PFX".."PFX" %s\n",
-        bb->last_page, new_pc, jmp?"jmp":"");
+    LOG(THREAD, LOG_ALL, 5, "\t    app_bb_overlaps " PFX ".." PFX " %s\n", bb->last_page,
+        new_pc, jmp ? "jmp" : "");
     if (!bb->overlap_info->overlap && !jmp) {
         /* contiguous interval: prev_pc..new_pc (open-ended) */
         if (bb->last_page < bb->overlap_info->region_end &&
@@ -270,28 +272,33 @@ update_overlap_info(dcontext_t *dcontext, build_bb_t *bb, app_pc new_pc, bool jm
 }
 
 #ifdef DEBUG
-# define BBPRINT(bb, level, ...) do {                     \
-    LOG(THREAD, LOG_INTERP, level, __VA_ARGS__);          \
-    if (bb->outf != INVALID_FILE && bb->outf != (THREAD)) \
-        print_file(bb->outf, __VA_ARGS__);                \
-} while (0);
+#    define BBPRINT(bb, level, ...)                               \
+        do {                                                      \
+            LOG(THREAD, LOG_INTERP, level, __VA_ARGS__);          \
+            if (bb->outf != INVALID_FILE && bb->outf != (THREAD)) \
+                print_file(bb->outf, __VA_ARGS__);                \
+        } while (0);
 #else
-# ifdef INTERNAL
-#  define BBPRINT(bb, level, ...) do {                     \
-     if (bb->outf != INVALID_FILE)                         \
-         print_file(bb->outf, __VA_ARGS__);                \
-   } while (0);
-# else
-#  define BBPRINT(bb, level, ...) /* nothing */
-# endif
+#    ifdef INTERNAL
+#        define BBPRINT(bb, level, ...)                \
+            do {                                       \
+                if (bb->outf != INVALID_FILE)          \
+                    print_file(bb->outf, __VA_ARGS__); \
+            } while (0);
+#    else
+#        define BBPRINT(bb, level, ...) /* nothing */
+#    endif
 #endif
 
 #ifdef WINDOWS
-extern void intercept_load_dll(void);
-extern void intercept_unload_dll(void);
-# ifdef INTERNAL
-extern void DllMainThreadAttach(void);
-# endif
+extern void
+intercept_load_dll(void);
+extern void
+intercept_unload_dll(void);
+#    ifdef INTERNAL
+extern void
+DllMainThreadAttach(void);
+#    endif
 #endif
 
 /* forward declarations */
@@ -302,8 +309,7 @@ static void
 build_native_exec_bb(dcontext_t *dcontext, build_bb_t *bb);
 
 static bool
-at_native_exec_gateway(dcontext_t *dcontext, app_pc start
-                       _IF_DEBUG(bool xfer_target));
+at_native_exec_gateway(dcontext_t *dcontext, app_pc start _IF_DEBUG(bool xfer_target));
 
 #ifdef DEBUG
 static void
@@ -314,37 +320,36 @@ report_native_module(dcontext_t *dcontext, app_pc modpc);
 #if defined(DEBUG) || !defined(WINDOWS)
 /* cl.exe non-debug won't let other modules use it if inlined */
 inline
-#endif 
-bool
-must_not_be_inlined(app_pc pc)
+#endif
+    bool
+    must_not_be_inlined(app_pc pc)
 {
     return (
 #ifdef INTERNAL
-            !dynamo_options.inline_calls
+        !dynamo_options.inline_calls
 #else
-            0
+        0
 #endif
 #ifdef WINDOWS
-            || pc == (app_pc)intercept_load_dll
-            || pc == (app_pc)intercept_unload_dll
-            /* we're guaranteed to have direct calls to the next routine since our
-             * own DllMain calls it! */
-# ifdef INTERNAL
-            || pc == (app_pc) DllMainThreadAttach
-# endif
-            /* check for nudge handling escape from cache */
-            || (pc == (app_pc)generic_nudge_handler)
+        || pc == (app_pc)intercept_load_dll || pc == (app_pc)intercept_unload_dll
+    /* we're guaranteed to have direct calls to the next routine since our
+     * own DllMain calls it! */
+#    ifdef INTERNAL
+        || pc == (app_pc)DllMainThreadAttach
+#    endif
+        /* check for nudge handling escape from cache */
+        || (pc == (app_pc)generic_nudge_handler)
 #else
-            /* PR 200203: long-term we want to control loading of client
-             * libs, but for now we have to let the loader call _fini()
-             * in the client, which may end up calling __wrap_free().
-             * It's simpler to let those be interpreted and make a native
-             * call to the real heap routine here as this is a direct
-             * call whereas we'd need native_exec for the others:
-             */
-            || pc == (app_pc)global_heap_free
+        /* PR 200203: long-term we want to control loading of client
+         * libs, but for now we have to let the loader call _fini()
+         * in the client, which may end up calling __wrap_free().
+         * It's simpler to let those be interpreted and make a native
+         * call to the real heap routine here as this is a direct
+         * call whereas we'd need native_exec for the others:
+         */
+        || pc == (app_pc)global_heap_free
 #endif
-        );
+    );
 }
 
 /* return true if pc is a direct jmp target that should NOT be elided and followed */
@@ -377,7 +382,7 @@ must_not_be_elided(app_pc pc)
             || (is_in_interception_buffer(pc))
 #else /* LINUX */
 #endif
-            );
+    );
 }
 
 #ifdef DR_APP_EXPORTS
@@ -396,19 +401,17 @@ must_escape_from(app_pc pc)
      * because of stubs, etc. that end up doing indirect jumps to them!
      */
     bool res = false
-#ifdef DR_APP_EXPORTS
+#    ifdef DR_APP_EXPORTS
         || (automatic_startup &&
-            (pc == (app_pc)dynamorio_app_init ||
-             pc == (app_pc)dr_app_start ||
-             pc == (app_pc)dynamo_thread_init ||
-             pc == (app_pc)dynamorio_app_exit ||
+            (pc == (app_pc)dynamorio_app_init || pc == (app_pc)dr_app_start ||
+             pc == (app_pc)dynamo_thread_init || pc == (app_pc)dynamorio_app_exit ||
              /* dr_app_stop is a nop already */
              pc == (app_pc)dynamo_thread_exit))
-#endif
+#    endif
         ;
-#ifdef DEBUG
+#    ifdef DEBUG
     if (res) {
-# ifdef DR_APP_EXPORTS
+#        ifdef DR_APP_EXPORTS
         LOG(THREAD_GET, LOG_INTERP, 3, "must_escape_from: found ");
         if (pc == (app_pc)dynamorio_app_init)
             LOG(THREAD_GET, LOG_INTERP, 3, "dynamorio_app_init\n");
@@ -417,13 +420,13 @@ must_escape_from(app_pc pc)
         /* FIXME: are dynamo_thread_* still needed hered? */
         else if (pc == (app_pc)dynamo_thread_init)
             LOG(THREAD_GET, LOG_INTERP, 3, "dynamo_thread_init\n");
-        else if (pc ==  (app_pc)dynamorio_app_exit)
+        else if (pc == (app_pc)dynamorio_app_exit)
             LOG(THREAD_GET, LOG_INTERP, 3, "dynamorio_app_exit\n");
-        else if (pc ==  (app_pc)dynamo_thread_exit)
+        else if (pc == (app_pc)dynamo_thread_exit)
             LOG(THREAD_GET, LOG_INTERP, 3, "dynamo_thread_exit\n");
-# endif
+#        endif
     }
-#endif
+#    endif
 
     return res;
 }
@@ -439,7 +442,7 @@ check_for_stopping_point(dcontext_t *dcontext, build_bb_t *bb)
 {
 #ifdef DR_APP_EXPORTS
     if (must_escape_from(bb->cur_pc)) {
-        BBPRINT(bb, 3, "interp: emergency exit from "PFX"\n", bb->cur_pc);
+        BBPRINT(bb, 3, "interp: emergency exit from " PFX "\n", bb->cur_pc);
         /* if ever find ourselves at top of one of these, immediately issue
          * a ret instruction...haven't set up frame yet so stack fine, only
          * problem is return value, go ahead and overwrite xax, it's
@@ -455,7 +458,8 @@ check_for_stopping_point(dcontext_t *dcontext, build_bb_t *bb)
         /* should this be treated as a real return? */
         bb->exit_type |= LINK_INDIRECT | LINK_RETURN;
         ASSERT_NOT_IMPLEMENTED(false);
-        bb->exit_target = get_ibl_routine(dcontext, IBL_LINKED, DEFAULT_IBL_BB(), IBL_RETURN);
+        bb->exit_target =
+            get_ibl_routine(dcontext, IBL_LINKED, DEFAULT_IBL_BB(), IBL_RETURN);
         return true;
     }
 #endif /* DR_APP_EXPORTS */
@@ -528,7 +532,6 @@ eflags_analysis(instr_t *instr, int status, uint *eflags_6)
     return status;
 }
 
-
 /* check origins of code for several purposes:
  * 1) we need list of areas where this thread's fragments come
  *    from, for faster flushing on munmaps
@@ -560,17 +563,17 @@ check_new_page_start(dcontext_t *dcontext, build_bb_t *bb)
     DEBUG_DECLARE(bool ok;)
     if (!bb->check_vm_area)
         return;
-    DEBUG_DECLARE(ok =) check_thread_vm_area(dcontext, bb->start_pc, bb->start_pc,
-                                             (bb->for_cache ? &bb->vmlist : NULL),
-                                             &bb->flags, &bb->checked_end,
-                                             false/*!xfer*/);
+    DEBUG_DECLARE(ok =)
+    check_thread_vm_area(dcontext, bb->start_pc, bb->start_pc,
+                         (bb->for_cache ? &bb->vmlist : NULL), &bb->flags,
+                         &bb->checked_end, false /*!xfer*/);
     ASSERT(ok); /* cannot return false on non-xfer */
     bb->last_page = bb->start_pc;
     if (bb->overlap_info != NULL)
         reset_overlap_info(dcontext, bb);
 }
 
-/* Walk forward in straight line from prev_pc to new_pc.  
+/* Walk forward in straight line from prev_pc to new_pc.
  * FIXME: with checked_end we don't need to call this on every contig end
  * while bb building like we used to.  Should revisit the overlap info and
  * walk_app_bb reasons for keeping those contig() calls and see if we can
@@ -582,15 +585,14 @@ check_new_page_contig(dcontext_t *dcontext, build_bb_t *bb, app_pc new_pc)
     if (!bb->check_vm_area)
         return;
     if (bb->overlap_info != NULL)
-        update_overlap_info(dcontext, bb, new_pc, false/*not jmp*/);
+        update_overlap_info(dcontext, bb, new_pc, false /*not jmp*/);
     if (bb->checked_end == NULL) {
         ASSERT(new_pc == bb->start_pc);
     } else if (new_pc > bb->checked_end) {
         DEBUG_DECLARE(bool ok =)
-            check_thread_vm_area(dcontext, new_pc, bb->start_pc,
-                                 (bb->for_cache ? &bb->vmlist : NULL),
-                                 &bb->flags, &bb->checked_end,
-                                 false/*!xfer*/);
+        check_thread_vm_area(dcontext, new_pc, bb->start_pc,
+                             (bb->for_cache ? &bb->vmlist : NULL), &bb->flags,
+                             &bb->checked_end, false /*!xfer*/);
         ASSERT(ok); /* cannot return false on non-xfer */
     }
     DOLOG(4, LOG_INTERP, {
@@ -612,7 +614,7 @@ check_new_page_jmp(dcontext_t *dcontext, build_bb_t *bb, app_pc new_pc)
      * only checks across pages.
      */
     if ((bb->flags & FRAG_SELFMOD_SANDBOXED) != 0)
-        return false;         
+        return false;
     if (PAGE_START(bb->last_page) != PAGE_START(new_pc))
         LOG(THREAD, LOG_INTERP, 4, "page boundary crossed\n");
     /* do not walk into a native exec dll (we assume not currently there,
@@ -622,20 +624,19 @@ check_new_page_jmp(dcontext_t *dcontext, build_bb_t *bb, app_pc new_pc)
      * occur from DGC, and rely on check_thread_vm_area to disallow,
      * as an (unsafe) optimization
      */
-    if (DYNAMO_OPTION(native_exec) &&
-        DYNAMO_OPTION(native_exec_dircalls) &&
+    if (DYNAMO_OPTION(native_exec) && DYNAMO_OPTION(native_exec_dircalls) &&
         !vmvector_empty(native_exec_areas) &&
-        vmvector_overlap(native_exec_areas, new_pc, new_pc+1))
+        vmvector_overlap(native_exec_areas, new_pc, new_pc + 1))
         return false;
     if (!bb->check_vm_area)
         return true;
     /* need to check this even if an intra-page jmp b/c we allow sub-page vm regions */
     if (!check_thread_vm_area(dcontext, new_pc, bb->start_pc,
-                              (bb->for_cache ? &bb->vmlist : NULL),
-                              &bb->flags, &bb->checked_end, true/*xfer*/))
+                              (bb->for_cache ? &bb->vmlist : NULL), &bb->flags,
+                              &bb->checked_end, true /*xfer*/))
         return false;
     if (bb->overlap_info != NULL)
-        update_overlap_info(dcontext, bb, new_pc, true/*jmp*/);
+        update_overlap_info(dcontext, bb, new_pc, true /*jmp*/);
     bb->flags |= FRAG_HAS_DIRECT_CTI;
     bb->last_page = new_pc; /* update even if not new page, for walk_app_bb */
     return true;
@@ -644,11 +645,11 @@ check_new_page_jmp(dcontext_t *dcontext, build_bb_t *bb, app_pc new_pc)
 static inline void
 bb_process_invalid_instr(dcontext_t *dcontext, build_bb_t *bb)
 {
-    
+
     /* invalid instr: end bb BEFORE the instr, we'll throw exception if we
      * reach the instr itself
      */
-    LOG(THREAD, LOG_INTERP, 2, "interp: invalid instr at "PFX"\n", bb->instr_start);
+    LOG(THREAD, LOG_INTERP, 2, "interp: invalid instr at " PFX "\n", bb->instr_start);
     /* This routine is called by more than just bb builder, also used
      * for recreating state, so check bb->app_interp parameter to find out
      * if building a real app bb to be executed
@@ -673,8 +674,8 @@ bb_process_invalid_instr(dcontext_t *dcontext, build_bb_t *bb)
         /* FIXME case 10672: provide a runtime option to specify new
          * instruction formats to avoid this app exception */
         ASSERT(dcontext->bb_build_info == bb);
-        bb_build_abort(dcontext, true/*clean vm area*/);
-        /* FIXME : we use illegal instruction here, even though we 
+        bb_build_abort(dcontext, true /*clean vm area*/);
+        /* FIXME : we use illegal instruction here, even though we
          * know windows uses different exception codes for different
          * types of invalid instructions (for ex. STATUS_INVALID_LOCK
          * _SEQUENCE for lock prefix on a jmp instruction)
@@ -700,7 +701,7 @@ bb_process_invalid_instr(dcontext_t *dcontext, build_bb_t *bb)
          * bad opcode just bytes up until know it's bad).
          */
         if (!is_readable_without_exception(bb->instr_start, MAX_INSTR_LENGTH)) {
-            app_pc nxt_page = (app_pc) ALIGN_FORWARD(bb->instr_start, PAGE_SIZE);
+            app_pc nxt_page = (app_pc)ALIGN_FORWARD(bb->instr_start, PAGE_SIZE);
             sz = nxt_page - bb->instr_start;
         } else {
             sz = MAX_INSTR_LENGTH;
@@ -717,43 +718,41 @@ bb_process_invalid_instr(dcontext_t *dcontext, build_bb_t *bb)
 }
 
 /* returns true to indicate "elide and continue" and false to indicate "end bb now"
- * should be used both for converted indirect jumps and 
+ * should be used both for converted indirect jumps and
  * FIXME: for direct jumps by bb_process_ubr
  */
 static inline bool
-follow_direct_jump(dcontext_t *dcontext, build_bb_t *bb, 
-                   app_pc target)
+follow_direct_jump(dcontext_t *dcontext, build_bb_t *bb, app_pc target)
 {
-    if (bb->follow_direct &&
-        bb->num_elide_jmp < DYNAMO_OPTION(max_elide_jmp) &&
+    if (bb->follow_direct && bb->num_elide_jmp < DYNAMO_OPTION(max_elide_jmp) &&
         (DYNAMO_OPTION(elide_back_jmps) || bb->cur_pc <= target)) {
-        check_new_page_contig(dcontext, bb, bb->cur_pc-1);
+        check_new_page_contig(dcontext, bb, bb->cur_pc - 1);
         if (check_new_page_jmp(dcontext, bb, target)) {
             /* Elide unconditional branch and follow target */
             bb->num_elide_jmp++;
             STATS_INC(total_elided_jmps);
             STATS_TRACK_MAX(max_elided_jmps, bb->num_elide_jmp);
             bb->cur_pc = target;
-            BBPRINT(bb, 4, "        continuing at target "PFX"\n", bb->cur_pc);
+            BBPRINT(bb, 4, "        continuing at target " PFX "\n", bb->cur_pc);
 
-            return true;        /* keep bb going */
+            return true; /* keep bb going */
         } else {
-            BBPRINT(bb, 3, "        NOT following jmp from "PFX" to "PFX"\n",
+            BBPRINT(bb, 3, "        NOT following jmp from " PFX " to " PFX "\n",
                     bb->instr_start, target);
         }
     } else {
-        BBPRINT(bb, 3, "   NOT attempting to follow jump from "PFX" to "PFX"\n",
+        BBPRINT(bb, 3, "   NOT attempting to follow jump from " PFX " to " PFX "\n",
                 bb->instr_start, target);
     }
-    return false;               /* stop bb */
+    return false; /* stop bb */
 }
 
 /* returns true to indicate "elide and continue" and false to indicate "end bb now" */
 static inline bool
 bb_process_ubr(dcontext_t *dcontext, build_bb_t *bb)
 {
-    app_pc tgt = (byte *) opnd_get_pc(instr_get_target(bb->instr));
-    BBPRINT(bb, 4, "interp: direct jump at "PFX"\n", bb->instr_start);
+    app_pc tgt = (byte *)opnd_get_pc(instr_get_target(bb->instr));
+    BBPRINT(bb, 4, "interp: direct jump at " PFX "\n", bb->instr_start);
     if (must_not_be_elided(tgt)) {
 #ifdef WINDOWS
         if (is_syscall_trampoline(tgt)) {
@@ -762,7 +761,8 @@ bb_process_ubr(dcontext_t *dcontext, build_bb_t *bb)
              * original app mov immed that it replaced
              */
             BBPRINT(bb, 3,
-                    "interp: replacing syscall trampoline @"PFX" w/ orig mov @"PFX"\n",
+                    "interp: replacing syscall trampoline @" PFX " w/ orig mov @" PFX
+                    "\n",
                     bb->instr_start, tgt);
             instr_reset(dcontext, bb->instr);
 
@@ -772,8 +772,8 @@ bb_process_ubr(dcontext_t *dcontext, build_bb_t *bb)
              * (usually mov_imm but can be lea if hooked_deeper) here */
             ASSERT(instr_get_opcode(bb->instr) == OP_mov_imm ||
                    (instr_get_opcode(bb->instr) == OP_lea &&
-                    DYNAMO_OPTION(native_exec_hook_conflict) == 
-                    HOOKED_TRAMPOLINE_HOOK_DEEPER));
+                    DYNAMO_OPTION(native_exec_hook_conflict) ==
+                        HOOKED_TRAMPOLINE_HOOK_DEEPER));
             instrlist_append(bb->ilist, bb->instr);
             /* translation should point to the trampoline at the
              * original application address
@@ -781,15 +781,13 @@ bb_process_ubr(dcontext_t *dcontext, build_bb_t *bb)
             if (bb->record_translation)
                 instr_set_translation(bb->instr, bb->instr_start);
             if (instr_get_opcode(bb->instr) == OP_lea) {
-                app_pc translation = bb->instr_start + 
-                    instr_length(dcontext, bb->instr);
+                app_pc translation = bb->instr_start + instr_length(dcontext, bb->instr);
                 ASSERT_CURIOSITY(instr_length(dcontext, bb->instr) == 4);
                 /* we hooked deep need to add the int 2e instruction */
                 /* can't use create_syscall_instr because of case 5217 hack */
                 ASSERT(get_syscall_method() == SYSCALL_METHOD_INT);
-                bb->instr = INSTR_CREATE_int(dcontext,
-                                             opnd_create_immed_int((char)0x2e,
-                                                                   OPSZ_1));
+                bb->instr =
+                    INSTR_CREATE_int(dcontext, opnd_create_immed_int((char)0x2e, OPSZ_1));
                 if (bb->record_translation)
                     instr_set_translation(bb->instr, translation);
                 ASSERT(instr_is_syscall(bb->instr) &&
@@ -799,8 +797,8 @@ bb_process_ubr(dcontext_t *dcontext, build_bb_t *bb)
             }
             return true; /* keep bb going */
         }
-#endif 
-        BBPRINT(bb, 3, "interp: NOT following jmp to "PFX"\n", tgt);
+#endif
+        BBPRINT(bb, 3, "interp: NOT following jmp to " PFX "\n", tgt);
         /* add instruction to instruction list */
         instrlist_append(bb->ilist, bb->instr);
         /* indicate that relative target must be
@@ -813,23 +811,23 @@ bb_process_ubr(dcontext_t *dcontext, build_bb_t *bb)
         STATS_INC(coarse_prevent_cti);
         return false; /* end bb now */
     } else {
-        if (bb->follow_direct &&
-            bb->num_elide_jmp < DYNAMO_OPTION(max_elide_jmp) &&
+        if (bb->follow_direct && bb->num_elide_jmp < DYNAMO_OPTION(max_elide_jmp) &&
             (DYNAMO_OPTION(elide_back_jmps) || bb->cur_pc <= tgt)) {
-            check_new_page_contig(dcontext, bb, bb->cur_pc-1);
+            check_new_page_contig(dcontext, bb, bb->cur_pc - 1);
             if (check_new_page_jmp(dcontext, bb, tgt)) {
                 /* Elide unconditional branch and follow target */
                 bb->num_elide_jmp++;
                 STATS_INC(total_elided_jmps);
                 STATS_TRACK_MAX(max_elided_jmps, bb->num_elide_jmp);
                 bb->cur_pc = tgt;
-                BBPRINT(bb, 4, "        continuing at target "PFX"\n", bb->cur_pc);
+                BBPRINT(bb, 4, "        continuing at target " PFX "\n", bb->cur_pc);
                 /* pretend never saw this ubr: delete instr, then continue */
                 instr_destroy(dcontext, bb->instr);
                 bb->instr = NULL;
                 return true; /* keep bb going */
             } else {
-                BBPRINT(bb, 3, "        NOT following direct jmp from "PFX" to "PFX"\n",
+                BBPRINT(bb, 3,
+                        "        NOT following direct jmp from " PFX " to " PFX "\n",
                         bb->instr_start, tgt);
             }
         }
@@ -841,7 +839,6 @@ bb_process_ubr(dcontext_t *dcontext, build_bb_t *bb)
     return true; /* keep bb going */
 }
 
-
 /* returns true if call is elided,
  * and false if not following due to hitting a limit or other reason */
 static bool
@@ -850,28 +847,27 @@ follow_direct_call(dcontext_t *dcontext, build_bb_t *bb, app_pc callee)
     /* FIXME: This code should be reused in bb_process_convertible_indcall()
      * and in bb_process_call_direct()
      */
-    if (bb->follow_direct &&
-        bb->num_elide_call < DYNAMO_OPTION(max_elide_call) &&
+    if (bb->follow_direct && bb->num_elide_call < DYNAMO_OPTION(max_elide_call) &&
         (DYNAMO_OPTION(elide_back_calls) || bb->cur_pc <= callee)) {
-        check_new_page_contig(dcontext, bb, bb->cur_pc-1);
+        check_new_page_contig(dcontext, bb, bb->cur_pc - 1);
         if (check_new_page_jmp(dcontext, bb, callee)) {
             bb->num_elide_call++;
             STATS_INC(total_elided_calls);
             STATS_TRACK_MAX(max_elided_calls, bb->num_elide_call);
             bb->cur_pc = callee;
 
-            BBPRINT(bb, 4, "   continuing in callee at "PFX"\n", bb->cur_pc);
-            return true;        /* keep bb going in callee */
+            BBPRINT(bb, 4, "   continuing in callee at " PFX "\n", bb->cur_pc);
+            return true; /* keep bb going in callee */
         } else {
             BBPRINT(bb, 3,
-                    "   NOT following direct (or converted) call from "PFX" to "PFX"\n",
+                    "   NOT following direct (or converted) call from " PFX " to " PFX
+                    "\n",
                     bb->instr_start, callee);
         }
-    }
-    else {
-        BBPRINT(bb, 3, "   NOT attempting to follow call from "PFX" to "PFX"\n",
+    } else {
+        BBPRINT(bb, 3, "   NOT attempting to follow call from " PFX " to " PFX "\n",
                 bb->instr_start, callee);
-    }    
+    }
     return false; /* stop bb */
 }
 
@@ -890,16 +886,16 @@ static inline bool
 bb_process_call_direct(dcontext_t *dcontext, build_bb_t *bb)
 {
     byte *callee = (byte *)opnd_get_pc(instr_get_target(bb->instr));
-# ifdef CUSTOM_TRACES_RET_REMOVAL
+#ifdef CUSTOM_TRACES_RET_REMOVAL
     if (callee == bb->instr_start + 5) {
         LOG(THREAD, LOG_INTERP, 4, "found call to next instruction\n");
     } else
         dcontext->num_calls++;
-# endif
+#endif
     STATS_INC(num_all_calls);
-    BBPRINT(bb, 4, "interp: direct call at "PFX"\n", bb->instr_start);
+    BBPRINT(bb, 4, "interp: direct call at " PFX "\n", bb->instr_start);
     if (must_not_be_inlined(callee)) {
-        BBPRINT(bb, 3, "interp: NOT inlining call to "PFX"\n", callee);
+        BBPRINT(bb, 3, "interp: NOT inlining call to " PFX "\n", callee);
         /* Case 8711: coarse-grain can't handle non-exit cti.
          * If we allow this fragment to be coarse we must kill the freeze
          * nudge thread!
@@ -908,11 +904,11 @@ bb_process_call_direct(dcontext_t *dcontext, build_bb_t *bb)
         STATS_INC(coarse_prevent_cti);
         return true; /* keep bb going, w/o inlining call */
     } else {
-        if (DYNAMO_OPTION(coarse_split_calls) && DYNAMO_OPTION(coarse_units) && 
+        if (DYNAMO_OPTION(coarse_split_calls) && DYNAMO_OPTION(coarse_units) &&
             TEST(FRAG_COARSE_GRAIN, bb->flags)) {
             if (instrlist_first(bb->ilist) != bb->instr) {
                 /* have call be in its own bb */
-                bb_stop_prior_to_instr(dcontext, bb, true/*appended already*/);
+                bb_stop_prior_to_instr(dcontext, bb, true /*appended already*/);
                 return false; /* stop bb */
             } else {
                 /* single-call fine-grained bb */
@@ -921,19 +917,19 @@ bb_process_call_direct(dcontext_t *dcontext, build_bb_t *bb)
             }
         }
         /* FIXME: use follow_direct_call() */
-        if (bb->follow_direct &&
-            bb->num_elide_call < DYNAMO_OPTION(max_elide_call) &&
+        if (bb->follow_direct && bb->num_elide_call < DYNAMO_OPTION(max_elide_call) &&
             (DYNAMO_OPTION(elide_back_calls) || bb->cur_pc <= callee)) {
-            check_new_page_contig(dcontext, bb, bb->cur_pc-1);
+            check_new_page_contig(dcontext, bb, bb->cur_pc - 1);
             if (check_new_page_jmp(dcontext, bb, callee)) {
                 bb->num_elide_call++;
                 STATS_INC(total_elided_calls);
                 STATS_TRACK_MAX(max_elided_calls, bb->num_elide_call);
                 bb->cur_pc = callee;
-                BBPRINT(bb, 4, "      continuing in callee at "PFX"\n", bb->cur_pc);
+                BBPRINT(bb, 4, "      continuing in callee at " PFX "\n", bb->cur_pc);
                 return true; /* keep bb going */
             } else {
-                BBPRINT(bb, 3, "        NOT following direct call from "PFX" to "PFX"\n",
+                BBPRINT(bb, 3,
+                        "        NOT following direct call from " PFX " to " PFX "\n",
                         bb->instr_start, callee);
             }
         }
@@ -1013,8 +1009,8 @@ bb_process_SEH_push(dcontext_t *dcontext, build_bb_t *bb, void *value)
         ASSERT_CURIOSITY(value != NULL);
         return;
     }
-    LOG(THREAD, LOG_INTERP, 3, "App moving "PFX" to fs:[0]\n", value);
-# ifdef RETURN_AFTER_CALL
+    LOG(THREAD, LOG_INTERP, 3, "App moving " PFX " to fs:[0]\n", value);
+#    ifdef RETURN_AFTER_CALL
     if (DYNAMO_OPTION(borland_SEH_rct)) {
         /* xref case 5752, the Borland compiler SEH implementation uses a push
          * imm ret motif for fall through to the finally of a try finally block
@@ -1028,7 +1024,7 @@ bb_process_SEH_push(dcontext_t *dcontext, build_bb_t *bb, void *value)
          *  d: jmp a:  (rel8/32)
          *     ... (usually nothing)
          *  e:
-         * (where ret at b is targeting e, or a valid after call).  The 
+         * (where ret at b is targeting e, or a valid after call).  The
          * exception dispatcher calls c (the SEH frame has c as the handler)
          * which jmps to the exception handler which, in turn, calls d to
          * execute the finally block.  Fall through is as shown above. So,
@@ -1043,7 +1039,7 @@ bb_process_SEH_push(dcontext_t *dcontext, build_bb_t *bb, void *value)
          *           at_Borland_SEH_rct_exemption() to be added, not that
          *           it makes any difference.
          *    [ jmp z:  (rel8/32) || (rarely) ret || (very rarely) jmp ind]
-         * x: jmp rel32          (x should be in the .E/.F table)  
+         * x: jmp rel32          (x should be in the .E/.F table)
          * y:
          *    ...
          *    call rel32
@@ -1106,16 +1102,15 @@ bb_process_SEH_push(dcontext_t *dcontext, build_bb_t *bb, void *value)
         if (!safe_read(value, sizeof(frame), &frame)) {
             /* We already checked for NULL and -1 above so this should be
              * a valid SEH frame. Xref 8181, borland_seh_frame_t struct is
-             * bigger then EXCEPTION_REGISTRATION (which is all that is 
+             * bigger then EXCEPTION_REGISTRATION (which is all that is
              * required) so verify smaller size is readable. */
             ASSERT_CURIOSITY(sizeof(EXCEPTION_REGISTRATION) < sizeof(frame) &&
-                             safe_read(value, sizeof(EXCEPTION_REGISTRATION),
-                                       &frame));
+                             safe_read(value, sizeof(EXCEPTION_REGISTRATION), &frame));
             goto post_borland;
         }
         /* frame.reg.handler is c or y, read extra prior bytes to look for b */
-        if (!safe_read((app_pc)frame.reg.handler - RET_0_LENGTH,
-                       sizeof(target_buf), target_buf)) {
+        if (!safe_read((app_pc)frame.reg.handler - RET_0_LENGTH, sizeof(target_buf),
+                       target_buf)) {
             goto post_borland;
         }
         if (is_jmp_rel32(&target_buf[RET_0_LENGTH], (app_pc)frame.reg.handler,
@@ -1123,23 +1118,20 @@ bb_process_SEH_push(dcontext_t *dcontext, build_bb_t *bb, void *value)
             /* we have a possible match, now do the more expensive checking */
             app_pc base;
             LOG(THREAD, LOG_INTERP, 3,
-                "Read possible borland SEH frame @"PFX"\n\t"
-                "next="PFX" handler="PFX" xbp="PFX"\n\t",
+                "Read possible borland SEH frame @" PFX "\n\t"
+                "next=" PFX " handler=" PFX " xbp=" PFX "\n\t",
                 value, frame.reg.prev, frame.reg.handler, frame.xbp);
-            DOLOG(3, LOG_INTERP, {
-                dump_buffer_as_bytes(THREAD, target_buf, sizeof(target_buf), 0);
-            });
+            DOLOG(3, LOG_INTERP,
+                  { dump_buffer_as_bytes(THREAD, target_buf, sizeof(target_buf), 0); });
             /* optimize check if we've already processed this frame once */
             if ((DYNAMO_OPTION(rct_ind_jump) != OPTION_DISABLED ||
                  DYNAMO_OPTION(rct_ind_call) != OPTION_DISABLED) &&
-                rct_ind_branch_target_lookup(dcontext,
-                                             (app_pc)frame.reg.handler +
-                                             JMP_LONG_LENGTH)) {
+                rct_ind_branch_target_lookup(
+                    dcontext, (app_pc)frame.reg.handler + JMP_LONG_LENGTH)) {
                 /* we already processed this SEH frame once, this is prob. a
                  * frame pop, no need to continue */
                 STATS_INC(num_borland_SEH_dup_frame);
-                LOG(THREAD, LOG_INTERP, 3,
-                    "Processing duplicate Borland SEH frame\n");
+                LOG(THREAD, LOG_INTERP, 3, "Processing duplicate Borland SEH frame\n");
                 goto post_borland;
             }
             base = get_module_base((app_pc)frame.reg.handler);
@@ -1152,8 +1144,7 @@ bb_process_SEH_push(dcontext_t *dcontext, build_bb_t *bb, void *value)
             /* FIXME - (perf) we could cache the region from the first
              * is_in_code_section() call and check against that before falling
              * back on is_in_code_section in case of multiple code sections. */
-            if (base != NULL &&
-                get_allocation_base(handler_jmp_target) == base &&
+            if (base != NULL && get_allocation_base(handler_jmp_target) == base &&
                 get_allocation_base(bb->instr_start) == base &&
                 /* FIXME - with -rct_analyze_at_load we should be able to
                  * verify that frame->handler (x: c:) is on the .E/.F
@@ -1162,7 +1153,7 @@ bb_process_SEH_push(dcontext_t *dcontext, build_bb_t *bb, void *value)
                 is_in_code_section(base, bb->instr_start, NULL, NULL) &&
                 is_in_code_section(base, handler_jmp_target, NULL, NULL) &&
                 is_range_in_code_section(base, (app_pc)frame.reg.handler,
-                                         (app_pc)frame.reg.handler+JMP_LONG_LENGTH+1,
+                                         (app_pc)frame.reg.handler + JMP_LONG_LENGTH + 1,
                                          NULL, NULL)) {
                 app_pc finally_target;
                 byte push_imm_buf[PUSH_IMM32_LENGTH];
@@ -1171,17 +1162,16 @@ bb_process_SEH_push(dcontext_t *dcontext, build_bb_t *bb, void *value)
                  * to .E/.F table */
                 STATS_INC(num_borland_SEH_try_match);
                 LOG(THREAD, LOG_INTERP, 2,
-                    "Found Borland SEH frame adding "PFX" to .E/.F table\n",
-                    (app_pc)frame.reg.handler+JMP_LONG_LENGTH);
+                    "Found Borland SEH frame adding " PFX " to .E/.F table\n",
+                    (app_pc)frame.reg.handler + JMP_LONG_LENGTH);
                 if ((DYNAMO_OPTION(rct_ind_jump) != OPTION_DISABLED ||
                      DYNAMO_OPTION(rct_ind_call) != OPTION_DISABLED)) {
                     mutex_lock(&rct_module_lock);
-                    rct_add_valid_ind_branch_target(dcontext,
-                                                    (app_pc)frame.reg.handler +
-                                                    JMP_LONG_LENGTH);
+                    rct_add_valid_ind_branch_target(
+                        dcontext, (app_pc)frame.reg.handler + JMP_LONG_LENGTH);
                     mutex_unlock(&rct_module_lock);
                 }
-                /* we set this as an enabler for another exemption in 
+                /* we set this as an enabler for another exemption in
                  * callback .C, see notes there */
                 if (!seen_Borland_SEH) {
                     SELF_UNPROTECT_DATASEC(DATASEC_RARELY_PROT);
@@ -1193,14 +1183,14 @@ bb_process_SEH_push(dcontext_t *dcontext, build_bb_t *bb, void *value)
                 ASSERT(ok);
                 /* look for .C addresses for try finally */
                 if (target_buf[0] == RAW_OPCODE_ret &&
-                    (is_jmp_rel32(&target_buf[RET_0_LENGTH+JMP_LONG_LENGTH],
-                                  (app_pc)frame.reg.handler+JMP_LONG_LENGTH,
+                    (is_jmp_rel32(&target_buf[RET_0_LENGTH + JMP_LONG_LENGTH],
+                                  (app_pc)frame.reg.handler + JMP_LONG_LENGTH,
                                   &finally_target) ||
-                     is_jmp_rel8(&target_buf[RET_0_LENGTH+JMP_LONG_LENGTH],
-                                 (app_pc)frame.reg.handler+JMP_LONG_LENGTH,
+                     is_jmp_rel8(&target_buf[RET_0_LENGTH + JMP_LONG_LENGTH],
+                                 (app_pc)frame.reg.handler + JMP_LONG_LENGTH,
                                  &finally_target)) &&
-                    safe_read(finally_target - sizeof(push_imm_buf), 
-                              sizeof(push_imm_buf), push_imm_buf) &&
+                    safe_read(finally_target - sizeof(push_imm_buf), sizeof(push_imm_buf),
+                              push_imm_buf) &&
                     push_imm_buf[0] == RAW_OPCODE_push_imm32) {
                     app_pc push_val = *(app_pc *)&push_imm_buf[1];
                     /* do a few more, expensive, sanity checks */
@@ -1216,37 +1206,34 @@ bb_process_SEH_push(dcontext_t *dcontext, build_bb_t *bb, void *value)
                          * and finally_target (a:) to the .E/.F table */
                         STATS_INC(num_borland_SEH_finally_match);
                         LOG(THREAD, LOG_INTERP, 2,
-                            "Found Borland SEH finally frame adding "PFX" to"
-                            " .C table and "PFX" to .E/.F table\n",
+                            "Found Borland SEH finally frame adding " PFX " to"
+                            " .C table and " PFX " to .E/.F table\n",
                             push_val, finally_target);
                         if ((DYNAMO_OPTION(rct_ind_jump) != OPTION_DISABLED ||
                              DYNAMO_OPTION(rct_ind_call) != OPTION_DISABLED)) {
                             mutex_lock(&rct_module_lock);
-                            rct_add_valid_ind_branch_target(dcontext,
-                                                            finally_target);
+                            rct_add_valid_ind_branch_target(dcontext, finally_target);
                             mutex_unlock(&rct_module_lock);
                         }
                         if (DYNAMO_OPTION(ret_after_call)) {
                             fragment_add_after_call(dcontext, push_val);
                         }
                     } else {
-                        ASSERT_CURIOSITY(false &&
-                                         "partial borland seh finally match");
+                        ASSERT_CURIOSITY(false && "partial borland seh finally match");
                     }
                 }
             }
         }
     }
- post_borland:
-# endif /* RETURN_AFTER_CALL */
+post_borland:
+#    endif /* RETURN_AFTER_CALL */
     return;
 }
 
 /* helper routine for bb_process_fs_ref
  * return true if bb should be continued, false if it shouldn't  */
 static bool
-bb_process_fs_ref_opnd(dcontext_t *dcontext, build_bb_t *bb, opnd_t dst,
-                       bool *is_to_fs0)
+bb_process_fs_ref_opnd(dcontext_t *dcontext, build_bb_t *bb, opnd_t dst, bool *is_to_fs0)
 {
     ASSERT(is_to_fs0 != NULL);
     *is_to_fs0 = false;
@@ -1260,7 +1247,7 @@ bb_process_fs_ref_opnd(dcontext_t *dcontext, build_bb_t *bb, opnd_t dst,
             /* As is, always ending the bb here has a mixed effect on mem usage
              * with default options.  We do end up with slightly more bb's
              * (and associated bookeeping costs), but frequently with MS dlls
-             * we reduce code cache dupliaction from jmp/call ellision 
+             * we reduce code cache dupliaction from jmp/call ellision
              * (_SEH_[Pro,Epi]log otherwise ends up frequently duplicated for
              * instance). */
             /* FIXME - we must stop the bb here even if there's already
@@ -1268,8 +1255,8 @@ bb_process_fs_ref_opnd(dcontext_t *dcontext, build_bb_t *bb, opnd_t dst,
              * reproducible bb building for recreate app state.  We should
              * only get here through code duplication (typically jmp/call
              * inlining, though can also be through multiple entry points into
-             * the same block of non cti instructions). */ 
-            bb_stop_prior_to_instr(dcontext, bb, false/*not appended yet*/);
+             * the same block of non cti instructions). */
+            bb_stop_prior_to_instr(dcontext, bb, false /*not appended yet*/);
             return false; /* stop bb */
         }
         /* Only process the push if building a new bb for cache, can't check
@@ -1316,7 +1303,7 @@ bb_process_fs_ref(dcontext_t *dcontext, build_bb_t *bb)
         ASSERT(instr_get_prefix_flag(bb->instr, PREFIX_SEG_FS));
     }
     /* expect to see only simple mov's to fs:[0] for new SEH frames
-     * FIXME - might we see other types we'd want to intercept? 
+     * FIXME - might we see other types we'd want to intercept?
      * do we want to proccess pop instructions (usually just for removing
      * a frame)? */
     if (instr_get_opcode(bb->instr) == OP_mov_st) {
@@ -1339,7 +1326,7 @@ bb_process_fs_ref(dcontext_t *dcontext, build_bb_t *bb)
                     ASSERT_NOT_REACHED();
                 }
                 STATS_INC(num_SEH_pushes_processed);
-                LOG(THREAD, LOG_INTERP, 3, "found mov to fs:[0] @ "PFX"\n",
+                LOG(THREAD, LOG_INTERP, 3, "found mov to fs:[0] @ " PFX "\n",
                     bb->instr_start);
                 bb_process_SEH_push(dcontext, bb, (void *)value);
             } else {
@@ -1347,7 +1334,7 @@ bb_process_fs_ref(dcontext_t *dcontext, build_bb_t *bb)
             }
         }
     }
-# if defined(DEBUG) && defined(INTERNAL)
+#    if defined(DEBUG) && defined(INTERNAL)
     else if (INTERNAL_OPTION(check_for_SEH_push)) {
         /* Debug build Sanity check that we aren't missing SEH frame pushes */
         int i;
@@ -1363,23 +1350,20 @@ bb_process_fs_ref(dcontext_t *dcontext, build_bb_t *bb)
              * SEH frame stored on tos */
             if (is_to_fs0) {
                 if (instr_get_opcode(bb->instr) == OP_pop) {
-                    LOG(THREAD, LOG_INTERP, 4,
-                        "found pop to fs:[0] @ "PFX"\n", bb->instr_start);
+                    LOG(THREAD, LOG_INTERP, 4, "found pop to fs:[0] @ " PFX "\n",
+                        bb->instr_start);
                     STATS_INC(num_process_SEH_pop_fs0);
                 } else {
                     /* an unexpected SEH frame push */
                     LOG(THREAD, LOG_INTERP, 1,
-                        "found unexpected write to fs:[0] @"PFX"\n",
-                        bb->instr_start);
-                    DOLOG(1, LOG_INTERP, {
-                        loginst(dcontext, 1, bb->instr, "");
-                    }); 
+                        "found unexpected write to fs:[0] @" PFX "\n", bb->instr_start);
+                    DOLOG(1, LOG_INTERP, { loginst(dcontext, 1, bb->instr, ""); });
                     ASSERT_CURIOSITY(!is_to_fs0);
                 }
             }
         }
     }
-# endif
+#    endif
     return true; /* continue bb */
 }
 #endif /* win32 */
@@ -1390,12 +1374,12 @@ bb_process_fs_ref(dcontext_t *dcontext, build_bb_t *bb)
  * When returning false, continue_bb isn't pertinent.
  */
 static bool
-bb_process_ignorable_syscall(dcontext_t *dcontext, build_bb_t *bb,
-                             int sysnum, bool *continue_bb)
+bb_process_ignorable_syscall(dcontext_t *dcontext, build_bb_t *bb, int sysnum,
+                             bool *continue_bb)
 {
     STATS_INC(ignorable_syscalls);
     BBPRINT(bb, 3, "found ignorable system call 0x%04x\n", sysnum);
-#ifdef WINDOWS
+#    ifdef WINDOWS
     if (get_syscall_method() != SYSCALL_METHOD_SYSENTER) {
         DODEBUG({
             if (get_syscall_method() == SYSCALL_METHOD_WOW64)
@@ -1404,8 +1388,7 @@ bb_process_ignorable_syscall(dcontext_t *dcontext, build_bb_t *bb,
         if (continue_bb != NULL)
             *continue_bb = true;
         return true;
-    }
-    else {
+    } else {
         /* Can we continue interp after the sysenter at the instruction
          * after the call to sysenter? */
         instr_t *call = bb_verify_sysenter_pattern(dcontext, bb);
@@ -1419,18 +1402,16 @@ bb_process_ignorable_syscall(dcontext_t *dcontext, build_bb_t *bb,
              * instruction that follows it isn't reached by DR.
              */
             if (DYNAMO_OPTION(ignore_syscalls_follow_sysenter)) {
-                bb->cur_pc =
-                    instr_get_raw_bits(call) + instr_length(dcontext, call);
+                bb->cur_pc = instr_get_raw_bits(call) + instr_length(dcontext, call);
                 if (continue_bb != NULL)
                     *continue_bb = true;
                 return true;
-            }
-            else {
+            } else {
                 /* End this bb now. We set the exit target so that control
                  * skips the vsyscall 'ret' that's executed natively after the
                  * syscall and ends up at the correct place.
                  */
-                /* FIXME Assigning exit_target causes the fragment to end 
+                /* FIXME Assigning exit_target causes the fragment to end
                  * with a direct exit stub to the after-call address, which
                  * is fine. If bb->exit_target < bb->start_pc, the future
                  * fragment for exit_target is marked as a trace head which
@@ -1438,8 +1419,7 @@ bb_process_ignorable_syscall(dcontext_t *dcontext, build_bb_t *bb,
                  * is that exit_target's fragment can't be included in
                  * trace for start_pc.
                  */
-                bb->exit_target =
-                    instr_get_raw_bits(call) + instr_length(dcontext, call);
+                bb->exit_target = instr_get_raw_bits(call) + instr_length(dcontext, call);
                 if (continue_bb != NULL)
                     *continue_bb = false;
                 return true;
@@ -1453,11 +1433,11 @@ bb_process_ignorable_syscall(dcontext_t *dcontext, build_bb_t *bb,
         STATS_DEC(ignorable_syscalls);
         return false;
     }
-#else
+#    else
     if (continue_bb != NULL)
         *continue_bb = true;
     return true;
-#endif
+#    endif
 }
 #endif
 
@@ -1474,8 +1454,7 @@ bb_process_shared_syscall(dcontext_t *dcontext, build_bb_t *bb, int sysnum)
             STATS_INC(optimizable_syscalls);
     });
     BBPRINT(bb, 3, "found %soptimizable system call 0x%04x\n",
-            INTERNAL_OPTION(shared_eq_ignore) ? "ignorable-" : "",
-            sysnum);
+            INTERNAL_OPTION(shared_eq_ignore) ? "ignorable-" : "", sysnum);
 
     LOG(THREAD, LOG_INTERP, 3,
         "ending bb at syscall & NOT removing the interrupt itself\n");
@@ -1502,22 +1481,20 @@ bb_process_shared_syscall(dcontext_t *dcontext, build_bb_t *bb, int sysnum)
 
 #ifndef LINUX_KERNEL
 static bool
-bb_process_non_ignorable_syscall(dcontext_t *dcontext, build_bb_t *bb,
-                                 int sysnum)
+bb_process_non_ignorable_syscall(dcontext_t *dcontext, build_bb_t *bb, int sysnum)
 {
     BBPRINT(bb, 3, "found non-ignorable system call 0x%04x\n", sysnum);
     STATS_INC(non_ignorable_syscalls);
     bb->exit_type |= LINK_NI_SYSCALL;
     /* destroy the interrupt instruction */
-    LOG(THREAD, LOG_INTERP, 3,
-        "ending bb at syscall & removing the interrupt itself\n");
+    LOG(THREAD, LOG_INTERP, 3, "ending bb at syscall & removing the interrupt itself\n");
     /* Indicate that this is a non-ignorable syscall so mangle will remove */
-#ifdef LINUX
+#    ifdef LINUX
     if (instr_get_opcode(bb->instr) == OP_int) {
         bb->exit_type |= LINK_NI_SYSCALL_INT;
         bb->instr->flags |= INSTR_NI_SYSCALL_INT;
     } else
-#endif
+#    endif
         bb->instr->flags |= INSTR_NI_SYSCALL;
     /* Set instr to NULL in order to get translation of exit cti correct. */
     bb->instr = NULL;
@@ -1536,28 +1513,28 @@ bb_process_syscall(dcontext_t *dcontext, build_bb_t *bb)
     return true;
 #else
     int sysnum;
-#ifdef CLIENT_INTERFACE
+#    ifdef CLIENT_INTERFACE
     /* PR 307284: for simplicity do syscall/int processing post-client.
      * We give up on inlining but we can still use ignorable/shared syscalls
      * and trace continuation.
      */
     if (bb->pass_to_client && !bb->post_client)
         return false;
-#endif
-#ifdef DGC_DIAGNOSTICS
+#    endif
+#    ifdef DGC_DIAGNOSTICS
     if (TEST(FRAG_DYNGEN, bb->flags) && !is_dyngen_vsyscall(bb->instr_start)) {
-        LOG(THREAD, LOG_INTERP, 1, "WARNING: syscall @ "PFX" in dyngen code!\n",
+        LOG(THREAD, LOG_INTERP, 1, "WARNING: syscall @ " PFX " in dyngen code!\n",
             bb->instr_start);
     }
-#endif
-    BBPRINT(bb, 4, "interp: syscall @ "PFX"\n", bb->instr_start);
+#    endif
+    BBPRINT(bb, 4, "interp: syscall @ " PFX "\n", bb->instr_start);
     check_syscall_method(dcontext, bb->instr);
     bb->flags |= FRAG_HAS_SYSCALL;
     /* if we can identify syscall number and it is an ignorable syscall,
      * we let bb keep going, else we end bb and flag it
      */
     sysnum = find_syscall_num(dcontext, bb->ilist, bb->instr);
-#ifdef VMX86_SERVER
+#    ifdef VMX86_SERVER
     DOSTATS({
         if (instr_get_opcode(bb->instr) == OP_int &&
             instr_get_interrupt_number(bb->instr) == VMKUW_SYSCALL_GATEWAY) {
@@ -1565,43 +1542,42 @@ bb_process_syscall(dcontext_t *dcontext, build_bb_t *bb)
             LOG(THREAD, LOG_SYSCALLS, 2, "vmkuw system call site: #=%d\n", sysnum);
         }
     });
-#endif
+#    endif
     BBPRINT(bb, 3, "syscall # is %d\n", sysnum);
-#ifdef CLIENT_INTERFACE 
+#    ifdef CLIENT_INTERFACE
     if (sysnum > -1 && instrument_filter_syscall(dcontext, sysnum)) {
         BBPRINT(bb, 3, "client asking to intercept => pretending syscall # %d is -1\n",
                 sysnum);
         sysnum = -1;
     }
-#endif
-    if (sysnum > -1 &&
-        DYNAMO_OPTION(ignore_syscalls) && 
+#    endif
+    if (sysnum > -1 && DYNAMO_OPTION(ignore_syscalls) &&
         ignorable_system_call(sysnum)
         /* PR 288101: On Linux we do not yet support inlined sysenter instrs as we
          * do not have in-cache support for the post-sysenter continuation: we rely
          * for now on very simple sysenter handling where dispatch uses asynch_target
          * to know where to go next.
          */
-        IF_LINUX(&& instr_get_opcode(bb->instr) != OP_sysenter)) {
+        IF_LINUX(&&instr_get_opcode(bb->instr) != OP_sysenter)) {
 
         bool continue_bb;
 
-#ifndef LINUX_KERNEL
+#    ifndef LINUX_KERNEL
         if (bb_process_ignorable_syscall(dcontext, bb, sysnum, &continue_bb)) {
             if (!DYNAMO_OPTION(inline_ignored_syscalls))
                 continue_bb = false;
             return continue_bb;
         }
-#endif
+#    endif
     }
-#ifdef WINDOWS
+#    ifdef WINDOWS
     if (sysnum > -1 && DYNAMO_OPTION(shared_syscalls) &&
         optimizable_system_call(sysnum)) {
         bb_process_shared_syscall(dcontext, bb, sysnum);
         return false;
     }
-#endif
-    
+#    endif
+
     /* Fall thru and handle as a non-ignorable syscall. */
     return bb_process_non_ignorable_syscall(dcontext, bb, sysnum);
 #endif
@@ -1611,8 +1587,7 @@ bb_process_syscall(dcontext_t *dcontext, build_bb_t *bb)
  * Only sets continue_bb if it returns true.
  */
 static bool
-bb_process_indcall_syscall(dcontext_t *dcontext, build_bb_t *bb,
-                           bool *continue_bb)
+bb_process_indcall_syscall(dcontext_t *dcontext, build_bb_t *bb, bool *continue_bb)
 {
     ASSERT(continue_bb != NULL);
 #ifdef WINDOWS
@@ -1638,10 +1613,10 @@ bb_process_interrupt(dcontext_t *dcontext, build_bb_t *bb)
      * and trace continuation.
      * PR 550752: we cannot end at int 0x2d: we live w/ client consequences
      */
-    if (bb->pass_to_client && !bb->post_client IF_WINDOWS(&& num != 0x2d))
+    if (bb->pass_to_client && !bb->post_client IF_WINDOWS(&&num != 0x2d))
         return false;
 #endif
-    BBPRINT(bb, 3, "int 0x%x @ "PFX"\n", num, bb->instr_start);
+    BBPRINT(bb, 3, "int 0x%x @ " PFX "\n", num, bb->instr_start);
 #ifdef WINDOWS
     if (num == 0x2b) {
         /* interrupt 0x2B signals return from callback */
@@ -1655,8 +1630,8 @@ bb_process_interrupt(dcontext_t *dcontext, build_bb_t *bb)
         STATS_INC(num_int2b);
         return false;
     } else {
-        SYSLOG_INTERNAL_INFO_ONCE("non-syscall, non-int2b 0x%x @ "PFX" from "PFX,
-                                  num, bb->instr_start, bb->start_pc);
+        SYSLOG_INTERNAL_INFO_ONCE("non-syscall, non-int2b 0x%x @ " PFX " from " PFX, num,
+                                  bb->instr_start, bb->start_pc);
     }
 #endif /* WINDOWS */
     return true;
@@ -1692,22 +1667,21 @@ bb_process_convertible_indcall(dcontext_t *dcontext, build_bb_t *bb)
     instr = bb->instr;
     if (!(
 #ifdef WINDOWS
-          /* Match 'call (%xdx)' for a post-SP2 indirect call to sysenter. */
-          (opnd_is_near_base_disp(instr_get_src(instr, 0)) &&
-           opnd_get_base(instr_get_src(instr, 0)) == REG_XDX &&
-           opnd_get_disp(instr_get_src(instr, 0)) == 0) ||
+            /* Match 'call (%xdx)' for a post-SP2 indirect call to sysenter. */
+            (opnd_is_near_base_disp(instr_get_src(instr, 0)) &&
+             opnd_get_base(instr_get_src(instr, 0)) == REG_XDX &&
+             opnd_get_disp(instr_get_src(instr, 0)) == 0) ||
 #endif
-          /* Match 'call %reg'. */
-          opnd_is_reg(instr_get_src(instr, 0))))
+            /* Match 'call %reg'. */
+            opnd_is_reg(instr_get_src(instr, 0))))
         return false;
 
     /* If there's no CTI in the BB, we can check if there are 5+ preceding
      * bytes and if they could hold a "mov" instruction.
      */
-    if (!TEST(FRAG_HAS_DIRECT_CTI, bb->flags) &&
-        bb->instr_start - 5 >= bb->start_pc) {
+    if (!TEST(FRAG_HAS_DIRECT_CTI, bb->flags) && bb->instr_start - 5 >= bb->start_pc) {
 
-        byte opcode = *((byte *) bb->instr_start - 5);
+        byte opcode = *((byte *)bb->instr_start - 5);
 
         /* Check the opcode. Do we see a "mov ... -> %reg"?  Valid opcodes are in
          * the 0xb8-0xbf range (Intel IA-32 ISA ref, v.2) and specify the
@@ -1721,8 +1695,8 @@ bb_process_convertible_indcall(dcontext_t *dcontext, build_bb_t *bb)
     src0 = instr_get_src(instr, 0);
     call_instr = instr;
     instr = instr_get_prev_expanded(dcontext, bb->ilist, bb->instr);
-    call_src_reg = opnd_is_near_base_disp(src0) ? opnd_get_base(src0) :
-        opnd_get_reg(src0);
+    call_src_reg =
+        opnd_is_near_base_disp(src0) ? opnd_get_base(src0) : opnd_get_reg(src0);
     if (instr == NULL || instr_get_opcode(instr) != OP_mov_imm ||
         opnd_get_reg(instr_get_dst(instr, 0)) != call_src_reg)
         return false;
@@ -1733,22 +1707,23 @@ bb_process_convertible_indcall(dcontext_t *dcontext, build_bb_t *bb)
     callee = NULL;
     if (opnd_is_reg(src0)) {
         /* Extract the target address. */
-        callee = (app_pc) opnd_get_immed_int(instr_get_src(instr, 0));
+        callee = (app_pc)opnd_get_immed_int(instr_get_src(instr, 0));
 #ifdef WINDOWS
-# ifdef PROGRAM_SHEPHERDING
-        /* FIXME - is checking for on vsyscall page better or is checking == to 
+#    ifdef PROGRAM_SHEPHERDING
+        /* FIXME - is checking for on vsyscall page better or is checking == to
          * VSYSCALL_BOOTSTRAP_ADDR? Both are hacky. */
         if (is_dyngen_vsyscall((app_pc)opnd_get_immed_int(instr_get_src(instr, 0)))) {
-            LOG(THREAD, LOG_INTERP, 4, "Pre-SP2 style indirect call "
-                "to sysenter found at "PFX"\n", bb->instr_start);
+            LOG(THREAD, LOG_INTERP, 4,
+                "Pre-SP2 style indirect call "
+                "to sysenter found at " PFX "\n",
+                bb->instr_start);
             STATS_INC(num_sysenter_indcalls);
             vsyscall = true;
             ASSERT(opnd_get_immed_int(instr_get_src(instr, 0)) ==
                    (ptr_int_t)VSYSCALL_BOOTSTRAP_ADDR);
             ASSERT(!use_ki_syscall_routines()); /* double check our determination */
-        }
-        else
-# endif
+        } else
+#    endif
 #endif
             STATS_INC(num_convertible_indcalls);
     }
@@ -1759,18 +1734,16 @@ bb_process_convertible_indcall(dcontext_t *dcontext, build_bb_t *bb)
      * FIXME It's unsavory to hard-code 0x7ffe0300, but the constant has little
      * context in an SP2 os. It's a hold-over from pre-SP2.
      */
-    else if (get_syscall_method() == SYSCALL_METHOD_SYSENTER
-             && call_src_reg == REG_XDX
-             && opnd_get_immed_int(instr_get_src(instr, 0)) == 
-             (ptr_int_t)VSYSCALL_BOOTSTRAP_ADDR) {
+    else if (get_syscall_method() == SYSCALL_METHOD_SYSENTER && call_src_reg == REG_XDX &&
+             opnd_get_immed_int(instr_get_src(instr, 0)) ==
+                 (ptr_int_t)VSYSCALL_BOOTSTRAP_ADDR) {
         /* Extract the target address. We expect that the memory read using the
          * value in the immediate field is ok as it's the vsyscall page
          * which 1) cannot be made unreadable and 2) cannot be made writable so
          * the stored value will not change. Of course, it's possible that the
          * os could change the page contents.
          */
-        callee = (app_pc)
-            *((ptr_uint_t *) opnd_get_immed_int(instr_get_src(instr, 0)));
+        callee = (app_pc) * ((ptr_uint_t *)opnd_get_immed_int(instr_get_src(instr, 0)));
         if (get_app_sysenter_addr() == NULL) {
             /* For the first call* we've yet to decode an app syscall, yet we
              * cannot have later recreations have differing behavior, so we must
@@ -1797,8 +1770,10 @@ bb_process_convertible_indcall(dcontext_t *dcontext, build_bb_t *bb)
             if (callee == NULL)
                 ASSERT_CURIOSITY(false && "call* to vsyscall unexpected mismatch");
             else {
-                LOG(THREAD, LOG_INTERP, 4, "Post-SP2 style indirect call "
-                    "to sysenter found at "PFX"\n", bb->instr_start);
+                LOG(THREAD, LOG_INTERP, 4,
+                    "Post-SP2 style indirect call "
+                    "to sysenter found at " PFX "\n",
+                    bb->instr_start);
                 STATS_INC(num_sysenter_indcalls);
             }
         });
@@ -1817,12 +1792,13 @@ bb_process_convertible_indcall(dcontext_t *dcontext, build_bb_t *bb)
         STATS_INC(coarse_prevent_indcall);
     }
 
-    LOG(THREAD, LOG_INTERP, 4, "interp: possible convertible"
-        " indirect call from "PFX" to "PFX"\n",
+    LOG(THREAD, LOG_INTERP, 4,
+        "interp: possible convertible"
+        " indirect call from " PFX " to " PFX "\n",
         bb->instr_start, callee);
 
     if (must_not_be_inlined(callee)) {
-        BBPRINT(bb, 3, "   NOT inlining indirect call to "PFX"\n", callee);
+        BBPRINT(bb, 3, "   NOT inlining indirect call to " PFX "\n", callee);
         /* Case 8711: coarse-grain can't handle non-exit cti */
         bb->flags &= ~FRAG_COARSE_GRAIN;
         STATS_INC(coarse_prevent_cti);
@@ -1830,10 +1806,9 @@ bb_process_convertible_indcall(dcontext_t *dcontext, build_bb_t *bb)
         return true; /* keep bb going, w/o inlining call */
     }
 
-    if (bb->follow_direct &&
-        bb->num_elide_call < DYNAMO_OPTION(max_elide_call) &&
+    if (bb->follow_direct && bb->num_elide_call < DYNAMO_OPTION(max_elide_call) &&
         (DYNAMO_OPTION(elide_back_calls) || bb->cur_pc <= callee)) {
-        check_new_page_contig(dcontext, bb, bb->cur_pc-1);
+        check_new_page_contig(dcontext, bb, bb->cur_pc - 1);
         /* FIXME This is identical to the code for evaluating a
          * direct call's callee. If such code appears in another
          * (3rd) place, we should outline it.
@@ -1855,7 +1830,7 @@ bb_process_convertible_indcall(dcontext_t *dcontext, build_bb_t *bb)
             bb->cur_pc = callee;
             /* FIXME: when using follow_direct_call don't forget to set this */
             call_instr->flags |= INSTR_IND_CALL_DIRECT;
-            BBPRINT(bb, 4, "   continuing in callee at "PFX"\n", bb->cur_pc);
+            BBPRINT(bb, 4, "   continuing in callee at " PFX "\n", bb->cur_pc);
             return true; /* keep bb going */
         }
         if (vsyscall) {
@@ -1868,7 +1843,7 @@ bb_process_convertible_indcall(dcontext_t *dcontext, build_bb_t *bb)
         }
     }
     /* FIXME: we're also not converting to a direct call - was this intended? */
-    BBPRINT(bb, 3, "   NOT following indirect call from "PFX" to "PFX"\n",
+    BBPRINT(bb, 3, "   NOT following indirect call from " PFX " to " PFX "\n",
             bb->instr_start, callee);
     DODEBUG({
         if (vsyscall) {
@@ -1880,7 +1855,8 @@ bb_process_convertible_indcall(dcontext_t *dcontext, build_bb_t *bb)
                     ASSERT_CURIOSITY(false && "leaving call* to vsyscall");
             });
         }
-    });;
+    });
+    ;
     return false; /* stop bb */
 }
 
@@ -1891,7 +1867,7 @@ read_from_IAT(app_pc iat_reference)
     /* FIXME: we should have looked up where the real IAT should be at
      * the time of checking whether is_in_IAT
      */
-    return *(app_pc*) iat_reference;
+    return *(app_pc *)iat_reference;
 }
 
 /* returns whether target is an IAT of a module that we convert.  Note
@@ -1906,9 +1882,9 @@ is_targeting_convertible_IAT(dcontext_t *dcontext, instr_t *instr,
      * if too many writes to its IAT are found,
      * even 1 may be too much to handle!
      */
-    
-    /* We only allow constant address, 
-     * any registers used for effective address calculation 
+
+    /* We only allow constant address,
+     * any registers used for effective address calculation
      * can not be guaranteed to be constant dynamically.
      */
     /* FIXME: yet a 'call %reg' if that value is an export would be a
@@ -1935,8 +1911,7 @@ is_targeting_convertible_IAT(dcontext_t *dcontext, instr_t *instr,
         memory_reference = (app_pc)(ptr_uint_t)opnd_get_disp(opnd);
 
         /* now should check all other fields */
-        if (opnd_get_base(opnd) != REG_NULL || 
-            opnd_get_index(opnd) != REG_NULL) {
+        if (opnd_get_base(opnd) != REG_NULL || opnd_get_index(opnd) != REG_NULL) {
             /* this is not a pure memory reference, can't be IAT */
             return false;
         }
@@ -1945,7 +1920,7 @@ is_targeting_convertible_IAT(dcontext_t *dcontext, instr_t *instr,
         return false;
     }
 
-    LOG(THREAD, LOG_INTERP, 3, "is_targeting_convertible_IAT: memory_reference "PFX"\n",
+    LOG(THREAD, LOG_INTERP, 3, "is_targeting_convertible_IAT: memory_reference " PFX "\n",
         memory_reference);
 
     /* FIXME: if we'd need some more additional structures those can
@@ -1953,15 +1928,16 @@ is_targeting_convertible_IAT(dcontext_t *dcontext, instr_t *instr,
      * we'd have to extend the vmareas with custom fields
      */
     ASSERT(DYNAMO_OPTION(IAT_convert));
-    if (vmvector_overlap(IAT_areas, memory_reference, memory_reference+1)) {
+    if (vmvector_overlap(IAT_areas, memory_reference, memory_reference + 1)) {
         /* IAT has to be in the same module as current instruction,
          * but even in the unlikely reference by address from another
          * module there is really no problem, so not worth checking
          */
-        ASSERT_CURIOSITY(get_module_base(instr->bytes) == get_module_base(memory_reference));
+        ASSERT_CURIOSITY(get_module_base(instr->bytes) ==
+                         get_module_base(memory_reference));
 
         /* FIXME: now that we know it is in IAT/GOT,
-         * we have to READ the contents and return that 
+         * we have to READ the contents and return that
          * safely to the caller so they can convert accordingly
          */
 
@@ -1997,24 +1973,24 @@ bb_process_IAT_convertible_indjmp(dcontext_t *dcontext, build_bb_t *bb,
     /* Check if the instr is a (near) indirect jump */
     if (instr_get_opcode(bb->instr) != OP_jmp_ind) {
         ASSERT_CURIOSITY(false && "far ind jump");
-        return false;           /* not matching, stop bb */
+        return false; /* not matching, stop bb */
     }
 
-    if (!is_targeting_convertible_IAT(dcontext, bb->instr, 
-                                      &iat_reference)) {
+    if (!is_targeting_convertible_IAT(dcontext, bb->instr, &iat_reference)) {
         DOSTATS({
             if (TEST(INSTR_IND_JMP_PLT_EXIT, bb->exit_type)) {
                 /* see how often we mark as likely a PLT a JMP which in
-                 * fact is not going through IAT 
+                 * fact is not going through IAT
                  */
                 STATS_INC(num_indirect_jumps_PLT_not_IAT);
                 LOG(THREAD, LOG_INTERP, 3,
-                    "bb_process_IAT_convertible_indjmp: indirect jmp not PLT instr="
-                    PFX"\n", bb->instr->bytes);
+                    "bb_process_IAT_convertible_indjmp: indirect jmp not PLT instr=" PFX
+                    "\n",
+                    bb->instr->bytes);
             }
         });
-        
-        return false;           /* not matching, stop bb */
+
+        return false; /* not matching, stop bb */
     }
 
     target = read_from_IAT(iat_reference);
@@ -2022,8 +1998,8 @@ bb_process_IAT_convertible_indjmp(dcontext_t *dcontext, build_bb_t *bb,
     DOLOG(4, LOG_INTERP, {
         char name[MAXIMUM_SYMBOL_LENGTH];
         print_symbolic_address(target, name, sizeof(name), false);
-        LOG(THREAD, LOG_INTERP, 4, 
-            "bb_process_IAT_convertible_indjmp: target="PFX" %s\n", target, name);
+        LOG(THREAD, LOG_INTERP, 4,
+            "bb_process_IAT_convertible_indjmp: target=" PFX " %s\n", target, name);
     });
 
     STATS_INC(num_indirect_jumps_IAT);
@@ -2035,16 +2011,17 @@ bb_process_IAT_convertible_indjmp(dcontext_t *dcontext, build_bb_t *bb,
              * match */
             STATS_INC(num_indirect_jumps_IAT_not_PLT);
             /* FIXME: case 6459 for further inquiry */
-            LOG(THREAD, LOG_INTERP, 4, 
-                "bb_process_IAT_convertible_indjmp: indirect jmp not PLT target="PFX"\n", 
+            LOG(THREAD, LOG_INTERP, 4,
+                "bb_process_IAT_convertible_indjmp: indirect jmp not PLT target=" PFX
+                "\n",
                 target);
         }
     });
 
     if (must_not_be_elided(target)) {
         ASSERT_NOT_TESTED();
-        BBPRINT(bb, 3,
-                "   NOT inlining indirect jmp to must_not_be_elided "PFX"\n", target);
+        BBPRINT(bb, 3, "   NOT inlining indirect jmp to must_not_be_elided " PFX "\n",
+                target);
         return false; /* do not convert indirect jump, will stop bb */
     }
 
@@ -2055,28 +2032,28 @@ bb_process_IAT_convertible_indjmp(dcontext_t *dcontext, build_bb_t *bb,
      */
 
     /* IAT_elide should definitely not touch native_exec modules.
-     * 
+     *
      * FIXME: we also prevent IAT_convert from optimizing imports in
      * native_exec_list DLLs, although we could let that convert to a
      * direct jump and require native_exec_dircalls to be always on to
      * intercept those jmps.
      */
     if (DYNAMO_OPTION(native_exec) &&
-        vmvector_overlap(native_exec_areas, target, target+1)) {
-        BBPRINT(bb, 3,
-                "   NOT inlining indirect jump to native exec module "PFX"\n", target);
+        vmvector_overlap(native_exec_areas, target, target + 1)) {
+        BBPRINT(bb, 3, "   NOT inlining indirect jump to native exec module " PFX "\n",
+                target);
         STATS_INC(num_indirect_jumps_IAT_native);
-        return false;           /* do not convert indirect jump, stop bb */
+        return false; /* do not convert indirect jump, stop bb */
     }
 
     /* mangle mostly as such as direct jumps would be mangled in
      * bb_process_ubr(dcontext, bb) but note bb->instr has already
      * been appended so has to reverse some of its actions
      */
-    
+
     /* pretend never saw an indirect JMP, we'll either add a new
        direct JMP or we'll just continue in target */
-    instrlist_remove(bb->ilist, bb->instr);    /* bb->instr has been appended already */
+    instrlist_remove(bb->ilist, bb->instr); /* bb->instr has been appended already */
     instr_destroy(dcontext, bb->instr);
     bb->instr = NULL;
 
@@ -2091,13 +2068,13 @@ bb_process_IAT_convertible_indjmp(dcontext_t *dcontext, build_bb_t *bb,
          * a JMP instead of a CALL just as if sharing tails.
          */
         if (follow_direct_jump(dcontext, bb, target)) {
-            LOG(THREAD, LOG_INTERP, 4, 
-                "bb_process_IAT_convertible_indjmp: eliding jmp* target="PFX"\n", 
+            LOG(THREAD, LOG_INTERP, 4,
+                "bb_process_IAT_convertible_indjmp: eliding jmp* target=" PFX "\n",
                 target);
 
             STATS_INC(num_indirect_jumps_IAT_elided);
             *elide_continue = true; /* do not stop bb */
-            return true;        /* converted indirect to direct */
+            return true;            /* converted indirect to direct */
         }
     }
     /* otherwise convert to direct jump without eliding */
@@ -2108,15 +2085,14 @@ bb_process_IAT_convertible_indjmp(dcontext_t *dcontext, build_bb_t *bb,
      * FIXME: what are callers supposed to see when we do NOT mangle?
      */
 
-    LOG(THREAD, LOG_INTERP, 4, 
-        "bb_process_IAT_convertible_indjmp: converting jmp* target="PFX"\n", 
-        target);
+    LOG(THREAD, LOG_INTERP, 4,
+        "bb_process_IAT_convertible_indjmp: converting jmp* target=" PFX "\n", target);
 
     STATS_INC(num_indirect_jumps_IAT_converted);
     /* end basic block with a direct JMP to target */
-    bb->exit_target = target;   
-    *elide_continue = false;    /* matching, but should stop bb */
-    return true;               /* matching */
+    bb->exit_target = target;
+    *elide_continue = false; /* matching, but should stop bb */
+    return true;             /* matching */
 }
 
 /* Returns true if the current instr in the BB is an indirect call
@@ -2144,30 +2120,29 @@ bb_process_IAT_convertible_indcall(dcontext_t *dcontext, build_bb_t *bb,
     /* Check if the instr is a (near) indirect call */
     if (instr_get_opcode(bb->instr) != OP_call_ind) {
         ASSERT_CURIOSITY(false && "far call");
-        return false;           /* not matching, stop bb */
+        return false; /* not matching, stop bb */
     }
 
-    if (!is_targeting_convertible_IAT(dcontext, bb->instr,
-                                      &iat_reference)) {
-        return false;           /* not matching, stop bb */
+    if (!is_targeting_convertible_IAT(dcontext, bb->instr, &iat_reference)) {
+        return false; /* not matching, stop bb */
     }
     target = read_from_IAT(iat_reference);
     DOLOG(4, LOG_INTERP, {
         char name[MAXIMUM_SYMBOL_LENGTH];
         print_symbolic_address(target, name, sizeof(name), false);
-        LOG(THREAD, LOG_INTERP, 4, 
-            "bb_process_IAT_convertible_indcall: target="PFX" %s\n", target, name);
+        LOG(THREAD, LOG_INTERP, 4,
+            "bb_process_IAT_convertible_indcall: target=" PFX " %s\n", target, name);
     });
     STATS_INC(num_indirect_calls_IAT);
-    
+
     /* mangle mostly as such as direct calls are mangled with
      * bb_process_call_direct(dcontext, bb)
      */
 
     if (must_not_be_inlined(target)) {
         ASSERT_NOT_TESTED();
-        BBPRINT(bb, 3,
-                "   NOT inlining indirect call to must_not_be_inlined "PFX"\n", target);
+        BBPRINT(bb, 3, "   NOT inlining indirect call to must_not_be_inlined " PFX "\n",
+                target);
         return false; /* do not convert indirect call, stop bb */
     }
 
@@ -2177,38 +2152,41 @@ bb_process_IAT_convertible_indcall(dcontext_t *dcontext, build_bb_t *bb,
      * this check isn't much slower.
      */
     if (DYNAMO_OPTION(native_exec) &&
-        vmvector_overlap(native_exec_areas, target, target+1)) {
-        BBPRINT(bb, 3,
-                "   NOT inlining indirect call to native exec module "PFX"\n", target);
+        vmvector_overlap(native_exec_areas, target, target + 1)) {
+        BBPRINT(bb, 3, "   NOT inlining indirect call to native exec module " PFX "\n",
+                target);
         STATS_INC(num_indirect_calls_IAT_native);
-        return false;           /* do not convert indirect call, stop bb */
+        return false; /* do not convert indirect call, stop bb */
     }
 
     /* mangle_indirect_call and calculate return address as of
-     * bb->instr and will remove bb->instr 
+     * bb->instr and will remove bb->instr
      * FIXME: it would have been
      * better to replace in instrlist with a direct call and have
-     * mangle_{in,}direct_call use other than the raw bytes, but this for now does the job.
+     * mangle_{in,}direct_call use other than the raw bytes, but this for now does the
+     * job.
      */
     bb->instr->flags |= INSTR_IND_CALL_DIRECT;
 
     if (DYNAMO_OPTION(IAT_elide)) {
         /* try to elide just as a direct call would have been elided */
         if (follow_direct_call(dcontext, bb, target)) {
-            LOG(THREAD, LOG_INTERP, 4, 
-                "bb_process_IAT_convertible_indcall: eliding call* flags=0x%08x target="
-                PFX"\n", bb->instr->flags, target);
+            LOG(THREAD, LOG_INTERP, 4,
+                "bb_process_IAT_convertible_indcall: eliding call* flags=0x%08x "
+                "target=" PFX "\n",
+                bb->instr->flags, target);
 
             STATS_INC(num_indirect_calls_IAT_elided);
             *elide_continue = true; /* do not stop bb */
-            return true;        /* converted indirect to direct */
+            return true;            /* converted indirect to direct */
         }
     }
     /* otherwise convert to direct call without eliding */
 
-    LOG(THREAD, LOG_INTERP, 4, 
-        "bb_process_IAT_convertible_indcall: converting call* flags=0x%08x target="PFX
-        "\n", bb->instr->flags, target);
+    LOG(THREAD, LOG_INTERP, 4,
+        "bb_process_IAT_convertible_indcall: converting call* flags=0x%08x target=" PFX
+        "\n",
+        bb->instr->flags, target);
 
     STATS_INC(num_indirect_calls_IAT_converted);
     /* bb->instr has been appended already, and will get removed by
@@ -2220,28 +2198,27 @@ bb_process_IAT_convertible_indcall(dcontext_t *dcontext, build_bb_t *bb,
     /* end basic block with a direct CALL to target.  With default
      * options it should get mangled to a PUSH; JMP
      */
-    *elide_continue = false;    /* matching, but should stop bb */
-    return true;                /* converted indirect to direct */
+    *elide_continue = false; /* matching, but should stop bb */
+    return true;             /* converted indirect to direct */
 }
 
 static bool
 instr_will_be_exit_cti(instr_t *inst)
 {
     /* can't use instr_is_exit_cti() on pre-mangled instrs */
-    return (instr_ok_to_mangle(inst) &&
-            instr_is_cti(inst) &&
+    return (instr_ok_to_mangle(inst) && instr_is_cti(inst) &&
             (!instr_is_call_direct(inst) ||
              !must_not_be_inlined(instr_get_branch_target_pc(inst)))
             /* PR 239470: ignore wow64 syscall, which is an ind call */
-            IF_WINDOWS(&& !instr_is_wow64_syscall(inst)));
+            IF_WINDOWS(&&!instr_is_wow64_syscall(inst)));
 }
 
 #ifdef CLIENT_INTERFACE
-# ifndef LINUX_KERNEL
+#    ifndef LINUX_KERNEL
 /* PR 215217: check syscall restrictions */
 static bool
-client_check_syscall(instrlist_t *ilist, instr_t *inst,
-                     bool *found_syscall, bool *found_int)
+client_check_syscall(instrlist_t *ilist, instr_t *inst, bool *found_syscall,
+                     bool *found_int)
 {
     /* We do consider the wow64 call* a syscall here (it is both
      * a syscall and a call*: PR 240258).
@@ -2279,7 +2256,7 @@ client_check_syscall(instrlist_t *ilist, instr_t *inst,
     }
     return true;
 }
-# endif /* LINUX_KERNEL */
+#    endif /* LINUX_KERNEL */
 
 /* Pass bb to client, and afterward check for criteria we require and rescan for
  * eflags and other flags that might have changed.
@@ -2306,8 +2283,8 @@ client_process_bb(dcontext_t *dcontext, build_bb_t *bb,
         return;
 
     /* Call the bb creation callback(s) */
-    if (!instrument_basic_block(dcontext, (app_pc) bb->start_pc, bb->ilist,
-                                bb->for_trace, !bb->app_interp, &emitflags)) {
+    if (!instrument_basic_block(dcontext, (app_pc)bb->start_pc, bb->ilist, bb->for_trace,
+                                !bb->app_interp, &emitflags)) {
         /* although no callback was called we must process syscalls/ints (PR 307284) */
     }
 
@@ -2320,8 +2297,8 @@ client_process_bb(dcontext_t *dcontext, build_bb_t *bb,
     /* PR 215217, PR 240265:
      * We need to check for client changes that require a new exit
      * target.  We can't practically analyze the instrlist to decipher
-     * the exit, so we'll search backwards and require that the last 
-     * cti is the exit cti.  Typically, the last instruction in the 
+     * the exit, so we'll search backwards and require that the last
+     * cti is the exit cti.  Typically, the last instruction in the
      * block should be the exit.  Post-mbr and post-syscall positions
      * are particularly fragile, as our mangling code sets state up for
      * the exit that could be messed up by instrs inserted after the
@@ -2365,20 +2342,21 @@ client_process_bb(dcontext_t *dcontext, build_bb_t *bb,
         /* in case bb was truncated, find last non-meta fall-through */
         if (last_app_instr == NULL)
             last_app_instr = inst;
-    
+
         /* PR 215217: client should not add new source code regions, else our
          * cache consistency (both page prot and selfmod) will fail
          */
-        CLIENT_ASSERT(DYNAMO_OPTION(opt_speed) || (
-                      (instr_get_translation(inst) >= bb->start_pc &&
-                       instr_get_translation(inst) < bb->cur_pc) ||
-                      (instr_is_ubr(inst) && opnd_is_pc(instr_get_target(inst)) &&
-                       instr_get_translation(inst) == opnd_get_pc(instr_get_target(inst))))
-                      /* the displaced code and jmp return from intercept buffer
-                       * has translation fields set to hooked app routine */
-                      IF_WINDOWS(|| dr_fragment_app_pc(bb->start_pc) != bb->start_pc),
-                      "block's app sources (instr_set_translation() targets) "
-                      "must remain within original bounds");
+        CLIENT_ASSERT(
+            DYNAMO_OPTION(opt_speed) ||
+                ((instr_get_translation(inst) >= bb->start_pc &&
+                  instr_get_translation(inst) < bb->cur_pc) ||
+                 (instr_is_ubr(inst) && opnd_is_pc(instr_get_target(inst)) &&
+                  instr_get_translation(inst) == opnd_get_pc(instr_get_target(inst))))
+                /* the displaced code and jmp return from intercept buffer
+                 * has translation fields set to hooked app routine */
+                IF_WINDOWS(|| dr_fragment_app_pc(bb->start_pc) != bb->start_pc),
+            "block's app sources (instr_set_translation() targets) "
+            "must remain within original bounds");
 
         /* PR 307284: we didn't process syscalls and ints pre-client
          * so do so now to get bb->flags and bb->exit_type set
@@ -2394,10 +2372,10 @@ client_process_bb(dcontext_t *dcontext, build_bb_t *bb,
                 bb->instr = tmp;
         }
 
-#ifndef LINUX_KERNEL
+#    ifndef LINUX_KERNEL
         /* ensure syscall/int2b terminates block */
         client_check_syscall(bb->ilist, inst, &found_syscall, &found_int);
-#endif
+#    endif
 
         if (instr_will_be_exit_cti(inst)) {
 
@@ -2411,49 +2389,46 @@ client_process_bb(dcontext_t *dcontext, build_bb_t *bb,
                  * but we're not sure if we want to support that with CI.
                  * xref case 10846
                  */
-                CLIENT_ASSERT(!TEST(~(LINK_DIRECT | LINK_INDIRECT | LINK_CALL |
-                                      LINK_RETURN | LINK_JMP
-                                      IF_NOT_LINUX_KERNEL(| LINK_NI_SYSCALL_ALL)
-                                      IF_WINDOWS(| LINK_CALLBACK_RETURN)),
-                                    bb->exit_type),
-                              "client unsupported block exit type internal error");
+                CLIENT_ASSERT(
+                    !TEST(~(LINK_DIRECT | LINK_INDIRECT | LINK_CALL | LINK_RETURN |
+                            LINK_JMP IF_NOT_LINUX_KERNEL(| LINK_NI_SYSCALL_ALL)
+                                IF_WINDOWS(| LINK_CALLBACK_RETURN)),
+                          bb->exit_type),
+                    "client unsupported block exit type internal error");
 
                 found_exit_cti = true;
                 bb->instr = inst;
 
                 if (instr_is_ubr(inst) || instr_is_call_direct(inst)) {
-                    CLIENT_ASSERT(instr_is_ubr(inst) ||
-                                  inst == instrlist_last(bb->ilist),
+                    CLIENT_ASSERT(instr_is_ubr(inst) || inst == instrlist_last(bb->ilist),
                                   "an exit call must terminate the block");
                     /* a ubr need not be the final instr */
                     if (inst == last_app_instr) {
                         bb->exit_target = instr_get_branch_target_pc(inst);
                         bb->exit_type = instr_branch_type(inst);
                     }
-                }
-                else if (instr_is_cbr(inst)) {
+                } else if (instr_is_cbr(inst)) {
                     CLIENT_ASSERT(inst == instrlist_last(bb->ilist),
                                   "an exit cbr must terminate the block");
                     /* A null exit target specifies a cbr (see below). */
                     bb->exit_target = NULL;
                     bb->exit_type = 0;
-                    instr_exit_branch_set_type(bb->instr,
-                                               instr_branch_type(inst));
+                    instr_exit_branch_set_type(bb->instr, instr_branch_type(inst));
                 }
-#ifdef LINUX_KERNEL
+#    ifdef LINUX_KERNEL
                 else if (instr_may_return_to_user(inst)) {
-                    bb->exit_target = (app_pc) fake_user_return_exit_target;
+                    bb->exit_target = (app_pc)fake_user_return_exit_target;
                     bb->exit_type = instr_branch_type(inst);
-                    bb->flags |= FRAG_MUST_END_TRACE; 
+                    bb->flags |= FRAG_MUST_END_TRACE;
                 }
-#endif
+#    endif
                 else {
                     ASSERT(instr_is_mbr(inst));
                     CLIENT_ASSERT(inst == instrlist_last(bb->ilist),
                                   "an exit mbr must terminate the block");
-                    bb->exit_target = get_ibl_routine(dcontext, IBL_LINKED,
-                                                      DEFAULT_IBL_BB(), 
-                                                      get_ibl_branch_type(inst));
+                    bb->exit_target =
+                        get_ibl_routine(dcontext, IBL_LINKED, DEFAULT_IBL_BB(),
+                                        get_ibl_branch_type(inst));
                     bb->exit_type = instr_branch_type(inst);
                     *ibl_branch_type = get_ibl_branch_type(inst);
                 }
@@ -2480,8 +2455,7 @@ client_process_bb(dcontext_t *dcontext, build_bb_t *bb,
              * reasons as well.
              */
             else {
-                CLIENT_ASSERT(DYNAMO_OPTION(opt_speed) ||
-                              instr_is_ubr(inst),
+                CLIENT_ASSERT(DYNAMO_OPTION(opt_speed) || instr_is_ubr(inst),
                               "a second exit cti must be a ubr");
                 bb->flags |= FRAG_CANNOT_BE_TRACE;
                 /* our cti check above should have already turned off coarse */
@@ -2513,8 +2487,8 @@ client_process_bb(dcontext_t *dcontext, build_bb_t *bb,
          */
         app_pc last_app_pc = instr_get_translation(last_app_instr);
         bb->cur_pc = decode_next_pc(dcontext, last_app_pc);
-        LOG(THREAD, LOG_INTERP, 3,
-            "setting cur_pc (for fall-through) to" PFX"\n", bb->cur_pc);
+        LOG(THREAD, LOG_INTERP, 3, "setting cur_pc (for fall-through) to" PFX "\n",
+            bb->cur_pc);
         /* don't set bb->instr if last instr is still syscall/int.
          * FIXME: I'm not 100% convinced the logic here covers everything
          * build_bb_ilist does.
@@ -2574,16 +2548,16 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
      */
     int total_branches = 0;
     uint total_instrs = 0;
-    uint total_writes = 0; /* only used for selfmod */
-    instr_t *non_cti;              /* used if !full_decode */
+    uint total_writes = 0;  /* only used for selfmod */
+    instr_t *non_cti;       /* used if !full_decode */
     byte *non_cti_start_pc; /* used if !full_decode */
-    uint eflags_6 = 0; /* holds arith eflags written so far (in read slots) */
+    uint eflags_6 = 0;      /* holds arith eflags written so far (in read slots) */
     /* indirect branch type as an IBL selector */
     ibl_branch_type_t ibl_branch_type = IBL_GENERIC; /* initialization only */
 #ifdef HOT_PATCHING_INTERFACE
     bool hotp_should_inject = false, hotp_injected = false;
 #endif
-    app_pc page_start_pc = (app_pc) NULL;
+    app_pc page_start_pc = (app_pc)NULL;
     bool bb_build_nested = false;
     /* Caller will free objects allocated here so we must use the passed-in
      * dcontext for allocation; we need separate var for non-global dcontext.
@@ -2607,13 +2581,14 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
     if (my_dcontext != NULL) {
         if (bb->for_cache) {
             /* Caller should have set! */
-            ASSERT(bb == (build_bb_t *) my_dcontext->bb_build_info);
+            ASSERT(bb == (build_bb_t *)my_dcontext->bb_build_info);
         } else if (my_dcontext->bb_build_info == NULL) {
-            my_dcontext->bb_build_info = (void *) bb;
+            my_dcontext->bb_build_info = (void *)bb;
         } else {
             /* For nested we leave the original, which should be the only vmlist,
-             * and we give up on freeing dangling instr_t and instrlist_t from this decode.
-             * We need the original's for_cache so we know to free the bb_building_lock.
+             * and we give up on freeing dangling instr_t and instrlist_t from this
+             * decode. We need the original's for_cache so we know to free the
+             * bb_building_lock.
              * FIXME: use TRY to handle decode exceptions locally?  Shouldn't have
              * violation remediations on a !for_cache build.
              */
@@ -2624,7 +2599,7 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
         }
     } else
         ASSERT(dynamo_exited);
-    
+
     if (bb->record_translation || !bb->for_cache ||
         IF_CLIENT_INTERFACE_ELSE(INTERNAL_OPTION(full_decode), false))
         bb->full_decode = true;
@@ -2635,7 +2610,7 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
     }
 
     LOG(THREAD, LOG_INTERP, 3, "\ninterp: ");
-    BBPRINT(bb, 3, "start_pc = "PFX"\n", bb->start_pc);
+    BBPRINT(bb, 3, "start_pc = " PFX "\n", bb->start_pc);
 
     DOSTATS({
         if (bb->app_interp) {
@@ -2654,7 +2629,7 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
     /* start converting instructions into IR */
     check_new_page_start(dcontext, bb);
     bb->cur_pc = bb->start_pc;
-    
+
     /* for translation in case we break out of loop before decoding any
      * instructions, (i.e. check_for_stopping_point()) */
     bb->instr_start = bb->cur_pc;
@@ -2679,7 +2654,7 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
     KSTART(bb_decoding);
     while (true) {
         if (check_for_stopping_point(dcontext, bb)) {
-            BBPRINT(bb, 3, "interp: found DynamoRIO stopping point at "PFX"\n",
+            BBPRINT(bb, 3, "interp: found DynamoRIO stopping point at " PFX "\n",
                     bb->cur_pc);
             break;
         }
@@ -2694,11 +2669,10 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
         do {
             /* If the thread's vmareas aren't being added to, indicate the
              * page that's being decoded. */
-            if (!bb->for_cache
-                && page_start_pc != (app_pc) PAGE_START(bb->cur_pc)) {
-                page_start_pc = (app_pc) PAGE_START(bb->cur_pc);
-                set_thread_decode_page_start(my_dcontext == NULL ?
-                                             dcontext : my_dcontext, page_start_pc);
+            if (!bb->for_cache && page_start_pc != (app_pc)PAGE_START(bb->cur_pc)) {
+                page_start_pc = (app_pc)PAGE_START(bb->cur_pc);
+                set_thread_decode_page_start(my_dcontext == NULL ? dcontext : my_dcontext,
+                                             page_start_pc);
             }
 
             bb->instr_start = bb->cur_pc;
@@ -2714,8 +2688,8 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
             }
 
             ASSERT(!bb->check_vm_area || bb->checked_end != NULL);
-            if (bb->check_vm_area &&
-                bb->cur_pc != NULL && bb->cur_pc-1 > bb->checked_end) {
+            if (bb->check_vm_area && bb->cur_pc != NULL &&
+                bb->cur_pc - 1 > bb->checked_end) {
                 /* We're beyond the vmarea allowed -- so check again.
                  * Ideally we'd want to check BEFORE we decode from the
                  * subsequent page, as it could be inaccessible, but not worth
@@ -2724,15 +2698,14 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
                  * mechanisms to handle faults while decoding, which we need
                  * anyway to handle racy unmaps by the app.
                  */
-                check_new_page_contig(dcontext, bb, bb->cur_pc-1);
+                check_new_page_contig(dcontext, bb, bb->cur_pc - 1);
             }
 
             total_instrs++;
-            DOELOG(3, LOG_INTERP, {
-                disassemble_with_bytes(dcontext, bb->instr_start, THREAD);
-            });
+            DOELOG(3, LOG_INTERP,
+                   { disassemble_with_bytes(dcontext, bb->instr_start, THREAD); });
 
-#ifdef LINUX_KERNEL            
+#ifdef LINUX_KERNEL
             ASSERT(instr_get_opcode(bb->instr) != OP_int);
             ASSERT(instr_get_opcode(bb->instr) != OP_sysexit);
             ASSERT(instr_get_opcode(bb->instr) != OP_jmp_far);
@@ -2742,7 +2715,7 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
             ASSERT(instr_get_opcode(bb->instr) != OP_int3);
             /* TODO(peter): We can't check for all gs writes because
              * load_gs_index needs to write to gs. We should whitelist it. */
-# if 0
+#    if 0
             DODEBUG({
                 uint i;
                 for (i = 0; i < instr_num_dsts(bb->instr); i++) {
@@ -2754,7 +2727,7 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
                     }
                 }
             });
-# endif
+#    endif
 #endif
 
 #if defined(INTERNAL) || defined(CLIENT_INTERFACE)
@@ -2773,9 +2746,9 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
             if (bb->eflags != EFLAGS_WRITE_6 && bb->eflags != EFLAGS_READ_OF)
                 bb->eflags = eflags_analysis(bb->instr, bb->eflags, &eflags_6);
 
-            /* stop decoding at an invalid instr (tested above) or a cti
-             *(== opcode valid) or a possible SEH frame push (if
-             * -process_SEH_push). */
+                /* stop decoding at an invalid instr (tested above) or a cti
+                 *(== opcode valid) or a possible SEH frame push (if
+                 * -process_SEH_push). */
 #ifdef WINDOWS
             if (DYNAMO_OPTION(process_SEH_push) &&
                 instr_get_prefix_flag(bb->instr, PREFIX_SEG_FS)) {
@@ -2809,7 +2782,7 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
 
 #ifdef HOT_PATCHING_INTERFACE
         /* If this lookup succeeds then the current bb needs to be patched.
-         * In hotp_inject(), address lookup will be done for each instruction 
+         * In hotp_inject(), address lookup will be done for each instruction
          * pc in this bb and patching will be done if an exact match is found.
          *
          * Hot patching should be done only for app interp and recreating
@@ -2819,26 +2792,25 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
          * FIXME: this lookup can further be reduced by determining whether or
          *        not the current bb's module needs patching via check_new_page*
          */
-        if (DYNAMO_OPTION(hot_patching) && bb->mangle_ilist &&
-            !hotp_should_inject) {
+        if (DYNAMO_OPTION(hot_patching) && bb->mangle_ilist && !hotp_should_inject) {
             /* case 8780: we may hold the lock; FIXME: figure out if this can
              * be avoided - messy to hold hotp_vul_table lock like this for
              * unnecessary operations. */
             bool owns_hotp_lock = self_owns_write_lock(hotp_get_lock());
             if (hotp_does_region_need_patch(non_cti_start_pc, bb->cur_pc,
                                             owns_hotp_lock)) {
-                BBPRINT(bb, 2, "hotpatch match in "PFX": "PFX"-"PFX"\n",
+                BBPRINT(bb, 2, "hotpatch match in " PFX ": " PFX "-" PFX "\n",
                         bb->start_pc, non_cti_start_pc, bb->cur_pc);
                 hotp_should_inject = true;
                 /* Don't elide if we are going to hot patch this bb because
                  * the patch point can be a direct cti; eliding would result
                  * in the patch not being applied.  See case 5901.
-                 * FIXME: we could make this more efficient by only turning 
+                 * FIXME: we could make this more efficient by only turning
                  * off follow_direct if the instr is direct cti.
                  */
                 bb->follow_direct = false;
                 DOSTATS({
-                    if TEST(FRAG_HAS_DIRECT_CTI, bb->flags)
+                    if TEST (FRAG_HAS_DIRECT_CTI, bb->flags)
                         STATS_INC(hotp_num_frag_direct_cti);
                 });
             }
@@ -2846,15 +2818,16 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
 #endif
 
         if (bb->full_decode) {
-            if (TEST(FRAG_SELFMOD_SANDBOXED, bb->flags) &&
-                instr_valid(bb->instr) && instr_writes_memory(bb->instr)) {
+            if (TEST(FRAG_SELFMOD_SANDBOXED, bb->flags) && instr_valid(bb->instr) &&
+                instr_writes_memory(bb->instr)) {
                 /* to allow tailing non-writes, end prior to the write beyond the max */
                 total_writes++;
                 if (total_writes > DYNAMO_OPTION(selfmod_max_writes)) {
                     BBPRINT(bb, 3, "reached selfmod write limit %d, stopping\n",
                             DYNAMO_OPTION(selfmod_max_writes));
                     STATS_INC(num_max_selfmod_writes_enforced);
-                    bb_stop_prior_to_instr(dcontext, bb, false/*not added to bb->ilist*/);
+                    bb_stop_prior_to_instr(dcontext, bb,
+                                           false /*not added to bb->ilist*/);
                     break;
                 }
             }
@@ -2892,13 +2865,12 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
 #ifdef WINDOWS
         if (DYNAMO_OPTION(process_SEH_push) &&
             instr_get_prefix_flag(bb->instr, PREFIX_SEG_FS)) {
-            DEBUG_DECLARE(ssize_t dbl_count = bb->cur_pc - bb->instr_start); 
+            DEBUG_DECLARE(ssize_t dbl_count = bb->cur_pc - bb->instr_start);
             if (!bb_process_fs_ref(dcontext, bb)) {
                 DOSTATS({
                     if (bb->app_interp) {
                         LOG(THREAD, LOG_INTERP, 3,
-                            "stopping bb at fs-using instr @ "PFX"\n",
-                            bb->instr_start);
+                            "stopping bb at fs-using instr @ " PFX "\n", bb->instr_start);
                         STATS_INC(num_process_SEH_bb_early_terminate);
                         /* don't double count the fs instruction itself
                          * since we removed it from this bb */
@@ -2910,18 +2882,18 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
             }
         }
 #else
-#  ifndef LINUX_KERNEL
+#    ifndef LINUX_KERNEL
         if (instr_get_prefix_flag(bb->instr,
                                   (SEG_TLS == SEG_GS) ? PREFIX_SEG_GS : PREFIX_SEG_FS)
             /* __errno_location is interpreted when global, though it's hidden in TOT */
-            IF_LINUX(&& !is_in_dynamo_dll(bb->instr_start))) {
+            IF_LINUX(&&!is_in_dynamo_dll(bb->instr_start))) {
             /* On linux we use a segment register and do not yet
              * support the application using the same register!
              */
             CLIENT_ASSERT(false, "no support yet for application using non-NPTL segment");
             ASSERT_BUG_NUM(205276, false);
         }
-#  endif
+#    endif
 #endif
 
         if (instr_is_ubr(bb->instr)) {
@@ -2947,14 +2919,13 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
              * FRAG_MUST_END_TRACE. My intent is to ensure that we return to the
              * dispatcher when we encounter these instructions.
              */
-            bb->flags |= FRAG_MUST_END_TRACE; 
+            bb->flags |= FRAG_MUST_END_TRACE;
             bb->exit_type = instr_branch_type(bb->instr);
             /* TODO(peter): Handle sysexit. */
             ASSERT(TESTANY(LINK_SYSRET | LINK_IRET, bb->exit_type));
             LOG(THREAD, LOG_INTERP, 2, "Block has %s @ pc %p\n",
-                TEST(LINK_IRET, bb->exit_type) ?
-                    "iret" : "sysret", bb->instr->bytes);
-            bb->exit_target = (app_pc) fake_user_return_exit_target;
+                TEST(LINK_IRET, bb->exit_type) ? "iret" : "sysret", bb->instr->bytes);
+            bb->exit_target = (app_pc)fake_user_return_exit_target;
             break;
         }
 #endif
@@ -2964,8 +2935,7 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
                     bb->exit_type |= instr_branch_type(bb->instr);
                 break;
             }
-        }
-        else if (instr_is_mbr(bb->instr)) { /* including indirect calls */
+        } else if (instr_is_mbr(bb->instr)) { /* including indirect calls */
 
             /* Manage the case where we don't need to perform 'normal'
              * indirect branch processing.
@@ -2980,11 +2950,11 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
                 STATS_INC(num_all_calls);
                 STATS_INC(num_indirect_calls);
 
-                if (DYNAMO_OPTION(coarse_split_calls) && DYNAMO_OPTION(coarse_units) && 
+                if (DYNAMO_OPTION(coarse_split_calls) && DYNAMO_OPTION(coarse_units) &&
                     TEST(FRAG_COARSE_GRAIN, bb->flags)) {
                     if (instrlist_first(bb->ilist) != bb->instr) {
                         /* have call be in its own bb */
-                        bb_stop_prior_to_instr(dcontext, bb, true/*appended already*/);
+                        bb_stop_prior_to_instr(dcontext, bb, true /*appended already*/);
                         break; /* stop bb */
                     } else {
                         /* single-call fine-grained bb */
@@ -2996,26 +2966,25 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
                 /* If the indirect call can be converted into a direct one,
                  * bypass normal indirect call processing.
                  */
-                if (DYNAMO_OPTION(indcall2direct)
-                    && bb_process_convertible_indcall(dcontext, bb)) {
+                if (DYNAMO_OPTION(indcall2direct) &&
+                    bb_process_convertible_indcall(dcontext, bb)) {
                     normal_indirect_processing = false;
                     elide_and_continue_if_converted = true;
-                } else if (DYNAMO_OPTION(IAT_convert)
-                           && bb_process_IAT_convertible_indcall(dcontext, bb, 
-                                                                 &elide_and_continue_if_converted)) {
+                } else if (DYNAMO_OPTION(IAT_convert) &&
+                           bb_process_IAT_convertible_indcall(
+                               dcontext, bb, &elide_and_continue_if_converted)) {
                     normal_indirect_processing = false;
-                }
-                else if (bb_process_indcall_syscall(dcontext, bb,
-                                                    &elide_and_continue_if_converted)) {
+                } else if (bb_process_indcall_syscall(dcontext, bb,
+                                                      &elide_and_continue_if_converted)) {
                     normal_indirect_processing = false;
-                }
-                else
+                } else
                     ibl_branch_type = IBL_INDCALL;
             } else {
                 /* indirect jump */
                 /* was prev instr a direct call? if so, this is a PLT-style ind call */
                 instr_t *prev = instr_get_prev(bb->instr);
-                if (prev != NULL && instr_opcode_valid(prev) && instr_is_call_direct(prev)) {
+                if (prev != NULL && instr_opcode_valid(prev) &&
+                    instr_is_call_direct(prev)) {
                     bb->exit_type |= INSTR_IND_JMP_PLT_EXIT;
                     /* just because we have a CALL to JMP* makes it
                        only a _likely_ PLT call, we still have to make
@@ -3025,17 +2994,17 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
                 }
 
                 elide_and_continue_if_converted = true;
-                        
-                if (DYNAMO_OPTION(IAT_convert) 
-                    && bb_process_IAT_convertible_indjmp(dcontext, bb, 
-                                                         &elide_and_continue_if_converted)) {
+
+                if (DYNAMO_OPTION(IAT_convert) &&
+                    bb_process_IAT_convertible_indjmp(dcontext, bb,
+                                                      &elide_and_continue_if_converted)) {
                     /* Clear the IND_JMP_PLT_EXIT flag since we've converted
                      * the PLT to a direct transition (and possibly elided).
                      * Xref case 7867 for why leaving this flag in the eliding
                      * case can cause later failures. */
                     bb->exit_type &= ~INSTR_IND_JMP_PLT_EXIT;
                     normal_indirect_processing = false;
-                } else          /* FIXME: this can always be set */
+                } else /* FIXME: this can always be set */
                     ibl_branch_type = IBL_INDJMP;
                 STATS_INC(num_indirect_jumps);
             }
@@ -3057,30 +3026,28 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
                     break;
                 /* fall through for -max_bb_instrs check */
             }
-        }
-        else if (instr_is_cti(bb->instr) && !instr_is_call(bb->instr)) {
+        } else if (instr_is_cti(bb->instr) && !instr_is_call(bb->instr)) {
             total_branches++;
             if (total_branches >= BRANCH_LIMIT) {
                 /* set type of 1st exit cti for cbr (bb->exit_type is for fall-through) */
                 instr_exit_branch_set_type(bb->instr, instr_branch_type(bb->instr));
                 break;
             }
-        }
-        else if (instr_is_syscall(bb->instr)) {
+        } else if (instr_is_syscall(bb->instr)) {
 #ifdef LINUX_KERNEL
-        	CLIENT_ASSERT(false, "System call made within in the kernel.");
+            CLIENT_ASSERT(false, "System call made within in the kernel.");
 #endif
             if (!bb_process_syscall(dcontext, bb))
                 break;
-        } /* end syscall */
+        }                                                 /* end syscall */
         else if (instr_get_opcode(bb->instr) == OP_int) { /* non-syscall int */
             if (!bb_process_interrupt(dcontext, bb))
                 break;
         }
 #ifdef CHECK_RETURNS_SSE2
         else if (instr_is_sse_or_sse2(bb->instr)) {
-            FATAL_USAGE_ERROR(CHECK_RETURNS_SSE2_XMM_USED, 2, 
-                              get_application_name(), get_application_pid());
+            FATAL_USAGE_ERROR(CHECK_RETURNS_SSE2_XMM_USED, 2, get_application_name(),
+                              get_application_pid());
         }
 #endif
 
@@ -3102,22 +3069,20 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
 #ifdef DEBUG_MEMORY
     /* make sure anyone who destroyed also set to NULL */
     ASSERT(bb->instr == NULL ||
-           (bb->instr->bytes != (byte *) HEAP_UNALLOCATED_PTR_UINT &&
-            bb->instr->bytes != (byte *) HEAP_ALLOCATED_PTR_UINT &&
-            bb->instr->bytes != (byte *) HEAP_PAD_PTR_UINT));
+           (bb->instr->bytes != (byte *)HEAP_UNALLOCATED_PTR_UINT &&
+            bb->instr->bytes != (byte *)HEAP_ALLOCATED_PTR_UINT &&
+            bb->instr->bytes != (byte *)HEAP_PAD_PTR_UINT));
 #endif
 
-    check_new_page_contig(dcontext, bb, bb->cur_pc-1);
+    check_new_page_contig(dcontext, bb, bb->cur_pc - 1);
     bb->end_pc = bb->cur_pc;
-    BBPRINT(bb, 3, "end_pc = "PFX"\n\n", bb->end_pc);
+    BBPRINT(bb, 3, "end_pc = " PFX "\n\n", bb->end_pc);
 
     /* We could put this in check_new_page_jmp where it already checks
      * for native_exec overlap, but selfmod ubrs don't even call that routine
      */
-    if (DYNAMO_OPTION(native_exec) &&
-        DYNAMO_OPTION(native_exec_callcall) &&        
-        !vmvector_empty(native_exec_areas) &&
-        bb->app_interp && bb->instr != NULL && 
+    if (DYNAMO_OPTION(native_exec) && DYNAMO_OPTION(native_exec_callcall) &&
+        !vmvector_empty(native_exec_areas) && bb->app_interp && bb->instr != NULL &&
         (instr_is_ubr(bb->instr) || instr_is_call_direct(bb->instr)) &&
         instrlist_first(bb->ilist) == instrlist_last(bb->ilist)) {
         /* Case 4564/3558: handle .NET COM method table where a call* targets
@@ -3129,11 +3094,11 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
          * at a return-address-clobberable point.
          */
         app_pc tgt = opnd_get_pc(instr_get_target(bb->instr));
-        if (vmvector_overlap(native_exec_areas, tgt, tgt+1) &&
-            at_native_exec_gateway(dcontext, tgt _IF_DEBUG(true/*xfer tgt*/))) {
+        if (vmvector_overlap(native_exec_areas, tgt, tgt + 1) &&
+            at_native_exec_gateway(dcontext, tgt _IF_DEBUG(true /*xfer tgt*/))) {
             /* replace this ilist w/ a native exec one */
             LOG(THREAD, LOG_INTERP, 2,
-                "direct xfer @gateway @"PFX" to native_exec module "PFX"\n",
+                "direct xfer @gateway @" PFX " to native_exec module " PFX "\n",
                 bb->start_pc, tgt);
             bb->native_exec = true;
             /* add this ubr/call to the native_exec_list, both as an optimization
@@ -3174,9 +3139,9 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
          * choice but to back out, which for now we do by rebuilding.
          * FIXME: find better way
          */
-        /* FIXME: a better assert is needed because this can trigger if 
-         * hot patching turns off follow_direct, the current bb was elided 
-         * earlier and is marked as selfmod.  hotp_num_frag_direct_cti will 
+        /* FIXME: a better assert is needed because this can trigger if
+         * hot patching turns off follow_direct, the current bb was elided
+         * earlier and is marked as selfmod.  hotp_num_frag_direct_cti will
          * track this for now.
          */
         ASSERT(bb->follow_direct == true); /* else, infinite loop possible */
@@ -3190,7 +3155,7 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
         }
         bb->flags = FRAG_SELFMOD_SANDBOXED; /* lose all other flags */
         bb->full_decode = true; /* full decode -- see comment at top of routine */
-        bb->follow_direct = false; 
+        bb->follow_direct = false;
         /* overlap info will be reset by check_new_page_start */
         build_bb_ilist(dcontext, bb);
         return;
@@ -3205,7 +3170,7 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
         ASSERT(DYNAMO_OPTION(hot_patching));
         hotp_injected = hotp_inject(dcontext, bb->ilist);
 
-        /* Fix for 5272.  Hot patch injection uses dr clean call api which 
+        /* Fix for 5272.  Hot patch injection uses dr clean call api which
          * accesses dcontext fields directly, so the injected bbs can't be
          * shared until that is changed or the clean call mechanism is replaced
          * with bb termination to execute hot patchces.
@@ -3231,12 +3196,12 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
      * the target of the final indirect branch (the indirect branch itself
      * will get mangled into a non-cti)
      */
-    if (bb->exit_target == NULL) { /* not set by ind branch, etc. */
-        bb->exit_target = (cache_pc) bb->cur_pc; /* fall-through pc */
+    if (bb->exit_target == NULL) {              /* not set by ind branch, etc. */
+        bb->exit_target = (cache_pc)bb->cur_pc; /* fall-through pc */
         if (bb->instr != NULL && instr_opcode_valid(bb->instr) &&
             instr_is_cbr(bb->instr) &&
-            (int) (bb->exit_target - bb->start_pc) <= SHRT_MAX &&
-            (int) (bb->exit_target - bb->start_pc) >= SHRT_MIN &&
+            (int)(bb->exit_target - bb->start_pc) <= SHRT_MAX &&
+            (int)(bb->exit_target - bb->start_pc) >= SHRT_MIN &&
             /* rule out jecxz, etc. */
             !instr_is_cti_loop(bb->instr))
             bb->flags |= FRAG_CBR_FALLTHROUGH_SHORT;
@@ -3251,7 +3216,7 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
 #ifdef HOT_PATCHING_INTERFACE
         && !hotp_injected
 #endif
-       ) {
+    ) {
 #ifndef LINUX_KERNEL
         /* If the fragment doesn't have a syscalls or contains a
          * non-ignorable one -- meaning that the frag will exit the cache
@@ -3288,41 +3253,40 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
           * decode_fragment() cannot handle -- and on win32 this overlaps w/
           * FRAG_MUST_END_TRACE and LINK_NI_SYSCALL
           */
-         TEST(FRAG_HAS_SYSCALL, bb->flags) ||
-         TEST(FRAG_CANNOT_BE_TRACE, bb->flags) ||
+         TEST(FRAG_HAS_SYSCALL, bb->flags) || TEST(FRAG_CANNOT_BE_TRACE, bb->flags) ||
          TEST(FRAG_SELFMOD_SANDBOXED, bb->flags) ||
          /* PR 214142: coarse units does not support storing translations */
          TEST(FRAG_HAS_TRANSLATION_INFO, bb->flags) ||
-         /* FRAG_HAS_DIRECT_CTI: we never elide (assert is below);
-          * not-inlined call/jmp: we turn off FRAG_COARSE_GRAIN up above
-          */
+    /* FRAG_HAS_DIRECT_CTI: we never elide (assert is below);
+     * not-inlined call/jmp: we turn off FRAG_COARSE_GRAIN up above
+     */
 #ifdef WINDOWS
          TEST(LINK_CALLBACK_RETURN, bb->exit_type) ||
 #endif
 #ifndef LINUX_KERNEL
-        TESTANY(LINK_NI_SYSCALL_ALL, bb->exit_type) ||
+         TESTANY(LINK_NI_SYSCALL_ALL, bb->exit_type) ||
 #endif
          TEST(FRAG_MUST_END_TRACE, bb->flags))) {
         /* Currently not supported in a coarse unit */
         STATS_INC(num_fine_in_coarse);
         DOSTATS({
             if (!TEST(FRAG_SHARED, bb->flags))
-                STATS_INC(coarse_prevent_private); 
+                STATS_INC(coarse_prevent_private);
             else if (TEST(FRAG_HAS_SYSCALL, bb->flags))
-                STATS_INC(coarse_prevent_syscall); 
+                STATS_INC(coarse_prevent_syscall);
             else if (TEST(FRAG_MUST_END_TRACE, bb->flags))
-                STATS_INC(coarse_prevent_end_trace); 
+                STATS_INC(coarse_prevent_end_trace);
             else if (TEST(FRAG_CANNOT_BE_TRACE, bb->flags))
-                STATS_INC(coarse_prevent_no_trace); 
+                STATS_INC(coarse_prevent_no_trace);
             else if (TEST(FRAG_SELFMOD_SANDBOXED, bb->flags))
-                STATS_INC(coarse_prevent_selfmod); 
+                STATS_INC(coarse_prevent_selfmod);
             else if (TEST(FRAG_HAS_TRANSLATION_INFO, bb->flags))
-                STATS_INC(coarse_prevent_translation); 
+                STATS_INC(coarse_prevent_translation);
             else if (IF_WINDOWS_ELSE_0(TEST(LINK_CALLBACK_RETURN, bb->exit_type)))
-                STATS_INC(coarse_prevent_cbret); 
+                STATS_INC(coarse_prevent_cbret);
 #ifndef LINUX_KERNEL
             else if (TESTANY(LINK_NI_SYSCALL_ALL, bb->exit_type))
-                STATS_INC(coarse_prevent_syscall); 
+                STATS_INC(coarse_prevent_syscall);
 #endif
             else
                 ASSERT_NOT_REACHED();
@@ -3333,10 +3297,10 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
 
     /* now that we know whether shared, ensure we have the right ibl routine */
     if (!TEST(FRAG_SHARED, bb->flags) && TEST(LINK_INDIRECT, bb->exit_type)) {
-        ASSERT(bb->exit_target == get_ibl_routine(dcontext, IBL_LINKED, DEFAULT_IBL_BB(),
-                                                  ibl_branch_type));
-        bb->exit_target = get_ibl_routine(dcontext, IBL_LINKED, IBL_BB_PRIVATE,
-                                          ibl_branch_type);
+        ASSERT(bb->exit_target ==
+               get_ibl_routine(dcontext, IBL_LINKED, DEFAULT_IBL_BB(), ibl_branch_type));
+        bb->exit_target =
+            get_ibl_routine(dcontext, IBL_LINKED, IBL_BB_PRIVATE, ibl_branch_type);
     }
 
     if (bb->mangle_ilist &&
@@ -3348,13 +3312,13 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
             if (bb->instr == NULL) {
                 /* we removed (or mangle will remove) the last instruction
                  * for special handling (invalid/syscall/int 2b) or there were
-                 * no instructions added (i.e. check_stopping_point in which 
-                 * case instr_start == cur_pc), use last instruction's start 
+                 * no instructions added (i.e. check_stopping_point in which
+                 * case instr_start == cur_pc), use last instruction's start
                  * address for the translation */
                 translation = bb->instr_start;
             } else if (instr_is_cti(bb->instr)) {
-                /* last instruction is a cti, consider the exit jmp part of 
-                 * the mangling of the cti (since we might not know the target 
+                /* last instruction is a cti, consider the exit jmp part of
+                 * the mangling of the cti (since we might not know the target
                  * if, for ex., its indirect) */
                 translation = instr_get_translation(bb->instr);
             } else {
@@ -3370,7 +3334,7 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
          */
         instr_set_our_mangling(exit_instr, true);
         /* here we need to set exit_type */
-        LOG(THREAD, LOG_EMIT, 3, "exit_branch_type=0x%x bb->exit_target="PFX"\n",
+        LOG(THREAD, LOG_EMIT, 3, "exit_branch_type=0x%x bb->exit_target=" PFX "\n",
             bb->exit_type, bb->exit_target);
         instr_exit_branch_set_type(exit_instr, bb->exit_type);
 
@@ -3384,7 +3348,7 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
         bb->flags |= FRAG_CANNOT_BE_TRACE;
 #endif
     if (!INTERNAL_OPTION(unsafe_ignore_eflags_prefix)
-        IF_X64(|| !INTERNAL_OPTION(unsafe_ignore_eflags_trace))) {
+            IF_X64(|| !INTERNAL_OPTION(unsafe_ignore_eflags_trace))) {
         bb->flags |= instr_eflags_to_fragment_eflags(bb->eflags);
         if (TEST(FRAG_WRITES_EFLAGS_OF, bb->flags)) {
             LOG(THREAD, LOG_INTERP, 4, "fragment writes OF prior to reading it!\n");
@@ -3424,7 +3388,7 @@ build_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
      * app memory so we wait until all done)
      */
     if (!bb_build_nested && !bb->for_cache && my_dcontext != NULL) {
-        ASSERT(my_dcontext->bb_build_info == (void *) bb);
+        ASSERT(my_dcontext->bb_build_info == (void *)bb);
         my_dcontext->bb_build_info = NULL;
     }
     bb->instr = NULL;
@@ -3455,7 +3419,7 @@ bb_build_abort(dcontext_t *dcontext, bool clean_vmarea)
 {
     ASSERT(dcontext->bb_build_info != NULL); /* caller should check */
     if (dcontext->bb_build_info != NULL) {
-        build_bb_t *bb = (build_bb_t *) dcontext->bb_build_info;
+        build_bb_t *bb = (build_bb_t *)dcontext->bb_build_info;
         /* free instr memory */
         if (bb->instr != NULL && bb->ilist != NULL &&
             instrlist_last(bb->ilist) != bb->instr)
@@ -3505,8 +3469,7 @@ mangle_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
          */
         bb->flags |= FRAG_CANNOT_BE_TRACE;
         if (!insert_selfmod_sandbox(dcontext, bb->ilist, bb->flags, bb->start_pc,
-                                    bb->cur_pc, bb->record_translation,
-                                    bb->for_cache)) {
+                                    bb->cur_pc, bb->record_translation, bb->for_cache)) {
             /* have to rebuild bb using full decode -- it has invalid instrs
              * in middle, which we don't want to deal w/ for sandboxing!
              */
@@ -3520,8 +3483,8 @@ mangle_bb_ilist(dcontext_t *dcontext, build_bb_t *bb)
                 bb->vmlist = NULL;
             }
             bb->flags = FRAG_SELFMOD_SANDBOXED; /* lose all other flags */
-            bb->full_decode = true; /* full decode this time! */
-            bb->follow_direct = false; 
+            bb->full_decode = true;             /* full decode this time! */
+            bb->follow_direct = false;
             /* overlap info will be reset by check_new_page_start */
             return false;
         }
@@ -3552,9 +3515,9 @@ instrlist_t *
 build_app_bb_ilist(dcontext_t *dcontext, byte *start_pc, file_t outf)
 {
     build_bb_t bb;
-    init_build_bb(&bb, start_pc, false/*not interp*/, false/*not for cache*/,
-                  false/*do not mangle*/, false/*no translation*/, outf,
-                  0/*no pre flags*/, NULL/*no overlap*/);
+    init_build_bb(&bb, start_pc, false /*not interp*/, false /*not for cache*/,
+                  false /*do not mangle*/, false /*no translation*/, outf,
+                  0 /*no pre flags*/, NULL /*no overlap*/);
     build_bb_ilist(dcontext, &bb);
     return bb.ilist;
 }
@@ -3580,18 +3543,19 @@ decode_as_bb(void *drcontext, byte *start_pc)
      * app code visible to the client (just like it is for the
      * real bb built there, so at least we're consistent).
      */
-# ifdef WINDOWS
+#    ifdef WINDOWS
     byte *real_pc;
     if (is_intercepted_app_pc((app_pc)start_pc, &real_pc))
         start_pc = real_pc;
-# endif
+#    endif
 
-    init_build_bb(&bb, start_pc, false /*not interp*/, 
-                  false /*not for cache*/, false /*do not mangle*/,
+    init_build_bb(&bb, start_pc, false /*not interp*/, false /*not for cache*/,
+                  false /*do not mangle*/,
                   true /* translation; xref case 10070 where this
                         * currently turns on full decode; today we
                         * provide no way to turn that off, as IR
-                        * expansion routines are not exported (PR 200409). */,
+                        * expansion routines are not exported (PR 200409). */
+                  ,
                   INVALID_FILE, 0 /*no pre flags*/, NULL /*no overlap*/);
     build_bb_ilist((dcontext_t *)drcontext, &bb);
     return bb.ilist;
@@ -3621,12 +3585,12 @@ decode_trace(void *drcontext, void *tag)
         if (!is_couldbelinking(dcontext))
             mutex_lock(&thread_initexit_lock);
         ilist = recreate_fragment_ilist(dcontext, NULL, &frag, &alloc_res,
-                                        false/*no mangling*/
-                                        _IF_CLIENT(false/*do not re-call client*/));
+                                        false /*no mangling*/
+                                        _IF_CLIENT(false /*do not re-call client*/));
         ASSERT(!alloc_res);
         if (!is_couldbelinking(dcontext))
             mutex_unlock(&thread_initexit_lock);
-        
+
         return ilist;
     }
 
@@ -3638,25 +3602,25 @@ app_pc
 find_app_bb_end(dcontext_t *dcontext, byte *start_pc, uint flags)
 {
     build_bb_t bb;
-    init_build_bb(&bb, start_pc, false/*not interp*/, false/*not for cache*/,
-                  false/*do not mangle*/, false/*no translation*/, INVALID_FILE,
-                  flags, NULL/*no overlap*/);
+    init_build_bb(&bb, start_pc, false /*not interp*/, false /*not for cache*/,
+                  false /*do not mangle*/, false /*no translation*/, INVALID_FILE, flags,
+                  NULL /*no overlap*/);
     build_bb_ilist(dcontext, &bb);
     instrlist_clear_and_destroy(dcontext, bb.ilist);
     return bb.end_pc;
 }
 
 bool
-app_bb_overlaps(dcontext_t *dcontext, byte *start_pc, uint flags,
-                byte *region_start, byte *region_end, overlap_info_t *info_res)
+app_bb_overlaps(dcontext_t *dcontext, byte *start_pc, uint flags, byte *region_start,
+                byte *region_end, overlap_info_t *info_res)
 {
     build_bb_t bb;
     overlap_info_t info;
     info.region_start = region_start;
     info.region_end = region_end;
-    init_build_bb(&bb, start_pc, false/*not interp*/, false/*not for cache*/,
-                  false/*do not mangle*/, false/*no translation*/, INVALID_FILE,
-                  flags, &info);
+    init_build_bb(&bb, start_pc, false /*not interp*/, false /*not for cache*/,
+                  false /*do not mangle*/, false /*no translation*/, INVALID_FILE, flags,
+                  &info);
     build_bb_ilist(dcontext, &bb);
     instrlist_clear_and_destroy(dcontext, bb.ilist);
     info.bb_end = bb.end_pc;
@@ -3692,18 +3656,17 @@ on_native_exec_list(app_pc modbase, const char *name)
 
     if (!IS_STRING_OPTION_EMPTY(native_exec_default_list)) {
         string_option_read_lock();
-        LOG(THREAD_GET, LOG_INTERP|LOG_VMAREAS, 4,
+        LOG(THREAD_GET, LOG_INTERP | LOG_VMAREAS, 4,
             "on_native_exec_list: module %s vs default list %s\n",
-            modname==NULL?"null":modname, dynamo_options.native_exec_default_list);
+            modname == NULL ? "null" : modname, dynamo_options.native_exec_default_list);
         onlist = check_filter(dynamo_options.native_exec_default_list, modname);
         string_option_read_unlock();
     }
-    if (!onlist &&
-        !IS_STRING_OPTION_EMPTY(native_exec_list)) {
+    if (!onlist && !IS_STRING_OPTION_EMPTY(native_exec_list)) {
         string_option_read_lock();
-        LOG(THREAD_GET, LOG_INTERP|LOG_VMAREAS, 4,
+        LOG(THREAD_GET, LOG_INTERP | LOG_VMAREAS, 4,
             "on_native_exec_list: module %s vs append list %s\n",
-            modname==NULL?"null":modname, dynamo_options.native_exec_list);
+            modname == NULL ? "null" : modname, dynamo_options.native_exec_list);
         onlist = check_filter(dynamo_options.native_exec_list, modname);
         string_option_read_unlock();
     }
@@ -3723,7 +3686,7 @@ report_native_module(dcontext_t *dcontext, app_pc modpc)
         ASSERT(DYNAMO_OPTION(native_exec_callcall));
         modname = "<DGC>";
     }
-    LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 2,
+    LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 2,
         "module %s is on native list, executing natively\n", modname);
     STATS_INC(num_native_module_entrances);
     SYSLOG_INTERNAL_WARNING_ONCE("module %s set up for native execution", modname);
@@ -3747,7 +3710,7 @@ build_native_exec_bb(dcontext_t *dcontext, build_bb_t *bb)
      * another thread goes into DR
      */
     /* Create a bb that changes the return address on the app stack such that we
-     * will take control when coming back, and then goes native.  
+     * will take control when coming back, and then goes native.
      * N.B.: we ASSUME we reached this moduled via a call --
      * build_basic_block_fragment needs to make sure, since we can't verify here
      * w/o trying to decode backward from retaddr, and if we're wrong we'll
@@ -3764,9 +3727,9 @@ build_native_exec_bb(dcontext_t *dcontext, build_bb_t *bb)
         bb->flags &= ~FRAG_HAS_TRANSLATION_INFO;
     bb->native_exec = true;
 
-    BBPRINT(bb, IF_DGCDIAG_ELSE(1, 2), "build_native_exec_bb @"PFX"\n", bb->start_pc);
-    DOLOG(2, LOG_INTERP, {
-        dump_mcontext(get_mcontext(dcontext), THREAD, DUMP_NOT_XML); });
+    BBPRINT(bb, IF_DGCDIAG_ELSE(1, 2), "build_native_exec_bb @" PFX "\n", bb->start_pc);
+    DOLOG(2, LOG_INTERP,
+          { dump_mcontext(get_mcontext(dcontext), THREAD, DUMP_NOT_XML); });
     check_new_page_start(dcontext, bb);
     /* create instrlist after check_new_page_start to avoid memory leak
      * on unreadable memory
@@ -3790,65 +3753,73 @@ build_native_exec_bb(dcontext_t *dcontext, build_bb_t *bb)
      * use the dcontext stack just like for callbacks or stack
      * native_exec_ret{val,loc} in some other manner.
      */
-    append_shared_get_dcontext(dcontext, bb->ilist, true/*save xdi*/);
-    instrlist_append(bb->ilist, instr_create_save_to_dc_via_reg
-                     (dcontext, REG_NULL/*default*/, REG_XAX, XAX_OFFSET));
-    instrlist_append(bb->ilist, INSTR_CREATE_mov_ld(dcontext, opnd_create_reg(REG_XAX),
-                                                    OPND_CREATE_MEMPTR(REG_XSP, 0)));
-    instrlist_append(bb->ilist, instr_create_save_to_dc_via_reg
-                     (dcontext, REG_NULL/*default*/, REG_XAX,
-                      NATIVE_EXEC_RETVAL_OFFSET));
+    append_shared_get_dcontext(dcontext, bb->ilist, true /*save xdi*/);
+    instrlist_append(bb->ilist,
+                     instr_create_save_to_dc_via_reg(dcontext, REG_NULL /*default*/,
+                                                     REG_XAX, XAX_OFFSET));
+    instrlist_append(bb->ilist,
+                     INSTR_CREATE_mov_ld(dcontext, opnd_create_reg(REG_XAX),
+                                         OPND_CREATE_MEMPTR(REG_XSP, 0)));
+    instrlist_append(bb->ilist,
+                     instr_create_save_to_dc_via_reg(dcontext, REG_NULL /*default*/,
+                                                     REG_XAX, NATIVE_EXEC_RETVAL_OFFSET));
     /* we don't count on mcontext being preserved (native syscalls will clobber it),
      * and when we re-takeover we need the new app state anyway, so we have to use
      * a special field to store where we clobbered the app retaddr in order to restore
      * it on a detach
      */
-    instrlist_append(bb->ilist, instr_create_save_to_dc_via_reg
-                     (dcontext, REG_NULL/*default*/, REG_XSP,
-                      NATIVE_EXEC_RETLOC_OFFSET));
+    instrlist_append(bb->ilist,
+                     instr_create_save_to_dc_via_reg(dcontext, REG_NULL /*default*/,
+                                                     REG_XSP, NATIVE_EXEC_RETLOC_OFFSET));
 #ifdef X64
     /* must go through a register */
-    instrlist_append(bb->ilist, INSTR_CREATE_mov_imm
-                     (dcontext, opnd_create_reg(REG_XAX),
-                      OPND_CREATE_INTPTR((ptr_int_t)back_from_native)));
-    instrlist_append(bb->ilist, INSTR_CREATE_mov_st
-                     (dcontext, OPND_CREATE_MEMPTR(REG_XSP, 0),
-                      opnd_create_reg(REG_XAX)));
+    instrlist_append(
+        bb->ilist,
+        INSTR_CREATE_mov_imm(dcontext, opnd_create_reg(REG_XAX),
+                             OPND_CREATE_INTPTR((ptr_int_t)back_from_native)));
+    instrlist_append(bb->ilist,
+                     INSTR_CREATE_mov_st(dcontext, OPND_CREATE_MEMPTR(REG_XSP, 0),
+                                         opnd_create_reg(REG_XAX)));
     reachable = rel32_reachable_from_heap(bb->start_pc);
     if (!reachable) {
         /* best to store the target at the end of the bb, to keep it readonly,
          * but that requires a post-pass to patch its value: since native_exec
          * is already hacky we just go through TLS and ignore multi-thread selfmod.
          */
-        instrlist_append(bb->ilist, INSTR_CREATE_mov_imm
-                         (dcontext, opnd_create_reg(REG_XAX),
-                          OPND_CREATE_INTPTR((ptr_int_t)bb->start_pc)));
-        instrlist_append(bb->ilist, INSTR_CREATE_mov_st
-                         (dcontext, opnd_create_tls_slot(os_tls_offset
-                                                         (MANGLE_XCX_SPILL_SLOT)),
-                          opnd_create_reg(REG_XAX)));
+        instrlist_append(
+            bb->ilist,
+            INSTR_CREATE_mov_imm(dcontext, opnd_create_reg(REG_XAX),
+                                 OPND_CREATE_INTPTR((ptr_int_t)bb->start_pc)));
+        instrlist_append(bb->ilist,
+                         INSTR_CREATE_mov_st(
+                             dcontext,
+                             opnd_create_tls_slot(os_tls_offset(MANGLE_XCX_SPILL_SLOT)),
+                             opnd_create_reg(REG_XAX)));
     }
 #else
-    instrlist_append(bb->ilist, INSTR_CREATE_mov_st
-                     (dcontext, OPND_CREATE_MEM32(REG_XSP, 0),
-                      OPND_CREATE_INTPTR((ptr_int_t)back_from_native)));
+    instrlist_append(
+        bb->ilist,
+        INSTR_CREATE_mov_st(dcontext, OPND_CREATE_MEM32(REG_XSP, 0),
+                            OPND_CREATE_INTPTR((ptr_int_t)back_from_native)));
 #endif
-    instrlist_append(bb->ilist, instr_create_restore_from_dc_via_reg
-                     (dcontext, REG_NULL/*default*/, REG_XAX, XAX_OFFSET));
+    instrlist_append(bb->ilist,
+                     instr_create_restore_from_dc_via_reg(dcontext, REG_NULL /*default*/,
+                                                          REG_XAX, XAX_OFFSET));
     append_shared_restore_dcontext_reg(dcontext, bb->ilist);
     /* need some cleanup prior to native: turn off asynch, clobber trace, etc. */
     /* FIXME: mark call as do-not-mangle */
-    dr_insert_clean_call(dcontext, bb->ilist, NULL, (void *) entering_native,
-                         false/*!fp*/, 0);
+    dr_insert_clean_call(dcontext, bb->ilist, NULL, (void *)entering_native,
+                         false /*!fp*/, 0);
     /* this is the jump to native code */
 #ifdef X64
     if (reachable) {
         instrlist_append(bb->ilist,
                          INSTR_CREATE_jmp(dcontext, opnd_create_pc(bb->start_pc)));
     } else {
-        instrlist_append(bb->ilist, INSTR_CREATE_jmp_ind
-                         (dcontext, opnd_create_tls_slot(os_tls_offset
-                                                         (MANGLE_XCX_SPILL_SLOT))));
+        instrlist_append(
+            bb->ilist,
+            INSTR_CREATE_jmp_ind(
+                dcontext, opnd_create_tls_slot(os_tls_offset(MANGLE_XCX_SPILL_SLOT))));
     }
 #else
     instrlist_append(bb->ilist, INSTR_CREATE_jmp(dcontext, opnd_create_pc(bb->start_pc)));
@@ -3868,7 +3839,7 @@ build_native_exec_bb(dcontext_t *dcontext, build_bb_t *bb)
 
     /* Can't be coarse-grain since has non-exit cti */
     bb->flags &= ~FRAG_COARSE_GRAIN;
-    STATS_INC(coarse_prevent_native_exec); 
+    STATS_INC(coarse_prevent_native_exec);
 
     /* trace barrier */
     bb->flags |= FRAG_MUST_END_TRACE;
@@ -3884,13 +3855,12 @@ build_native_exec_bb(dcontext_t *dcontext, build_bb_t *bb)
      */
     if (TEST(FRAG_SELFMOD_SANDBOXED, bb->flags))
         bb->flags &= ~FRAG_SELFMOD_SANDBOXED;
-    DEBUG_DECLARE(ok = ) mangle_bb_ilist(dcontext, bb);
+    DEBUG_DECLARE(ok =) mangle_bb_ilist(dcontext, bb);
     ASSERT(ok);
 }
 
 static bool
-at_native_exec_gateway(dcontext_t *dcontext, app_pc start
-                       _IF_DEBUG(bool xfer_target))
+at_native_exec_gateway(dcontext_t *dcontext, app_pc start _IF_DEBUG(bool xfer_target))
 {
     /* ASSUMPTION: transfer to another module will always be by indirect call
      * or non-inlined direct call from a fragment that will not be flushed.
@@ -3916,18 +3886,17 @@ at_native_exec_gateway(dcontext_t *dcontext, app_pc start
      * not just if lastexit is ind xfer.
      *
      * We count up easy-to-identify cases we've missed in the DOSTATS below.
-     */ 
+     */
     bool native_exec_bb = false;
-    if (DYNAMO_OPTION(native_exec) &&
-        !vmvector_empty(native_exec_areas)) {
+    if (DYNAMO_OPTION(native_exec) && !vmvector_empty(native_exec_areas)) {
         /* do we KNOW that we came from an indirect call? */
-        if (TESTANY(LINK_CALL|LINK_IND_JMP_PLT, dcontext->last_exit->flags) &&
+        if (TESTANY(LINK_CALL | LINK_IND_JMP_PLT, dcontext->last_exit->flags) &&
             /* only check direct calls if native_exec_dircalls is on */
             (DYNAMO_OPTION(native_exec_dircalls) ||
              LINKSTUB_INDIRECT(dcontext->last_exit->flags))) {
             STATS_INC(num_native_entrance_checks);
             /* we do the overlap check last since it's more costly */
-            if (vmvector_overlap(native_exec_areas, start, start+1)) {
+            if (vmvector_overlap(native_exec_areas, start, start + 1)) {
                 native_exec_bb = true;
                 DOSTATS({
                     if (TEST(LINK_CALL, dcontext->last_exit->flags)) {
@@ -3937,10 +3906,9 @@ at_native_exec_gateway(dcontext_t *dcontext, app_pc start
                             STATS_INC(num_native_module_entrances_call);
                     } else
                         STATS_INC(num_native_module_entrances_plt);
-                    
                 });
             }
-        } 
+        }
         /* can we GUESS that we came from an indirect call? */
         else if (DYNAMO_OPTION(native_exec_guess_calls) &&
                  (/* FIXME: require jmp* be in separate module? */
@@ -3950,22 +3918,23 @@ at_native_exec_gateway(dcontext_t *dcontext, app_pc start
             /* if unknown last exit, or last exit was jmp*, examine TOS and guess
              * whether it's a retaddr
              */
-            app_pc *tos = (app_pc *) get_mcontext(dcontext)->xsp;
+            app_pc *tos = (app_pc *)get_mcontext(dcontext)->xsp;
             STATS_INC(num_native_entrance_TOS_checks);
             /* vector check cheaper than is_readable syscall, etc. so do it before them,
              * but after last_exit checks above since overlap is more costly
              */
-            if (vmvector_overlap(native_exec_areas, start, start+1) &&
+            if (vmvector_overlap(native_exec_areas, start, start + 1) &&
                 is_readable_without_exception((app_pc)tos, 4)) {
                 enum { MAX_CALL_CONSIDER = 6 /* ignore prefixes */ };
                 app_pc retaddr = *tos;
-                LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 2,
-                    "at native_exec target: checking TOS "PFX" => "PFX" for retaddr\n",
+                LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 2,
+                    "at native_exec target: checking TOS " PFX " => " PFX
+                    " for retaddr\n",
                     tos, retaddr);
 #ifdef RETURN_AFTER_CALL
                 if (DYNAMO_OPTION(ret_after_call)) {
                     native_exec_bb = is_observed_call_site(dcontext, retaddr);
-                    LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 2,
+                    LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 2,
                         "native_exec: *TOS is %sa call site in ret-after-call table\n",
                         native_exec_bb ? "" : "NOT ");
                 } else {
@@ -3973,7 +3942,7 @@ at_native_exec_gateway(dcontext_t *dcontext, app_pc start
                     /* try to decode backward -- make sure readable for decoding */
                     if (is_readable_without_exception(retaddr - MAX_CALL_CONSIDER,
                                                       MAX_CALL_CONSIDER +
-                                                      MAX_INSTR_LENGTH)) {
+                                                          MAX_INSTR_LENGTH)) {
                         /* ind calls have variable length and form so we decode
                          * each byte rather than searching for ff and guessing length
                          */
@@ -3981,15 +3950,15 @@ at_native_exec_gateway(dcontext_t *dcontext, app_pc start
                         instr_t instr;
                         instr_init(dcontext, &instr);
                         for (pc = retaddr - MAX_CALL_CONSIDER; pc < retaddr; pc++) {
-                            LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 3,
-                                "native_exec: decoding @"PFX" looking for call\n", pc);
+                            LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 3,
+                                "native_exec: decoding @" PFX " looking for call\n", pc);
                             instr_reset(dcontext, &instr);
                             next_pc = decode_cti(dcontext, pc, &instr);
                             STATS_INC(num_native_entrance_TOS_decodes);
                             if (next_pc == retaddr && instr_is_call(&instr)) {
                                 native_exec_bb = true;
-                                LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 2,
-                                    "native_exec: found call @ pre-*TOS "PFX"\n", pc);
+                                LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 2,
+                                    "native_exec: found call @ pre-*TOS " PFX "\n", pc);
                                 break;
                             }
                         }
@@ -4011,9 +3980,11 @@ at_native_exec_gateway(dcontext_t *dcontext, app_pc start
         DOSTATS({
             /* did we reach a native dll w/o going through an ind call caught above? */
             if (!xfer_target /* else we'll re-check at the target itself */ &&
-                !native_exec_bb && vmvector_overlap(native_exec_areas, start, start+1)) {
-                LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 2,
-                    "WARNING: pc "PFX" is on native list but reached bypassing gateway!\n",
+                !native_exec_bb &&
+                vmvector_overlap(native_exec_areas, start, start + 1)) {
+                LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 2,
+                    "WARNING: pc " PFX
+                    " is on native list but reached bypassing gateway!\n",
                     start);
                 STATS_INC(num_native_entrance_miss);
                 /* do-once since once get into dll past gateway may xfer
@@ -4032,9 +4003,8 @@ at_native_exec_gateway(dcontext_t *dcontext, app_pc start
  */
 static inline void
 init_interp_build_bb(dcontext_t *dcontext, build_bb_t *bb, app_pc start,
-                     uint initial_flags
-                     _IF_CLIENT(bool for_trace)
-                     _IF_CLIENT(instrlist_t **unmangled_ilist))
+                     uint initial_flags _IF_CLIENT(bool for_trace)
+                         _IF_CLIENT(instrlist_t **unmangled_ilist))
 {
     ASSERT_OWN_MUTEX(USE_BB_BUILDING_LOCK() && !TEST(FRAG_TEMP_PRIVATE, initial_flags),
                      &bb_building_lock);
@@ -4043,13 +4013,14 @@ init_interp_build_bb(dcontext_t *dcontext, build_bb_t *bb, app_pc start,
     ASSERT(dcontext->bb_build_info == NULL);
     /* This won't make us be nested b/c for bb.for_cache caller is supposed
      * to set this up */
-    dcontext->bb_build_info = (void *) bb;
+    dcontext->bb_build_info = (void *)bb;
 
-    init_build_bb(bb, start, true/*real interp*/, true/*for cache*/, true/*mangle*/, 
-                  false /* translation: set below for clients */,
-                  INVALID_FILE, initial_flags |
-                  (INTERNAL_OPTION(store_translations) ?
-                   FRAG_HAS_TRANSLATION_INFO : 0), NULL/*no overlap*/);
+    init_build_bb(
+        bb, start, true /*real interp*/, true /*for cache*/, true /*mangle*/,
+        false /* translation: set below for clients */, INVALID_FILE,
+        initial_flags |
+            (INTERNAL_OPTION(store_translations) ? FRAG_HAS_TRANSLATION_INFO : 0),
+        NULL /*no overlap*/);
     if (!TEST(FRAG_TEMP_PRIVATE, initial_flags))
         bb->has_bb_building_lock = true;
 #ifdef CLIENT_INTERFACE
@@ -4096,7 +4067,7 @@ init_interp_build_bb(dcontext_t *dcontext, build_bb_t *bb, app_pc start,
 static inline void
 exit_interp_build_bb(dcontext_t *dcontext, build_bb_t *bb)
 {
-    ASSERT(dcontext->bb_build_info == (void *) bb);
+    ASSERT(dcontext->bb_build_info == (void *)bb);
     /* Caller's responsibility to clean up since bb.for_cache */
     dcontext->bb_build_info = NULL;
 
@@ -4110,8 +4081,9 @@ exit_interp_build_bb(dcontext_t *dcontext, build_bb_t *bb)
  */
 fragment_t *
 build_basic_block_fragment(dcontext_t *dcontext, app_pc start, uint initial_flags,
-                           bool link, bool visible _IF_CLIENT(bool for_trace)
-                           _IF_CLIENT(instrlist_t **unmangled_ilist))
+                           bool link,
+                           bool visible _IF_CLIENT(bool for_trace)
+                               _IF_CLIENT(instrlist_t **unmangled_ilist))
 {
     fragment_t *f;
     build_bb_t bb;
@@ -4134,9 +4106,9 @@ build_basic_block_fragment(dcontext_t *dcontext, app_pc start, uint initial_flag
     image_entry = check_for_image_entry(start);
 #endif
 
-    init_interp_build_bb(dcontext, &bb, start, initial_flags
-                         _IF_CLIENT(for_trace) _IF_CLIENT(unmangled_ilist));
-    if (at_native_exec_gateway(dcontext, start _IF_DEBUG(false/*not xfer tgt*/))) {
+    init_interp_build_bb(dcontext, &bb, start,
+                         initial_flags _IF_CLIENT(for_trace) _IF_CLIENT(unmangled_ilist));
+    if (at_native_exec_gateway(dcontext, start _IF_DEBUG(false /*not xfer tgt*/))) {
         DODEBUG({ report_native_module(dcontext, bb.start_pc); });
 #ifdef CLIENT_INTERFACE
         /* PR 232617 - build_native_exec_bb doesn't support setting translation
@@ -4153,8 +4125,9 @@ build_basic_block_fragment(dcontext_t *dcontext, app_pc start, uint initial_flag
             instrlist_clear_and_destroy(dcontext, bb.ilist);
             vm_area_destroy_list(dcontext, bb.vmlist);
             dcontext->bb_build_info = NULL;
-            init_interp_build_bb(dcontext, &bb, start, initial_flags
-                                 _IF_CLIENT(for_trace) _IF_CLIENT(unmangled_ilist));
+            init_interp_build_bb(dcontext, &bb, start,
+                                 initial_flags _IF_CLIENT(for_trace)
+                                     _IF_CLIENT(unmangled_ilist));
 #ifdef CLIENT_INTERFACE
             /* PR 232617 - build_native_exec_bb doesn't support setting
              * translation info, but it also doesn't pass the built bb to the
@@ -4192,8 +4165,7 @@ build_basic_block_fragment(dcontext_t *dcontext, app_pc start, uint initial_flag
     DOLOG(2, LOG_INTERP, { disassemble_fragment(dcontext, f, stats->loglevel <= 3); });
     DOLOG(4, LOG_INTERP, {
         if (TEST(FRAG_SELFMOD_SANDBOXED, f->flags)) {
-            LOG(THREAD, LOG_INTERP, 4,
-                "\nXXXX sandboxed fragment!  original code:\n");
+            LOG(THREAD, LOG_INTERP, 4, "\nXXXX sandboxed fragment!  original code:\n");
             disassemble_app_bb(dcontext, f->tag, THREAD);
             LOG(THREAD, LOG_INTERP, 4, "code cache code:\n");
             disassemble_fragment(dcontext, f, false);
@@ -4231,21 +4203,21 @@ build_basic_block_fragment(dcontext_t *dcontext, app_pc start, uint initial_flag
  */
 instrlist_t *
 recreate_bb_ilist(dcontext_t *dcontext, byte *pc, uint flags, uint *res_flags,
-                  uint *res_exit_type, bool check_vm_area, bool mangle
-                  _IF_CLIENT(bool call_client) _IF_CLIENT(bool for_trace))
+                  uint *res_exit_type, bool check_vm_area,
+                  bool mangle _IF_CLIENT(bool call_client) _IF_CLIENT(bool for_trace))
 {
     build_bb_t bb;
 
-    if (!is_readable_without_exception(pc, 4/* don't know full range -- just do simple check now */)) {
-        LOG(THREAD, LOG_INTERP, 3,
-            "recreate_bb_ilist: cannot read memory at "PFX"\n", pc);
+    if (!is_readable_without_exception(
+            pc, 4 /* don't know full range -- just do simple check now */)) {
+        LOG(THREAD, LOG_INTERP, 3, "recreate_bb_ilist: cannot read memory at " PFX "\n",
+            pc);
         return NULL;
     }
 
     LOG(THREAD, LOG_INTERP, 3, "\nbuilding bb instrlist now *********************\n");
-    init_build_bb(&bb, pc, false/*not interp*/, false/*not for cache*/,
-                  mangle, true/*translation*/, INVALID_FILE,
-                  flags, NULL/*no overlap*/);
+    init_build_bb(&bb, pc, false /*not interp*/, false /*not for cache*/, mangle,
+                  true /*translation*/, INVALID_FILE, flags, NULL /*no overlap*/);
     bb.check_vm_area = check_vm_area;
 #ifdef CLIENT_INTERFACE
     /* PR 214962: we call bb hook again, unless the client told us
@@ -4281,7 +4253,7 @@ recreate_bb_ilist(dcontext_t *dcontext, byte *pc, uint flags, uint *res_flags,
  *   If f_res!=NULL, the fragment is returned and whether it was allocated
  *   is returned in the alloc_res param.
  *   If f_res==NULL, if the fragment was allocated it is freed here.
- * 
+ *
  * NOTE : does not add prefix instructions to the created ilist, if we change
  * this to add them be sure to check recreate_app_* for compatibility (for ex.
  * adding them and setting their translation to pc would break current
@@ -4292,30 +4264,31 @@ recreate_bb_ilist(dcontext_t *dcontext, byte *pc, uint flags, uint *res_flags,
  * In that case f_res is still pointed at the fragment if it was found, and
  * alloc is valid.
  *
- * For proper synchronization : 
+ * For proper synchronization :
  * If caller is the dcontext's owner then needs to be couldbelinking, otherwise
  * the dcontext's owner should be suspended and the callers should own the
  * thread_initexit_lock
  */
 instrlist_t *
 recreate_fragment_ilist(dcontext_t *dcontext, byte *pc,
-                        /*IN/OUT*/fragment_t **f_res, /*OUT*/bool *alloc_res,
+                        /*IN/OUT*/ fragment_t **f_res, /*OUT*/ bool *alloc_res,
                         bool mangle _IF_CLIENT(bool call_client))
 {
     fragment_t *f;
     uint flags = 0;
     instrlist_t *ilist;
     bool alloc = false;
-    monitor_data_t md = {0,};
+    monitor_data_t md = {
+        0,
+    };
     IF_X64(bool old_mode = true;)
-    /* check synchronization, we need to make sure no one flushes the 
+    /* check synchronization, we need to make sure no one flushes the
      * fragment we just looked up while we are recreating it, if it's the
      * caller's dcontext then just need to be couldbelinking, otherwise need
-     * the thread_initexit_lock since then we are looking up in someone else's 
+     * the thread_initexit_lock since then we are looking up in someone else's
      * table (the dcontext's owning thread would also need to be suspended)
      */
-    ASSERT((dcontext != GLOBAL_DCONTEXT &&
-            get_thread_id() == dcontext->owning_thread && 
+    ASSERT((dcontext != GLOBAL_DCONTEXT && get_thread_id() == dcontext->owning_thread &&
             is_couldbelinking(dcontext)) ||
            (ASSERT_OWN_MUTEX(true, &thread_initexit_lock), true));
     STATS_INC(num_recreated_fragments);
@@ -4325,12 +4298,13 @@ recreate_fragment_ilist(dcontext_t *dcontext, byte *pc,
     } else {
         /* Ensure callers don't give us both valid f and valid pc */
         ASSERT(f_res == NULL || *f_res == NULL);
-        LOG(THREAD, LOG_INTERP, 3, "recreate_fragment_ilist: looking up pc "PFX"\n", pc);
+        LOG(THREAD, LOG_INTERP, 3, "recreate_fragment_ilist: looking up pc " PFX "\n",
+            pc);
         f = fragment_pclookup_with_linkstubs(dcontext, pc, &alloc);
-        LOG(THREAD, LOG_INTERP, 3, "\tfound F%d\n", f == NULL? -1 : f->id);
+        LOG(THREAD, LOG_INTERP, 3, "\tfound F%d\n", f == NULL ? -1 : f->id);
         if (f_res != NULL)
             *f_res = f;
-        /* ref case 3559, others, we won't be able to reliably recreate if 
+        /* ref case 3559, others, we won't be able to reliably recreate if
          * target is pending flush, original memory might no longer be there or
          * the memory might have changed.  caller should use the stored
          * translation info instead.
@@ -4347,11 +4321,10 @@ recreate_fragment_ilist(dcontext_t *dcontext, byte *pc,
 
     if ((f->flags & FRAG_IS_TRACE) == 0) {
         /* easy case: just a bb */
-        ilist = recreate_bb_ilist(dcontext, (byte *) f->tag,
-                                  0/*no pre flags*/, &flags, NULL,
-                                  true/*check vm area*/, mangle
-                                  _IF_CLIENT(call_client)
-                                  _IF_CLIENT(false/*not for_trace*/));
+        ilist = recreate_bb_ilist(dcontext, (byte *)f->tag, 0 /*no pre flags*/, &flags,
+                                  NULL, true /*check vm area*/,
+                                  mangle _IF_CLIENT(call_client)
+                                      _IF_CLIENT(false /*not for_trace*/));
         ASSERT(ilist != NULL);
         if (ilist == NULL) /* a race */
             goto recreate_fragment_done;
@@ -4373,21 +4346,19 @@ recreate_fragment_ilist(dcontext_t *dcontext, byte *pc,
             /* be sure we ask for translation fields */
             md.trace_flags = f->flags | FRAG_HAS_TRANSLATION_INFO;
             md.num_blks = t->num_bbs;
-            md.blk_info = (trace_bb_build_t *)
-                HEAP_ARRAY_ALLOC(dcontext, trace_bb_build_t, md.num_blks, ACCT_TRACE,
-                                 true);
+            md.blk_info = (trace_bb_build_t *)HEAP_ARRAY_ALLOC(
+                dcontext, trace_bb_build_t, md.num_blks, ACCT_TRACE, true);
         }
 
         ilist = instrlist_create(dcontext);
         STATS_INC(num_recreated_traces);
         ASSERT(t->bbs != NULL);
-        for (i=0; i<t->num_bbs; i++) {
-            apc = (byte *) t->bbs[i].tag;
-            bb = recreate_bb_ilist(dcontext, apc, 0/*no pre flags*/,
-                                   &flags, &md.final_exit_flags,
-                                   true/*check vm area*/, !mangle_at_end
-                                   _IF_CLIENT(call_client)
-                                   _IF_CLIENT(true/*for_trace*/));
+        for (i = 0; i < t->num_bbs; i++) {
+            apc = (byte *)t->bbs[i].tag;
+            bb = recreate_bb_ilist(dcontext, apc, 0 /*no pre flags*/, &flags,
+                                   &md.final_exit_flags, true /*check vm area*/,
+                                   !mangle_at_end _IF_CLIENT(call_client)
+                                       _IF_CLIENT(true /*for_trace*/));
             ASSERT(bb != NULL);
             if (bb == NULL) {
                 instrlist_clear_and_destroy(dcontext, ilist);
@@ -4414,23 +4385,23 @@ recreate_fragment_ilist(dcontext_t *dcontext, byte *pc,
             if (mangle && !mangle_at_end) {
                 /* To duplicate the trace-building logic:
                  * - call fixup_last_cti()
-                 * - retarget the ibl routine just like extend_trace() does 
+                 * - retarget the ibl routine just like extend_trace() does
                  */
                 app_pc target = (last != NULL) ? opnd_get_pc(instr_get_target(last))
-                    : NULL; /* FIXME: is it always safe */
+                                               : NULL; /* FIXME: is it always safe */
                 /* convert a basic block IBL, and retarget it to IBL_TRACE* */
                 if (target != NULL &&
                     is_indirect_branch_lookup_routine(dcontext, target)) {
                     target = get_alternate_ibl_routine(dcontext, target, f->flags);
                     ASSERT(target != NULL);
                     LOG(THREAD, LOG_MONITOR, 3,
-                        "recreate_fragment_ilist: replacing ibl_routine to target="
-                        PFX"\n", target);
+                        "recreate_fragment_ilist: replacing ibl_routine to target=" PFX
+                        "\n",
+                        target);
                     instr_set_target(last, opnd_create_pc(target));
                 }
-                if (DYNAMO_OPTION(pad_jmps) && 
-                    !INTERNAL_OPTION(pad_jmps_shift_bb)) {
-                    /* FIXME - hack, but pad_jmps_shift_bb will be on by 
+                if (DYNAMO_OPTION(pad_jmps) && !INTERNAL_OPTION(pad_jmps_shift_bb)) {
+                    /* FIXME - hack, but pad_jmps_shift_bb will be on by
                      * default. Synchronize changes here with recreate_fragment_ilist.
                      * This hack is protected by asserts in nop_pad_ilist() (that
                      * we never add nops to a bb if -pad_jmps_shift_bb) and in
@@ -4440,9 +4411,8 @@ recreate_fragment_ilist(dcontext_t *dcontext, byte *pc,
                     remove_nops_from_ilist(dcontext, bb _IF_DEBUG(true));
                 }
                 if (instrlist_last(ilist) != NULL) {
-                    fixup_last_cti(dcontext, ilist, (app_pc) apc, flags, f->flags, NULL,
-                                   NULL, true/* record translation */, NULL,
-                                   NULL, NULL);
+                    fixup_last_cti(dcontext, ilist, (app_pc)apc, flags, f->flags, NULL,
+                                   NULL, true /* record translation */, NULL, NULL, NULL);
                 }
             }
 
@@ -4457,7 +4427,7 @@ recreate_fragment_ilist(dcontext_t *dcontext, byte *pc,
          */
         if (call_client) /* else it's decode_trace() who is not really recreating */
             instrument_trace(dcontext, f->tag, ilist, true);
-        /* instrument_trace checks that all non-meta instrs have translation fields */
+            /* instrument_trace checks that all non-meta instrs have translation fields */
 #endif
 
         if (mangle) {
@@ -4476,31 +4446,31 @@ recreate_fragment_ilist(dcontext_t *dcontext, byte *pc,
                  * assumption: all optimizations are deterministic and stateless,
                  * so we can exactly replicate their results
                  */
-                LOG(THREAD_GET, LOG_INTERP, 2, 
-                    "\tre-applying optimizations to F%d\n", f->id);
-# ifdef SIDELINE
+                LOG(THREAD_GET, LOG_INTERP, 2, "\tre-applying optimizations to F%d\n",
+                    f->id);
+#    ifdef SIDELINE
                 if (dynamo_options.sideline) {
                     if (!TEST(FRAG_DO_NOT_SIDELINE, f->flags))
                         optimize_trace(dcontext, f->tag, ilist);
                     /* else, never optimized */
                 } else
-# endif
+#    endif
                     optimize_trace(dcontext, f->tag, ilist);
             }
 #endif
 
             /* FIXME: case 4718 append_trace_speculate_last_ibl(true)
-             * should be called as well 
+             * should be called as well
              */
             if (PAD_FRAGMENT_JMPS(f->flags))
                 nop_pad_ilist(dcontext, f, ilist, false /* set translation */);
         }
     }
 
- recreate_fragment_done:
+recreate_fragment_done:
     if (md.blk_info != NULL) {
-        HEAP_ARRAY_FREE(dcontext, md.blk_info, trace_bb_build_t, md.num_blks,
-                        ACCT_TRACE, true);
+        HEAP_ARRAY_FREE(dcontext, md.blk_info, trace_bb_build_t, md.num_blks, ACCT_TRACE,
+                        true);
     }
     if (alloc_res != NULL)
         *alloc_res = alloc;
@@ -4510,15 +4480,14 @@ recreate_fragment_ilist(dcontext_t *dcontext, byte *pc,
     return ilist;
 }
 
-
 /*** TRACE BUILDING ROUTINES *****************************************************/
 
 static void
-process_nops_for_trace(dcontext_t *dcontext, instrlist_t *ilist, uint flags
-                       _IF_DEBUG(bool recreating))
+process_nops_for_trace(dcontext_t *dcontext, instrlist_t *ilist,
+                       uint flags _IF_DEBUG(bool recreating))
 {
     if (PAD_FRAGMENT_JMPS(flags) && !INTERNAL_OPTION(pad_jmps_shift_bb)) {
-        /* FIXME - hack, but pad_jmps_shift_bb will be on by 
+        /* FIXME - hack, but pad_jmps_shift_bb will be on by
          * default. Synchronize changes here with recreate_fragment_ilist.
          * This hack is protected by asserts in nop_pad_ilist() (that
          * we never add nops to a bb if -pad_jmps_shift_bb) and in
@@ -4561,10 +4530,9 @@ regenerate_custom_exit_stub(dcontext_t *dcontext, instr_t *exit_cti, linkstub_t 
         cspc = decode(dcontext, cspc, in);
         ASSERT(cspc != NULL); /* our own code! */
         if (instr_is_cti(in)) {
-            if (!instr_is_return(in) &&
-                opnd_is_near_pc(instr_get_target(in)) &&
+            if (!instr_is_return(in) && opnd_is_near_pc(instr_get_target(in)) &&
                 (opnd_get_pc(instr_get_target(in)) < start_pc ||
-                 opnd_get_pc(instr_get_target(in)) > start_pc+f->size)) {
+                 opnd_get_pc(instr_get_target(in)) > start_pc + f->size)) {
                 loginst(dcontext, 3, in, "\tcti has off-fragment target");
                 /* indicate that relative target must be
                  * re-encoded, and that it is not an exit cti
@@ -4577,7 +4545,7 @@ regenerate_custom_exit_stub(dcontext_t *dcontext, instr_t *exit_cti, linkstub_t 
                  */
                 instr_t *clone = instr_clone(dcontext, in);
                 /* HACK: use note field! */
-                instr_set_note(clone, (void *) in);
+                instr_set_note(clone, (void *)in);
                 instrlist_append(&intra_ctis, clone);
             }
         }
@@ -4589,11 +4557,10 @@ regenerate_custom_exit_stub(dcontext_t *dcontext, instr_t *exit_cti, linkstub_t 
      * FIXME: allow targeting other instrs?
      */
     for (in = instrlist_first(cil); in != NULL; in = instr_get_next(in)) {
-        for (cti = instrlist_first(&intra_ctis); cti != NULL;
-             cti = instr_get_next(cti)) {
+        for (cti = instrlist_first(&intra_ctis); cti != NULL; cti = instr_get_next(cti)) {
             if (opnd_get_pc(instr_get_target(cti)) == instr_get_raw_bits(in)) {
                 /* cti targets this instr */
-                instr_t *real_cti = (instr_t *) instr_get_note(cti);
+                instr_t *real_cti = (instr_t *)instr_get_note(cti);
                 /* Do not preserve raw bits just in case instrlist changes
                  * and the instr target moves (xref PR 333691)
                  */
@@ -4604,7 +4571,7 @@ regenerate_custom_exit_stub(dcontext_t *dcontext, instr_t *exit_cti, linkstub_t 
             }
         }
     }
-    instrlist_clear(dcontext,&intra_ctis);
+    instrlist_clear(dcontext, &intra_ctis);
 
     instr_set_exit_stub_code(exit_cti, cil);
 }
@@ -4624,7 +4591,8 @@ tracelist_add(dcontext_t *dcontext, instrlist_t *ilist, instr_t *where, instr_t 
 
 /* Combines instrlist_postinsert to ilist and the size calculation of the addition */
 static inline int
-tracelist_add_after(dcontext_t *dcontext, instrlist_t *ilist, instr_t *where, instr_t *inst)
+tracelist_add_after(dcontext_t *dcontext, instrlist_t *ilist, instr_t *where,
+                    instr_t *inst)
 {
     /* when we emit the trace we're going to call instr_length() on all instrs
      * anyway, and we'll re-use any memory allocated here for an encoding
@@ -4637,13 +4605,12 @@ tracelist_add_after(dcontext_t *dcontext, instrlist_t *ilist, instr_t *where, in
 #ifdef HASHTABLE_STATISTICS
 /* increments a given counter - assuming XCX is dead */
 int
-insert_increment_stat_counter(dcontext_t *dcontext, instrlist_t *trace, instr_t *next,                 
+insert_increment_stat_counter(dcontext_t *dcontext, instrlist_t *trace, instr_t *next,
                               uint *counter_address)
 {
     int added_size = 0;
     /* incrementing a branch-type specific thread private counter */
-    opnd_t private_branchtype_counter = 
-        OPND_CREATE_ABSMEM(counter_address, OPSZ_4);
+    opnd_t private_branchtype_counter = OPND_CREATE_ABSMEM(counter_address, OPSZ_4);
 
     /* using LEA to avoid clobbering eflags in a simple load-increment-store */
     /*>>>    movl    counter, %ecx */
@@ -4652,15 +4619,13 @@ insert_increment_stat_counter(dcontext_t *dcontext, instrlist_t *trace, instr_t 
     /* x64: the counter is still 32 bits */
     added_size += tracelist_add(dcontext, trace, next,
                                 INSTR_CREATE_mov_ld(dcontext, opnd_create_reg(REG_ECX),
-                                                    private_branchtype_counter)
-                                );
+                                                    private_branchtype_counter));
+    added_size += tracelist_add(
+        dcontext, trace, next,
+        INSTR_CREATE_lea(dcontext, opnd_create_reg(REG_ECX),
+                         opnd_create_base_disp(REG_ECX, REG_NULL, 0, 1, OPSZ_lea)));
     added_size += tracelist_add(dcontext, trace, next,
-                                INSTR_CREATE_lea(dcontext, opnd_create_reg(REG_ECX),
-                                                 opnd_create_base_disp(REG_ECX, 
-                                                                       REG_NULL, 0, 1, OPSZ_lea)));
-    added_size += tracelist_add(dcontext, trace, next,
-                                INSTR_CREATE_mov_st(dcontext, 
-                                                    private_branchtype_counter,
+                                INSTR_CREATE_mov_st(dcontext, private_branchtype_counter,
                                                     opnd_create_reg(REG_ECX)));
     return added_size;
 }
@@ -4668,25 +4633,26 @@ insert_increment_stat_counter(dcontext_t *dcontext, instrlist_t *trace, instr_t 
 
 /* inserts proper instruction(s) to restore XCX spilled on indirect branch mangling
  *    assumes target instrlist is a trace!
- * returns size to be added to trace 
+ * returns size to be added to trace
  */
 static inline int
 insert_restore_spilled_xcx(dcontext_t *dcontext, instrlist_t *trace, instr_t *next)
-{    
+{
     int added_size = 0;
 
     if (DYNAMO_OPTION(private_ib_in_tls)) {
-        added_size += tracelist_add(dcontext, trace, next, 
-            INSTR_CREATE_mov_ld(dcontext,
-                                opnd_create_reg(REG_XCX),
-                                opnd_create_tls_slot(os_tls_offset(MANGLE_XCX_SPILL_SLOT))));
+        added_size +=
+            tracelist_add(dcontext, trace, next,
+                          INSTR_CREATE_mov_ld(dcontext, opnd_create_reg(REG_XCX),
+                                              opnd_create_tls_slot(
+                                                  os_tls_offset(MANGLE_XCX_SPILL_SLOT))));
     } else {
         /* We need to restore XCX from TLS for shared fragments, but from
          * mcontext for private fragments, and all traces are private
          */
-        added_size += tracelist_add(dcontext, trace, next,
-                                    instr_create_restore_from_dcontext
-                                    (dcontext, REG_XCX, XCX_OFFSET));
+        added_size += tracelist_add(
+            dcontext, trace, next,
+            instr_create_restore_from_dcontext(dcontext, REG_XCX, XCX_OFFSET));
     }
 
     return added_size;
@@ -4695,7 +4661,7 @@ insert_restore_spilled_xcx(dcontext_t *dcontext, instrlist_t *trace, instr_t *ne
 /* 32-bit only: inserts a comparison to speculative_tag with no side effect and
  * if value is matched continue target is assumed to be immediately
  * after targeter (which must be < 127 bytes away).
- * returns size to be added to trace 
+ * returns size to be added to trace
  */
 static int
 insert_transparent_comparison(dcontext_t *dcontext, instrlist_t *trace,
@@ -4718,24 +4684,24 @@ insert_transparent_comparison(dcontext_t *dcontext, instrlist_t *trace,
      * stub will be <128 away
      */
     /* lea requires OPSZ_lea operand */
-    added_size += tracelist_add
-        (dcontext, trace, targeter,
-         INSTR_CREATE_lea
-         (dcontext, opnd_create_reg(REG_ECX),
-          opnd_create_base_disp(REG_ECX, REG_NULL, 0,
-                                -((int)(ptr_int_t)speculative_tag), OPSZ_lea)));
+    added_size += tracelist_add(
+        dcontext, trace, targeter,
+        INSTR_CREATE_lea(dcontext, opnd_create_reg(REG_ECX),
+                         opnd_create_base_disp(REG_ECX, REG_NULL, 0,
+                                               -((int)(ptr_int_t)speculative_tag),
+                                               OPSZ_lea)));
     jecxz = INSTR_CREATE_jecxz(dcontext, opnd_create_instr(continue_label));
     /* do not treat jecxz as exit cti! */
     instr_set_ok_to_mangle(jecxz, false);
     added_size += tracelist_add(dcontext, trace, targeter, jecxz);
     /* need to recover address in ecx */
     IF_X64(ASSERT_NOT_IMPLEMENTED(false));
-    added_size += tracelist_add
-        (dcontext, trace, targeter,
-         INSTR_CREATE_lea
-         (dcontext, opnd_create_reg(REG_ECX),
-          opnd_create_base_disp(REG_ECX, REG_NULL, 0,
-                                ((int)(ptr_int_t)speculative_tag), OPSZ_lea)));
+    added_size +=
+        tracelist_add(dcontext, trace, targeter,
+                      INSTR_CREATE_lea(dcontext, opnd_create_reg(REG_ECX),
+                                       opnd_create_base_disp(
+                                           REG_ECX, REG_NULL, 0,
+                                           ((int)(ptr_int_t)speculative_tag), OPSZ_lea)));
     added_size += tracelist_add_after(dcontext, trace, targeter, continue_label);
     return added_size;
 }
@@ -4747,7 +4713,7 @@ insert_transparent_comparison(dcontext_t *dcontext, instrlist_t *trace,
 static int
 mangle_indirect_branch_in_trace(dcontext_t *dcontext, instrlist_t *trace,
                                 instr_t *targeter, app_pc next_tag, uint next_flags,
-                                instr_t **delete_after/*OUT*/, instr_t *end_instr)
+                                instr_t **delete_after /*OUT*/, instr_t *end_instr)
 {
     int added_size = 0;
     instr_t *next = instr_get_next(targeter);
@@ -4758,8 +4724,9 @@ mangle_indirect_branch_in_trace(dcontext_t *dcontext, instrlist_t *trace,
            targeter == instrlist_last(trace));
 
     ASSERT(delete_after != NULL);
-    *delete_after = (next == NULL || (end_instr != NULL && targeter == end_instr)) ?
-        NULL : instr_get_prev(next);
+    *delete_after = (next == NULL || (end_instr != NULL && targeter == end_instr))
+        ? NULL
+        : instr_get_prev(next);
 
     STATS_INC(trace_ib_cmp);
 
@@ -4818,11 +4785,11 @@ mangle_indirect_branch_in_trace(dcontext_t *dcontext, instrlist_t *trace,
   0x4053811c   83 c4 04             add    $0x04 %esp -> %esp
         */
         LOG(THREAD, LOG_MONITOR, 4,
-            "ret removal: *b=0x%x, prev="PFX", dcontext="PFX", 0x%x\n",
-            *b, *((int *)(b-4)), dcontext, XCX_OFFSET);
-        if ((*b == 0x59 && *((int *)(b-4)) == ((uint)dcontext)+XCX_OFFSET) ||
-            (*(b-3)==0x59 && *((int *)(b-7)) == ((uint)dcontext)+XCX_OFFSET &&
-             *(b-2)==0x83 && *(b-1)==0xc4)) {
+            "ret removal: *b=0x%x, prev=" PFX ", dcontext=" PFX ", 0x%x\n", *b,
+            *((int *)(b - 4)), dcontext, XCX_OFFSET);
+        if ((*b == 0x59 && *((int *)(b - 4)) == ((uint)dcontext) + XCX_OFFSET) ||
+            (*(b - 3) == 0x59 && *((int *)(b - 7)) == ((uint)dcontext) + XCX_OFFSET &&
+             *(b - 2) == 0x83 && *(b - 1) == 0xc4)) {
             uint esp_add;
             /* already added calls & rets to call depth
              * if not negative, the call for this ret is earlier in this trace!
@@ -4837,15 +4804,15 @@ mangle_indirect_branch_in_trace(dcontext_t *dcontext, instrlist_t *trace,
                 esp_add = 4 + (uint)(*b);
                 LOG(THREAD, LOG_MONITOR, 4, "*b=0x%x, esp_add=%d\n", *b, esp_add);
             }
-# ifdef DEBUG
+#    ifdef DEBUG
             num_rets_removed++;
-# endif
+#    endif
             removed_ret = true;
-            added_size += tracelist_add
-                (dcontext, trace, targeter,
-                 INSTR_CREATE_lea(dcontext, opnd_create_reg(REG_ESP),
-                                  opnd_create_base_disp(REG_ESP, REG_NULL, 0,
-                                                        esp_add, OPSZ_lea)));
+            added_size +=
+                tracelist_add(dcontext, trace, targeter,
+                              INSTR_CREATE_lea(dcontext, opnd_create_reg(REG_ESP),
+                                               opnd_create_base_disp(REG_ESP, REG_NULL, 0,
+                                                                     esp_add, OPSZ_lea)));
         }
     }
     if (removed_ret) {
@@ -4857,12 +4824,12 @@ mangle_indirect_branch_in_trace(dcontext_t *dcontext, instrlist_t *trace,
 #ifdef NATIVE_RETURN
     IF_X64(ASSERT_NOT_IMPLEMENTED(false));
     if (
-# ifdef NATIVE_RETURN_RET_IN_TRACES
+#    ifdef NATIVE_RETURN_RET_IN_TRACES
         /* disable inlining ret: keep it as ret, actually gets better
          * performance, most noticeably on eon, vortex
          */
-        false && 
-# endif
+        false &&
+#    endif
         prev_l != NULL && prev_l->ret_pc != 0) {
         /* we came here through a ret
          * it was like this:
@@ -4888,7 +4855,7 @@ mangle_indirect_branch_in_trace(dcontext_t *dcontext, instrlist_t *trace,
         instrlist_t *stub_code = instrlist_create(dcontext);
         /* remove ret (will be added to custom exit stub code) */
         instr_t *ret = targeter;
-        LOG(THREAD, LOG_MONITOR, 4, "\tprev_l was a ret with last addr "PFX"\n",
+        LOG(THREAD, LOG_MONITOR, 4, "\tprev_l was a ret with last addr " PFX "\n",
             dcontext->last_retaddr);
         while (ret != NULL) {
             ret = instr_get_prev(ret);
@@ -4908,11 +4875,11 @@ mangle_indirect_branch_in_trace(dcontext_t *dcontext, instrlist_t *trace,
             ASSERT(ret != NULL);
             instrlist_remove(trace, ret);
             instr_destroy(dcontext, ret);
-            added_size += tracelist_add
-                (dcontext, trace, targeter,
-                 INSTR_CREATE_lea(dcontext, opnd_create_reg(REG_ESP),
-                                  opnd_create_base_disp(REG_ESP, REG_NULL, 0,
-                                                        (int)4, OPSZ_lea)));
+            added_size +=
+                tracelist_add(dcontext, trace, targeter,
+                              INSTR_CREATE_lea(dcontext, opnd_create_reg(REG_ESP),
+                                               opnd_create_base_disp(REG_ESP, REG_NULL, 0,
+                                                                     (int)4, OPSZ_lea)));
             instrlist_remove(trace, targeter);
             instr_destroy(dcontext, targeter);
             LOG(THREAD, LOG_MONITOR, 4, "\tjust removed ret (#calls %d)\n",
@@ -4921,108 +4888,110 @@ mangle_indirect_branch_in_trace(dcontext_t *dcontext, instrlist_t *trace,
             goto fixup_last_cti_finished;
         }
         /* add cmp to cache addr */
-        added_size += tracelist_add
-            (dcontext, trace, targeter,
-             INSTR_CREATE_cmp(dcontext, opnd_create_reg(REG_ECX),
-                              OPND_CREATE_INT32((int)dcontext->last_retaddr)));
+        added_size += tracelist_add(
+            dcontext, trace, targeter,
+            INSTR_CREATE_cmp(dcontext, opnd_create_reg(REG_ECX),
+                             OPND_CREATE_INT32((int)dcontext->last_retaddr)));
         /* change jmp into jne indirect_branch_lookup */
         instr_set_opcode(targeter, OP_jnz);
         /* add custom exit stub code */
-        added_size += tracelist_add(dcontext, stub_code, NULL,
-                                    INSTR_CREATE_push(dcontext, opnd_create_reg(REG_ECX)));
+        added_size +=
+            tracelist_add(dcontext, stub_code, NULL,
+                          INSTR_CREATE_push(dcontext, opnd_create_reg(REG_ECX)));
         /* FIXME: When using -unsafe_ignore_eflags, does jmp after call go to
          * ib prefix of target? need to fix up eflags issues w/ mangle.c */
         ASSERT_NOT_IMPLEMENTED(!INTERNAL_OPTION(unsafe_ignore_eflags));
-        added_size += tracelist_add
-            (dcontext, stub_code, NULL,
-             instr_create_restore_from_dcontext(dcontext, REG_ECX, XCX_OFFSET));
+        added_size += tracelist_add(
+            dcontext, stub_code, NULL,
+            instr_create_restore_from_dcontext(dcontext, REG_ECX, XCX_OFFSET));
         /* can't re-use ret instr, b/c need a ret w/ NO IMMED */
-        added_size += tracelist_add(dcontext, stub_code, NULL,
-                                    INSTR_CREATE_ret(dcontext));
+        added_size +=
+            tracelist_add(dcontext, stub_code, NULL, INSTR_CREATE_ret(dcontext));
         instr_set_exit_stub_code(targeter, stub_code);
-            
+
         /* now let normal restore-if-on-trace code get added */
     } else {
 #endif /* NATIVE_RETURN */
 
 #ifdef X64
-        added_size += tracelist_add
-            (dcontext, trace, targeter, INSTR_CREATE_mov_st
-             (dcontext, opnd_create_tls_slot(os_tls_offset(PREFIX_XAX_SPILL_SLOT)),
-              opnd_create_reg(REG_XAX)));
-        added_size += tracelist_add
-            (dcontext, trace, targeter, INSTR_CREATE_mov_imm
-             (dcontext, opnd_create_reg(REG_XAX),
-              OPND_CREATE_INTPTR((ptr_int_t)next_tag)));
+        added_size += tracelist_add(
+            dcontext, trace, targeter,
+            INSTR_CREATE_mov_st(
+                dcontext, opnd_create_tls_slot(os_tls_offset(PREFIX_XAX_SPILL_SLOT)),
+                opnd_create_reg(REG_XAX)));
+        added_size +=
+            tracelist_add(dcontext, trace, targeter,
+                          INSTR_CREATE_mov_imm(dcontext, opnd_create_reg(REG_XAX),
+                                               OPND_CREATE_INTPTR((ptr_int_t)next_tag)));
         /* saving in the trace and restoring in ibl means that
          * -unsafe_ignore_eflags_{trace,ibl} must be equivalent
          */
         if (!DYNAMO_OPTION(unsafe_ignore_eflags_trace)) {
-            added_size += tracelist_add
-                (dcontext, trace, targeter, INSTR_CREATE_mov_st
-                 (dcontext, opnd_create_tls_slot(os_tls_offset(INDIRECT_STUB_SPILL_SLOT)),
-                  opnd_create_reg(REG_XAX)));
+            added_size += tracelist_add(
+                dcontext, trace, targeter,
+                INSTR_CREATE_mov_st(
+                    dcontext,
+                    opnd_create_tls_slot(os_tls_offset(INDIRECT_STUB_SPILL_SLOT)),
+                    opnd_create_reg(REG_XAX)));
             /* FIXME: share w/ insert_save_eflags() */
-            added_size += tracelist_add
-                (dcontext, trace, targeter, INSTR_CREATE_lahf(dcontext));
+            added_size +=
+                tracelist_add(dcontext, trace, targeter, INSTR_CREATE_lahf(dcontext));
             if (!INTERNAL_OPTION(unsafe_ignore_overflow)) { /* OF needs saving */
                 /* Move OF flags into the OF flag spill slot. */
-                added_size += tracelist_add
-                    (dcontext, trace, targeter,
-                     INSTR_CREATE_setcc(dcontext, OP_seto, opnd_create_reg(REG_AL)));
+                added_size += tracelist_add(
+                    dcontext, trace, targeter,
+                    INSTR_CREATE_setcc(dcontext, OP_seto, opnd_create_reg(REG_AL)));
             }
-            added_size += tracelist_add
-                (dcontext, trace, targeter,
-                 INSTR_CREATE_cmp(dcontext, opnd_create_reg(REG_XCX),
-                                  opnd_create_tls_slot(os_tls_offset
-                                                       (INDIRECT_STUB_SPILL_SLOT))));
+            added_size += tracelist_add(
+                dcontext, trace, targeter,
+                INSTR_CREATE_cmp(
+                    dcontext, opnd_create_reg(REG_XCX),
+                    opnd_create_tls_slot(os_tls_offset(INDIRECT_STUB_SPILL_SLOT))));
         } else {
-            added_size += tracelist_add
-                (dcontext, trace, targeter,
-                 INSTR_CREATE_cmp(dcontext, opnd_create_reg(REG_XCX),
-                                  opnd_create_reg(REG_XAX)));
+            added_size +=
+                tracelist_add(dcontext, trace, targeter,
+                              INSTR_CREATE_cmp(dcontext, opnd_create_reg(REG_XCX),
+                                               opnd_create_reg(REG_XAX)));
         }
         /* change jmp into jne to trace cmp entry of ibl routine (special entry
          * that is after the eflags save) */
         instr_set_opcode(targeter, OP_jnz);
         added_size++; /* jcc is 6 bytes, jmp is 5 bytes */
         ASSERT(opnd_is_pc(instr_get_target(targeter)));
-        instr_set_target(targeter, opnd_create_pc
-                         (get_trace_cmp_entry(dcontext, opnd_get_pc
-                                              (instr_get_target(targeter)))));
+        instr_set_target(targeter,
+                         opnd_create_pc(get_trace_cmp_entry(
+                             dcontext, opnd_get_pc(instr_get_target(targeter)))));
         /* since the target gets lost we need to OR in this flag */
-        instr_exit_branch_set_type(targeter, instr_exit_branch_type(targeter) |
-                                   INSTR_TRACE_CMP_EXIT);
+        instr_exit_branch_set_type(
+            targeter, instr_exit_branch_type(targeter) | INSTR_TRACE_CMP_EXIT);
 #else
-        if (!INTERNAL_OPTION(unsafe_ignore_eflags_trace)) {
-            /* if equal follow to the next instruction after the exit CTI */
-            added_size +=
-                insert_transparent_comparison(dcontext, trace, targeter, next_tag);
-            /* leave jmp as it is, a jmp to exit stub (thence to ind br
-             * lookup) */
-        }
-        else {
-            /* assume eflags don't need to be saved across ind branches,
-             * so go ahead and use cmp, jne
-             */
-            /* FIXME: no way to cmp w/ 64-bit immed */
-            IF_X64(ASSERT_NOT_IMPLEMENTED(false));
-            added_size += tracelist_add
-                (dcontext, trace, targeter,
-                 INSTR_CREATE_cmp(dcontext, opnd_create_reg(REG_ECX),
-                                  OPND_CREATE_INT32((int)(ptr_int_t)next_tag)));
+    if (!INTERNAL_OPTION(unsafe_ignore_eflags_trace)) {
+        /* if equal follow to the next instruction after the exit CTI */
+        added_size += insert_transparent_comparison(dcontext, trace, targeter, next_tag);
+        /* leave jmp as it is, a jmp to exit stub (thence to ind br
+         * lookup) */
+    } else {
+        /* assume eflags don't need to be saved across ind branches,
+         * so go ahead and use cmp, jne
+         */
+        /* FIXME: no way to cmp w/ 64-bit immed */
+        IF_X64(ASSERT_NOT_IMPLEMENTED(false));
+        added_size +=
+            tracelist_add(dcontext, trace, targeter,
+                          INSTR_CREATE_cmp(dcontext, opnd_create_reg(REG_ECX),
+                                           OPND_CREATE_INT32((int)(ptr_int_t)next_tag)));
 
-            /* Change jmp into jne indirect_branch_lookup */
-            /* CHECK: is that also going to exit stub */
-            instr_set_opcode(targeter, OP_jnz);
-            added_size++; /* jcc is 6 bytes, jmp is 5 bytes */
-        }
+        /* Change jmp into jne indirect_branch_lookup */
+        /* CHECK: is that also going to exit stub */
+        instr_set_opcode(targeter, OP_jnz);
+        added_size++; /* jcc is 6 bytes, jmp is 5 bytes */
+    }
 #endif /* X64 */
         /* PR 214962: our spill restoration needs this whole sequence marked mangle */
         instr_set_our_mangling(targeter, true);
 
-        LOG(THREAD, LOG_MONITOR, 3,
-            "fixup_last_cti: added cmp vs. "PFX" for ind br\n", next_tag);
+        LOG(THREAD, LOG_MONITOR, 3, "fixup_last_cti: added cmp vs. " PFX " for ind br\n",
+            next_tag);
 
 #ifdef NATIVE_RETURN
     }
@@ -5034,13 +5003,13 @@ mangle_indirect_branch_in_trace(dcontext_t *dcontext, instrlist_t *trace,
         ibl_type_t ibl_type;
         /* FIXME: see if can test the instr flags instead */
         DEBUG_DECLARE(bool ok =)
-            get_ibl_routine_type(dcontext, opnd_get_pc(instr_get_target(targeter)),
-                                 &ibl_type);
+        get_ibl_routine_type(dcontext, opnd_get_pc(instr_get_target(targeter)),
+                             &ibl_type);
         ASSERT(ok);
-        added_size += insert_increment_stat_counter
-            (dcontext, trace, next, 
-             &get_ibl_per_type_statistics(dcontext, ibl_type.branch_type)->
-             ib_stay_on_trace_stat);
+        added_size += insert_increment_stat_counter(
+            dcontext, trace, next,
+            &get_ibl_per_type_statistics(dcontext, ibl_type.branch_type)
+                 ->ib_stay_on_trace_stat);
     }
 #endif /* HASHTABLE_STATISTICS */
 
@@ -5049,26 +5018,25 @@ mangle_indirect_branch_in_trace(dcontext_t *dcontext, instrlist_t *trace,
     added_size += insert_restore_spilled_xcx(dcontext, trace, next);
 
 #ifdef X64
-    LOG(THREAD, LOG_INTERP, 4, "next_flags for post-ibl-cmp: 0x%x\n",
-        next_flags);
+    LOG(THREAD, LOG_INTERP, 4, "next_flags for post-ibl-cmp: 0x%x\n", next_flags);
     if (!TEST(FRAG_WRITES_EFLAGS_6, next_flags) &&
         !DYNAMO_OPTION(unsafe_ignore_eflags_trace)) {
-        if (!TEST(FRAG_WRITES_EFLAGS_OF, next_flags) &&  /* OF was saved */
-            !INTERNAL_OPTION(unsafe_ignore_overflow)) { 
+        if (!TEST(FRAG_WRITES_EFLAGS_OF, next_flags) && /* OF was saved */
+            !INTERNAL_OPTION(unsafe_ignore_overflow)) {
             /* restore OF using add that overflows if OF was on when we did seto */
-            added_size += tracelist_add
-                (dcontext, trace, next, INSTR_CREATE_add
-                 (dcontext, opnd_create_reg(REG_AL), OPND_CREATE_INT8(0x7f)));
+            added_size +=
+                tracelist_add(dcontext, trace, next,
+                              INSTR_CREATE_add(dcontext, opnd_create_reg(REG_AL),
+                                               OPND_CREATE_INT8(0x7f)));
         }
-        added_size += tracelist_add
-            (dcontext, trace, next, INSTR_CREATE_sahf(dcontext));
+        added_size += tracelist_add(dcontext, trace, next, INSTR_CREATE_sahf(dcontext));
     } else
         STATS_INC(trace_ib_no_flag_restore);
     /* TODO optimization: check if xax is live or not in next bb */
-    added_size += tracelist_add
-        (dcontext, trace, next, INSTR_CREATE_mov_ld
-         (dcontext, opnd_create_reg(REG_XAX),
-          opnd_create_tls_slot(os_tls_offset(PREFIX_XAX_SPILL_SLOT))));
+    added_size += tracelist_add(
+        dcontext, trace, next,
+        INSTR_CREATE_mov_ld(dcontext, opnd_create_reg(REG_XAX),
+                            opnd_create_tls_slot(os_tls_offset(PREFIX_XAX_SPILL_SLOT))));
 #endif
 
 #ifdef RETURN_STACK
@@ -5076,12 +5044,11 @@ mangle_indirect_branch_in_trace(dcontext_t *dcontext, instrlist_t *trace,
         /* if we stay on the trace, still need to clear pair from
          * return stack
          */
-        opnd_t top = opnd_create_dcontext_field(dcontext,
-                                                TOP_OF_RSTACK_OFFSET);
+        opnd_t top = opnd_create_dcontext_field(dcontext, TOP_OF_RSTACK_OFFSET);
         /* insert prior to restoring flags (add clobbers them)! */
         added_size += tracelist_add(dcontext, trace, next,
                                     INSTR_CREATE_add(dcontext, top, OPND_CREATE_INT8(8)));
-        
+
         /* FIXME: we need to execute a ret instruction in order to
          * clear the hardware's return stack!  And if we do that there
          * is no way to avoid a ret misprediction...
@@ -5112,10 +5079,9 @@ mangle_indirect_branch_in_trace(dcontext_t *dcontext, instrlist_t *trace,
  * revive the now-removed CUSTOM_TRACES_ADD_TRACE define from the attic.
  */
 static int
-fixup_last_cti(dcontext_t *dcontext, instrlist_t *trace,
-               app_pc next_tag, uint next_flags, uint trace_flags,
-               fragment_t *prev_f, linkstub_t *prev_l,
-               bool record_translation, uint *num_exits_deleted/*OUT*/,
+fixup_last_cti(dcontext_t *dcontext, instrlist_t *trace, app_pc next_tag, uint next_flags,
+               uint trace_flags, fragment_t *prev_f, linkstub_t *prev_l,
+               bool record_translation, uint *num_exits_deleted /*OUT*/,
                /* If non-NULL, only looks inside trace between these two */
                instr_t *start_instr, instr_t *end_instr)
 {
@@ -5212,8 +5178,8 @@ fixup_last_cti(dcontext_t *dcontext, instrlist_t *trace,
                 }
             } else if (prev_l != NULL) {
                 LOG(THREAD, LOG_MONITOR, 4,
-                    "counting backwards: %d == target_tag = "PFX"\n",
-                    cur_exit, opnd_get_pc(instr_get_target(inst)));
+                    "counting backwards: %d == target_tag = " PFX "\n", cur_exit,
+                    opnd_get_pc(instr_get_target(inst)));
                 cur_exit--;
             }
         } /* is exit cti */
@@ -5222,13 +5188,10 @@ fixup_last_cti(dcontext_t *dcontext, instrlist_t *trace,
     if (record_translation)
         instrlist_set_translation_target(trace, instr_get_translation(targeter));
     instrlist_set_our_mangling(trace, true); /* PR 267260 */
-    DOLOG(4, LOG_MONITOR, {
-        loginst(dcontext, 4, targeter, "\ttargeter");
-    });
+    DOLOG(4, LOG_MONITOR, { loginst(dcontext, 4, targeter, "\ttargeter"); });
     if (is_indirect) {
-        added_size += mangle_indirect_branch_in_trace(dcontext, trace, targeter,
-                                                      next_tag, next_flags,
-                                                      &delete_after, end_instr);
+        added_size += mangle_indirect_branch_in_trace(
+            dcontext, trace, targeter, next_tag, next_flags, &delete_after, end_instr);
     } else {
         /* direct jump or conditional branch */
         instr_t *next = targeter->next;
@@ -5253,7 +5216,7 @@ fixup_last_cti(dcontext_t *dcontext, instrlist_t *trace,
             /* remove unnecessary ubr at end of block */
             delete_after = instr_get_prev(targeter);
             if (delete_after != NULL) {
-                LOG(THREAD, LOG_MONITOR, 4,     "fixup_last_cti: removed ubr\n");
+                LOG(THREAD, LOG_MONITOR, 4, "fixup_last_cti: removed ubr\n");
             }
         } else
             ASSERT_NOT_REACHED();
@@ -5289,7 +5252,8 @@ fixup_last_cti(dcontext_t *dcontext, instrlist_t *trace,
                 exits_deleted++;
             } else if (instr_opcode_valid(inst) && instr_is_cti(inst)) {
                 LOG(THREAD, LOG_MONITOR, 3,
-                    "WARNING: deleting non-exit cti in unused tail of frag added to trace\n");
+                    "WARNING: deleting non-exit cti in unused tail of frag added to "
+                    "trace\n");
             }
             loginst(dcontext, 4, inst, "\tdeleting");
             instrlist_remove(trace, inst);
@@ -5302,7 +5266,7 @@ fixup_last_cti(dcontext_t *dcontext, instrlist_t *trace,
         *num_exits_deleted = exits_deleted;
 
 #ifdef NATIVE_RETURN
- fixup_last_cti_finished:
+fixup_last_cti_finished:
 #endif
     if (record_translation)
         instrlist_set_translation_target(trace, NULL);
@@ -5316,8 +5280,7 @@ fixup_last_cti(dcontext_t *dcontext, instrlist_t *trace,
  */
 int
 append_trace_speculate_last_ibl(dcontext_t *dcontext, instrlist_t *trace,
-                                app_pc speculate_next_tag,
-                                bool record_translation)
+                                app_pc speculate_next_tag, bool record_translation)
 {
     /* unlike fixup_last_cti() here we are about to go directly to the IBL routine */
     /* spill XCX in a scratch slot - note always using TLS */
@@ -5325,7 +5288,7 @@ append_trace_speculate_last_ibl(dcontext_t *dcontext, instrlist_t *trace,
     ibl_type_t ibl_type;
 
     instr_t *inst = instrlist_last(trace); /* currently only relevant to last CTI */
-    instr_t *where = inst;         /* preinsert before last CTI */
+    instr_t *where = inst;                 /* preinsert before last CTI */
 
     instr_t *next = instr_get_next(inst);
     DEBUG_DECLARE(bool ok;)
@@ -5335,10 +5298,10 @@ append_trace_speculate_last_ibl(dcontext_t *dcontext, instrlist_t *trace,
     ASSERT(instr_is_exit_cti(inst));
 
     /* FIXME: see if can test the instr flags instead */
-    DEBUG_DECLARE(ok = )
-        get_ibl_routine_type(dcontext, opnd_get_pc(instr_get_target(inst)), &ibl_type);
+    DEBUG_DECLARE(ok =)
+    get_ibl_routine_type(dcontext, opnd_get_pc(instr_get_target(inst)), &ibl_type);
     ASSERT(ok);
-                
+
     if (record_translation)
         instrlist_set_translation_target(trace, instr_get_translation(inst));
     instrlist_set_our_mangling(trace, true); /* PR 267260 */
@@ -5350,46 +5313,44 @@ append_trace_speculate_last_ibl(dcontext_t *dcontext, instrlist_t *trace,
         if (INTERNAL_OPTION(speculate_last_exit_stats)) {
             int tls_stat_scratch_slot = os_tls_offset(HTABLE_STATS_SPILL_SLOT);
 
-            added_size += 
-                tracelist_add(dcontext, trace, where, 
-                              INSTR_CREATE_mov_st(dcontext,
-                                                  opnd_create_tls_slot(tls_stat_scratch_slot),
-                                                  opnd_create_reg(REG_XCX)));
-            added_size += 
-                insert_increment_stat_counter(dcontext, trace, where, 
-                                              &get_ibl_per_type_statistics(dcontext, 
-                                                                           ibl_type.branch_type)
-                                              ->ib_trace_last_ibl_exit);
-            added_size += 
-                tracelist_add(dcontext, trace, where, 
-                              INSTR_CREATE_mov_ld(dcontext,
-                                                  opnd_create_reg(REG_XCX),
-                                                  opnd_create_tls_slot(tls_stat_scratch_slot)));
+            added_size += tracelist_add(
+                dcontext, trace, where,
+                INSTR_CREATE_mov_st(dcontext, opnd_create_tls_slot(tls_stat_scratch_slot),
+                                    opnd_create_reg(REG_XCX)));
+            added_size += insert_increment_stat_counter(
+                dcontext, trace, where,
+                &get_ibl_per_type_statistics(dcontext, ibl_type.branch_type)
+                     ->ib_trace_last_ibl_exit);
+            added_size += tracelist_add(
+                dcontext, trace, where,
+                INSTR_CREATE_mov_ld(dcontext, opnd_create_reg(REG_XCX),
+                                    opnd_create_tls_slot(tls_stat_scratch_slot)));
         }
     });
 #endif
-    /* preinsert comparison before exit CTI, but increment of success statistics after it */
+    /* preinsert comparison before exit CTI, but increment of success statistics after it
+     */
 
     /* we need to compare to speculate_next_tag now */
     /* XCX holds value to match */
 
     /* should use similar eflags-clobbering scheme to inline cmp */
     IF_X64(ASSERT_NOT_IMPLEMENTED(false));
-    /* 
-     *    8d 89 76 9b bf ff    lea    -tag(%ecx) -> %ecx 
+    /*
+     *    8d 89 76 9b bf ff    lea    -tag(%ecx) -> %ecx
      *    e3 0b                jecxz  continue
-     *    8d 89 8a 64 40 00    lea    tag(%ecx) -> %ecx 
+     *    8d 89 8a 64 40 00    lea    tag(%ecx) -> %ecx
      *    e9 17 00 00 00       jmp    <exit stub 1: IBL>
      *
      * continue:
      *                        <increment stats>
-     *                        <restore app ecx>  # see FIXME whether to go to prefix or do here
-     *    e9 cc aa dd 00       jmp speculate_next_tag
+     *                        <restore app ecx>  # see FIXME whether to go to prefix or do
+     * here e9 cc aa dd 00       jmp speculate_next_tag
      *
      */
 
     /* leave jmp as it is, a jmp to exit stub (thence to ind br lookup) */
-    added_size += 
+    added_size +=
         insert_transparent_comparison(dcontext, trace, where, speculate_next_tag);
 
 #ifdef HASHTABLE_STATISTICS
@@ -5398,19 +5359,17 @@ append_trace_speculate_last_ibl(dcontext_t *dcontext, instrlist_t *trace,
             int tls_stat_scratch_slot = os_tls_offset(HTABLE_STATS_SPILL_SLOT);
             /* XCX already saved */
 
-            added_size += 
-                insert_increment_stat_counter(dcontext, trace, next, 
-                                              &get_ibl_per_type_statistics(dcontext, 
-                                                                           ibl_type.branch_type)
-                                              ->ib_trace_last_ibl_speculate_success);
+            added_size += insert_increment_stat_counter(
+                dcontext, trace, next,
+                &get_ibl_per_type_statistics(dcontext, ibl_type.branch_type)
+                     ->ib_trace_last_ibl_speculate_success);
             /* restore XCX to app IB target*/
-            added_size += 
-                tracelist_add(dcontext, trace, next, 
-                              INSTR_CREATE_mov_ld(dcontext,
-                                                  opnd_create_reg(REG_XCX),
-                                                  opnd_create_tls_slot(tls_stat_scratch_slot)));
+            added_size += tracelist_add(
+                dcontext, trace, next,
+                INSTR_CREATE_mov_ld(dcontext, opnd_create_reg(REG_XCX),
+                                    opnd_create_tls_slot(tls_stat_scratch_slot)));
         }
-    });        
+    });
 #endif
     /* adding a new CTI for speculative target that is a pseudo
      * direct exit.  Although we could have used the indirect stub
@@ -5423,7 +5382,7 @@ append_trace_speculate_last_ibl(dcontext_t *dcontext, instrlist_t *trace,
 
     /* Ensure all register state is properly preserved on both linked
      * and unlinked paths - currently only XCX is in use.
-     * 
+     *
      *
      * Preferably we should be targeting prefix of target to
      * save some space for recovering XCX from hot path.  We'd
@@ -5434,7 +5393,7 @@ append_trace_speculate_last_ibl(dcontext_t *dcontext, instrlist_t *trace,
      *
      * For simplicity, we currently restore XCX here and use a plain
      * direct exit stub that goes to target start_pc instead of
-     * prefixes.  
+     * prefixes.
      *
      * FIXME: (case 5085) the problem with the current scheme is that
      * when we exit unlinked the source will be marked as a DIRECT
@@ -5449,10 +5408,11 @@ append_trace_speculate_last_ibl(dcontext_t *dcontext, instrlist_t *trace,
     added_size += insert_restore_spilled_xcx(dcontext, trace, next);
 
     /* add a new direct exit stub */
-    added_size += tracelist_add(dcontext, trace, next, 
-                                INSTR_CREATE_jmp(dcontext, opnd_create_pc(speculate_next_tag)));
+    added_size +=
+        tracelist_add(dcontext, trace, next,
+                      INSTR_CREATE_jmp(dcontext, opnd_create_pc(speculate_next_tag)));
     LOG(THREAD, LOG_INTERP, 3,
-        "append_trace_speculate_last_ibl: added cmp vs. "PFX" for ind br\n",
+        "append_trace_speculate_last_ibl: added cmp vs. " PFX " for ind br\n",
         speculate_next_tag);
 
     if (record_translation)
@@ -5481,7 +5441,7 @@ append_ib_trace_last_ibl_exit_stat(dcontext_t *dcontext, instrlist_t *trace,
     ibl_type_t ibl_type;
 
     instr_t *inst = instrlist_last(trace); /* currently only relevant to last CTI */
-    instr_t *where = inst;         /* preinsert before exit CTI */
+    instr_t *where = inst;                 /* preinsert before exit CTI */
 
     DEBUG_DECLARE(bool ok;)
 
@@ -5493,53 +5453,56 @@ append_ib_trace_last_ibl_exit_stat(dcontext_t *dcontext, instrlist_t *trace,
 
     /* FIXME: see if can test the instr flags instead */
     ok = get_ibl_routine_type(dcontext, opnd_get_pc(instr_get_target(inst)), &ibl_type);
-                
+
     ASSERT(ok);
-    added_size += tracelist_add(dcontext, trace, where, 
-                                INSTR_CREATE_mov_st(dcontext,
-                                                    opnd_create_tls_slot(tls_stat_scratch_slot),
-                                                    opnd_create_reg(REG_XCX)));
-    added_size += 
-        insert_increment_stat_counter(dcontext, trace, where, 
-                                      &get_ibl_per_type_statistics(dcontext, ibl_type.branch_type)
-                                      ->ib_trace_last_ibl_exit);
-    added_size += tracelist_add(dcontext, trace, where, 
-                                INSTR_CREATE_mov_ld(dcontext,
-                                                    opnd_create_reg(REG_XCX),
-                                                    opnd_create_tls_slot(tls_stat_scratch_slot)));
+    added_size += tracelist_add(
+        dcontext, trace, where,
+        INSTR_CREATE_mov_st(dcontext, opnd_create_tls_slot(tls_stat_scratch_slot),
+                            opnd_create_reg(REG_XCX)));
+    added_size += insert_increment_stat_counter(
+        dcontext, trace, where,
+        &get_ibl_per_type_statistics(dcontext, ibl_type.branch_type)
+             ->ib_trace_last_ibl_exit);
+    added_size +=
+        tracelist_add(dcontext, trace, where,
+                      INSTR_CREATE_mov_ld(dcontext, opnd_create_reg(REG_XCX),
+                                          opnd_create_tls_slot(tls_stat_scratch_slot)));
 
     if (speculate_next_tag != NULL) {
         instr_t *next = instr_get_next(inst);
         /* preinsert comparison before exit CTI, but increment goes after it */
 
-        /* we need to compare to speculate_next_tag now - just like fixup_last_cti() would do later */
+        /* we need to compare to speculate_next_tag now - just like fixup_last_cti() would
+         * do later */
         /* ECX holds value to match here */
-        
+
         /* leave jmp as it is, a jmp to exit stub (thence to ind br lookup) */
 
         /* continue:
-         *    increment success counter 
+         *    increment success counter
          *    jmp targeter
          *
-         *   FIXME: now the last instruction is no longer the exit_cti - see if that breaks any assumptions,
-         *   using a short jump to see if anyone erroneously uses this
+         *   FIXME: now the last instruction is no longer the exit_cti - see if that
+         * breaks any assumptions, using a short jump to see if anyone erroneously uses
+         * this
          */
-        added_size += 
+        added_size +=
             insert_transparent_comparison(dcontext, trace, where, speculate_next_tag);
 
-        /* we'll kill again although ECX restored unnecessarily by comparison routine,   */
-        added_size += 
-            insert_increment_stat_counter(dcontext, trace, next, 
-                                          &get_ibl_per_type_statistics(dcontext, ibl_type.branch_type)
-                                          ->ib_trace_last_ibl_speculate_success);
+        /* we'll kill again although ECX restored unnecessarily by comparison routine, */
+        added_size += insert_increment_stat_counter(
+            dcontext, trace, next,
+            &get_ibl_per_type_statistics(dcontext, ibl_type.branch_type)
+                 ->ib_trace_last_ibl_speculate_success);
         /* restore ECX */
-        added_size += tracelist_add(dcontext, trace, next, 
-                                INSTR_CREATE_mov_ld(dcontext,
-                                                    opnd_create_reg(REG_ECX),
-                                                    opnd_create_tls_slot(tls_stat_scratch_slot)));
+        added_size += tracelist_add(
+            dcontext, trace, next,
+            INSTR_CREATE_mov_ld(dcontext, opnd_create_reg(REG_ECX),
+                                opnd_create_tls_slot(tls_stat_scratch_slot)));
         /* jmp where */
-        added_size += tracelist_add(dcontext, trace, next, 
-                                    INSTR_CREATE_jmp_short(dcontext, opnd_create_instr(where)));
+        added_size +=
+            tracelist_add(dcontext, trace, next,
+                          INSTR_CREATE_jmp_short(dcontext, opnd_create_instr(where)));
     }
 
     return added_size;
@@ -5549,7 +5512,7 @@ append_ib_trace_last_ibl_exit_stat(dcontext_t *dcontext, instrlist_t *trace,
 /* Add the fragment f to the end of the trace instrlist_t kept in dcontext
  *
  * Note that recreate_fragment_ilist() is making assumptions about its operation
- * synchronize changes 
+ * synchronize changes
  *
  * Returns the size change in the trace from mangling the previous block
  * (assumes the caller has already calculated the size from adding the new block)
@@ -5557,7 +5520,7 @@ append_ib_trace_last_ibl_exit_stat(dcontext_t *dcontext, instrlist_t *trace,
 uint
 extend_trace(dcontext_t *dcontext, fragment_t *f, linkstub_t *prev_l)
 {
-    monitor_data_t *md = (monitor_data_t *) dcontext->monitor_field;
+    monitor_data_t *md = (monitor_data_t *)dcontext->monitor_field;
     fragment_t *prev_f = NULL;
     instrlist_t *trace = &(md->trace);
     instrlist_t *ilist;
@@ -5578,7 +5541,7 @@ extend_trace(dcontext_t *dcontext, fragment_t *f, linkstub_t *prev_l)
                /* we track the ordinal of the del linkstub so it's ok */
                prev_l == get_deleted_linkstub(dcontext));
         prev_f = linkstub_fragment(dcontext, prev_l);
-        LOG(THREAD, LOG_MONITOR, 4, "prev_l = owned by F%d, branch pc "PFX"\n",
+        LOG(THREAD, LOG_MONITOR, 4, "prev_l = owned by F%d, branch pc " PFX "\n",
             prev_f->id, EXIT_CTI_PC(prev_f, prev_l));
     } else {
         LOG(THREAD, LOG_MONITOR, 4, "prev_l is NULL\n");
@@ -5586,22 +5549,21 @@ extend_trace(dcontext_t *dcontext, fragment_t *f, linkstub_t *prev_l)
 
     /* insert code to optimize last branch based on new fragment */
     if (instrlist_last(trace) != NULL) {
-        prev_mangle_size = fixup_last_cti(dcontext, trace, f->tag, f->flags,
-                                          md->trace_flags, prev_f, prev_l, false,
-                                          &num_exits_deleted, NULL, NULL);
+        prev_mangle_size =
+            fixup_last_cti(dcontext, trace, f->tag, f->flags, md->trace_flags, prev_f,
+                           prev_l, false, &num_exits_deleted, NULL, NULL);
     }
-    
+
 #ifdef CUSTOM_TRACES_RET_REMOVAL
     /* add now, want fixup to operate on depth before adding new blk */
     dcontext->call_depth += f->num_calls;
     dcontext->call_depth -= f->num_rets;
 #endif
 
-    LOG(THREAD, LOG_MONITOR, 4,
-        "\tadding block %d == "PFX"\n", md->num_blks, f->tag);
+    LOG(THREAD, LOG_MONITOR, 4, "\tadding block %d == " PFX "\n", md->num_blks, f->tag);
 
     size = md->trace_buf_size - md->trace_buf_top;
-    LOG(THREAD, LOG_MONITOR, 4, "decoding F%d into trace buf @"PFX" + 0x%x = "PFX"\n",
+    LOG(THREAD, LOG_MONITOR, 4, "decoding F%d into trace buf @" PFX " + 0x%x = " PFX "\n",
         f->id, md->trace_buf, md->trace_buf_top, md->trace_buf + md->trace_buf_top);
     /* FIXME: PR 307388: if md->pass_to_client, much of this is a waste of time as
      * we're going to re-mangle and re-fixup after passing our unmangled list to the
@@ -5622,11 +5584,11 @@ extend_trace(dcontext_t *dcontext, fragment_t *f, linkstub_t *prev_l)
     md->blk_info[md->num_blks].info.num_exits = new_exits_dir + new_exits_indir;
 #endif
     md->num_blks++;
-    
+
     /* We need to remove any nops we added for -pad_jmps (we don't expect there
-     * to be any in a bb if -pad_jmps_shift_bb) to avoid screwing up 
+     * to be any in a bb if -pad_jmps_shift_bb) to avoid screwing up
      * fixup_last_cti etc. */
-    process_nops_for_trace(dcontext, ilist, f->flags _IF_DEBUG(false/*!recreating*/));
+    process_nops_for_trace(dcontext, ilist, f->flags _IF_DEBUG(false /*!recreating*/));
 
     DOLOG(5, LOG_MONITOR, {
         LOG(THREAD, LOG_MONITOR, 5, "post-trace-ibl-fixup, ilist is:\n");
@@ -5635,12 +5597,13 @@ extend_trace(dcontext_t *dcontext, fragment_t *f, linkstub_t *prev_l)
 
     ASSERT(!instrlist_get_our_mangling(ilist));
     instrlist_append(trace, instrlist_first(ilist));
-    instrlist_init(ilist); /* clear fields so destroy won't kill instrs now on trace list */
+    instrlist_init(
+        ilist); /* clear fields so destroy won't kill instrs now on trace list */
     instrlist_destroy(dcontext, ilist);
 
     md->trace_buf_top += size;
     ASSERT(md->trace_buf_top < md->trace_buf_size);
-    LOG(THREAD, LOG_MONITOR, 4, "post-extend_trace, trace buf + 0x%x => "PFX"\n",
+    LOG(THREAD, LOG_MONITOR, 4, "post-extend_trace, trace buf + 0x%x => " PFX "\n",
         md->trace_buf_top, md->trace_buf);
 
     DOLOG(4, LOG_MONITOR, {
@@ -5652,8 +5615,7 @@ extend_trace(dcontext_t *dcontext, fragment_t *f, linkstub_t *prev_l)
 
 /* If branch_type is 0, sets it to the type of a ubr */
 static instr_t *
-create_exit_jmp(dcontext_t *dcontext, app_pc target, app_pc translation,
-                uint branch_type)
+create_exit_jmp(dcontext_t *dcontext, app_pc target, app_pc translation, uint branch_type)
 {
     instr_t *jmp = INSTR_CREATE_jmp(dcontext, opnd_create_pc(target));
     instr_set_translation(jmp, translation);
@@ -5669,8 +5631,7 @@ static bool
 can_use_mangle_trace(void)
 {
     /* elision messes up our bb boundary identification */
-    bool ok = (DYNAMO_OPTION(max_elide_jmp) == 0 &&
-               DYNAMO_OPTION(max_elide_call) == 0 &&
+    bool ok = (DYNAMO_OPTION(max_elide_jmp) == 0 && DYNAMO_OPTION(max_elide_call) == 0 &&
                !DYNAMO_OPTION(indcall2direct));
 #ifdef CLIENT_INTERFACE
     /* must be able to use it if client has hooks */
@@ -5703,7 +5664,7 @@ mangle_trace(dcontext_t *dcontext, instrlist_t *ilist, monitor_data_t *md)
 
     ASSERT(can_use_mangle_trace());
 
-    LOG(THREAD, LOG_MONITOR, 2, "mangle_trace "PFX"\n", md->trace_tag);
+    LOG(THREAD, LOG_MONITOR, 2, "mangle_trace " PFX "\n", md->trace_tag);
     DOLOG(4, LOG_INTERP, {
         LOG(THREAD, LOG_INTERP, 4, "ilist passed to mangle_trace:\n");
         instrlist_disassemble(dcontext, md->trace_tag, ilist, THREAD);
@@ -5721,9 +5682,9 @@ mangle_trace(dcontext_t *dcontext, instrlist_t *ilist, monitor_data_t *md)
             continue;
 
         DOLOG(5, LOG_INTERP, {
-            LOG(THREAD, LOG_MONITOR, 4, "transl "PFX" ", instr_get_translation(inst));
+            LOG(THREAD, LOG_MONITOR, 4, "transl " PFX " ", instr_get_translation(inst));
             loginst(dcontext, 4, inst, "considering non-meta");
-        }); 
+        });
 
         /* Check for bb end with no exit cti.  We don't worry about whether a ubr w/
          * a translation set to its target is part of this or next bb: all that's
@@ -5733,22 +5694,23 @@ mangle_trace(dcontext_t *dcontext, instrlist_t *ilist, monitor_data_t *md)
          * the next block's translation range.
          */
         /* PR 366232: we handle empty bbs by looping here */
-        for (i = 1; blk+i < md->num_blks; i++) {
+        for (i = 1; blk + i < md->num_blks; i++) {
             /* Since we can have tail-duplication among bbs, make sure to first
              * check whether we're still in the cur block: b/c this translation
              * can be both in this block and in next block.  In such a case we
              * assume a (backward) cti separates them. */
             if (!(instr_get_translation(inst) >= md->blk_info[blk].info.tag &&
                   instr_get_translation(inst) < md->blk_info[blk].bounds.end_pc) &&
-                instr_get_translation(inst) >= md->blk_info[blk+i].info.tag &&
-                instr_get_translation(inst) < md->blk_info[blk+i].bounds.end_pc) {
+                instr_get_translation(inst) >= md->blk_info[blk + i].info.tag &&
+                instr_get_translation(inst) < md->blk_info[blk + i].bounds.end_pc) {
                 /* counting down but adding jmps in forward order */
                 for (; i >= 1; i--) {
                     DOLOG(4, LOG_INTERP, { /* use prev to avoid added jmp */
-                        loginst(dcontext, 4, prev, "fallthrough end of bb");
-                    }); 
-                    jmp = create_exit_jmp(dcontext, md->blk_info[blk+1].info.tag,
-                                          md->blk_info[blk+1].info.tag, 0);
+                                           loginst(dcontext, 4, prev,
+                                                   "fallthrough end of bb");
+                    });
+                    jmp = create_exit_jmp(dcontext, md->blk_info[blk + 1].info.tag,
+                                          md->blk_info[blk + 1].info.tag, 0);
                     instrlist_preinsert(ilist, inst, jmp);
                     md->blk_info[blk].bounds.end_instr = jmp;
                     blk++;
@@ -5756,7 +5718,7 @@ mangle_trace(dcontext_t *dcontext, instrlist_t *ilist, monitor_data_t *md)
                     /* we'll decrement if jmp gets elided (as it should) */
                     md->blk_info[blk].info.num_exits++;
 #endif
-                    LOG(THREAD, LOG_MONITOR, 4, "starting next bb "PFX"\n",
+                    LOG(THREAD, LOG_MONITOR, 4, "starting next bb " PFX "\n",
                         md->blk_info[blk].info.tag);
                 }
                 break;
@@ -5765,11 +5727,11 @@ mangle_trace(dcontext_t *dcontext, instrlist_t *ilist, monitor_data_t *md)
 
 #ifdef CLIENT_INTERFACE
         /* Ensure non-ignorable syscall/int2b terminates trace */
-#ifndef LINUX_KERNEL
+#    ifndef LINUX_KERNEL
         if (md->pass_to_client &&
             !client_check_syscall(ilist, inst, &found_syscall, &found_int))
             return false;
-#endif
+#    endif
 
         /* Clients should not add new source code regions, which would mess us up
          * here, as well as mess up our cache consistency (both page prot and
@@ -5781,9 +5743,10 @@ mangle_trace(dcontext_t *dcontext, instrlist_t *ilist, monitor_data_t *md)
               (instr_is_ubr(inst) && opnd_is_pc(instr_get_target(inst)) &&
                instr_get_translation(inst) == opnd_get_pc(instr_get_target(inst))))) {
             LOG(THREAD, LOG_MONITOR, 2,
-                "trace error: out-of-bounds transl "PFX" vs start "PFX" end "PFX"\n",
-                instr_get_translation(inst),
-                md->blk_info[blk].info.tag, md->blk_info[blk].bounds.end_pc);
+                "trace error: out-of-bounds transl " PFX " vs start " PFX " end " PFX
+                "\n",
+                instr_get_translation(inst), md->blk_info[blk].info.tag,
+                md->blk_info[blk].bounds.end_pc);
             CLIENT_ASSERT(false,
                           "trace's app sources (instr_set_translation() targets) "
                           "must remain within original bounds");
@@ -5810,21 +5773,19 @@ mangle_trace(dcontext_t *dcontext, instrlist_t *ilist, monitor_data_t *md)
         if (instr_will_be_exit_cti(inst) &&
             (!instr_is_ubr(inst) ||
              (inst == instrlist_last(ilist) ||
-              (blk+1 < md->num_blks &&
+              (blk + 1 < md->num_blks &&
                /* client is disallowed from changing bb exits and sequencing in trace
                 * hook; if they change in bb for_trace, will be reflected here.
                 */
-               opnd_get_pc(instr_get_target(inst)) == md->blk_info[blk+1].info.tag)))) {
+               opnd_get_pc(instr_get_target(inst)) == md->blk_info[blk + 1].info.tag)))) {
 
-            DOLOG(4, LOG_INTERP, {
-                loginst(dcontext, 4, inst, "end of bb");
-            }); 
+            DOLOG(4, LOG_INTERP, { loginst(dcontext, 4, inst, "end of bb"); });
 
             /* Add jump that fixup_last_cti expects */
             if (!instr_is_ubr(inst)) {
                 app_pc target;
                 if (instr_is_mbr(inst)) {
-                    target = get_ibl_routine(dcontext, IBL_LINKED, DEFAULT_IBL_TRACE(), 
+                    target = get_ibl_routine(dcontext, IBL_LINKED, DEFAULT_IBL_TRACE(),
                                              get_ibl_branch_type(inst));
                 } else if (instr_is_cbr(inst)) {
                     target = instr_get_translation(inst) + instr_length(dcontext, inst);
@@ -5845,7 +5806,7 @@ mangle_trace(dcontext_t *dcontext, instrlist_t *ilist, monitor_data_t *md)
             blk++;
             DOLOG(4, LOG_INTERP, {
                 if (blk < md->num_blks) {
-                    LOG(THREAD, LOG_MONITOR, 4, "starting next bb "PFX"\n",
+                    LOG(THREAD, LOG_MONITOR, 4, "starting next bb " PFX "\n",
                         md->blk_info[blk].info.tag);
                 }
             });
@@ -5861,7 +5822,6 @@ mangle_trace(dcontext_t *dcontext, instrlist_t *ilist, monitor_data_t *md)
         if (instr_will_be_exit_cti(inst))
             md->blk_info[blk].info.num_exits++;
 #endif
-
     }
     if (blk < md->num_blks) {
         ASSERT(!instr_is_ubr(instrlist_last(ilist)));
@@ -5903,7 +5863,8 @@ mangle_trace(dcontext_t *dcontext, instrlist_t *ilist, monitor_data_t *md)
         CLIENT_ASSERT((!found_syscall && !found_int)
                       /* On linux we allow ignorable syscalls in middle.
                        * FIXME PR 307284: see notes above. */
-                      IF_NOT_LINUX_KERNEL(IF_LINUX(|| !TEST(LINK_NI_SYSCALL, md->final_exit_flags))),
+                      IF_NOT_LINUX_KERNEL(
+                          IF_LINUX(|| !TEST(LINK_NI_SYSCALL, md->final_exit_flags))),
                       "client changed exit target where unsupported\n"
                       "check if trace ends in a syscall or int");
     }
@@ -5919,7 +5880,7 @@ mangle_trace(dcontext_t *dcontext, instrlist_t *ilist, monitor_data_t *md)
         instrlist_disassemble(dcontext, md->trace_tag, ilist, THREAD);
     });
     /* We do not need to remove nops since we never emitted */
-    mangle(dcontext, ilist, md->trace_flags, true/*mangle calls*/,
+    mangle(dcontext, ilist, md->trace_flags, true /*mangle calls*/,
            /* we're post-client so we don't need translations unless storing */
            TEST(FRAG_HAS_TRANSLATION_INFO, md->trace_flags));
     DOLOG(4, LOG_INTERP, {
@@ -5932,21 +5893,20 @@ mangle_trace(dcontext_t *dcontext, instrlist_t *ilist, monitor_data_t *md)
     start_instr = instrlist_first(ilist);
     for (inst = instrlist_first(ilist); inst != NULL; inst = next_inst) {
         next_inst = instr_get_next(inst);
-        
+
         if (inst == md->blk_info[blk].bounds.end_instr) {
             /* Chain exit to point to next bb */
             if (blk + 1 < md->num_blks) {
                 /* We must do proper analysis so that state translation matches
                  * created traces in whether eflags are restored post-cmp
                  */
-                uint next_flags = forward_eflags_analysis(dcontext, ilist,
-                                                          instr_get_next(inst));
+                uint next_flags =
+                    forward_eflags_analysis(dcontext, ilist, instr_get_next(inst));
                 next_flags = instr_eflags_to_fragment_eflags(next_flags);
                 LOG(THREAD, LOG_INTERP, 4, "next_flags for fixup_last_cti: 0x%x\n",
                     next_flags);
-                fixup_last_cti(dcontext, ilist, md->blk_info[blk+1].info.tag,
-                               next_flags,
-                               md->trace_flags, NULL, NULL,
+                fixup_last_cti(dcontext, ilist, md->blk_info[blk + 1].info.tag,
+                               next_flags, md->trace_flags, NULL, NULL,
                                TEST(FRAG_HAS_TRANSLATION_INFO, md->trace_flags),
                                &num_exits_deleted,
                                /* Only walk ilist between these instrs */
@@ -5982,7 +5942,7 @@ instr_eflags_to_fragment_eflags(uint instr_eflags)
 {
     uint frag_eflags = 0;
     if (instr_eflags == EFLAGS_WRITE_OF) {
-        /* this fragment writes OF before reading it 
+        /* this fragment writes OF before reading it
          * May still read other flags before writing them.
          */
         frag_eflags |= FRAG_WRITES_EFLAGS_OF;
@@ -6016,8 +5976,8 @@ forward_eflags_analysis(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr
             eflags_result = eflags_analysis(in, eflags_result, &eflags_6);
         DOLOG(4, LOG_INTERP, {
             loginst(dcontext, 4, in, "forward_eflags_analysis");
-            LOG(THREAD, LOG_INTERP, 4, "\tinstr %x => %x\n",
-                instr_get_eflags(in), eflags_result);
+            LOG(THREAD, LOG_INTERP, 4, "\tinstr %x => %x\n", instr_get_eflags(in),
+                eflags_result);
         });
     }
     return eflags_result;
@@ -6025,14 +5985,14 @@ forward_eflags_analysis(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr
 
 /* This translates f's code into an instrlist_t and returns it.
  * If buf is NULL:
- *   The Instrs returned point into f's raw bits, so encode them 
+ *   The Instrs returned point into f's raw bits, so encode them
  *   before you delete f!
  * Else, f's raw bits are copied into buf, and *bufsz is modified to
  *   contain the total bytes copied
  *   FIXME: should have release build checks and not just asserts where
  *   we rely on caller to have big-enough buffer?
  * If target_flags differ from f->flags in sharing and/or in trace-ness,
- *   converts ibl and tls usage in f to match the desired target_flags.  
+ *   converts ibl and tls usage in f to match the desired target_flags.
  *   FIXME: converting from private to shared tls is not yet
  *   implemented: we rely on -private_ib_in_tls for adding normal
  *   private bbs to shared traces, and disallow any extensive mangling
@@ -6045,14 +6005,13 @@ forward_eflags_analysis(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr
  */
 
 /* We want to avoid low-loglevel disassembly when we're in the middle of disassembly */
-#define DF_LOGLEVEL(dc) \
-    (((dc) != GLOBAL_DCONTEXT && (dc)->in_opnd_disassemble) ? 6U : 4U)
+#define DF_LOGLEVEL(dc) (((dc) != GLOBAL_DCONTEXT && (dc)->in_opnd_disassemble) ? 6U : 4U)
 
 instrlist_t *
-decode_fragment(dcontext_t *dcontext, fragment_t *f, byte *buf, /*IN/OUT*/uint *bufsz,
-                uint target_flags, /*OUT*/uint *dir_exits, /*OUT*/uint *indir_exits)
+decode_fragment(dcontext_t *dcontext, fragment_t *f, byte *buf, /*IN/OUT*/ uint *bufsz,
+                uint target_flags, /*OUT*/ uint *dir_exits, /*OUT*/ uint *indir_exits)
 {
-    linkstub_t  *l;
+    linkstub_t *l;
     cache_pc start_pc, stop_pc, pc, prev_pc = NULL, raw_start_pc;
     instr_t *instr, *cti = NULL, *raw_instr;
     instrlist_t *ilist = instrlist_create(dcontext);
@@ -6105,8 +6064,8 @@ decode_fragment(dcontext_t *dcontext, fragment_t *f, byte *buf, /*IN/OUT*/uint *
         info = get_fragment_coarse_info(f);
         ASSERT(info != NULL);
         coarse_elided_ubrs =
-            (info->persisted && TEST(PERSCACHE_ELIDED_UBR, info->flags))
-            || (!info->persisted && DYNAMO_OPTION(coarse_freeze_elide_ubr));
+            (info->persisted && TEST(PERSCACHE_ELIDED_UBR, info->flags)) ||
+            (!info->persisted && DYNAMO_OPTION(coarse_freeze_elide_ubr));
         /* Assumption: coarse-grain fragments have no ctis w/ off-fragment targets
          * that are not exit ctis
          */
@@ -6120,7 +6079,7 @@ decode_fragment(dcontext_t *dcontext, fragment_t *f, byte *buf, /*IN/OUT*/uint *
             stop_pc = EXIT_CTI_PC(f, l);
         } else if (TEST(FRAG_FAKE, f->flags)) {
             /* we don't know the size of f */
-            stop_pc = (cache_pc) UNIVERSAL_REGION_END;
+            stop_pc = (cache_pc)UNIVERSAL_REGION_END;
         } else {
             /* fake fragment_t, or code between last exit but before stubs or padding */
             stop_pc = fragment_body_end_pc(dcontext, f);
@@ -6134,15 +6093,15 @@ decode_fragment(dcontext_t *dcontext, fragment_t *f, byte *buf, /*IN/OUT*/uint *
                  * off FRAG_COARSE_GRAIN and set FRAG_CANNOT_BE_TRACE).
                  * Sanity check, make sure it at least looks like there is no
                  * code here */
-                ASSERT(IS_SET_TO_DEBUG(raw_start_pc, stop_pc - raw_start_pc)); 
+                ASSERT(IS_SET_TO_DEBUG(raw_start_pc, stop_pc - raw_start_pc));
                 stop_pc = raw_start_pc;
             }
         }
         IF_X64(ASSERT(TEST(FRAG_FAKE, f->flags) /* no copy made */ ||
                       CHECK_TRUNCATE_TYPE_uint((stop_pc - raw_start_pc))));
-        num_bytes = (uint) (stop_pc - raw_start_pc);
+        num_bytes = (uint)(stop_pc - raw_start_pc);
         LOG(THREAD, LOG_MONITOR, DF_LOGLEVEL(dcontext),
-            "decoding fragment from "PFX" to "PFX"\n", raw_start_pc, stop_pc);
+            "decoding fragment from " PFX " to " PFX "\n", raw_start_pc, stop_pc);
         if (num_bytes > 0) {
             if (buf != NULL) {
                 if (TEST(FRAG_FAKE, f->flags)) {
@@ -6158,7 +6117,7 @@ decode_fragment(dcontext_t *dcontext, fragment_t *f, byte *buf, /*IN/OUT*/uint *
                     memcpy(cur_buf, raw_start_pc, num_bytes);
                     top_buf = cur_buf + num_bytes;
                     LOG(THREAD, LOG_MONITOR, DF_LOGLEVEL(dcontext),
-                        "decode_fragment: copied "PFX"-"PFX" to "PFX"-"PFX"\n",
+                        "decode_fragment: copied " PFX "-" PFX " to " PFX "-" PFX "\n",
                         raw_start_pc, raw_start_pc + num_bytes, cur_buf,
                         cur_buf + num_bytes);
                     /* cur_buf is incremented later -- it always points to start
@@ -6178,7 +6137,7 @@ decode_fragment(dcontext_t *dcontext, fragment_t *f, byte *buf, /*IN/OUT*/uint *
              */
             instr = instr_create(dcontext);
             pc = raw_start_pc;
-            /* do we have to translate the store of xcx from tls to dcontext? 
+            /* do we have to translate the store of xcx from tls to dcontext?
              * be careful -- there can be private bbs w/ indirect branches, so
              * must see if this is a shared fragment we're adding
              */
@@ -6200,20 +6159,20 @@ decode_fragment(dcontext_t *dcontext, fragment_t *f, byte *buf, /*IN/OUT*/uint *
                  * possible (case 9325 -- need exact re-mangle + re-instrument),
                  * though -coarse_pclookup_table helps.
                  */
-                if (info != NULL && info->frozen &&
-                    coarse_elided_ubrs && pc != start_pc) {
+                if (info != NULL && info->frozen && coarse_elided_ubrs &&
+                    pc != start_pc) {
                     /* case 6532: check for ib stubs as we elide the jmp there too */
                     bool stop = false;
                     if (coarse_is_indirect_stub(pc)) {
                         stop = true;
-                        LOG(THREAD, LOG_MONITOR, DF_LOGLEVEL(dcontext)-1,
-                            "\thit ib stub @"PFX"\n", pc);
+                        LOG(THREAD, LOG_MONITOR, DF_LOGLEVEL(dcontext) - 1,
+                            "\thit ib stub @" PFX "\n", pc);
                     } else {
                         app_pc tag = fragment_coarse_entry_pclookup(dcontext, info, pc);
                         if (tag != NULL) {
                             stop = true;
-                            LOG(THREAD, LOG_MONITOR, DF_LOGLEVEL(dcontext)-1,
-                                "\thit frozen tgt: "PFX"."PFX"\n", tag, pc);
+                            LOG(THREAD, LOG_MONITOR, DF_LOGLEVEL(dcontext) - 1,
+                                "\thit frozen tgt: " PFX "." PFX "\n", tag, pc);
                         }
                     }
                     if (stop) {
@@ -6233,9 +6192,8 @@ decode_fragment(dcontext_t *dcontext, fragment_t *f, byte *buf, /*IN/OUT*/uint *
                 pc = decode_cti(dcontext, pc, instr);
 #ifdef WINDOWS
                 /* Perform fixups for ignorable syscalls on XP & 2003. */
-                if (possible_ignorable_sysenter
-                    && instr_opcode_valid(instr)
-                    && instr_is_syscall(instr)) {
+                if (possible_ignorable_sysenter && instr_opcode_valid(instr) &&
+                    instr_is_syscall(instr)) {
 
                     /* We want to find the instr preceding the sysenter and have
                      * it point to the post-sysenter instr in the trace, rather than
@@ -6246,7 +6204,7 @@ decode_fragment(dcontext_t *dcontext, fragment_t *f, byte *buf, /*IN/OUT*/uint *
 
                     ASSERT(prev_decode_pc != NULL);
                     LOG(THREAD, LOG_MONITOR, DF_LOGLEVEL(dcontext),
-                        "decode_fragment: sysenter found @"PFX"\n",
+                        "decode_fragment: sysenter found @" PFX "\n",
                         instr_get_raw_bits(instr));
 
                     /* create single raw instr for instructions up to the
@@ -6266,8 +6224,7 @@ decode_fragment(dcontext_t *dcontext, fragment_t *f, byte *buf, /*IN/OUT*/uint *
                      */
                     sysenter_prev = instr_create(dcontext);
                     decode(dcontext, prev_decode_pc, sysenter_prev);
-                    ASSERT(instr_valid(instr) &&
-                           instr_is_mov_imm_to_tos(sysenter_prev));
+                    ASSERT(instr_valid(instr) && instr_is_mov_imm_to_tos(sysenter_prev));
                     instrlist_append(ilist, sysenter_prev);
                     cur_buf += instr_length(dcontext, sysenter_prev);
 
@@ -6293,14 +6250,13 @@ decode_fragment(dcontext_t *dcontext, fragment_t *f, byte *buf, /*IN/OUT*/uint *
 
                     instrlist_append(ilist, sysenter_post);
                     /* Point the pre-sysenter mov to the post-sysenter instr. */
-                    instr_set_src(sysenter_prev, 0,
-                                  opnd_create_instr(sysenter_post));
+                    instr_set_src(sysenter_prev, 0, opnd_create_instr(sysenter_post));
                     instr_set_ok_to_mangle(sysenter_prev, false);
                     instr_set_ok_to_mangle(sysenter_post, false);
 
                     DOLOG(DF_LOGLEVEL(dcontext), LOG_INTERP, {
                         LOG(THREAD, LOG_INTERP, DF_LOGLEVEL(dcontext),
-                            "Post-sysenter -- F%d ("PFX") into:\n", f->id, f->tag);
+                            "Post-sysenter -- F%d (" PFX ") into:\n", f->id, f->tag);
                         instrlist_disassemble(dcontext, f->tag, ilist, THREAD);
                     });
 
@@ -6319,7 +6275,8 @@ decode_fragment(dcontext_t *dcontext, fragment_t *f, byte *buf, /*IN/OUT*/uint *
                     bool separate_cti = false;
                     bool re_relativize = false;
                     DOLOG(DF_LOGLEVEL(dcontext), LOG_MONITOR, {
-                        loginst(dcontext, 4, instr, "decode_fragment: found non-exit cti");
+                        loginst(dcontext, 4, instr,
+                                "decode_fragment: found non-exit cti");
                     });
                     if (TEST(FRAG_FAKE, f->flags)) {
                         /* Case 8711: we don't know the size so we can't even
@@ -6357,7 +6314,8 @@ decode_fragment(dcontext_t *dcontext, fragment_t *f, byte *buf, /*IN/OUT*/uint *
                         separate_cti = true;
                         re_relativize = true;
                     } else if (opnd_get_pc(instr_get_target(instr)) < start_pc ||
-                               opnd_get_pc(instr_get_target(instr)) > start_pc+f->size) {
+                               opnd_get_pc(instr_get_target(instr)) >
+                                   start_pc + f->size) {
                         separate_cti = true;
                         re_relativize = true;
                         DOLOG(DF_LOGLEVEL(dcontext), LOG_MONITOR, {
@@ -6369,12 +6327,13 @@ decode_fragment(dcontext_t *dcontext, fragment_t *f, byte *buf, /*IN/OUT*/uint *
                          */
                         instr_t *clone = instr_clone(dcontext, instr);
                         /* HACK: use note field! */
-                        instr_set_note(clone, (void *) instr);
+                        instr_set_note(clone, (void *)instr);
                         /* we leave the clone pointing at valid original raw bits */
                         instrlist_append(&intra_ctis, clone);
                         /* intra-fragment target */
                         DOLOG(DF_LOGLEVEL(dcontext), LOG_MONITOR, {
-                            loginst(dcontext, 4, instr, "\tcti has intra-fragment target");
+                            loginst(dcontext, 4, instr,
+                                    "\tcti has intra-fragment target");
                         });
 #ifdef NATIVE_RETURN
                         if (instr_is_call(instr)) {
@@ -6434,9 +6393,9 @@ decode_fragment(dcontext_t *dcontext, fragment_t *f, byte *buf, /*IN/OUT*/uint *
                         raw_start_pc = prev_pc;
                     }
                     /* now append our new xcx save */
-                    instrlist_append(ilist,
-                                     instr_create_save_to_dcontext
-                                     (dcontext, REG_XCX, XCX_OFFSET));
+                    instrlist_append(
+                        ilist,
+                        instr_create_save_to_dcontext(dcontext, REG_XCX, XCX_OFFSET));
                     /* make sure skip current instr */
                     cur_buf += (int)(pc - prev_pc);
                     raw_start_pc = pc;
@@ -6464,7 +6423,7 @@ decode_fragment(dcontext_t *dcontext, fragment_t *f, byte *buf, /*IN/OUT*/uint *
                     if (buf != NULL) {
                         /* re-relativize into the new buffer */
                         DEBUG_DECLARE(byte *nxt =)
-                            instr_encode(dcontext, instr, cur_buf);
+                        instr_encode(dcontext, instr, cur_buf);
                         instr_set_raw_bits(instr, cur_buf, (int)(pc - prev_pc));
                         instr_set_rip_rel_valid(instr, true);
                         ASSERT(nxt != NULL);
@@ -6480,7 +6439,7 @@ decode_fragment(dcontext_t *dcontext, fragment_t *f, byte *buf, /*IN/OUT*/uint *
             DODEBUG({
                 if (pc != stop_pc) {
                     LOG(THREAD, LOG_MONITOR, DF_LOGLEVEL(dcontext),
-                        "PC "PFX", stop_pc "PFX"\n", pc, stop_pc);
+                        "PC " PFX ", stop_pc " PFX "\n", pc, stop_pc);
                 }
             });
             ASSERT(pc == stop_pc);
@@ -6502,12 +6461,12 @@ decode_fragment(dcontext_t *dcontext, fragment_t *f, byte *buf, /*IN/OUT*/uint *
                      */
                     ASSERT(top_buf < cur_buf);
                     IF_X64(ASSERT(CHECK_TRUNCATE_TYPE_uint((cur_buf - top_buf))));
-                    num_bytes = (uint) (cur_buf - top_buf);
+                    num_bytes = (uint)(cur_buf - top_buf);
                     ASSERT(cur_buf + num_bytes < buf + *bufsz);
                     memcpy(cur_buf, raw_start_pc, num_bytes);
                     top_buf = cur_buf + num_bytes;
                     LOG(THREAD, LOG_MONITOR, DF_LOGLEVEL(dcontext),
-                        "decode_fragment: copied "PFX"-"PFX" to "PFX"-"PFX"\n",
+                        "decode_fragment: copied " PFX "-" PFX " to " PFX "-" PFX "\n",
                         raw_start_pc, raw_start_pc + num_bytes, cur_buf,
                         cur_buf + num_bytes);
                 }
@@ -6542,15 +6501,15 @@ decode_fragment(dcontext_t *dcontext, fragment_t *f, byte *buf, /*IN/OUT*/uint *
             app_pc instr_tgt;
             /* Ensure we get proper target for short cti sequence */
             if (instr_is_cti_short_rewrite(instr, stop_pc))
-                remangle_short_rewrite(dcontext, instr, stop_pc, 0/*same target*/);
+                remangle_short_rewrite(dcontext, instr, stop_pc, 0 /*same target*/);
             instr_tgt = opnd_get_pc(instr_get_target(instr));
             ASSERT(TEST(FRAG_COARSE_GRAIN, f->flags));
             if (cti == NULL && coarse_is_entrance_stub(instr_tgt)) {
                 target_tag = entrance_stub_target_tag(instr_tgt);
                 l_flags = LINK_DIRECT;
                 /* FIXME; try to get LINK_JMP vs LINK_CALL vs fall-through? */
-                LOG(THREAD, LOG_MONITOR, DF_LOGLEVEL(dcontext)-1,
-                    "\tstub tgt: "PFX" => "PFX"\n", instr_tgt, target_tag);
+                LOG(THREAD, LOG_MONITOR, DF_LOGLEVEL(dcontext) - 1,
+                    "\tstub tgt: " PFX " => " PFX "\n", instr_tgt, target_tag);
             } else if (instr_tgt == raw_start_pc /*target next instr*/
                        /* could optimize by not checking for stub if
                         * coarse_elided_ubrs but we need to know whether ALL
@@ -6563,21 +6522,20 @@ decode_fragment(dcontext_t *dcontext, fragment_t *f, byte *buf, /*IN/OUT*/uint *
                 DEBUG_DECLARE(bool is_ibl;)
                 target_tag = coarse_indirect_stub_jmp_target(instr_tgt);
                 l_flags = LINK_INDIRECT;
-                DEBUG_DECLARE(is_ibl = )
-                    get_ibl_routine_type_ex(dcontext, target_tag, &ibl_type
-                                            _IF_X64(NULL));
+                DEBUG_DECLARE(is_ibl =)
+                get_ibl_routine_type_ex(dcontext, target_tag, &ibl_type _IF_X64(NULL));
                 ASSERT(is_ibl);
                 l_flags |= ibltype_to_linktype(ibl_type.branch_type);
-                LOG(THREAD, LOG_MONITOR, DF_LOGLEVEL(dcontext)-1,
-                    "\tind stub tgt: "PFX" => "PFX"\n", instr_tgt, target_tag);
+                LOG(THREAD, LOG_MONITOR, DF_LOGLEVEL(dcontext) - 1,
+                    "\tind stub tgt: " PFX " => " PFX "\n", instr_tgt, target_tag);
             } else {
                 target_tag = fragment_coarse_entry_pclookup(dcontext, info, instr_tgt);
                 /* Only frozen units don't jump through stubs */
                 ASSERT(info != NULL && info->frozen);
                 ASSERT(target_tag != NULL);
                 l_flags = LINK_DIRECT;
-                LOG(THREAD, LOG_MONITOR, DF_LOGLEVEL(dcontext)-1,
-                    "\tfrozen tgt: "PFX"."PFX"\n", target_tag, instr_tgt);
+                LOG(THREAD, LOG_MONITOR, DF_LOGLEVEL(dcontext) - 1,
+                    "\tfrozen tgt: " PFX "." PFX "\n", target_tag, instr_tgt);
             }
         } else {
             target_tag = EXIT_TARGET_TAG(dcontext, f, l);
@@ -6594,31 +6552,32 @@ decode_fragment(dcontext_t *dcontext, fragment_t *f, byte *buf, /*IN/OUT*/uint *
             app_pc new_target = target_tag;
             /* don't point to fcache bits */
             instr_set_raw_bits_valid(instr, false);
-            LOG(THREAD, LOG_MONITOR, DF_LOGLEVEL(dcontext)-1,
-                "decode_fragment exit_cti: pc="PFX" l->target_tag="PFX" l->flags=0x%x\n",
+            LOG(THREAD, LOG_MONITOR, DF_LOGLEVEL(dcontext) - 1,
+                "decode_fragment exit_cti: pc=" PFX " l->target_tag=" PFX
+                " l->flags=0x%x\n",
                 stop_pc, target_tag, l_flags);
 
-            /* need to propagate exit branch type flags, 
+            /* need to propagate exit branch type flags,
              * instr_t flag copied from old fragment linkstub
-             * TODO: when ibl targets are different this won't be necessary 
+             * TODO: when ibl targets are different this won't be necessary
              */
             instr_exit_branch_set_type(instr, linkstub_propagatable_flags(l_flags));
 
             /* convert to proper ibl */
             if (is_indirect_branch_lookup_routine(dcontext, target_tag)) {
                 DEBUG_DECLARE(app_pc old_target = new_target;)
-                new_target = get_alternate_ibl_routine(dcontext, target_tag,
-                                                       target_flags);
+                new_target =
+                    get_alternate_ibl_routine(dcontext, target_tag, target_flags);
                 ASSERT(new_target != NULL);
 
                 /* for stats on traces, we assume if target_flags contains
                  * FRAG_IS_TRACE then we are extending a trace
                  */
                 DODEBUG({
-                    LOG(THREAD, LOG_MONITOR, DF_LOGLEVEL(dcontext)-1,
-                        "%s: %s ibl_routine "PFX" with %s_target="PFX"\n",
-                        TEST(FRAG_IS_TRACE, target_flags) ? 
-                        "extend_trace" : "decode_fragment",
+                    LOG(THREAD, LOG_MONITOR, DF_LOGLEVEL(dcontext) - 1,
+                        "%s: %s ibl_routine " PFX " with %s_target=" PFX "\n",
+                        TEST(FRAG_IS_TRACE, target_flags) ? "extend_trace"
+                                                          : "decode_fragment",
                         new_target == old_target ? "maintaining" : "replacing",
                         old_target, new_target == old_target ? "old" : "new", new_target);
                     STATS_INC(num_traces_ibl_extended);
@@ -6630,7 +6589,7 @@ decode_fragment(dcontext_t *dcontext, fragment_t *f, byte *buf, /*IN/OUT*/uint *
                         STATS_INC(num_traces_shared_syscall_extended);
                 });
 #endif
-            }     
+            }
 
             instr_set_target(instr, opnd_create_pc(new_target));
 
@@ -6664,7 +6623,7 @@ decode_fragment(dcontext_t *dcontext, fragment_t *f, byte *buf, /*IN/OUT*/uint *
     if (instrlist_first(&intra_ctis) != NULL) {
         /* We have to undo all of our level 0 blocks by expanding.
          * Any instrs that need re-relativization should already be
-         * separate, so this should not affect rip-rel instrs.           
+         * separate, so this should not affect rip-rel instrs.
          */
         int offs = 0;
         for (instr = instrlist_first_expanded(dcontext, ilist); instr != NULL;
@@ -6679,7 +6638,7 @@ decode_fragment(dcontext_t *dcontext, fragment_t *f, byte *buf, /*IN/OUT*/uint *
                  */
                 if (opnd_get_pc(instr_get_target(cti)) - start_pc == offs) {
                     /* cti targets this instr */
-                    instr_t *real_cti = (instr_t *) instr_get_note(cti);
+                    instr_t *real_cti = (instr_t *)instr_get_note(cti);
                     /* PR 333691: do not preserve raw bits of real_cti, since
                      * instrlist may change (e.g., inserted nops).  Must re-encode
                      * once instrlist is finalized.
@@ -6695,11 +6654,10 @@ decode_fragment(dcontext_t *dcontext, fragment_t *f, byte *buf, /*IN/OUT*/uint *
         }
     }
 
-    instrlist_clear(dcontext,&intra_ctis);
+    instrlist_clear(dcontext, &intra_ctis);
     DOLOG(DF_LOGLEVEL(dcontext), LOG_INTERP, {
         LOG(THREAD, LOG_INTERP, DF_LOGLEVEL(dcontext),
-            "Decoded F%d ("PFX"."PFX") into:\n",
-            f->id, f->tag, FCACHE_ENTRY_PC(f));
+            "Decoded F%d (" PFX "." PFX ") into:\n", f->id, f->tag, FCACHE_ENTRY_PC(f));
         instrlist_disassemble(dcontext, f->tag, ilist, THREAD);
     });
 
@@ -6713,7 +6671,7 @@ decode_fragment(dcontext_t *dcontext, fragment_t *f, byte *buf, /*IN/OUT*/uint *
         *indir_exits = num_indir;
     if (buf != NULL) {
         IF_X64(ASSERT(CHECK_TRUNCATE_TYPE_uint((top_buf - buf))));
-        *bufsz = (uint) (top_buf - buf);
+        *bufsz = (uint)(top_buf - buf);
     }
     return ilist;
 }
@@ -6724,8 +6682,8 @@ decode_fragment(dcontext_t *dcontext, fragment_t *f, byte *buf, /*IN/OUT*/uint *
  */
 instrlist_t *
 decode_fragment_exact(dcontext_t *dcontext, fragment_t *f, byte *buf,
-                      /*IN/OUT*/uint *bufsz, uint target_flags,
-                      /*OUT*/uint *dir_exits, /*OUT*/uint *indir_exits)
+                      /*IN/OUT*/ uint *bufsz, uint target_flags,
+                      /*OUT*/ uint *dir_exits, /*OUT*/ uint *indir_exits)
 {
     instrlist_t *ilist =
         decode_fragment(dcontext, f, buf, bufsz, target_flags, dir_exits, indir_exits);
@@ -6747,19 +6705,19 @@ fragment_t *
 copy_fragment(dcontext_t *dcontext, fragment_t *f, bool replace)
 {
     instrlist_t *trace = instrlist_create(dcontext);
-    instr_t     *instr;
-    uint    *trace_buf;
-    int       trace_buf_top; /* index of next free location in trace_buf */
-    linkstub_t  *l;
+    instr_t *instr;
+    uint *trace_buf;
+    int trace_buf_top; /* index of next free location in trace_buf */
+    linkstub_t *l;
     byte *p;
-    cache_pc  start_pc;
-    int       num_bytes;
-    fragment_t  *new_f;
-    void      *vmlist = NULL;
-    app_pc    target_tag;
+    cache_pc start_pc;
+    int num_bytes;
+    fragment_t *new_f;
+    void *vmlist = NULL;
+    app_pc target_tag;
     DEBUG_DECLARE(bool ok;)
 
-    trace_buf = heap_alloc(dcontext, f->size*2 HEAPACCT(ACCT_FRAGMENT));
+    trace_buf = heap_alloc(dcontext, f->size * 2 HEAPACCT(ACCT_FRAGMENT));
 
     start_pc = FCACHE_ENTRY_PC(f);
     trace_buf_top = 0;
@@ -6773,7 +6731,7 @@ copy_fragment(dcontext_t *dcontext, fragment_t *f, bool replace)
          * that the first link stub corresponds to the first exit branch
          * in the body. */
         IF_X64(ASSERT(CHECK_TRUNCATE_TYPE_uint((EXIT_CTI_PC(f, l) - start_pc))));
-        num_bytes = (uint) (EXIT_CTI_PC(f, l) - start_pc);
+        num_bytes = (uint)(EXIT_CTI_PC(f, l) - start_pc);
         if (num_bytes > 0) {
             memcpy(p, (byte *)start_pc, num_bytes);
             trace_buf_top += num_bytes;
@@ -6796,9 +6754,7 @@ copy_fragment(dcontext_t *dcontext, fragment_t *f, bool replace)
         target_tag = EXIT_TARGET_TAG(dcontext, f, l);
         ASSERT(target_tag);
         if (instr_is_cti_short_rewrite(instr, EXIT_CTI_PC(f, l))) {
-            p = remangle_short_rewrite(dcontext, instr,
-                                       EXIT_CTI_PC(f, l),
-                                       target_tag);
+            p = remangle_short_rewrite(dcontext, instr, EXIT_CTI_PC(f, l), target_tag);
         } else {
             /* no short ctis that aren't mangled should be exit ctis */
             ASSERT(!instr_is_cti_short(instr));
@@ -6812,7 +6768,7 @@ copy_fragment(dcontext_t *dcontext, fragment_t *f, bool replace)
     /* We don't support shared fragments, where vm_area_add_to_list can fail */
     ASSERT_NOT_IMPLEMENTED(!TEST(FRAG_SHARED, f->flags));
     DEBUG_DECLARE(ok =)
-        vm_area_add_to_list(dcontext, f->tag, &vmlist, f->flags, f, false/*no locks*/);
+    vm_area_add_to_list(dcontext, f->tag, &vmlist, f->flags, f, false /*no locks*/);
     ASSERT(ok); /* should never fail for private fragments */
     new_f = emit_invisible_fragment(dcontext, f->tag, trace, f->flags, vmlist);
     if (replace) {
@@ -6835,12 +6791,12 @@ copy_fragment(dcontext_t *dcontext, fragment_t *f, bool replace)
     }
 #endif /* DEBUG */
 
-    heap_free(dcontext, trace_buf, f->size*2 HEAPACCT(ACCT_FRAGMENT));
+    heap_free(dcontext, trace_buf, f->size * 2 HEAPACCT(ACCT_FRAGMENT));
     /* free the instrlist_t elements */
     instrlist_clear_and_destroy(dcontext, trace);
     if (replace) {
-        fragment_delete(dcontext, f, FRAGDEL_NO_OUTPUT | FRAGDEL_NO_UNLINK |
-                        FRAGDEL_NO_HTABLE);
+        fragment_delete(dcontext, f,
+                        FRAGDEL_NO_OUTPUT | FRAGDEL_NO_UNLINK | FRAGDEL_NO_HTABLE);
         STATS_INC(num_fragments_deleted_copy_and_replace);
     }
     return new_f;
@@ -6857,8 +6813,7 @@ copy_fragment(dcontext_t *dcontext, fragment_t *f, bool replace)
  */
 void
 shift_ctis_in_fragment(dcontext_t *dcontext, fragment_t *f, ssize_t shift,
-                       cache_pc fcache_start, cache_pc fcache_end,
-                       size_t old_size)
+                       cache_pc fcache_start, cache_pc fcache_end, size_t old_size)
 {
     cache_pc pc, prev_pc = NULL;
     cache_pc start_pc = FCACHE_ENTRY_PC(f);
@@ -6889,7 +6844,7 @@ shift_ctis_in_fragment(dcontext_t *dcontext, fragment_t *f, ssize_t shift,
 #endif
         prev_pc = pc;
         instr_reset(dcontext, &instr);
-        pc = (cache_pc) decode_cti(dcontext, (byte*)pc, &instr);
+        pc = (cache_pc)decode_cti(dcontext, (byte *)pc, &instr);
 #ifdef WINDOWS
         /* Perform fixups for sysenter instrs when ignorable syscalls is used on
          * XP & 2003. These are not cache-external fixups, but it's convenient &
@@ -6897,9 +6852,8 @@ shift_ctis_in_fragment(dcontext_t *dcontext, fragment_t *f, ssize_t shift,
          * instruction, allowing identification of sysenters without additional
          * decoding.
          */
-        if (possible_ignorable_sysenter
-            && instr_opcode_valid(&instr)
-            && instr_is_syscall(&instr)) {
+        if (possible_ignorable_sysenter && instr_opcode_valid(&instr) &&
+            instr_is_syscall(&instr)) {
 
             cache_pc next_pc;
             app_pc target;
@@ -6911,20 +6865,19 @@ shift_ctis_in_fragment(dcontext_t *dcontext, fragment_t *f, ssize_t shift,
             next_pc = decode(dcontext, prev_decode_pc, &instr);
             ASSERT(next_pc == prev_pc);
             LOG(THREAD, LOG_MONITOR, 4,
-                "shift_ctis_in_fragment: pre-sysenter mov found @"PFX"\n",
+                "shift_ctis_in_fragment: pre-sysenter mov found @" PFX "\n",
                 instr_get_raw_bits(&instr));
             ASSERT(instr_is_mov_imm_to_tos(&instr));
-            target = instr_get_raw_bits(&instr) + instr_length(dcontext, &instr)
-                + (pc - prev_pc);
-            DODEBUG(old_target = (app_pc) opnd_get_immed_int(instr_get_src(&instr, 0)););
+            target = instr_get_raw_bits(&instr) + instr_length(dcontext, &instr) +
+                (pc - prev_pc);
+            DODEBUG(old_target = (app_pc)opnd_get_immed_int(instr_get_src(&instr, 0)););
             /* PR 253943: we don't support sysenter in x64 */
             IF_X64(ASSERT_NOT_IMPLEMENTED(false)); /* can't have 8-byte imm-to-mem */
             instr_set_src(&instr, 0, opnd_create_immed_int((ptr_int_t)target, OPSZ_4));
             ASSERT(old_target + shift == target);
             LOG(THREAD, LOG_MONITOR, 4,
-                "shift_ctis_in_fragment: pre-sysenter mov now pts to @"PFX"\n",
-                target);
-            DEBUG_DECLARE(encode_nxt = ) instr_encode(dcontext, &instr, prev_decode_pc);
+                "shift_ctis_in_fragment: pre-sysenter mov now pts to @" PFX "\n", target);
+            DEBUG_DECLARE(encode_nxt =) instr_encode(dcontext, &instr, prev_decode_pc);
             /* must not change size! */
             ASSERT(encode_nxt != NULL && encode_nxt == next_pc);
         }
@@ -6943,15 +6896,14 @@ shift_ctis_in_fragment(dcontext_t *dcontext, fragment_t *f, ssize_t shift,
              * are inserted through instrumentation, so go ahead and
              * check num srcs
              */
-            instr_num_srcs(&instr) > 0 &&
-            opnd_is_near_pc(instr_get_target(&instr))) {
+            instr_num_srcs(&instr) > 0 && opnd_is_near_pc(instr_get_target(&instr))) {
             app_pc target = opnd_get_pc(instr_get_target(&instr));
             if (target < fcache_start || target > fcache_old_end) {
-                DEBUG_DECLARE(byte *nxt_pc;)
+                DEBUG_DECLARE(byte * nxt_pc;)
                 /* re-encode instr w/ new pc-relative target */
                 instr_set_raw_bits_valid(&instr, false);
                 instr_set_target(&instr, opnd_create_pc(target - shift));
-                DEBUG_DECLARE(nxt_pc = ) instr_encode(dcontext, &instr, prev_pc);
+                DEBUG_DECLARE(nxt_pc =) instr_encode(dcontext, &instr, prev_pc);
                 /* must not change size! */
                 ASSERT(nxt_pc != NULL && nxt_pc == pc);
 #ifdef DEBUG
@@ -6975,7 +6927,7 @@ shift_ctis_in_fragment(dcontext_t *dcontext, fragment_t *f, ssize_t shift,
 void
 add_profile_call(dcontext_t *dcontext)
 {
-    monitor_data_t *md = (monitor_data_t *) dcontext->monitor_field;
+    monitor_data_t *md = (monitor_data_t *)dcontext->monitor_field;
     instrlist_t *trace = &(md->trace);
     byte *p = ((byte *)md->trace_buf) + md->trace_buf_top;
     instr_t *instr;
@@ -7020,15 +6972,15 @@ emulate(dcontext_t *dcontext, app_pc pc, dr_mcontext_t *mc)
         reg_t val;
         uint sz = opnd_size_in_bytes(opnd_get_size(dst));
         ASSERT(opnd_is_memory_reference(dst));
-        if (sz != 4 IF_X64(&& sz != 8)) {
+        if (sz != 4 IF_X64(&&sz != 8)) {
             next_pc = NULL;
             goto emulate_failure;
         }
-        target = (reg_t *) opnd_compute_address(dst, mc);
+        target = (reg_t *)opnd_compute_address(dst, mc);
         if (opnd_is_reg(src)) {
             val = reg_get_value(opnd_get_reg(src), mc);
         } else if (opnd_is_immed_int(src)) {
-            val = (reg_t) opnd_get_immed_int(src);
+            val = (reg_t)opnd_get_immed_int(src);
         } else {
             next_pc = NULL;
             goto emulate_failure;
@@ -7038,10 +6990,10 @@ emulate(dcontext_t *dcontext, app_pc pc, dr_mcontext_t *mc)
             ASSERT(get_memory_info((app_pc)target, NULL, NULL, &prot));
             ASSERT(TEST(MEMPROT_WRITE, prot));
         });
-        LOG(THREAD, LOG_INTERP, 2, "\temulating store by writing "PFX" to "PFX"\n",
+        LOG(THREAD, LOG_INTERP, 2, "\temulating store by writing " PFX " to " PFX "\n",
             val, target);
         if (sz == 4)
-            *((int*)target) = (int) val;
+            *((int *)target) = (int)val;
 #ifdef X64
         else if (sz == 8)
             *target = val;
@@ -7050,26 +7002,26 @@ emulate(dcontext_t *dcontext, app_pc pc, dr_mcontext_t *mc)
         opnd_t src = instr_get_src(&instr, 0);
         reg_t *target;
         uint sz = opnd_size_in_bytes(opnd_get_size(src));
-        if (sz != 4 IF_X64(&& sz != 8)) {
+        if (sz != 4 IF_X64(&&sz != 8)) {
             next_pc = NULL;
             goto emulate_failure;
         }
         /* FIXME: handle changing register value */
         ASSERT(opnd_is_memory_reference(src));
         /* FIXME: change these to take in dr_mcontext_t* ? */
-        target = (reg_t *) opnd_compute_address(src, mc);
+        target = (reg_t *)opnd_compute_address(src, mc);
         DODEBUG({
             uint prot;
             ASSERT(get_memory_info((app_pc)target, NULL, NULL, &prot));
             ASSERT(TEST(MEMPROT_WRITE, prot));
         });
-        LOG(THREAD, LOG_INTERP, 2, "\temulating %s to "PFX"\n",
+        LOG(THREAD, LOG_INTERP, 2, "\temulating %s to " PFX "\n",
             opc == OP_inc ? "inc" : "dec", target);
         if (sz == 4) {
             if (opc == OP_inc)
-                (*((int*)target))++;
+                (*((int *)target))++;
             else
-                (*((int*)target))--;
+                (*((int *)target))--;
         }
 #ifdef X64
         else if (sz == 8) {
@@ -7080,7 +7032,7 @@ emulate(dcontext_t *dcontext, app_pc pc, dr_mcontext_t *mc)
         }
 #endif
     }
- emulate_failure:
+emulate_failure:
     instr_free(dcontext, &instr);
     return next_pc;
 }

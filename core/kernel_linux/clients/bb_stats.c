@@ -19,7 +19,7 @@ typedef struct {
     void *last_fragment_tag;
     int last_fragment_length;
 
-    frag_stats_t* frag_stats;
+    frag_stats_t *frag_stats;
 } bb_stats_t;
 
 #if 0
@@ -34,16 +34,16 @@ create_frag_stats(void *drcontext, bb_stats_t *bb_stats)
 }
 #endif
 
-DEFINE_PER_CPU(bb_stats_t*, bb_stats_tls);
+DEFINE_PER_CPU(bb_stats_t *, bb_stats_tls);
 
-static bb_stats_t*
+static bb_stats_t *
 get_bb_stats_tls(void)
 {
     return __get_cpu_var(bb_stats_tls);
 }
 
 static void
-set_bb_stats_tls(bb_stats_t* tls)
+set_bb_stats_tls(bb_stats_t *tls)
 {
     /* GIANT HACK! Use Linux's per_cpu variable for instrcount TLS because DR
      * only provides TLS for a single client
@@ -53,10 +53,11 @@ set_bb_stats_tls(bb_stats_t* tls)
     __get_cpu_var(bb_stats_tls) = tls;
 }
 
-static ushort*
-alloc_histogram(void *drcontext) {
-    ushort *histogram = dr_thread_alloc(drcontext,
-                                        (MAX_BB_INSTRS + 1) * sizeof(*histogram));
+static ushort *
+alloc_histogram(void *drcontext)
+{
+    ushort *histogram =
+        dr_thread_alloc(drcontext, (MAX_BB_INSTRS + 1) * sizeof(*histogram));
     memset(histogram, 0, (MAX_BB_INSTRS + 1) * sizeof(*histogram));
     return histogram;
 }
@@ -64,8 +65,7 @@ alloc_histogram(void *drcontext) {
 static void
 thread_init_event(void *drcontext)
 {
-    bb_stats_t *bb_stats =
-        (bb_stats_t*) dr_thread_alloc(drcontext, sizeof(bb_stats_t));
+    bb_stats_t *bb_stats = (bb_stats_t *)dr_thread_alloc(drcontext, sizeof(bb_stats_t));
     memset(bb_stats, 0, sizeof(bb_stats_t));
     bb_stats->histogram = alloc_histogram(drcontext);
     bb_stats->histogram_tail = alloc_histogram(drcontext);
@@ -73,15 +73,14 @@ thread_init_event(void *drcontext)
 }
 
 static dr_emit_flags_t
-bb_event(void *drcontext, void *tag, instrlist_t *bb, bool for_trace,
-         bool translating) {
-    
+bb_event(void *drcontext, void *tag, instrlist_t *bb, bool for_trace, bool translating)
+{
+
     bb_stats_t *bb_stats = get_bb_stats_tls();
 
     if (bb_stats->use_last_fragment) {
         bb_stats->use_last_fragment = false;
-        bb_stats->max_tail_expansion +=
-            bb_stats->last_fragment_length *
+        bb_stats->max_tail_expansion += bb_stats->last_fragment_length *
             dr_fragment_size(drcontext, bb_stats->last_fragment_tag);
     }
 
@@ -93,13 +92,13 @@ bb_event(void *drcontext, void *tag, instrlist_t *bb, bool for_trace,
         if (!dr_is_emulating_interrupt_return(drcontext)) {
             DR_ASSERT(bb_stats->histogram[length] < USHORT_MAX);
             bb_stats->histogram[length] += 1;
-            bb_stats->last_fragment_tag = tag; 
+            bb_stats->last_fragment_tag = tag;
             bb_stats->last_fragment_length = length;
             bb_stats->use_last_fragment = true;
 
             if (length == 2) {
                 instr_t *first = instrlist_first(bb);
-                //instr_t *second = instr_get_next(first);
+                // instr_t *second = instr_get_next(first);
                 bb_stats->instr_pairs[instr_get_opcode(first)]++;
             }
         } else {
@@ -108,7 +107,7 @@ bb_event(void *drcontext, void *tag, instrlist_t *bb, bool for_trace,
         }
     }
 
-    return DR_EMIT_DEFAULT;    
+    return DR_EMIT_DEFAULT;
 }
 
 void
@@ -169,15 +168,15 @@ static ssize_t
 show_cpu_instr_pairs(int cpu, char *buf)
 {
     int i;
-    //int  j;
+    // int  j;
     char *orig_buf = buf;
     bb_stats_t *bb_stats = per_cpu(bb_stats_tls, cpu);
     if (!bb_stats) {
         return sprintf(buf, "cpu %d not yet initilized\n", cpu);
     }
     for (i = 0; i < OP_LAST; i++) {
-        //bool printed = false;
-        #if 0
+// bool printed = false;
+#if 0
         int total = 0;
         for (j = 0; j < OP_LAST; j++) {
             total += bb_stats->instr_pairs[i];
@@ -196,7 +195,7 @@ show_cpu_instr_pairs(int cpu, char *buf)
             buf += sprintf(buf, "\n");
         }
         */
-        #endif
+#endif
         if (bb_stats->instr_pairs[i] > 0) {
             buf += sprintf(buf, "%d %d\n", i, bb_stats->instr_pairs[i]);
         }
@@ -210,10 +209,12 @@ instrcount_init(void)
     if (dr_stats_init(&stats)) {
         return -ENOMEM;
     }
-#define ALLOC_STAT(name, fn) do {\
-    if (dr_cpu_stat_alloc(&stats, #name, fn, THIS_MODULE)) {\
-        goto failed;\
-    } } while (0)
+#define ALLOC_STAT(name, fn)                                     \
+    do {                                                         \
+        if (dr_cpu_stat_alloc(&stats, #name, fn, THIS_MODULE)) { \
+            goto failed;                                         \
+        }                                                        \
+    } while (0)
     ALLOC_STAT(max_tail_expansion, show_cpu_max_tail_expansion);
     ALLOC_STAT(length_histogram, show_cpu_length_hisotgram);
     ALLOC_STAT(length_histogram_tail, show_cpu_length_hisotgram_tail);

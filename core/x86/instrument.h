@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -103,8 +103,8 @@ dr_unregister_exit_event(void (*func)(void));
  */
 typedef enum {
     /** Emit as normal. */
-    DR_EMIT_DEFAULT              =    0,
-    /** 
+    DR_EMIT_DEFAULT = 0,
+    /**
      * Store translation information at emit time rather than calling
      * the basic block or trace event later to recreate the
      * information.  Note that even if a standalone basic block has
@@ -115,7 +115,7 @@ typedef enum {
      *
      * \sa #dr_register_bb_event()
      */
-    DR_EMIT_STORE_TRANSLATIONS   = 0x01,
+    DR_EMIT_STORE_TRANSLATIONS = 0x01,
 } dr_emit_flags_t;
 /* DR_API EXPORT END */
 
@@ -277,7 +277,7 @@ DR_API
  * basic block passed to earlier-registered clients will contain the
  * instrumentation and modifications put in place by later-registered
  * clients.
- * 
+ *
  * \note Basic blocks can be deleted due to hitting capacity limits or
  * cache consistency events (when the source application code of a
  * basic block is modified).  In that case, the client will see a new
@@ -295,10 +295,9 @@ DR_API
  * case, clients should be prepared to see duplicate tags without an
  * intermediate deletion.
  */
-void
-dr_register_bb_event(dr_emit_flags_t (*func)
-                     (void *drcontext, void *tag, instrlist_t *bb,
-                      bool for_trace, bool translating));
+void dr_register_bb_event(dr_emit_flags_t (*func)(void *drcontext, void *tag,
+                                                  instrlist_t *bb, bool for_trace,
+                                                  bool translating));
 
 DR_API
 /**
@@ -315,10 +314,9 @@ DR_API
  * this basic block.  Instead of unregistering, turn the event
  * callback into a nop.
  */
-bool
-dr_unregister_bb_event(dr_emit_flags_t (*func)
-                       (void *drcontext, void *tag, instrlist_t *bb,
-                        bool for_trace, bool translating));
+bool dr_unregister_bb_event(dr_emit_flags_t (*func)(void *drcontext, void *tag,
+                                                    instrlist_t *bb, bool for_trace,
+                                                    bool translating));
 
 DR_API
 /**
@@ -354,7 +352,7 @@ DR_API
  * - Only one non-meta direct branch that targets the subsequent block
  *   in the trace can be present in each block.
  * - Each block must end with a non-meta control transfer.
- * - The parameter to a system call, normally kept in the eax register, 
+ * - The parameter to a system call, normally kept in the eax register,
  *   cannot be changed.
  * - A system call or interrupt instruction cannot be added.
  *
@@ -383,7 +381,7 @@ DR_API
  * \note Certain control flow modifications applied to a basic block
  * can prevent it from becoming part of a trace: e.g., adding
  * additional non-meta control transfers.
- * 
+ *
  * \note If multiple clients are present, the instruction list for a
  * trace passed to earlier-registered clients will contain the
  * instrumentation and modifications put in place by later-registered
@@ -396,10 +394,9 @@ DR_API
  * deletion.  The deletion event (#dr_register_delete_event()) will be
  * raised at deletion time.
  */
-void
-dr_register_trace_event(dr_emit_flags_t (*func)
-                        (void *drcontext, void *tag, instrlist_t *trace,
-                         bool translating));
+void dr_register_trace_event(dr_emit_flags_t (*func)(void *drcontext, void *tag,
+                                                     instrlist_t *trace,
+                                                     bool translating));
 
 DR_API
 /**
@@ -412,12 +409,11 @@ DR_API
  * proper state translation on a later fault or other translation event.
  * Instead of unregistering, turn the event callback into a nop.
  */
-bool
-dr_unregister_trace_event(dr_emit_flags_t (*func)
-                          (void *drcontext, void *tag, instrlist_t *trace,
-                           bool translating));
+bool dr_unregister_trace_event(dr_emit_flags_t (*func)(void *drcontext, void *tag,
+                                                       instrlist_t *trace,
+                                                       bool translating));
 
-#ifdef CUSTOM_TRACES
+#    ifdef CUSTOM_TRACES
 /* DR_API EXPORT BEGIN */
 
 /**
@@ -445,9 +441,9 @@ DR_API
  * func before extending a trace with a new basic block.  The \p func
  * should return one of the #dr_custom_trace_action_t enum values.
  */
-void
-dr_register_end_trace_event(dr_custom_trace_action_t (*func)
-                            (void *drcontext, void *tag, void *next_tag));
+void dr_register_end_trace_event(dr_custom_trace_action_t (*func)(void *drcontext,
+                                                                  void *tag,
+                                                                  void *next_tag));
 
 DR_API
 /**
@@ -455,10 +451,10 @@ DR_API
  * \return true if unregistration is successful and false if it is not
  * (e.g., \p func was not registered).
  */
-bool
-dr_unregister_end_trace_event(dr_custom_trace_action_t (*func)
-                              (void *drcontext, void *tag, void *next_tag));
-#endif
+bool dr_unregister_end_trace_event(dr_custom_trace_action_t (*func)(void *drcontext,
+                                                                    void *tag,
+                                                                    void *next_tag));
+#    endif
 
 /* For the new-bb-before-deletion-event problem (PR 495787, and
  * described in the comment below):
@@ -546,9 +542,9 @@ DR_API
  * executing thread is the target thread.
  */
 void
-dr_register_restore_state_event(void (*func)
-                                (void *drcontext, void *tag, dr_mcontext_t *mcontext,
-                                 bool restore_memory, bool app_code_consistent));
+dr_register_restore_state_event(void (*func)(void *drcontext, void *tag,
+                                             dr_mcontext_t *mcontext, bool restore_memory,
+                                             bool app_code_consistent));
 
 DR_API
 /**
@@ -557,16 +553,17 @@ DR_API
  * (e.g., \p func was not registered).
  */
 bool
-dr_unregister_restore_state_event(void (*func)
-                                  (void *drcontext, void *tag, dr_mcontext_t *mcontext,
-                                   bool restore_memory, bool app_code_consistent));
+dr_unregister_restore_state_event(void (*func)(void *drcontext, void *tag,
+                                               dr_mcontext_t *mcontext,
+                                               bool restore_memory,
+                                               bool app_code_consistent));
 
 /* DR_API EXPORT BEGIN */
 /**
  * Data structure passed within dr_exception_t, dr_siginfo_t, and
  * dr_restore_state_info_t.
- * Contains information about the code fragment inside the code cache 
- * at the exception/signal/translation interruption point. 
+ * Contains information about the code fragment inside the code cache
+ * at the exception/signal/translation interruption point.
  */
 typedef struct _dr_fault_fragment_info_t {
     /**
@@ -580,7 +577,7 @@ typedef struct _dr_fault_fragment_info_t {
      * the exception/signal/translation interruption point. NULL for interruption
      * not in the code cache.  Clients are cautioned when examining
      * code cache instructions to not rely on any details of code
-     * inserted other than their own.  
+     * inserted other than their own.
      */
     byte *cache_start_pc;
     /** Indicates whether the interrupted code fragment is a trace */
@@ -592,7 +589,7 @@ typedef struct _dr_fault_fragment_info_t {
      * code was placed in the code cache. This guarantee varies
      * depending on the type of cache consistency being used by DR.
      */
-    bool app_code_consistent;    
+    bool app_code_consistent;
     /**
      * Instruction list for the fragment. Might be NULL.
      */
@@ -610,7 +607,7 @@ typedef struct _dr_restore_state_info_t {
     dr_mcontext_t *mcontext;
     /** Whether raw_mcontext is valid. */
     bool raw_mcontext_valid;
-    /** 
+    /**
      * The raw pre-translated machine state at the translation
      * interruption point inside the code cache.  Clients are
      * cautioned when examining code cache instructions to not rely on
@@ -629,7 +626,7 @@ typedef struct _dr_restore_state_info_t {
     dr_fault_fragment_info_t fragment_info;
 } dr_restore_state_info_t;
 
-#ifdef LINUX_KERNEL
+#    ifdef LINUX_KERNEL
 typedef struct _dr_interrupt_t {
     interrupt_stack_frame_t *frame;
     interrupt_stack_frame_t *raw_frame;
@@ -638,14 +635,12 @@ typedef struct _dr_interrupt_t {
 } dr_interrupt_t;
 
 void
-dr_register_interrupt_event(bool (*func) (void *drcontext,
-                                          dr_interrupt_t* interrupt));
+dr_register_interrupt_event(bool (*func)(void *drcontext, dr_interrupt_t *interrupt));
 
 bool
-dr_unregister_interrupt_event(bool (*func) (void *drcontext,
-                                            dr_interrupt_t* interrupt));
+dr_unregister_interrupt_event(bool (*func)(void *drcontext, dr_interrupt_t *interrupt));
 
-#endif
+#    endif
 /* DR_API EXPORT END */
 
 DR_API
@@ -686,8 +681,8 @@ DR_API
  *   when \p restore_memory is true.
  */
 void
-dr_register_restore_state_ex_event(bool (*func) (void *drcontext, bool restore_memory,
-                                                 dr_restore_state_info_t *info));
+dr_register_restore_state_ex_event(bool (*func)(void *drcontext, bool restore_memory,
+                                                dr_restore_state_info_t *info));
 
 DR_API
 /**
@@ -697,10 +692,10 @@ DR_API
  * registered).
  */
 bool
-dr_unregister_restore_state_ex_event(bool (*func) (void *drcontext, bool restore_memory,
-                                                   dr_restore_state_info_t *info));
+dr_unregister_restore_state_ex_event(bool (*func)(void *drcontext, bool restore_memory,
+                                                  dr_restore_state_info_t *info));
 
-DR_API 
+DR_API
 /**
  * Registers a callback function for the thread initialization event.
  * DR calls \p func whenever the application creates a new thread.
@@ -745,7 +740,7 @@ DR_API
 bool
 dr_unregister_thread_exit_event(void (*func)(void *drcontext));
 
-#ifdef LINUX
+#    ifdef LINUX
 DR_API
 /**
  * Registers a callback function for the fork event.  DR calls \p func
@@ -763,7 +758,7 @@ DR_API
  */
 bool
 dr_unregister_fork_init_event(void (*func)(void *drcontext));
-#endif
+#    endif
 
 DR_API
 /**
@@ -803,8 +798,7 @@ DR_API
  * dr_copy_module_data().
  */
 void
-dr_register_module_unload_event(void (*func)(void *drcontext,
-                                             const module_data_t *info));
+dr_register_module_unload_event(void (*func)(void *drcontext, const module_data_t *info));
 
 DR_API
 /**
@@ -817,7 +811,7 @@ dr_unregister_module_unload_event(void (*func)(void *drcontext,
                                                const module_data_t *info));
 
 /* DR_API EXPORT BEGIN */
-#ifdef WINDOWS
+#    ifdef WINDOWS
 /* DR_API EXPORT END */
 
 /* DR_API EXPORT BEGIN */
@@ -828,17 +822,17 @@ dr_unregister_module_unload_event(void (*func)(void *drcontext,
 typedef struct _dr_exception_t {
     dr_mcontext_t mcontext;   /**< Machine context at exception point. */
     EXCEPTION_RECORD *record; /**< Win32 exception record. */
-    /** 
+    /**
      * The raw pre-translated machine state at the exception interruption
      * point inside the code cache.  Clients are cautioned when examining
      * code cache instructions to not rely on any details of code inserted
      * other than their own.
      */
-    ALIGN_VAR(8)/*avoid differences in padding*/
+    ALIGN_VAR(8) /*avoid differences in padding*/
     dr_mcontext_t raw_mcontext;
     /**
      * Information about the code fragment inside the code cache at
-     * the exception interruption point. 
+     * the exception interruption point.
      */
     dr_fault_fragment_info_t fault_fragment_info;
 } dr_exception_t;
@@ -870,13 +864,13 @@ DR_API
  * handlers and to send control elsewhere instead, a client can call
  * dr_redirect_execution() from \p func.
  *
- * \note \p excpt->fault_fragment_info data is provided with 
- * \p excpt->raw_mcontext. It is valid only if  
- * \p excpt->fault_fragment_info.cache_start_pc is not \p NULL. 
+ * \note \p excpt->fault_fragment_info data is provided with
+ * \p excpt->raw_mcontext. It is valid only if
+ * \p excpt->fault_fragment_info.cache_start_pc is not \p NULL.
  * It provides clients information about the code fragment being
  * executed at the exception interruption point. Clients are cautioned
  * against relying on any details of code cache layout or register
- * usage beyond  instrumentation inserted by the client itself.  
+ * usage beyond  instrumentation inserted by the client itself.
  * \note Only valid on Windows.
  * \note The function is not called for RaiseException.
  */
@@ -892,9 +886,8 @@ DR_API
 bool
 dr_unregister_exception_event(bool (*func)(void *drcontext, dr_exception_t *excpt));
 /* DR_API EXPORT BEGIN */
-#endif /* WINDOWS */
+#    endif /* WINDOWS */
 /* DR_API EXPORT END */
-
 
 DR_API
 /**
@@ -945,7 +938,7 @@ DR_API
  * this way overlaps with system call parameter changes on some
  * platforms.  On Linux, for SYS_clone, client changes to the ebp/rbp
  * register will be ignored by the clone child.
- * 
+ *
  * If \p func returns true, the application's system call is invoked
  * normally; if \p func returns false, the system call is skipped.  If
  * it is skipped, the return value can be set with
@@ -983,7 +976,7 @@ DR_API
  *
  * The application's machine state can be accessed and set with
  * dr_get_mcontext() and dr_set_mcontext().
- * 
+ *
  * Additional system calls may be invoked by calling
  * dr_syscall_invoke_another() prior to returning from the
  * post-syscall event callback.  The system call to be invoked should
@@ -1002,10 +995,9 @@ DR_API
 bool
 dr_unregister_post_syscall_event(void (*func)(void *drcontext, int sysnum));
 
-
 /* DR_API EXPORT BEGIN */
 
-#ifdef LINUX
+#    ifdef LINUX
 /* DR_API EXPORT END */
 
 /* FIXME: for PR 304708 I originally included siginfo_t in
@@ -1032,7 +1024,7 @@ typedef struct _dr_siginfo_t {
     void *drcontext;
     /** The application machine state at the signal interruption point. */
     dr_mcontext_t mcontext;
-    /** 
+    /**
      * The raw pre-translated machine state at the signal interruption
      * point inside the code cache.  NULL for delayable signals.  Clients
      * are cautioned when examining code cache instructions to not rely on
@@ -1052,7 +1044,7 @@ typedef struct _dr_siginfo_t {
      * the application.  Events are only sent for blocked non-delayable signals,
      * not for delayable signals.
      */
-    bool blocked;       
+    bool blocked;
     /**
      * Information about the code fragment inside the code cache
      * at the signal interruption point.
@@ -1109,7 +1101,7 @@ DR_API
  * DR_SIGNAL_SUPPRESS is returned, \p siginfo->mcontext is ignored and \p
  * siginfo->raw_mcontext is used as the resumption context.  The client's
  * changes to \p siginfo->raw_mcontext will take effect.
- * 
+ *
  * For a delayable signal, DR raises a signal event only when about to
  * deliver the signal to the application.  Thus, if the application has
  * blocked a delayable signal, the corresponding signal event will not
@@ -1129,15 +1121,15 @@ DR_API
  * raised by a client code fault rather than the application.  Use
  * dr_safe_read() or dr_safe_write() to prevent such faults.
  *
- * \note \p siginfo->fault_fragment_info data is provided 
- * with \p siginfo->raw_mcontext. It is valid only if 
- * \p siginfo->fault_fragment_info.cache_start_pc is not 
+ * \note \p siginfo->fault_fragment_info data is provided
+ * with \p siginfo->raw_mcontext. It is valid only if
+ * \p siginfo->fault_fragment_info.cache_start_pc is not
  * \p NULL. It provides clients information about the code fragment
  * being executed at the signal interruption point. Clients are
  * cautioned against relying on any details of code cache layout or
  * register usage beyond instrumentation inserted by the client
- * itself. 
- * 
+ * itself.
+ *
  * \note Only valid on Linux.
  *
  * \note DR always requests SA_SIGINFO for all signals.
@@ -1150,9 +1142,8 @@ DR_API
  * a flag to distinguish its own uses of signals from the application's
  * use.  Races where the two are re-ordered should not be problematic.
  */
-void
-dr_register_signal_event(dr_signal_action_t (*func)
-                         (void *drcontext, dr_siginfo_t *siginfo));
+void dr_register_signal_event(dr_signal_action_t (*func)(void *drcontext,
+                                                         dr_siginfo_t *siginfo));
 
 DR_API
 /**
@@ -1160,19 +1151,17 @@ DR_API
  * \return true if unregistration is successful and false if it is not
  * (e.g., \p func was not registered).
  */
-bool
-dr_unregister_signal_event(dr_signal_action_t (*func)
-                           (void *drcontext, dr_siginfo_t *siginfo));
+bool dr_unregister_signal_event(dr_signal_action_t (*func)(void *drcontext,
+                                                           dr_siginfo_t *siginfo));
 /* DR_API EXPORT BEGIN */
-#endif /* LINUX */
+#    endif /* LINUX */
 /* DR_API EXPORT END */
-
 
 /****************************************************************************
  * SECURITY SUPPORT
  */
 
-#ifdef PROGRAM_SHEPHERDING
+#    ifdef PROGRAM_SHEPHERDING
 /* DR_API EXPORT BEGIN */
 
 /** Types of security violations that can be received at a security violation event
@@ -1270,8 +1259,7 @@ dr_unregister_security_event(void (*func)(void *drcontext, void *source_tag,
                                           dr_security_violation_type_t violation,
                                           dr_mcontext_t *mcontext,
                                           dr_security_violation_action_t *action));
-#endif /* PROGRAM_SHEPHERDING */
-
+#    endif /* PROGRAM_SHEPHERDING */
 
 DR_API
 /**
@@ -1310,67 +1298,100 @@ DR_API
 bool
 dr_nudge_client(client_id_t id, uint64 argument);
 
-
-void instrument_load_client_libs(void);
-void instrument_init(void);
-void instrument_exit(void);
-bool is_in_client_lib(app_pc addr);
-app_pc get_client_base(client_id_t client_id);
-const char *get_client_path_from_addr(app_pc addr);
-bool is_valid_client_id(client_id_t id);
-void instrument_thread_init(dcontext_t *dcontext, bool client_thread, bool valid_mc);
-void instrument_thread_exit_event(dcontext_t *dcontext);
-void instrument_thread_exit(dcontext_t *dcontext);
-#ifdef LINUX
-void instrument_fork_init(dcontext_t *dcontext);
-#endif
-bool instrument_basic_block(dcontext_t *dcontext, app_pc tag, instrlist_t *bb,
-                            bool for_trace, bool translating,
-                            dr_emit_flags_t *emitflags);
-dr_emit_flags_t instrument_trace(dcontext_t *dcontext, app_pc tag, instrlist_t *trace,
-                                 bool translating);
-#ifdef CUSTOM_TRACES
-dr_custom_trace_action_t instrument_end_trace(dcontext_t *dcontext, app_pc trace_tag,
-                                           app_pc next_tag);
-#endif
-void instrument_fragment_deleted(dcontext_t *dcontext, app_pc tag, uint flags);
-bool instrument_restore_state(dcontext_t *dcontext, bool restore_memory,
-                              dr_restore_state_info_t *info);
-#ifdef LINUX_KERNEL
-bool instrument_interrupt(dcontext_t *dcontext,
-                          dr_interrupt_t *interrupt);
-#endif
-module_data_t * copy_module_area_to_module_data(const module_area_t *area);
-void instrument_module_load_trigger(app_pc modbase);
-void instrument_module_load(module_data_t *data, bool previously_loaded);
-void instrument_module_unload(module_data_t *data);
+void
+instrument_load_client_libs(void);
+void
+instrument_init(void);
+void
+instrument_exit(void);
+bool
+is_in_client_lib(app_pc addr);
+app_pc
+get_client_base(client_id_t client_id);
+const char *
+get_client_path_from_addr(app_pc addr);
+bool
+is_valid_client_id(client_id_t id);
+void
+instrument_thread_init(dcontext_t *dcontext, bool client_thread, bool valid_mc);
+void
+instrument_thread_exit_event(dcontext_t *dcontext);
+void
+instrument_thread_exit(dcontext_t *dcontext);
+#    ifdef LINUX
+void
+instrument_fork_init(dcontext_t *dcontext);
+#    endif
+bool
+instrument_basic_block(dcontext_t *dcontext, app_pc tag, instrlist_t *bb, bool for_trace,
+                       bool translating, dr_emit_flags_t *emitflags);
+dr_emit_flags_t
+instrument_trace(dcontext_t *dcontext, app_pc tag, instrlist_t *trace, bool translating);
+#    ifdef CUSTOM_TRACES
+dr_custom_trace_action_t
+instrument_end_trace(dcontext_t *dcontext, app_pc trace_tag, app_pc next_tag);
+#    endif
+void
+instrument_fragment_deleted(dcontext_t *dcontext, app_pc tag, uint flags);
+bool
+instrument_restore_state(dcontext_t *dcontext, bool restore_memory,
+                         dr_restore_state_info_t *info);
+#    ifdef LINUX_KERNEL
+bool
+instrument_interrupt(dcontext_t *dcontext, dr_interrupt_t *interrupt);
+#    endif
+module_data_t *
+copy_module_area_to_module_data(const module_area_t *area);
+void
+instrument_module_load_trigger(app_pc modbase);
+void
+instrument_module_load(module_data_t *data, bool previously_loaded);
+void
+instrument_module_unload(module_data_t *data);
 
 /* returns whether this sysnum should be intercepted */
-bool instrument_filter_syscall(dcontext_t *dcontext, int sysnum);
+bool
+instrument_filter_syscall(dcontext_t *dcontext, int sysnum);
 /* returns whether this syscall should execute */
-bool instrument_pre_syscall(dcontext_t *dcontext, int sysnum);
-void instrument_post_syscall(dcontext_t *dcontext, int sysnum);
-bool instrument_invoke_another_syscall(dcontext_t *dcontext);
+bool
+instrument_pre_syscall(dcontext_t *dcontext, int sysnum);
+void
+instrument_post_syscall(dcontext_t *dcontext, int sysnum);
+bool
+instrument_invoke_another_syscall(dcontext_t *dcontext);
 
-void instrument_nudge(dcontext_t *dcontext, client_id_t id, uint64 arg);
-#ifdef WINDOWS
-bool instrument_exception(dcontext_t *dcontext, dr_exception_t *exception);
-void wait_for_outstanding_nudges(void);
-#else
-dr_signal_action_t instrument_signal(dcontext_t *dcontext, dr_siginfo_t *siginfo);
-bool dr_signal_hook_exists(void);
-#endif
-int get_num_client_threads(void);
-#ifdef PROGRAM_SHEPHERDING
-void instrument_security_violation(dcontext_t *dcontext, app_pc target_pc,
-                                   security_violation_t violation, action_type_t *action);
-#endif
-bool dr_bb_hook_exists(void);
-bool dr_trace_hook_exists(void);
-bool dr_fragment_deleted_hook_exists(void);
-bool dr_end_trace_hook_exists(void);
-bool dr_thread_exit_hook_exists(void);
-bool hide_tag_from_client(app_pc tag);
+void
+instrument_nudge(dcontext_t *dcontext, client_id_t id, uint64 arg);
+#    ifdef WINDOWS
+bool
+instrument_exception(dcontext_t *dcontext, dr_exception_t *exception);
+void
+wait_for_outstanding_nudges(void);
+#    else
+dr_signal_action_t
+instrument_signal(dcontext_t *dcontext, dr_siginfo_t *siginfo);
+bool
+dr_signal_hook_exists(void);
+#    endif
+int
+get_num_client_threads(void);
+#    ifdef PROGRAM_SHEPHERDING
+void
+instrument_security_violation(dcontext_t *dcontext, app_pc target_pc,
+                              security_violation_t violation, action_type_t *action);
+#    endif
+bool
+dr_bb_hook_exists(void);
+bool
+dr_trace_hook_exists(void);
+bool
+dr_fragment_deleted_hook_exists(void);
+bool
+dr_end_trace_hook_exists(void);
+bool
+dr_thread_exit_hook_exists(void);
+bool
+hide_tag_from_client(app_pc tag);
 
 /* DR_API EXPORT TOFILE dr_tools.h */
 /* DR_API EXPORT BEGIN */
@@ -1384,11 +1405,11 @@ bool hide_tag_from_client(app_pc tag);
  */
 /* DR_API EXPORT END */
 
-DR_API 
+DR_API
 /**
  * Creates a DR context that can be used in a standalone program.
- * \warning This context cannot be used as the drcontext for a thread 
- * running under DR control!  It is only for standalone programs that 
+ * \warning This context cannot be used as the drcontext for a thread
+ * running under DR control!  It is only for standalone programs that
  * wish to use DR as a library of disassembly, etc. routines.
  */
 void *
@@ -1400,28 +1421,29 @@ dr_standalone_init(void);
  * UTILITY ROUTINES
  */
 
-#ifdef WINDOWS
+#    ifdef WINDOWS
 /**
  * If \p x is false, displays a message about an assertion failure
  * (appending \p msg to the message) and then calls dr_abort()
- */ 
-# define DR_ASSERT_MSG(x, msg) \
-    ((void)((!(x)) ? \
-        (dr_messagebox("ASSERT FAILURE: %s:%d: %s (%s)", __FILE__,  __LINE__, #x, msg),\
-         dr_abort(), 0) : 0))
-#else
-# define DR_ASSERT_MSG(x, msg) \
-    ((void)((!(x)) ? \
-        (dr_fprintf(STDERR, "ASSERT FAILURE: %s:%d: %s (%s)", \
-                     __FILE__,  __LINE__, #x, msg), \
-         dr_abort(), 0) : 0))
-#endif
+ */
+#        define DR_ASSERT_MSG(x, msg)                                                   \
+            ((void)((!(x)) ? (dr_messagebox("ASSERT FAILURE: %s:%d: %s (%s)", __FILE__, \
+                                            __LINE__, #x, msg),                         \
+                              dr_abort(), 0)                                            \
+                           : 0))
+#    else
+#        define DR_ASSERT_MSG(x, msg)                                              \
+            ((void)((!(x)) ? (dr_fprintf(STDERR, "ASSERT FAILURE: %s:%d: %s (%s)", \
+                                         __FILE__, __LINE__, #x, msg),             \
+                              dr_abort(), 0)                                       \
+                           : 0))
+#    endif
 
 /**
  * If \p x is false, displays a message about an assertion failure and
  * then calls dr_abort()
- */ 
-#define DR_ASSERT(x) DR_ASSERT_MSG(x, "")
+ */
+#    define DR_ASSERT(x) DR_ASSERT_MSG(x, "")
 
 /* DR_API EXPORT END */
 
@@ -1441,14 +1463,14 @@ void
 dr_request_synchronized_exit(void);
 
 DR_API
-/** 
+/**
  * Returns the client-specific option string specified at client
  * registration.  \p client_id is the client ID passed to dr_init().
  */
 const char *
 dr_get_options(client_id_t client_id);
 
-DR_API 
+DR_API
 /**
  * Returns the client library name and path that were originally specified
  * to load the library.  If the resulting string is longer than #MAXIMUM_PATH
@@ -1458,29 +1480,29 @@ DR_API
 const char *
 dr_get_client_path(client_id_t client_id);
 
-DR_API 
+DR_API
 /** Returns the image name (without path) of the current application. */
 const char *
 dr_get_application_name(void);
 
-DR_API 
+DR_API
 /** Returns the process id of the current process. */
 process_id_t
 dr_get_process_id(void);
 
-#ifdef LINUX
-DR_API 
+#    ifdef LINUX
+DR_API
 /**
- * Returns the process id of the parent of the current process. 
+ * Returns the process id of the parent of the current process.
  * \note Linux only.
  */
 process_id_t
 dr_get_parent_id(void);
-#endif
+#    endif
 
-#ifdef WINDOWS
+#    ifdef WINDOWS
 DR_API
-/** 
+/**
  * Returns true if this process is a 32-bit process operating on a
  * 64-bit Windows kernel, known as Windows-On-Windows-64, or WOW64.
  * Returns false otherwise.
@@ -1489,7 +1511,7 @@ bool
 dr_is_wow64(void);
 
 DR_API
-/** 
+/**
  * Returns a pointer to the application's Process Environment Block
  * (PEB).  DR swaps to a private PEB when running client code, in
  * order to isolate the client and its dependent libraries from the
@@ -1498,7 +1520,7 @@ DR_API
  */
 void *
 dr_get_app_PEB(void);
-#endif
+#    endif
 
 DR_API
 /** Retrieves the current time. */
@@ -1524,7 +1546,7 @@ uint
 dr_get_random_value(uint max);
 
 DR_API
-/** 
+/**
  * Sets the seed used for dr_get_random_value().  Generally this would
  * only be called during client initialization.
  */
@@ -1548,7 +1570,7 @@ dr_abort(void);
  */
 /* DR_API EXPORT END */
 
-DR_API 
+DR_API
 /**
  * Allocates \p size bytes of memory from DR's memory pool specific to the
  * thread associated with \p drcontext.
@@ -1556,7 +1578,7 @@ DR_API
 void *
 dr_thread_alloc(void *drcontext, size_t size);
 
-DR_API 
+DR_API
 /**
  * Frees thread-specific memory allocated by dr_thread_alloc().
  * \p size must be the same as that passed to dr_thread_alloc().
@@ -1564,12 +1586,12 @@ DR_API
 void
 dr_thread_free(void *drcontext, void *mem, size_t size);
 
-DR_API 
+DR_API
 /** Allocates \p size bytes of memory from DR's global memory pool. */
 void *
 dr_global_alloc(size_t size);
 
-DR_API 
+DR_API
 /**
  * Frees memory allocated by dr_global_alloc().
  * \p size must be the same as that passed to dr_global_alloc().
@@ -1577,7 +1599,7 @@ DR_API
 void
 dr_global_free(void *mem, size_t size);
 
-DR_API 
+DR_API
 /**
  * Allocates \p size bytes of memory as a separate allocation from DR's
  * heap, allowing for separate protection.
@@ -1589,7 +1611,7 @@ DR_API
 void *
 dr_nonheap_alloc(size_t size, uint prot);
 
-DR_API 
+DR_API
 /**
  * Frees memory allocated by dr_nonheap_alloc().
  * \p size must be the same as that passed to dr_nonheap_alloc().
@@ -1597,9 +1619,9 @@ DR_API
 void
 dr_nonheap_free(void *mem, size_t size);
 
-#ifdef LINUX
+#    ifdef LINUX
 DR_API
-/** 
+/**
  * Allocates memory from DR's global memory pool, but mimics the
  * behavior of malloc.  Memory must be freed with __wrap_free().  The
  * __wrap routines are intended to be used with ld's -wrap option to
@@ -1613,7 +1635,7 @@ void *
 __wrap_malloc(size_t size);
 
 DR_API
-/** 
+/**
  * Reallocates memory from DR's global memory pool, but mimics the
  * behavior of realloc.  Memory must be freed with __wrap_free().  The
  * __wrap routines are intended to be used with ld's -wrap option; see
@@ -1633,7 +1655,7 @@ DR_API
  */
 void
 __wrap_free(void *mem);
-#endif
+#    endif
 
 /* DR_API EXPORT BEGIN */
 
@@ -1691,7 +1713,7 @@ bool
 dr_query_memory_ex(const byte *pc, OUT dr_mem_info_t *info);
 
 /* DR_API EXPORT BEGIN */
-#ifdef WINDOWS 
+#    ifdef WINDOWS
 /* DR_API EXPORT END */
 /* NOTE - see fixme for dr_query_memory - PR 198873. */
 DR_API
@@ -1703,7 +1725,7 @@ DR_API
 size_t
 dr_virtual_query(const byte *pc, MEMORY_BASIC_INFORMATION *mbi, size_t mbi_size);
 /* DR_API EXPORT BEGIN */
-#endif
+#    endif
 /* DR_API EXPORT END */
 
 DR_API
@@ -1711,7 +1733,7 @@ DR_API
  * Safely reads \p size bytes from address \p base into buffer \p
  * out_buf.  Reading is done without the possibility of an exception
  * occurring.  Optionally returns the actual number of bytes copied
- * into \p bytes_read.  Returns true if successful.  
+ * into \p bytes_read.  Returns true if successful.
  */
 bool
 dr_safe_read(const void *base, size_t size, void *out_buf, size_t *bytes_read);
@@ -1773,9 +1795,9 @@ DR_API
 void
 dr_barrier_destroy(void *barrier);
 
-DR_API 
-/** 
- * Initializes a mutex. 
+DR_API
+/**
+ * Initializes a mutex.
  *
  * Warning: there are restrictions on when DR-provided mutexes, and
  * locks in general, can be held by a client: no lock should be held
@@ -1792,17 +1814,17 @@ DR_API
 void
 dr_mutex_destroy(void *mutex);
 
-DR_API 
+DR_API
 /** Locks \p mutex.  Waits until the mutex is successfully held. */
 void
 dr_mutex_lock(void *mutex);
 
-DR_API 
+DR_API
 /** Unlocks \p mutex.  Asserts that mutex is currently locked. */
 void
 dr_mutex_unlock(void *mutex);
 
-DR_API 
+DR_API
 /** Tries once to lock \p mutex, returns whether or not successful. */
 bool
 dr_mutex_trylock(void *mutex);
@@ -1813,38 +1835,38 @@ dr_mutex_trylock(void *mutex);
  */
 
 /** For dr_module_iterator_* interface */
-typedef void * dr_module_iterator_t;
+typedef void *dr_module_iterator_t;
 
-#ifdef AVOID_API_EXPORT
+#    ifdef AVOID_API_EXPORT
 /* We always give copies of the module_area_t information to clients (in the form
  * of a module_data_t defined below) to avoid locking issues (see PR 225020). */
 /* i#160/PR 562667: support non-contiguous library mappings.  While we're at
  * it we go ahead and store info on each segment whether contiguous or not.
  */
-#endif
-#ifdef LINUX
+#    endif
+#    ifdef LINUX
 /** Holds information on a segment of a loaded module. */
 typedef struct _module_segment_data_t {
     app_pc start; /**< Start address of the segment, page-aligned backward. */
     app_pc end;   /**< End address of the segment, page-aligned forward. */
     uint prot;    /**< Protection attributes of the segment */
 } module_segment_data_t;
-#endif
+#    endif
 
 /**
  * Holds information about a loaded module. \note On Linux the start address can be
  * cast to an Elf32_Ehdr or Elf64_Ehdr. \note On Windows the start address can be cast to
  * an IMAGE_DOS_HEADER for use in finding the IMAGE_NT_HEADER and its OptionalHeader.
  * The OptionalHeader can be used to walk the module sections (among other things).
- * See WINNT.H. \note When accessing any memory inside the module (including header fields)
- * user is responsible for guarding against corruption and the possibility of the module
- * being unmapped.
+ * See WINNT.H. \note When accessing any memory inside the module (including header
+ * fields) user is responsible for guarding against corruption and the possibility of the
+ * module being unmapped.
  */
 struct _module_data_t {
     union {
-        app_pc start; /**< starting address of this module */
+        app_pc start;           /**< starting address of this module */
         module_handle_t handle; /**< module_handle for use with dr_get_proc_address() */
-    } ; /* anonymous union of start address and module handle */
+    };                          /* anonymous union of start address and module handle */
     /**
      * Ending address of this module.  Note that on Linux the module may not
      * be contiguous: there may be gaps containing other objects between start
@@ -1862,13 +1884,14 @@ struct _module_data_t {
 
     char *full_path; /**< full path to the file backing this module */
 
-#ifdef WINDOWS
-    version_number_t file_version; /**< file version number from .rsrc section */
+#    ifdef WINDOWS
+    version_number_t file_version;    /**< file version number from .rsrc section */
     version_number_t product_version; /**< product version number from .rsrc section */
-    uint checksum; /**< module checksum from the PE headers */
-    uint timestamp; /**< module timestamp from the PE headers */
-    size_t module_internal_size; /**< module internal size (from PE headers SizeOfImage) */
-#else
+    uint checksum;                    /**< module checksum from the PE headers */
+    uint timestamp;                   /**< module timestamp from the PE headers */
+    size_t
+        module_internal_size; /**< module internal size (from PE headers SizeOfImage) */
+#    else
     bool contiguous;   /**< whether there are no gaps between segments */
     uint num_segments; /**< number of segments */
     /**
@@ -1876,11 +1899,11 @@ struct _module_data_t {
      * by the start address of each segment.
      */
     module_segment_data_t *segments;
-#endif
-#ifdef AVOID_API_EXPORT
+#    endif
+#    ifdef AVOID_API_EXPORT
     /* FIXME: PR 215890: ELF64 size? Anything else? */
     /* We can add additional fields to the end without breaking compatibility */
-#endif
+#    endif
 };
 
 /* DR_API EXPORT END */
@@ -1934,7 +1957,7 @@ DR_API
 module_data_t *
 dr_module_iterator_next(dr_module_iterator_t *mi);
 
-DR_API 
+DR_API
 /**
  * User should call this routine to free the module iterator.
  */
@@ -1968,7 +1991,7 @@ const char *
 dr_module_preferred_name(const module_data_t *data);
 
 /* DR_API EXPORT BEGIN */
-#ifdef WINDOWS
+#    ifdef WINDOWS
 /* DR_API EXPORT END */
 DR_API
 /**
@@ -1976,11 +1999,11 @@ DR_API
  * information about that section in \p section_out. \note Not yet available on Linux.
  */
 bool
-dr_lookup_module_section(module_handle_t lib,
-                         byte *pc, IMAGE_SECTION_HEADER *section_out);
+dr_lookup_module_section(module_handle_t lib, byte *pc,
+                         IMAGE_SECTION_HEADER *section_out);
 
 /* DR_API EXPORT BEGIN */
-#endif /* WINDOWS */
+#    endif /* WINDOWS */
 /* DR_API EXPORT END */
 
 DR_API
@@ -1995,11 +2018,11 @@ DR_API
 generic_func_t
 dr_get_proc_address(module_handle_t lib, const char *name);
 
-#ifdef LINUX_KERNEL
+#    ifdef LINUX_KERNEL
 DR_API
 bool
 dr_kernel_find_symbol(const char *name, void **address, size_t *size);
-#endif
+#    endif
 
 /* DR_API EXPORT BEGIN */
 /**
@@ -2033,9 +2056,8 @@ DR_API
  * examines the specified module.
  */
 bool
-dr_get_proc_address_ex(module_handle_t lib, const char *name,
-                       dr_export_info_t *info OUT, size_t info_len);
-
+dr_get_proc_address_ex(module_handle_t lib, const char *name, dr_export_info_t *info OUT,
+                       size_t info_len);
 
 /* DR_API EXPORT BEGIN */
 /**************************************************
@@ -2045,7 +2067,7 @@ dr_get_proc_address_ex(module_handle_t lib, const char *name,
 
 DR_API
 /**
- * Usable only from a pre-syscall (dr_register_pre_syscall_event()) 
+ * Usable only from a pre-syscall (dr_register_pre_syscall_event())
  * event.  Returns the value of system call parameter number \p param_num.
  */
 reg_t
@@ -2149,27 +2171,27 @@ dr_file_exists(const char *fname);
 /* DR_API EXPORT BEGIN */
 /* flags for use with dr_open_file() */
 /** Open with read access. */
-#define DR_FILE_READ               0x1
+#    define DR_FILE_READ 0x1
 /** Open with write access, but do not open if the file already exists. */
-#define DR_FILE_WRITE_REQUIRE_NEW  0x2
+#    define DR_FILE_WRITE_REQUIRE_NEW 0x2
 /**
  * Open with write access.  If the file already exists, set the file position to the
  * end of the file.
  */
-#define DR_FILE_WRITE_APPEND       0x4
+#    define DR_FILE_WRITE_APPEND 0x4
 /**
  * Open with write access.  If the file already exists, truncate the
  * file to zero length.
  */
-#define DR_FILE_WRITE_OVERWRITE    0x8
+#    define DR_FILE_WRITE_OVERWRITE 0x8
 /**
  * Open with large (>2GB) file support.  Only applicable on 32-bit Linux.
  * \note DR's log files and tracedump files are all created with this flag.
  */
-#define DR_FILE_ALLOW_LARGE       0x10
+#    define DR_FILE_ALLOW_LARGE 0x10
 /* DR_API EXPORT END */
 
-DR_API 
+DR_API
 /**
  * Opens the file \p fname. If no such file exists then one is created.
  * The file access mode is set by the \p mode_flags argument which is drawn from
@@ -2193,25 +2215,25 @@ DR_API
 file_t
 dr_open_file(const char *fname, uint mode_flags);
 
-DR_API 
+DR_API
 /** Closes file \p f. */
 void
 dr_close_file(file_t f);
 
-DR_API 
+DR_API
 /** Flushes any buffers for file \p f. */
 void
 dr_flush_file(file_t f);
 
 DR_API
 /**
- * Writes \p count bytes from \p buf to file \p f.  
+ * Writes \p count bytes from \p buf to file \p f.
  * Returns the actual number written.
  */
 ssize_t
 dr_write_file(file_t f, const void *buf, size_t count);
 
-DR_API 
+DR_API
 /**
  * Reads up to \p count bytes from file \p f into \p buf.
  * Returns the actual number read.
@@ -2226,9 +2248,9 @@ dr_read_file(file_t f, void *buf, size_t count);
 /* DR_API EXPORT END */
 /* DR_API EXPORT BEGIN */
 /* For use with dr_file_seek(), specifies the origin at which to apply the offset. */
-#define DR_SEEK_SET 0  /**< start of file */
-#define DR_SEEK_CUR 1  /**< current file position */
-#define DR_SEEK_END 2  /**< end of file */
+#    define DR_SEEK_SET 0 /**< start of file */
+#    define DR_SEEK_CUR 1 /**< current file position */
+#    define DR_SEEK_END 2 /**< end of file */
 /* DR_API EXPORT END */
 
 DR_API
@@ -2280,42 +2302,45 @@ void
 dr_log(void *drcontext, uint mask, uint level, const char *fmt, ...);
 
 /* hack to get these constants in the right place in dr_ir_api.h */
-#if 0 /* now skip a line to prevent gen_api.pl from removing this */
+#    if 0 /* now skip a line to prevent gen_api.pl from removing this */
 
 /* DR_API EXPORT BEGIN */
 
 /* The log mask constants */
-#define LOG_NONE           0x00000000  /**< Log no data. */                              
-#define LOG_STATS          0x00000001  /**< Log per-thread and global statistics. */     
-#define LOG_TOP            0x00000002  /**< Log top-level information. */                
-#define LOG_THREADS        0x00000004  /**< Log data related to threads. */              
-#define LOG_SYSCALLS       0x00000008  /**< Log data related to system calls. */         
-#define LOG_ASYNCH         0x00000010  /**< Log data related to signals/callbacks/etc. */
-#define LOG_INTERP         0x00000020  /**< Log data related to app interpretation. */   
-#define LOG_EMIT           0x00000040  /**< Log data related to emitting code. */        
-#define LOG_LINKS          0x00000080  /**< Log data related to linking code. */         
-#define LOG_CACHE          0x00000100  /**< Log data related to code cache management. */
-#define LOG_FRAGMENT       0x00000200  /**< Log data related to app code fragments. */   
-#define LOG_DISPATCH       0x00000400  /**< Log data on every context switch dispatch. */
-#define LOG_MONITOR        0x00000800  /**< Log data related to trace building. */       
-#define LOG_HEAP           0x00001000  /**< Log data related to memory management. */     
-#define LOG_VMAREAS        0x00002000  /**< Log data related to address space regions. */
-#define LOG_SYNCH          0x00004000  /**< Log data related to synchronization. */      
-#define LOG_MEMSTATS       0x00008000  /**< Log data related to memory statistics. */    
-#define LOG_OPTS           0x00010000  /**< Log data related to optimizations. */        
-#define LOG_SIDELINE       0x00020000  /**< Log data related to sideline threads. */ 
-#define LOG_SYMBOLS        0x00040000  /**< Log data related to app symbols. */ 
-#define LOG_RCT            0x00080000  /**< Log data related to indirect transfers. */ 
-#define LOG_NT             0x00100000  /**< Log data related to Windows Native API. */ 
-#define LOG_HOT_PATCHING   0x00200000  /**< Log data related to hot patching. */ 
-#define LOG_HTABLE         0x00400000  /**< Log data related to hash tables. */ 
-#define LOG_MODULEDB       0x00800000  /**< Log data related to the module database. */ 
-#define LOG_ALL            0x00ffffff  /**< Log all data. */
+#        define LOG_NONE 0x00000000     /**< Log no data. */
+#        define LOG_STATS 0x00000001    /**< Log per-thread and global statistics. */
+#        define LOG_TOP 0x00000002      /**< Log top-level information. */
+#        define LOG_THREADS 0x00000004  /**< Log data related to threads. */
+#        define LOG_SYSCALLS 0x00000008 /**< Log data related to system calls. */
+#        define LOG_ASYNCH 0x00000010   /**< Log data related to signals/callbacks/etc. */
+#        define LOG_INTERP 0x00000020   /**< Log data related to app interpretation. */
+#        define LOG_EMIT 0x00000040     /**< Log data related to emitting code. */
+#        define LOG_LINKS 0x00000080    /**< Log data related to linking code. */
+#        define LOG_CACHE 0x00000100    /**< Log data related to code cache management. */
+#        define LOG_FRAGMENT 0x00000200 /**< Log data related to app code fragments. */
+#        define LOG_DISPATCH                                                           \
+            0x00000400                 /**< Log data on every context switch dispatch. \
+                                        */
+#        define LOG_MONITOR 0x00000800 /**< Log data related to trace building. */
+#        define LOG_HEAP 0x00001000    /**< Log data related to memory management. */
+#        define LOG_VMAREAS                                                             \
+            0x00002000                  /**< Log data related to address space regions. \
+                                         */
+#        define LOG_SYNCH 0x00004000    /**< Log data related to synchronization. */
+#        define LOG_MEMSTATS 0x00008000 /**< Log data related to memory statistics. */
+#        define LOG_OPTS 0x00010000     /**< Log data related to optimizations. */
+#        define LOG_SIDELINE 0x00020000 /**< Log data related to sideline threads. */
+#        define LOG_SYMBOLS 0x00040000  /**< Log data related to app symbols. */
+#        define LOG_RCT 0x00080000      /**< Log data related to indirect transfers. */
+#        define LOG_NT 0x00100000       /**< Log data related to Windows Native API. */
+#        define LOG_HOT_PATCHING 0x00200000 /**< Log data related to hot patching. */
+#        define LOG_HTABLE 0x00400000       /**< Log data related to hash tables. */
+#        define LOG_MODULEDB 0x00800000 /**< Log data related to the module database. */
+#        define LOG_ALL 0x00ffffff      /**< Log all data. */
 /* DR_API EXPORT END */
-#endif
+#    endif
 
-
-DR_API 
+DR_API
 /**
  * Returns the log file for the thread with drcontext \p drcontext.
  * If \p drcontext is NULL, returns the main log file.
@@ -2323,7 +2348,7 @@ DR_API
 file_t
 dr_get_logfile(void *drcontext);
 
-DR_API 
+DR_API
 /**
  * Returns true iff the -stderr_mask runtime option is non-zero, indicating
  * that the user wants notification messages printed to stderr.
@@ -2333,7 +2358,7 @@ dr_is_notify_on(void);
 
 DR_API
 /** Returns a handle to stdout. */
-file_t 
+file_t
 dr_get_stdout_file(void);
 
 DR_API
@@ -2346,14 +2371,14 @@ DR_API
 file_t
 dr_get_stdin_file(void);
 
-#ifdef PROGRAM_SHEPHERDING
+#    ifdef PROGRAM_SHEPHERDING
 DR_API
-/** Writes a security violation forensics report to the supplied file. The forensics 
+/** Writes a security violation forensics report to the supplied file. The forensics
  *  report will include detailed information about the source and target addresses of the
  *  violation as well as information on the current thread, process, and machine.  The
  *  forensics report is generated in an xml block described by dr_forensics-1.0.dtd.
  *  The encoding used is iso-8859-1.
- *  
+ *
  *  The dcontext, violation, and action arguments are supplied by the security violation
  *  event callback.  The file argument is the file to write the forensics report to and
  *  the violation_name argument is a supplied name for the violation.
@@ -2363,23 +2388,23 @@ dr_write_forensics_report(void *dcontext, file_t file,
                           dr_security_violation_type_t violation,
                           dr_security_violation_action_t action,
                           const char *violation_name);
-#endif /* PROGRAM_SHEPHERDING */
+#    endif /* PROGRAM_SHEPHERDING */
 
 /* DR_API EXPORT BEGIN */
-#ifdef WINDOWS 
+#    ifdef WINDOWS
 /* DR_API EXPORT END */
 DR_API
-/** 
+/**
  * Displays a message in a pop-up window. \note Windows only. \note On Windows Vista
  * most Windows services are unable to display message boxes.
  */
 void
 dr_messagebox(const char *fmt, ...);
 /* DR_API EXPORT BEGIN */
-#endif
+#    endif
 /* DR_API EXPORT END */
 
-DR_API 
+DR_API
 /**
  * Stdout printing that won't interfere with the
  * application's own printing.  Currently non-buffered.
@@ -2391,7 +2416,7 @@ DR_API
  * \note If the data to be printed is large it will be truncated to
  * an internal buffer size.
  */
-void 
+void
 dr_printf(const char *fmt, ...);
 
 DR_API
@@ -2431,14 +2456,14 @@ DR_API
 int
 dr_snprintf(char *buf, size_t max, const char *fmt, ...);
 
-DR_API 
+DR_API
 /** Prints \p msg followed by the instruction \p instr to file \p f. */
-void 
+void
 dr_print_instr(void *drcontext, file_t f, instr_t *instr, const char *msg);
 
-DR_API 
+DR_API
 /** Prints \p msg followed by the operand \p opnd to file \p f. */
-void 
+void
 dr_print_opnd(void *drcontext, file_t f, opnd_t opnd, const char *msg);
 
 /* DR_API EXPORT BEGIN */
@@ -2448,19 +2473,19 @@ dr_print_opnd(void *drcontext, file_t f, opnd_t opnd, const char *msg);
  */
 /* DR_API EXPORT END */
 
-DR_API 
+DR_API
 /**
- * Returns the DR context of the current thread. 
+ * Returns the DR context of the current thread.
  */
 void *
 dr_get_current_drcontext(void);
 
-DR_API 
+DR_API
 /** Returns the thread id of the thread with drcontext \p drcontext. */
-thread_id_t 
+thread_id_t
 dr_get_thread_id(void *drcontext);
 
-DR_API 
+DR_API
 /**
  * Returns the user-controlled thread-local-storage field.  To
  * generate an instruction sequence that reads the drcontext field
@@ -2469,13 +2494,13 @@ DR_API
 void *
 dr_get_tls_field(void *drcontext);
 
-DR_API 
-/** 
+DR_API
+/**
  * Sets the user-controlled thread-local-storage field.  To
  * generate an instruction sequence that reads the drcontext field
  * inline in the code cache, use dr_insert_write_tls_field().
  */
-void 
+void
 dr_set_tls_field(void *drcontext, void *value);
 
 DR_API
@@ -2500,10 +2525,8 @@ DR_API
  * to no more than 64 slots.
  */
 bool
-dr_raw_tls_calloc(OUT reg_id_t *segment_register,
-                  OUT uint *offset,
-                  IN  uint num_slots,
-                  IN  uint alignment);
+dr_raw_tls_calloc(OUT reg_id_t *segment_register, OUT uint *offset, IN uint num_slots,
+                  IN uint alignment);
 
 DR_API
 /**
@@ -2513,7 +2536,6 @@ DR_API
  */
 bool
 dr_raw_tls_cfree(uint offset, uint num_slots);
-
 
 /* PR 222812: due to issues in supporting client thread synchronization
  * and other complexities we are using nudges for simple push-i/o and
@@ -2528,7 +2550,7 @@ dr_raw_tls_cfree(uint offset, uint num_slots);
  * dr_mutex_lock, and dr_messagebox are ok) then it may have performance or
  * correctness (if the synch times out) impacts.
  */
-#ifdef CLIENT_SIDELINE
+#    ifdef CLIENT_SIDELINE
 DR_API
 /**
  * Creates a new thread that is marked as a non-application thread (i.e., DR
@@ -2590,7 +2612,7 @@ DR_API
  */
 bool
 dr_client_thread_set_suspendable(bool suspendable);
-#endif /* CLIENT_SIDELINE */
+#    endif /* CLIENT_SIDELINE */
 
 DR_API
 /** Current thread sleeps for \p time_ms milliseconds. */
@@ -2639,8 +2661,7 @@ DR_API
  * nudge callback.
  */
 bool
-dr_suspend_all_other_threads(OUT void ***drcontexts,
-                             OUT uint *num_suspended,
+dr_suspend_all_other_threads(OUT void ***drcontexts, OUT uint *num_suspended,
                              OUT uint *num_unsuspended);
 
 DR_API
@@ -2654,15 +2675,14 @@ DR_API
  * return value indicates whether all resumption attempts were successful.
  */
 bool
-dr_resume_all_other_threads(IN void **drcontexts,
-                            IN uint num_suspended);
+dr_resume_all_other_threads(IN void **drcontexts, IN uint num_suspended);
 
 /* We do not translate the context to avoid lock issues (PR 205795).
  * We do not delay until a safe point (via regular delayable signal path)
  * since some clients may want the interrupted context: for a general
  * timer clients should create a separate thread.
  */
-#ifdef LINUX
+#    ifdef LINUX
 DR_API
 /**
  * Installs an interval timer in the itimer sharing group that
@@ -2716,7 +2736,7 @@ DR_API
  */
 uint
 dr_get_itimer(int which);
-#endif /* LINUX */
+#    endif /* LINUX */
 
 /* DR_API EXPORT TOFILE dr_ir_utils.h */
 /* DR_API EXPORT BEGIN */
@@ -2751,63 +2771,63 @@ dr_get_itimer(int which);
  * \note The number of spill slots may change in future releases.
  */
 typedef enum {
-    SPILL_SLOT_1  =  0,  /** spill slot for register save/restore routines */
-    SPILL_SLOT_2  =  1,  /** spill slot for register save/restore routines */
-    SPILL_SLOT_3  =  2,  /** spill slot for register save/restore routines */
-    SPILL_SLOT_4  =  3,  /** spill slot for register save/restore routines */
-    SPILL_SLOT_5  =  4,  /** spill slot for register save/restore routines */
-    SPILL_SLOT_6  =  5,  /** spill slot for register save/restore routines */
-    SPILL_SLOT_7  =  6,  /** spill slot for register save/restore routines */
-    SPILL_SLOT_8  =  7,  /** spill slot for register save/restore routines */
-    SPILL_SLOT_9  =  8,  /** spill slot for register save/restore routines */
-#ifdef X64
-    SPILL_SLOT_10 =  9,  /** spill slot for register save/restore routines
-                          * \note x64 only */
-    SPILL_SLOT_11 = 10,  /** spill slot for register save/restore routines
-                          * \note x64 only */
-    SPILL_SLOT_12 = 11,  /** spill slot for register save/restore routines
-                          * \note x64 only */
-    SPILL_SLOT_13 = 12,  /** spill slot for register save/restore routines
-                          * \note x64 only */
-    SPILL_SLOT_14 = 13,  /** spill slot for register save/restore routines
-                          * \note x64 only */
-    SPILL_SLOT_15 = 14,  /** spill slot for register save/restore routines
-                          * \note x64 only */
-    SPILL_SLOT_16 = 15,  /** spill slot for register save/restore routines
-                          * \note x64 only */
-    SPILL_SLOT_17 = 16,  /** spill slot for register save/restore routines
-                          * \note x64 only */
+    SPILL_SLOT_1 = 0, /** spill slot for register save/restore routines */
+    SPILL_SLOT_2 = 1, /** spill slot for register save/restore routines */
+    SPILL_SLOT_3 = 2, /** spill slot for register save/restore routines */
+    SPILL_SLOT_4 = 3, /** spill slot for register save/restore routines */
+    SPILL_SLOT_5 = 4, /** spill slot for register save/restore routines */
+    SPILL_SLOT_6 = 5, /** spill slot for register save/restore routines */
+    SPILL_SLOT_7 = 6, /** spill slot for register save/restore routines */
+    SPILL_SLOT_8 = 7, /** spill slot for register save/restore routines */
+    SPILL_SLOT_9 = 8, /** spill slot for register save/restore routines */
+#    ifdef X64
+    SPILL_SLOT_10 = 9,             /** spill slot for register save/restore routines
+                                    * \note x64 only */
+    SPILL_SLOT_11 = 10,            /** spill slot for register save/restore routines
+                                    * \note x64 only */
+    SPILL_SLOT_12 = 11,            /** spill slot for register save/restore routines
+                                    * \note x64 only */
+    SPILL_SLOT_13 = 12,            /** spill slot for register save/restore routines
+                                    * \note x64 only */
+    SPILL_SLOT_14 = 13,            /** spill slot for register save/restore routines
+                                    * \note x64 only */
+    SPILL_SLOT_15 = 14,            /** spill slot for register save/restore routines
+                                    * \note x64 only */
+    SPILL_SLOT_16 = 15,            /** spill slot for register save/restore routines
+                                    * \note x64 only */
+    SPILL_SLOT_17 = 16,            /** spill slot for register save/restore routines
+                                    * \note x64 only */
     SPILL_SLOT_MAX = SPILL_SLOT_17 /** Enum value of the last register save/restore
                                     *  spill slot. */
-#else
+#    else
     SPILL_SLOT_MAX = SPILL_SLOT_9 /** Enum value of the last register save/restore
                                    *  spill slot. */
-#endif
+#    endif
 } dr_spill_slot_t;
 /* DR_API EXPORT END */
 
 DR_API
-/** 
+/**
  * Inserts into \p ilist prior to \p where meta-instruction(s) to save the
  * register \p reg in the spill slot \p slot.  See dr_restore_reg(). Use
  * dr_read_saved_reg() and dr_write_saved_reg() to access spill slots from clean
  * calls and restore_state_events (see dr_register_restore_state_event()).
  * \note The stored value remains available only until the next non-meta (i.e.
- * application) instruction. Use dr_insert_write_tls_field() and 
+ * application) instruction. Use dr_insert_write_tls_field() and
  * dr_insert_read_tls_field() for a persistent (but more costly to access)
  * thread-local-storage location.  See also dr_raw_tls_calloc().
  */
-void 
+void
 dr_save_reg(void *drcontext, instrlist_t *ilist, instr_t *where, reg_id_t reg,
             dr_spill_slot_t slot);
 
 DR_API
-/** 
- * Inserts into \p ilist prior to \p where meta-instruction(s) to restore the 
+/**
+ * Inserts into \p ilist prior to \p where meta-instruction(s) to restore the
  * register \p reg from the spill slot \p slot.  See dr_save_reg() for notes on
  * lifetime and alternative access to spill slots.
  */
-void 
+void
 dr_restore_reg(void *drcontext, instrlist_t *ilist, instr_t *where, reg_id_t reg,
                dr_spill_slot_t slot);
 
@@ -2839,10 +2859,10 @@ dr_read_saved_reg(void *drcontext, dr_spill_slot_t slot);
 
 DR_API
 /**
- * Can be used from a clean call to modify the value saved in the spill slot 
+ * Can be used from a clean call to modify the value saved in the spill slot
  * \p slot by dr_save_reg() such that a later dr_restore_reg() will see the
  * new value.
- * 
+ *
  * \note This routine should only be used during a clean call out of the
  * cache.  Use at any other time could corrupt application or \DynamoRIO
  * state.
@@ -2851,7 +2871,7 @@ void
 dr_write_saved_reg(void *drcontext, dr_spill_slot_t slot, reg_t value);
 
 DR_API
-/** 
+/**
  * Inserts into \p ilist prior to \p where meta-instruction(s) to save the 6
  * arithmetic flags into xax after first saving xax to the spill slot \p slot.
  * This is equivalent to dr_save_reg() of xax to \p slot followed by lahf and
@@ -2862,22 +2882,22 @@ DR_API
  * routine unless it is first saved (and later restored prior to
  * using dr_restore_arith_flags()).
  */
-void 
+void
 dr_save_arith_flags(void *drcontext, instrlist_t *ilist, instr_t *where,
                     dr_spill_slot_t slot);
 
 DR_API
-/** 
+/**
  * Inserts into \p ilist prior to \p where meta-instruction(s) to restore the 6
  * arithmetic flags, assuming they were saved using dr_save_arith_flags() with
  * slot \p slot and that xax holds the same value it did after the save.
  */
-void 
+void
 dr_restore_arith_flags(void *drcontext, instrlist_t *ilist, instr_t *where,
                        dr_spill_slot_t slot);
 
 DR_API
-/** Emulates the effects of 
+/** Emulates the effects of
  *  add 7f, al
  *  sahf
  * on eflags to restore eflags from xax. Does not modify xax.
@@ -2885,7 +2905,7 @@ DR_API
 void
 dr_emulate_restore_arith_flags(dr_mcontext_t *mcontext);
 
-/* FIXME PR 315333: add routine that scans ahead to see if need to save eflags.  See 
+/* FIXME PR 315333: add routine that scans ahead to see if need to save eflags.  See
  * forward_eflags_analysis(). */
 
 /* FIXME PR 315327: add routines to save, restore and access from C code xmm registers
@@ -2921,7 +2941,7 @@ dr_insert_write_tls_field(void *drcontext, instrlist_t *ilist, instr_t *where,
 
 DR_API
 /** Inserts \p instr as a non-application instruction into \p ilist prior to \p where. */
-void 
+void
 instrlist_meta_preinsert(instrlist_t *ilist, instr_t *where, instr_t *instr);
 
 DR_API
@@ -2937,15 +2957,15 @@ instrlist_meta_append(instrlist_t *ilist, instr_t *instr);
 DR_API
 /**
  * Inserts \p instr as a non-application instruction that can fault (see
- * instr_set_meta_may_fault()) into \p ilist prior to \p where. 
+ * instr_set_meta_may_fault()) into \p ilist prior to \p where.
  */
-void 
+void
 instrlist_meta_fault_preinsert(instrlist_t *ilist, instr_t *where, instr_t *instr);
 
 DR_API
 /**
  * Inserts \p instr as a non-application instruction that can fault (see
- * instr_set_meta_may_fault()) into \p ilist after \p where. 
+ * instr_set_meta_may_fault()) into \p ilist after \p where.
  */
 void
 instrlist_meta_fault_postinsert(instrlist_t *ilist, instr_t *where, instr_t *instr);
@@ -2953,7 +2973,7 @@ instrlist_meta_fault_postinsert(instrlist_t *ilist, instr_t *where, instr_t *ins
 DR_API
 /**
  * Inserts \p instr as a non-application instruction that can fault (see
- * instr_set_meta_may_fault()) onto the end of \p ilist. 
+ * instr_set_meta_may_fault()) onto the end of \p ilist.
  */
 void
 instrlist_meta_fault_append(instrlist_t *ilist, instr_t *instr);
@@ -3015,9 +3035,9 @@ DR_API
  * \note Arguments that reference sub-register portions of REG_XSP are
  * not supported (full REG_XSP is supported).
  */
-void 
-dr_insert_clean_call(void *drcontext, instrlist_t *ilist, instr_t *where,
-                     void *callee, bool save_fpstate, uint num_args, ...);
+void
+dr_insert_clean_call(void *drcontext, instrlist_t *ilist, instr_t *where, void *callee,
+                     bool save_fpstate, uint num_args, ...);
 
 DR_API
 /**
@@ -3066,9 +3086,9 @@ DR_API
  *
  * \note Arguments that reference REG_XSP are not supported in 64-bit mode.
  */
-void 
-dr_insert_call(void *drcontext, instrlist_t *ilist, instr_t *where,
-               void *callee, uint num_args, ...);
+void
+dr_insert_call(void *drcontext, instrlist_t *ilist, instr_t *where, void *callee,
+               uint num_args, ...);
 
 DR_API
 /**
@@ -3096,11 +3116,11 @@ uint
 dr_prepare_for_call(void *drcontext, instrlist_t *ilist, instr_t *instr);
 
 DR_API
-/** 
+/**
  * Inserts into \p ilist prior to \p where meta-instruction(s) to restore state
  * after a call.
  */
-void 
+void
 dr_cleanup_after_call(void *drcontext, instrlist_t *ilist, instr_t *where,
                       uint sizeof_param_area);
 
@@ -3134,9 +3154,9 @@ DR_API
  * -# address of call instruction (caller)
  * -# target address of call (callee)
  */
-void 
-dr_insert_call_instrumentation(void *drcontext, instrlist_t *ilist,
-                               instr_t *instr, void *callee);
+void
+dr_insert_call_instrumentation(void *drcontext, instrlist_t *ilist, instr_t *instr,
+                               void *callee);
 
 DR_API
 /**
@@ -3149,14 +3169,14 @@ DR_API
  * \note \p scratch_slot must be <= dr_max_opnd_accessible_spill_slot(). \p scratch_slot
  * is used internally to this routine and will be clobbered.
  */
-#ifdef AVOID_API_EXPORT
+#    ifdef AVOID_API_EXPORT
 /* If we re-enable -opt_speed (or -indcall2direct directly) we should add back:
  * \note This routine is not supported when the -opt_speed option is specified.
  */
-#endif
-void 
-dr_insert_mbr_instrumentation(void *drcontext, instrlist_t *ilist,
-                              instr_t *instr, void *callee, dr_spill_slot_t scratch_slot);
+#    endif
+void
+dr_insert_mbr_instrumentation(void *drcontext, instrlist_t *ilist, instr_t *instr,
+                              void *callee, dr_spill_slot_t scratch_slot);
 
 DR_API
 /**
@@ -3167,9 +3187,9 @@ DR_API
  * -# target address of branch
  * -# 0 if the branch is not taken, 1 if it is taken
  */
-void 
-dr_insert_cbr_instrumentation(void *drcontext, instrlist_t *ilist,
-                              instr_t *instr, void *callee);
+void
+dr_insert_cbr_instrumentation(void *drcontext, instrlist_t *ilist, instr_t *instr,
+                              void *callee);
 
 /* FIXME: will never see any ubrs! */
 DR_API
@@ -3183,9 +3203,9 @@ DR_API
  * \warning Basic block eliding is controlled by -max_elide_jmp.  If that
  * option is set to non-zero, ubrs may never be seen.
  */
-void 
-dr_insert_ubr_instrumentation(void *drcontext, instrlist_t *ilist,
-                              instr_t *instr, void *callee);
+void
+dr_insert_ubr_instrumentation(void *drcontext, instrlist_t *ilist, instr_t *instr,
+                              void *callee);
 
 DR_API
 /**
@@ -3204,9 +3224,9 @@ DR_API
 /**
  * Copies the current application machine context to \p context.
  * This routine may only be called from:
- * - A clean call invoked by dr_insert_clean_call() or dr_prepare_for_call() 
- * - A pre- or post-syscall event (dr_register_pre_syscall_event(), 
- *   dr_register_post_syscall_event()) 
+ * - A clean call invoked by dr_insert_clean_call() or dr_prepare_for_call()
+ * - A pre- or post-syscall event (dr_register_pre_syscall_event(),
+ *   dr_register_post_syscall_event())
  * - Basic block or trace creation events (dr_register_bb_event(),
  *   dr_register_trace_event()), but for basic block creation only when the
  *   basic block callback parameters \p for_trace and \p translating are
@@ -3242,9 +3262,9 @@ DR_API
 /**
  * Sets the application machine context to \p context.
  * This routine may only be called from:
- * - A clean call invoked by dr_insert_clean_call() or dr_prepare_for_call() 
- * - A pre- or post-syscall event (dr_register_pre_syscall_event(), 
- *   dr_register_post_syscall_event()) 
+ * - A clean call invoked by dr_insert_clean_call() or dr_prepare_for_call()
+ * - A pre- or post-syscall event (dr_register_pre_syscall_event(),
+ *   dr_register_post_syscall_event())
  *   dr_register_thread_exit_event())
  * - Basic block or trace creation events (dr_register_bb_event(),
  *   dr_register_trace_event()), but for basic block creation only when the
@@ -3265,7 +3285,7 @@ void
 dr_set_mcontext(void *drcontext, dr_mcontext_t *context, const int *app_errno);
 
 /* FIXME - combine with dr_set_mcontext()?  Implementation wise it's nice to split the
- * two since handling the pc with dr_set_mcontext() would complicate the clean call 
+ * two since handling the pc with dr_set_mcontext() would complicate the clean call
  * handling. But perhaps would be nicer from an interface perspective to combine them. */
 DR_API
 /**
@@ -3376,17 +3396,17 @@ DR_API
  * \note This routine may not be called while any locks are held that could block a thread
  * processing a registered event callback or cache callout.
  * \note dr_delay_flush_region() has fewer restrictions on use, but is less synchronous.
- * \note Use \p size == 1 to flush fragments containing the instruction at address 
+ * \note Use \p size == 1 to flush fragments containing the instruction at address
  * \p start. A flush of \p size == 0 is not allowed.
  * \note As currently implemented, dr_delay_flush_region() with no completion callback
- * routine specified can be substantially more performant. 
+ * routine specified can be substantially more performant.
  */
 bool
 dr_flush_region(app_pc start, size_t size);
 
 /* FIXME - get rid of the no locks requirement by making event callbacks !couldbelinking
  * and no dr locks (see PR 227619) so that client locks owned by this thread can't block
- * any couldbelinking thread.  FIXME - would be nice to make this available for 
+ * any couldbelinking thread.  FIXME - would be nice to make this available for
  * windows since there's less of a performance hit than using synch_all flushing, but
  * with coarse_units can't tell if we need a synch all flush or not and that confuses
  * the interface a lot. FIXME - xref PR 227619 - some other event handler are safe
@@ -3410,7 +3430,7 @@ DR_API
  * \note This routine may not be called while any locks are held that could block a thread
  * processing a registered event callback or cache callout.
  * \note dr_delay_flush_region() has fewer restrictions on use, but is less synchronous.
- * \note Use \p size == 1 to flush fragments containing the instruction at address 
+ * \note Use \p size == 1 to flush fragments containing the instruction at address
  * \p start. A flush of \p size == 0 is not allowed.
  * \note This routine is only available with either the -thread_private
  * or -enable_full_api options.  It is not available when -opt_memory is specified.
@@ -3421,29 +3441,29 @@ dr_unlink_flush_region(app_pc start, size_t size);
 /* FIXME - can we better bound when the flush will happen?  Maybe unlink shared syscalls
  * or similar or check the queue in more locations?  Should always hit the flush before
  * executing new code in the cache, and I think we'll always hit it before a nudge is
- * processed too.  Could trigger a nudge, or do this in a nudge, but that's rather 
+ * processed too.  Could trigger a nudge, or do this in a nudge, but that's rather
  * expensive. */
 DR_API
 /**
- * Request a flush of all fragments containing code from the region 
- * [\p start, \p start + \p size).  The flush will be performed at the next safe 
- * point in time (usually before any new code is added to the cache after this 
- * routine is called). If \p flush_completion_callback is non-NULL, it will be 
- * called with the \p flush_id provided to this routine when the flush completes, 
- * after which no execution will occur out of the fragments flushed. Returns true 
+ * Request a flush of all fragments containing code from the region
+ * [\p start, \p start + \p size).  The flush will be performed at the next safe
+ * point in time (usually before any new code is added to the cache after this
+ * routine is called). If \p flush_completion_callback is non-NULL, it will be
+ * called with the \p flush_id provided to this routine when the flush completes,
+ * after which no execution will occur out of the fragments flushed. Returns true
  * if the flush was successfully queued.
  *
  * \note dr_flush_region() and dr_unlink_flush_region() can give stronger guarantees on
  * when the flush will occur, but have more restrictions on use.
- * \note Use \p size == 1 to flush fragments containing the instruction at address 
+ * \note Use \p size == 1 to flush fragments containing the instruction at address
  * \p start.  A flush of \p size == 0 is not allowed.
  * \note As currently implemented there may be a performance penalty for requesting a
- * \p flush_completion_callback; for most performant usage set 
+ * \p flush_completion_callback; for most performant usage set
  * \p flush_completion_callback to NULL.
  */
 bool
 dr_delay_flush_region(app_pc start, size_t size, uint flush_id,
-                      void (*flush_completion_callback) (int flush_id));
+                      void (*flush_completion_callback)(int flush_id));
 
 DR_API
 /** Returns whether or not there is a fragment in code cache with tag \p tag. */
@@ -3457,7 +3477,7 @@ DR_API
 bool
 dr_bb_exists_at(void *drcontext, void *tag);
 
-DR_API 
+DR_API
 /**
  * Looks up the fragment with tag \p tag.
  * If not found, returns 0.
@@ -3466,12 +3486,12 @@ DR_API
 uint
 dr_fragment_size(void *drcontext, void *tag);
 
-DR_API 
+DR_API
 /** Retrieves the application PC of a fragment with tag \p tag. */
 app_pc
 dr_fragment_app_pc(void *tag);
 
-DR_API 
+DR_API
 /**
  * Given an application PC, returns a PC that contains the application code
  * corresponding to the original PC.  In some circumstances on Windows DR
@@ -3490,7 +3510,7 @@ DR_API
 app_pc
 dr_app_pc_for_decoding(app_pc pc);
 
-DR_API 
+DR_API
 /**
  * Given a code cache pc, returns the corresponding application pc.
  * This involves translating the state and thus may incur calls to
@@ -3508,7 +3528,7 @@ DR_API
 app_pc
 dr_fragment_start_pc(byte *cache_pc);
 
-#ifdef CUSTOM_TRACES
+#    ifdef CUSTOM_TRACES
 /* DR_API EXPORT BEGIN */
 
 /****************************************************************************
@@ -3530,11 +3550,11 @@ DR_API
  * to end the trace.  (The callback will be called both for
  * standard DR traces and for client-defined traces.)
  *
- * \note Some fragments are unsuitable for trace heads. DR will 
+ * \note Some fragments are unsuitable for trace heads. DR will
  * ignore attempts to mark such fragments as trace heads and will return
  * false. If the client marks a fragment that doesn't exist yet as a trace
  * head and DR later determines that the fragment is unsuitable for
- * a trace head it will unmark the fragment as a trace head without 
+ * a trace head it will unmark the fragment as a trace head without
  * notifying the client.
  *
  * \note Some fragments' notion of trace heads is dependent on
@@ -3559,10 +3579,10 @@ DR_API
 /** Checks to see that if there is a trace in the code cache at tag \p tag. */
 bool
 dr_trace_exists_at(void *drcontext, void *tag);
-#endif /* CUSTOM_TRACES */
+#    endif /* CUSTOM_TRACES */
 
-#ifdef UNSUPPORTED_API
-DR_API 
+#    ifdef UNSUPPORTED_API
+DR_API
 /**
  * All basic blocks created after this routine is called will have a prefix
  * that restores the ecx register.  Exit ctis can be made to target this prefix
@@ -3574,7 +3594,7 @@ DR_API
  */
 void
 dr_add_prefixes_to_basic_blocks(void);
-#endif /* UNSUPPORTED_API */
+#    endif /* UNSUPPORTED_API */
 
 #endif /* CLIENT_INTERFACE */
 
@@ -3596,8 +3616,7 @@ DR_API
  * the particular size needed.
  */
 void
-dr_insert_save_fpstate(void *drcontext, instrlist_t *ilist, instr_t *where,
-                       opnd_t buf);
+dr_insert_save_fpstate(void *drcontext, instrlist_t *ilist, instr_t *where, opnd_t buf);
 
 DR_API
 /**

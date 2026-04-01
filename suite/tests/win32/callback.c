@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -35,7 +35,7 @@
 #include <stdio.h>
 
 #ifdef USE_DYNAMO
-#include "dynamorio.h"
+#    include "dynamorio.h"
 #endif
 
 static bool thread_ready = false;
@@ -65,7 +65,7 @@ wnd_callback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     bool cross_cb_seh_supported;
     if (message == MSG_CUSTOM) {
-        print("in wnd_callback "PFX" %d %d\n", message, wParam, lParam);
+        print("in wnd_callback " PFX " %d %d\n", message, wParam, lParam);
         if (wParam == WP_CRASH) {
             /* ensure SendMessage returns prior to our crash */
             ReplyMessage(TRUE);
@@ -73,9 +73,8 @@ wnd_callback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 #ifdef X64
             cross_cb_seh_supported = false;
 #else
-            cross_cb_seh_supported =
-                (get_windows_version() < WINDOWS_VERSION_7 ||
-                 !is_wow64(GetCurrentProcess()));
+            cross_cb_seh_supported = (get_windows_version() < WINDOWS_VERSION_7 ||
+                                      !is_wow64(GetCurrentProcess()));
 #endif
             if (!cross_cb_seh_supported) {
                 /* FIXME i#266: even natively this exception is not making it across
@@ -87,15 +86,17 @@ wnd_callback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
                 __try {
                     *((int *)BAD_WRITE) = 4;
                     print("Should not get here\n");
-                }
-                __except (/* Only catch the bad write, to not mask DR errors (like
-                           * case 10579) */
-                          (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION &&
-                           (GetExceptionInformation())->ExceptionRecord->
-                           ExceptionInformation[0] == 1 /* write */ &&
-                           (GetExceptionInformation())->ExceptionRecord->
-                           ExceptionInformation[1] == BAD_WRITE) ?
-                          EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH) {
+                } __except (/* Only catch the bad write, to not mask DR errors (like
+                             * case 10579) */
+                            (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION &&
+                             (GetExceptionInformation())
+                                     ->ExceptionRecord->ExceptionInformation[0] ==
+                                 1 /* write */
+                             && (GetExceptionInformation())
+                                     ->ExceptionRecord->ExceptionInformation[1] ==
+                                 BAD_WRITE)
+                                ? EXCEPTION_EXECUTE_HANDLER
+                                : EXCEPTION_CONTINUE_SEARCH) {
                     print("Inside handler\n");
                     past_crash = true;
                 }
@@ -107,26 +108,27 @@ wnd_callback(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
         return MSG_SUCCESS;
     } else {
         /* lParam varies so don't make template nondet */
-        print("in wnd_callback "PFX" %d\n", message, wParam);
+        print("in wnd_callback " PFX " %d\n", message, wParam);
         return DefWindowProc(hwnd, message, wParam, lParam);
     }
 }
 
 int WINAPI
-run_func(void * arg)
+run_func(void *arg)
 {
     MSG msg;
     char *winName = "foobar";
-    WNDCLASS wndclass = {0, wnd_callback, 0, 0, NULL/* WinMain hwnd would be here */,
-                         NULL, NULL,
-                         NULL, NULL, winName};
-    
+    WNDCLASS wndclass = {
+        0,    wnd_callback, 0,    0,    NULL /* WinMain hwnd would be here */,
+        NULL, NULL,         NULL, NULL, winName
+    };
+
     if (!RegisterClass(&wndclass)) {
         print("Unable to create window class\n");
         return 0;
     }
     hwnd = CreateWindow(winName, winName, 0, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
-                        CW_USEDEFAULT, NULL, NULL, NULL/* WinMain hwnd would be here */,
+                        CW_USEDEFAULT, NULL, NULL, NULL /* WinMain hwnd would be here */,
                         NULL);
     /* deliberately not calling ShowWindow */
 
@@ -140,24 +142,24 @@ run_func(void * arg)
             if (GetMessage(&msg, NULL, 0, 0)) {
                 /* Messages not auto-sent to callbacks are processed here */
                 if (msg.message != MSG_CUSTOM || msg.wParam != WP_NOP) {
-                    print("Got message "PFX" %d %d\n",
-                          msg.message, msg.wParam, msg.lParam);
+                    print("Got message " PFX " %d %d\n", msg.message, msg.wParam,
+                          msg.lParam);
                 }
                 last_received = msg.message;
                 if (msg.message == MSG_CUSTOM && msg.wParam == WP_EXIT)
-                    break; /* Done */
+                    break;              /* Done */
                 TranslateMessage(&msg); /* convert virtual-key msgs to character msgs */
                 DispatchMessage(&msg);
             }
-        }
-        __except (/* Only catch the bad write, to not mask DR errors (like
-                   * case 10579) */
-                  (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION &&
-                   (GetExceptionInformation())->ExceptionRecord->ExceptionInformation[0]
-                   == 1 /* write */ &&
-                   (GetExceptionInformation())->ExceptionRecord->ExceptionInformation[1]
-                   == BAD_WRITE) ?
-                  EXCEPTION_EXECUTE_HANDLER : EXCEPTION_CONTINUE_SEARCH) {
+        } __except (/* Only catch the bad write, to not mask DR errors (like
+                     * case 10579) */
+                    (GetExceptionCode() == EXCEPTION_ACCESS_VIOLATION &&
+                     (GetExceptionInformation())
+                             ->ExceptionRecord->ExceptionInformation[0] == 1 /* write */
+                     && (GetExceptionInformation())
+                             ->ExceptionRecord->ExceptionInformation[1] == BAD_WRITE)
+                        ? EXCEPTION_EXECUTE_HANDLER
+                        : EXCEPTION_CONTINUE_SEARCH) {
             /* This should have crossed the callback boundary
              * On xpsp2 and earlier we never see a callback return for
              * the crashing callback, while on 2k3sp1 we do see one.
@@ -167,7 +169,7 @@ run_func(void * arg)
             continue;
         }
     }
-    return (int) msg.wParam;
+    return (int)msg.wParam;
 }
 
 int
@@ -184,7 +186,7 @@ main()
 
     print("About to create thread\n");
     hThread = CreateThread(NULL, 0, run_func, NULL, 0, &tid);
-    if (hThread == NULL) { 
+    if (hThread == NULL) {
         print("Error creating thread\n");
         return -1;
     }

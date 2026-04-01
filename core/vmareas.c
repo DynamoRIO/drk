@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -54,48 +54,48 @@
 #include "perscache.h"
 
 #ifdef WINDOWS
-# include "events.h"             /* event log messages - not supported yet on Linux  */
+#    include "events.h" /* event log messages - not supported yet on Linux  */
 #endif
 
 #ifdef CLIENT_INTERFACE
-# include "instrument.h"
+#    include "instrument.h"
 #endif
 
 #ifdef DEBUG
-# include "synch.h" /* all_threads_synch_lock */
+#    include "synch.h" /* all_threads_synch_lock */
 #endif
 
 #include "string_wrapper.h"
 
 enum {
-    /* VM_ flags to distinguish region types 
+    /* VM_ flags to distinguish region types
      * We also use some FRAG_ flags (but in a separate field so no value space overlap)
      * Adjacent regions w/ different flags are never merged.
      */
-    VM_WRITABLE     = 0x0001,    /* app memory writable? */
+    VM_WRITABLE = 0x0001, /* app memory writable? */
     /* UNMOD_IMAGE means the region was mmapped in and has been read-only since then
      * this excludes even loader modifications (IAT update, relocate, etc.) on win32!
      */
-    VM_UNMOD_IMAGE  = 0x0002,
-    VM_DELETE_ME    = 0x0004,    /* on delete queue -- for thread-local only */
-     /* NOTE : if a new area is added that overlaps an existing area with a 
-      * different VM_WAS_FUTURE flag, the areas will be merged with the flag 
-      * taken from the new area, see FIXME in add_vm_area */
-    VM_WAS_FUTURE   = 0x0008,    /* moved from future list to exec list */
-    VM_DR_HEAP      = 0x0010,    /* DR heap area */
-    VM_ONCE_ONLY    = 0x0020,    /* on future list but should be removed on 
-                                  * first exec */
+    VM_UNMOD_IMAGE = 0x0002,
+    VM_DELETE_ME = 0x0004, /* on delete queue -- for thread-local only */
+    /* NOTE : if a new area is added that overlaps an existing area with a
+     * different VM_WAS_FUTURE flag, the areas will be merged with the flag
+     * taken from the new area, see FIXME in add_vm_area */
+    VM_WAS_FUTURE = 0x0008, /* moved from future list to exec list */
+    VM_DR_HEAP = 0x0010,    /* DR heap area */
+    VM_ONCE_ONLY = 0x0020,  /* on future list but should be removed on
+                             * first exec */
     /* FIXME case 7877, 3744: need to properly merge pageprot regions with
      * existing selfmod regions before we can truly separate this.  For now we
      * continue to treat selfmod as pageprot.
      */
-    VM_MADE_READONLY = VM_WRITABLE/* FIXME: should be 0x0040 -- see above */,
-                                 /* DR has marked this region read 
-                                  * only for consistency, should only be used
-                                  * in conjunction with VM_WRITABLE */
-    VM_DELAY_READONLY = 0x0080,  /* dr has not yet marked this region read 
-                                  * only for consistency, should only be used
-                                  * in conjunction with VM_WRITABLE */
+    VM_MADE_READONLY = VM_WRITABLE /* FIXME: should be 0x0040 -- see above */,
+    /* DR has marked this region read
+     * only for consistency, should only be used
+     * in conjunction with VM_WRITABLE */
+    VM_DELAY_READONLY = 0x0080, /* dr has not yet marked this region read
+                                 * only for consistency, should only be used
+                                 * in conjunction with VM_WRITABLE */
 #ifdef PROGRAM_SHEPHERDING
     /* re-verify this region for code origins policies every time it is
      * encountered.  only used with selfmod regions that are only allowed if
@@ -104,10 +104,10 @@ enum {
      * xref case 4020.  can remove once we split code origins list from
      * cache consistency list (case 3744).
      */
-    VM_PATTERN_REVERIFY = 0x0100,  
+    VM_PATTERN_REVERIFY = 0x0100,
 #endif
 
-    VM_DRIVER_ADDRESS   = 0x0200,
+    VM_DRIVER_ADDRESS = 0x0200,
     /* a driver hooker area, needed for case 9022.  Note we can
      * normally read properties only of user mode addresses, so we
      * have to probe addresses in this area.  Also note that we're
@@ -120,16 +120,16 @@ enum {
      * This is a shortcut to reading custom.client->persisted.
      * This is not guaranteed to be set on shared_data: only on executable_areas.
      */
-    VM_PERSISTED_CACHE     = 0x0400,
+    VM_PERSISTED_CACHE = 0x0400,
 
     /* Case 10584: avoid flush synch when no code has been executed */
-    VM_EXECUTED_FROM       = 0x0800,
+    VM_EXECUTED_FROM = 0x0800,
 
     /* A workaround for lock rank issues: we delay adding loaded persisted
      * units to shared_data until first asked about.
      * This flags is NOT propagated on vmarea splits.
      */
-    VM_ADD_TO_SHARED_DATA  = 0x1000,
+    VM_ADD_TO_SHARED_DATA = 0x1000,
 };
 
 /* simple way to disable sandboxing */
@@ -168,7 +168,7 @@ typedef struct _ro_vs_sandbox_data_t {
  */
 typedef struct vm_area_t {
     app_pc start;
-    app_pc end;         /* open end interval */
+    app_pc end; /* open end interval */
     /* We have two different flags fields to allow easy use of the FRAG_ flags.
      * The two combined are used to distinguish different regions.
      * Adjacent regions w/ different flags are never merged.
@@ -212,39 +212,39 @@ typedef struct thread_data_t {
      * (cannot put shared in private last_area, that would void its usefulness
      *  since couldn't tell if area really in shared list or not)
      * but then have to update all other threads whenever change shared
-     * vmarea vector, so for now we use a global last_area 
+     * vmarea vector, so for now we use a global last_area
      */
     /* cached pointer of a PC in the last page decoded by thread -- set only
      * in thread-private structures, not in shared structures like shared_data */
     app_pc last_decode_area_page_pc;
-    bool   last_decode_area_valid; /* since no sentinel exists */
+    bool last_decode_area_valid; /* since no sentinel exists */
 #ifdef PROGRAM_SHEPHERDING
     uint thrown_exceptions; /* number of responses to execution violations */
 #endif
 } thread_data_t;
 
-#define SHOULD_LOCK_VECTOR(v)                               \
-       (TEST(VECTOR_SHARED, (v)->flags) &&                  \
-        !TEST(VECTOR_NO_LOCK, (v)->flags) &&                \
-        !self_owns_write_lock(&(v)->lock))
+#define SHOULD_LOCK_VECTOR(v)                                                \
+    (TEST(VECTOR_SHARED, (v)->flags) && !TEST(VECTOR_NO_LOCK, (v)->flags) && \
+     !self_owns_write_lock(&(v)->lock))
 
-#define LOCK_VECTOR(v, release_lock, RW) do {               \
-    if (SHOULD_LOCK_VECTOR(v)) {                            \
-        (release_lock) = true;                              \
-        RW##_lock(&(v)->lock);                              \
-    }                                                       \
-    else                                                    \
-        (release_lock) = false;                             \
-} while (0);
+#define LOCK_VECTOR(v, release_lock, RW) \
+    do {                                 \
+        if (SHOULD_LOCK_VECTOR(v)) {     \
+            (release_lock) = true;       \
+            RW##_lock(&(v)->lock);       \
+        } else                           \
+            (release_lock) = false;      \
+    } while (0);
 
-#define UNLOCK_VECTOR(v, release_lock, RW) do {             \
-    if ((release_lock)) {                                   \
-        ASSERT(TEST(VECTOR_SHARED, (v)->flags));            \
-        ASSERT(!TEST(VECTOR_NO_LOCK, (v)->flags));          \
-        ASSERT_OWN_READWRITE_LOCK(true, &(v)->lock);        \
-        RW##_unlock(&v->lock);                              \
-    }                                                       \
-} while (0);
+#define UNLOCK_VECTOR(v, release_lock, RW)               \
+    do {                                                 \
+        if ((release_lock)) {                            \
+            ASSERT(TEST(VECTOR_SHARED, (v)->flags));     \
+            ASSERT(!TEST(VECTOR_NO_LOCK, (v)->flags));   \
+            ASSERT_OWN_READWRITE_LOCK(true, &(v)->lock); \
+            RW##_unlock(&v->lock);                       \
+        }                                                \
+    } while (0);
 
 /* these two global vectors store all executable areas and all dynamo
  * areas (executable or otherwise).
@@ -261,7 +261,7 @@ static vm_area_vector_t *dynamo_areas;
  * unprotection.
  */
 static coarse_info_t **coarse_to_delete;
-                        
+
 /* used for DYNAMO_OPTION(handle_DR_modify),
  * DYNAMO_OPTION(handle_ntdll_modify) == DR_MODIFY_NOP or
  * DYNAMO_OPTION(patch_proof_list)
@@ -278,7 +278,7 @@ vm_area_vector_t *emulate_write_areas;
 
 /* used for DYNAMO_OPTION(IAT_convert)
  * IAT or GOT areas of all mapped DLLs - note the exact regions are added here.
- * While the IATs for modules in native_exec_areas are not added here - 
+ * While the IATs for modules in native_exec_areas are not added here -
  * note that any module's IAT may still be importing native modules.
  */
 vm_area_vector_t *IAT_areas;
@@ -288,27 +288,27 @@ vm_area_vector_t *IAT_areas;
  */
 static vm_area_vector_t *written_areas;
 
-static void free_written_area(void *data);
+static void
+free_written_area(void *data);
 
 #ifdef PROGRAM_SHEPHERDING
-/* for executable_if_flush and executable_if_alloc, we need a future list, so their regions
- * are considered executable until de-allocated -- even if written to!
+/* for executable_if_flush and executable_if_alloc, we need a future list, so their
+ * regions are considered executable until de-allocated -- even if written to!
  */
 static vm_area_vector_t *futureexec_areas;
-# ifdef WINDOWS
+#    ifdef WINDOWS
 /* FIXME: for -xdata_rct we only need start pc called on, so htable would do,
  * once we have reusable htable for storing single pc
  */
 static vm_area_vector_t *app_flushed_areas;
 
-# endif
+#    endif
 #endif
 
 /* tamper resistant region see tamper_resistant_region_add() for current use.
  * If needed this should be turned into a vm_area_vector_t as well.
  */
 static app_pc tamper_resistant_region_start, tamper_resistant_region_end;
-
 
 /* shared_data is synchronized via either single_thread_in_DR or
  * the vector lock (cannot use bb_building_lock b/c both trace building
@@ -399,7 +399,7 @@ static last_deallocated_t *last_deallocated;
 /* synchronization currently used only for the contents of
  * last_deallocated: last_unload_base and last_unload_size
  */
-DECLARE_CXTSWPROT_VAR(static mutex_t last_deallocated_lock, 
+DECLARE_CXTSWPROT_VAR(static mutex_t last_deallocated_lock,
                       INIT_LOCK_FREE(last_deallocated_lock));
 
 /* synchronization for shared_delete, not a rw lock since readers usually write */
@@ -409,25 +409,27 @@ DECLARE_CXTSWPROT_VAR(static mutex_t lazy_delete_lock, INIT_LOCK_FREE(lazy_delet
 
 /* multi_entry_t allocation is either global or local heap */
 #define MULTI_ALLOC_DC(dc, flags) FRAGMENT_ALLOC_DC(dc, flags)
-#define GET_DATA(dc, flags) \
-    (((dc) == GLOBAL_DCONTEXT || TEST(FRAG_SHARED, (flags))) ? shared_data : \
-     (thread_data_t *) (dc)->vm_areas_field)
-#define GET_VECTOR(dc, flags)                                                  \
-    (((dc) == GLOBAL_DCONTEXT || TEST(FRAG_SHARED, (flags))) ?                 \
-     (TEST(FRAG_WAS_DELETED, (flags)) ? NULL : &shared_data->areas) :           \
-     (&((thread_data_t *)(dc)->vm_areas_field)->areas))
-#define SHARED_VECTOR_RWLOCK(v, rw, op) do    { \
-    if (TEST(VECTOR_SHARED, (v)->flags)) {      \
-        ASSERT(SHARED_FRAGMENTS_ENABLED());     \
-        rw##_##op(&(v)->lock);                  \
-    }                                           \
-} while (0)
-#define ASSERT_VMAREA_DATA_PROTECTED(data, RW)                      \
-    ASSERT_OWN_##RW##_LOCK((data == shared_data &&                 \
-                            !INTERNAL_OPTION(single_thread_in_DR)), \
-                           &shared_data->areas.lock)
+#define GET_DATA(dc, flags)                                  \
+    (((dc) == GLOBAL_DCONTEXT || TEST(FRAG_SHARED, (flags))) \
+         ? shared_data                                       \
+         : (thread_data_t *)(dc)->vm_areas_field)
+#define GET_VECTOR(dc, flags)                                             \
+    (((dc) == GLOBAL_DCONTEXT || TEST(FRAG_SHARED, (flags)))              \
+         ? (TEST(FRAG_WAS_DELETED, (flags)) ? NULL : &shared_data->areas) \
+         : (&((thread_data_t *)(dc)->vm_areas_field)->areas))
+#define SHARED_VECTOR_RWLOCK(v, rw, op)         \
+    do {                                        \
+        if (TEST(VECTOR_SHARED, (v)->flags)) {  \
+            ASSERT(SHARED_FRAGMENTS_ENABLED()); \
+            rw##_##op(&(v)->lock);              \
+        }                                       \
+    } while (0)
+#define ASSERT_VMAREA_DATA_PROTECTED(data, RW)                          \
+    ASSERT_OWN_##RW##_LOCK(                                             \
+        (data == shared_data && !INTERNAL_OPTION(single_thread_in_DR)), \
+        &shared_data->areas.lock)
 
-/* list of native_exec module regions 
+/* list of native_exec module regions
  * FIXME: since using general routines, could allocate this elsewhere if add
  * vmvector_* interface heap alloc support
  */
@@ -437,22 +439,23 @@ vm_area_vector_t *native_exec_areas;
  * it points into a vector for the routines that take in only areas
  */
 #ifdef DEBUG
-# define ASSERT_VMAREA_VECTOR_PROTECTED(v, RW) do {                    \
-    ASSERT_OWN_##RW##_LOCK(SHOULD_LOCK_VECTOR(v) &&                    \
-                           !dynamo_exited, &(v)->lock);                \
-    if ((v) == dynamo_areas) {                                         \
-        ASSERT(dynamo_areas_uptodate || dynamo_areas_synching);        \
-    }                                                                  \
-} while (0);
+#    define ASSERT_VMAREA_VECTOR_PROTECTED(v, RW)                                        \
+        do {                                                                             \
+            ASSERT_OWN_##RW##_LOCK(SHOULD_LOCK_VECTOR(v) && !dynamo_exited, &(v)->lock); \
+            if ((v) == dynamo_areas) {                                                   \
+                ASSERT(dynamo_areas_uptodate || dynamo_areas_synching);                  \
+            }                                                                            \
+        } while (0);
 #else
-# define ASSERT_VMAREA_VECTOR_PROTECTED(v, RW) /* nothing */
+#    define ASSERT_VMAREA_VECTOR_PROTECTED(v, RW) /* nothing */
 #endif
 
 /* size of security violation string - must be at least 16 */
 #define MAXIMUM_VIOLATION_NAME_LENGTH 16
 
-#define VMVECTOR_INITIALIZE_VECTOR(v, flags, lockname) do {    \
-        vmvector_init_vector((v), (flags));            \
+#define VMVECTOR_INITIALIZE_VECTOR(v, flags, lockname)        \
+    do {                                                      \
+        vmvector_init_vector((v), (flags));                   \
         ASSIGN_INIT_READWRITE_LOCK_FREE((v)->lock, lockname); \
     } while (0);
 
@@ -489,8 +492,8 @@ mark_unload_future_added(app_pc module_base, size_t size);
 #endif
 
 static void
-vm_area_coarse_region_freeze(dcontext_t *dcontext, coarse_info_t *info,
-                             vm_area_t *area, bool in_place);
+vm_area_coarse_region_freeze(dcontext_t *dcontext, coarse_info_t *info, vm_area_t *area,
+                             bool in_place);
 
 #ifdef SIMULATE_ATTACK
 /* synch simulate_at string parsing */
@@ -514,7 +517,7 @@ DECLARE_FREQPROT_VAR(static bool dynamo_areas_uptodate, true);
 DECLARE_FREQPROT_VAR(static bool dynamo_areas_synching, false);
 #endif
 
-/* HACK to make dynamo_areas->lock recursive 
+/* HACK to make dynamo_areas->lock recursive
  * protected for both read and write by dynamo_areas->lock
  * FIXME: provide general rwlock w/ write portion recursive
  */
@@ -550,7 +553,7 @@ typedef struct _multi_entry_t {
      * we set flags==FRAG_IS_EXTRA_VMAREA to indicate a multi_entry_t
      * we also use FRAG_SHARED to indicate that a multi_entry_t is on global heap
      */
-    uint      flags;
+    uint flags;
     /* officially all list entries are fragment_t *, really some are multi_entry_t */
     fragment_t *next_vmarea;
     fragment_t *prev_vmarea;
@@ -563,68 +566,79 @@ typedef struct _multi_entry_t {
 /* macros to make dealing with both fragment_t and multi_entry_t easier */
 #define FRAG_MULTI(f) (TEST(FRAG_IS_EXTRA_VMAREA, (f)->flags))
 
-#define FRAG_MULTI_INIT(f) (TESTALL((FRAG_IS_EXTRA_VMAREA|FRAG_IS_EXTRA_VMAREA_INIT), (f)->flags))
+#define FRAG_MULTI_INIT(f) \
+    (TESTALL((FRAG_IS_EXTRA_VMAREA | FRAG_IS_EXTRA_VMAREA_INIT), (f)->flags))
 
-#define FRAG_NEXT(f) ((TEST(FRAG_IS_EXTRA_VMAREA, (f)->flags)) ? \
-    ((multi_entry_t *)(f))->next_vmarea : (f)->next_vmarea)
+#define FRAG_NEXT(f)                                                                \
+    ((TEST(FRAG_IS_EXTRA_VMAREA, (f)->flags)) ? ((multi_entry_t *)(f))->next_vmarea \
+                                              : (f)->next_vmarea)
 
-#define FRAG_NEXT_ASSIGN(f, val) do { \
-    if (TEST(FRAG_IS_EXTRA_VMAREA, (f)->flags)) \
-        ((multi_entry_t *)(f))->next_vmarea = (val); \
-    else \
-        (f)->next_vmarea = (val); \
-} while (0)
+#define FRAG_NEXT_ASSIGN(f, val)                         \
+    do {                                                 \
+        if (TEST(FRAG_IS_EXTRA_VMAREA, (f)->flags))      \
+            ((multi_entry_t *)(f))->next_vmarea = (val); \
+        else                                             \
+            (f)->next_vmarea = (val);                    \
+    } while (0)
 
-#define FRAG_PREV(f) ((TEST(FRAG_IS_EXTRA_VMAREA, (f)->flags)) ? \
-    ((multi_entry_t *)(f))->prev_vmarea : (f)->prev_vmarea)
+#define FRAG_PREV(f)                                                                \
+    ((TEST(FRAG_IS_EXTRA_VMAREA, (f)->flags)) ? ((multi_entry_t *)(f))->prev_vmarea \
+                                              : (f)->prev_vmarea)
 
-#define FRAG_PREV_ASSIGN(f, val) do { \
-    if (TEST(FRAG_IS_EXTRA_VMAREA, (f)->flags)) \
-        ((multi_entry_t *)(f))->prev_vmarea = (val); \
-    else \
-        (f)->prev_vmarea = (val); \
-} while (0)
+#define FRAG_PREV_ASSIGN(f, val)                         \
+    do {                                                 \
+        if (TEST(FRAG_IS_EXTRA_VMAREA, (f)->flags))      \
+            ((multi_entry_t *)(f))->prev_vmarea = (val); \
+        else                                             \
+            (f)->prev_vmarea = (val);                    \
+    } while (0)
 
 /* Case 8419: also_vmarea is invalid once we 1st-stage-delete a fragment */
-#define FRAG_ALSO(f) ((TEST(FRAG_IS_EXTRA_VMAREA, (f)->flags)) ? \
-    ((multi_entry_t *)(f))->also_vmarea : \
-    (ASSERT(!TEST(FRAG_WAS_DELETED, (f)->flags)), (f)->also.also_vmarea))
+#define FRAG_ALSO(f)                           \
+    ((TEST(FRAG_IS_EXTRA_VMAREA, (f)->flags))  \
+         ? ((multi_entry_t *)(f))->also_vmarea \
+         : (ASSERT(!TEST(FRAG_WAS_DELETED, (f)->flags)), (f)->also.also_vmarea))
 /* Only call this one to avoid the assert when you know it's safe */
-#define FRAG_ALSO_DEL_OK(f) ((TEST(FRAG_IS_EXTRA_VMAREA, (f)->flags)) ? \
-    ((multi_entry_t *)(f))->also_vmarea : (f)->also.also_vmarea)
+#define FRAG_ALSO_DEL_OK(f)                                                         \
+    ((TEST(FRAG_IS_EXTRA_VMAREA, (f)->flags)) ? ((multi_entry_t *)(f))->also_vmarea \
+                                              : (f)->also.also_vmarea)
 
-#define FRAG_ALSO_ASSIGN(f, val) do { \
-    if (TEST(FRAG_IS_EXTRA_VMAREA, (f)->flags)) \
-        ((multi_entry_t *)(f))->also_vmarea = (val); \
-    else { \
-        ASSERT(!TEST(FRAG_WAS_DELETED, (f)->flags)); \
-        (f)->also.also_vmarea = (val); \
-    } \
-} while (0)
+#define FRAG_ALSO_ASSIGN(f, val)                         \
+    do {                                                 \
+        if (TEST(FRAG_IS_EXTRA_VMAREA, (f)->flags))      \
+            ((multi_entry_t *)(f))->also_vmarea = (val); \
+        else {                                           \
+            ASSERT(!TEST(FRAG_WAS_DELETED, (f)->flags)); \
+            (f)->also.also_vmarea = (val);               \
+        }                                                \
+    } while (0)
 
 /* assumption: if multiple units, fragment_t is on list of region owning tag */
-#define FRAG_PC(f) ((TEST(FRAG_IS_EXTRA_VMAREA, (f)->flags)) ? \
-    ((multi_entry_t *)(f))->pc : (f)->tag)
+#define FRAG_PC(f) \
+    ((TEST(FRAG_IS_EXTRA_VMAREA, (f)->flags)) ? ((multi_entry_t *)(f))->pc : (f)->tag)
 
-#define FRAG_PC_ASSIGN(f, val) do { \
-    if (TEST(FRAG_IS_EXTRA_VMAREA, (f)->flags)) \
-        ((multi_entry_t *)(f))->pc = (val); \
-    else \
-        ASSERT_NOT_REACHED(); \
-} while (0)
+#define FRAG_PC_ASSIGN(f, val)                      \
+    do {                                            \
+        if (TEST(FRAG_IS_EXTRA_VMAREA, (f)->flags)) \
+            ((multi_entry_t *)(f))->pc = (val);     \
+        else                                        \
+            ASSERT_NOT_REACHED();                   \
+    } while (0)
 
-#define FRAG_FRAG(fr) ((TEST(FRAG_IS_EXTRA_VMAREA, (fr)->flags)) ? \
-    ((multi_entry_t *)(fr))->f : (fr))
+#define FRAG_FRAG(fr) \
+    ((TEST(FRAG_IS_EXTRA_VMAREA, (fr)->flags)) ? ((multi_entry_t *)(fr))->f : (fr))
 
-#define FRAG_FRAG_ASSIGN(fr, val) do { \
-    if (TEST(FRAG_IS_EXTRA_VMAREA, (fr)->flags)) \
-        ((multi_entry_t *)(fr))->f = (val); \
-    else \
-        ASSERT_NOT_REACHED(); \
-} while (0)
+#define FRAG_FRAG_ASSIGN(fr, val)                    \
+    do {                                             \
+        if (TEST(FRAG_IS_EXTRA_VMAREA, (fr)->flags)) \
+            ((multi_entry_t *)(fr))->f = (val);      \
+        else                                         \
+            ASSERT_NOT_REACHED();                    \
+    } while (0)
 
-#define FRAG_ID(fr) ((TEST(FRAG_IS_EXTRA_VMAREA, (fr)->flags)) ? \
-    ((multi_entry_t *)(fr))->f->id : (fr)->id)
+#define FRAG_ID(fr)                                                             \
+    ((TEST(FRAG_IS_EXTRA_VMAREA, (fr)->flags)) ? ((multi_entry_t *)(fr))->f->id \
+                                               : (fr)->id)
 
 /***************************************************/
 
@@ -634,8 +648,8 @@ vm_make_writable(byte *pc, size_t size)
 {
     byte *start_pc = (byte *)ALIGN_BACKWARD(pc, PAGE_SIZE);
     size_t final_size = ALIGN_FORWARD(size + (pc - start_pc), PAGE_SIZE);
-    DEBUG_DECLARE(bool ok = )
-        make_writable(start_pc, final_size);
+    DEBUG_DECLARE(bool ok =)
+    make_writable(start_pc, final_size);
     ASSERT(ok);
     ASSERT(INTERNAL_OPTION(cache_consistency));
 }
@@ -656,19 +670,18 @@ vm_make_unwritable(byte *pc, size_t size)
     DODEBUG({
         if (DYNAMO_OPTION(sandbox_non_text)) {
             app_pc modbase = get_module_base(pc);
-            ASSERT(modbase != NULL && is_range_in_code_section(modbase, pc,
-                                                               pc + size,
-                                                               NULL, NULL));
+            ASSERT(modbase != NULL &&
+                   is_range_in_code_section(modbase, pc, pc + size, NULL, NULL));
         }
     });
 }
 
-/* since dynamorio changes some readwrite memory regions to read only, 
- * this changes all regions memory permissions back to what they should be, 
- * since dynamorio uses this mechanism to ensure code cache coherency, 
- * once this method is called stale code could be executed out of the 
+/* since dynamorio changes some readwrite memory regions to read only,
+ * this changes all regions memory permissions back to what they should be,
+ * since dynamorio uses this mechanism to ensure code cache coherency,
+ * once this method is called stale code could be executed out of the
  * code cache */
-void 
+void
 revert_memory_regions(void)
 {
     int i;
@@ -680,13 +693,13 @@ revert_memory_regions(void)
     for (i = 0; i < executable_areas->length; i++) {
         if (TEST(VM_MADE_READONLY, executable_areas->buf[i].vm_flags)) {
             /* this is a region that dynamorio has marked read only, fix */
-            LOG(GLOBAL, LOG_VMAREAS, 1, 
-                " fixing permissions for RW executable area "PFX"-"PFX" %s\n", 
-                executable_areas->buf[i].start, executable_areas->buf[i].end, 
+            LOG(GLOBAL, LOG_VMAREAS, 1,
+                " fixing permissions for RW executable area " PFX "-" PFX " %s\n",
+                executable_areas->buf[i].start, executable_areas->buf[i].end,
                 executable_areas->buf[i].comment);
-            vm_make_writable(executable_areas->buf[i].start, 
+            vm_make_writable(executable_areas->buf[i].start,
                              executable_areas->buf[i].end -
-                             executable_areas->buf[i].start);
+                                 executable_areas->buf[i].start);
         }
     }
     read_unlock(&executable_areas->lock);
@@ -695,14 +708,12 @@ revert_memory_regions(void)
 static void
 print_vm_flags(uint vm_flags, uint frag_flags, file_t outf)
 {
-    print_file(outf, " %s%s%s%s",
-               (vm_flags & VM_WRITABLE) != 0 ? "W" : "-",
+    print_file(outf, " %s%s%s%s", (vm_flags & VM_WRITABLE) != 0 ? "W" : "-",
                (vm_flags & VM_WAS_FUTURE) != 0 ? "F" : "-",
                (frag_flags & FRAG_SELFMOD_SANDBOXED) != 0 ? "S" : "-",
                TEST(FRAG_COARSE_GRAIN, frag_flags) ? "C" : "-");
 #ifdef PROGRAM_SHEPHERDING
-    print_file(outf, "%s%s",
-               TEST(VM_PATTERN_REVERIFY, vm_flags) ? "P" : "-",
+    print_file(outf, "%s%s", TEST(VM_PATTERN_REVERIFY, vm_flags) ? "P" : "-",
                (frag_flags & FRAG_DYNGEN) != 0 ? "D" : "-");
 #endif
 }
@@ -711,10 +722,10 @@ print_vm_flags(uint vm_flags, uint frag_flags, file_t outf)
 static void
 print_vm_area(vm_area_vector_t *v, vm_area_t *area, file_t outf, const char *prefix)
 {
-    print_file(outf, "%s"PFX"-"PFX, prefix, area->start, area->end);
+    print_file(outf, "%s" PFX "-" PFX, prefix, area->start, area->end);
     print_vm_flags(area->vm_flags, area->frag_flags, outf);
     if (v == executable_areas && TEST(FRAG_COARSE_GRAIN, area->frag_flags)) {
-        coarse_info_t *info = (coarse_info_t *) area->custom.client;
+        coarse_info_t *info = (coarse_info_t *)area->custom.client;
         if (info != NULL) {
             if (info->persisted)
                 print_file(outf, "R");
@@ -727,17 +738,16 @@ print_vm_area(vm_area_vector_t *v, vm_area_t *area, file_t outf, const char *pre
 #ifdef DEBUG
     print_file(outf, " %s", area->comment);
     DOLOG(1, LOG_VMAREAS, {
-        IF_LINUX(extern vm_area_vector_t *all_memory_areas;)
-        app_pc modbase = 
+        IF_LINUX(extern vm_area_vector_t * all_memory_areas;)
+        app_pc modbase =
             /* avoid rank order violation */
-            IF_LINUX(v == all_memory_areas ? NULL :)
-            get_module_base(area->start);
+            IF_LINUX(v == all_memory_areas ? NULL :) get_module_base(area->start);
         if (modbase != NULL &&
             /* avoid rank order violations */
             v != dynamo_areas &&
             /* we free module list before vmareas */
             !dynamo_exited_and_cleaned &&
-            is_mapped_as_image(modbase)/*avoid asserts in getting name */) {
+            is_mapped_as_image(modbase) /*avoid asserts in getting name */) {
             const char *name;
             os_get_module_info_lock();
             os_get_module_name(modbase, &name);
@@ -747,7 +757,7 @@ print_vm_area(vm_area_vector_t *v, vm_area_t *area, file_t outf, const char *pre
     });
 #endif
     if (v == written_areas) {
-        ro_vs_sandbox_data_t *ro2s = (ro_vs_sandbox_data_t *) area->custom.client;
+        ro_vs_sandbox_data_t *ro2s = (ro_vs_sandbox_data_t *)area->custom.client;
 #ifdef DEBUG
         if (ro2s != NULL) { /* can be null if in middle of adding */
             uint tot_w = ro2s->ro2s_xfers * DYNAMO_OPTION(ro2sandbox_threshold);
@@ -757,8 +767,8 @@ print_vm_area(vm_area_vector_t *v, vm_area_t *area, file_t outf, const char *pre
                        ro2s->ro2s_xfers, ro2s->s2ro_xfers);
         }
 #else
-        print_file(outf, " written %3d, exec %5d",
-                   ro2s->written_count, ro2s->selfmod_execs);
+        print_file(outf, " written %3d, exec %5d", ro2s->written_count,
+                   ro2s->selfmod_execs);
 #endif
     }
     print_file(outf, "\n");
@@ -770,14 +780,15 @@ print_vm_areas(vm_area_vector_t *v, file_t outf)
 {
     int i;
     ASSERT_VMAREA_VECTOR_PROTECTED(v, READWRITE);
-    for(i = 0; i < v->length; i++) {
+    for (i = 0; i < v->length; i++) {
         print_vm_area(v, &v->buf[i], outf, "  ");
     }
 }
 
 #if defined(DEBUG) && defined(INTERNAL)
 static void
-print_contig_vm_areas(vm_area_vector_t *v, app_pc start, app_pc end, file_t outf, char *prefix)
+print_contig_vm_areas(vm_area_vector_t *v, app_pc start, app_pc end, file_t outf,
+                      char *prefix)
 {
     vm_area_t *new_area;
     app_pc pc = start;
@@ -799,8 +810,8 @@ print_pending_list(file_t outf)
     int i;
     ASSERT_OWN_MUTEX(true, &shared_delete_lock);
     for (i = 0, pend = todelete->shared_delete; pend != NULL; i++, pend = pend->next) {
-        print_file(outf, "%d: "PFX"-"PFX" ref=%d, stamp=%d\n",
-                   i, pend->start, pend->end, pend->ref_count, pend->flushtime_deleted);
+        print_file(outf, "%d: " PFX "-" PFX " ref=%d, stamp=%d\n", i, pend->start,
+                   pend->end, pend->ref_count, pend->flushtime_deleted);
     }
 }
 #endif
@@ -824,19 +835,17 @@ vm_area_vector_check_size(vm_area_vector_t *v)
     /* only called by add_vm_area which does the assert that the vector is
      * protected */
     /* check if at capacity */
-    if (v->size == v->length){
+    if (v->size == v->length) {
         if (v->length == 0) {
             v->size = INTERNAL_OPTION(vmarea_initial_size);
-            v->buf = (vm_area_t*) global_heap_alloc(v->size*sizeof(struct vm_area_t)
-                                                  HEAPACCT(ACCT_VMAREAS));
-        }
-        else {
+            v->buf = (vm_area_t *)global_heap_alloc(
+                v->size * sizeof(struct vm_area_t) HEAPACCT(ACCT_VMAREAS));
+        } else {
             /* FIXME: case 4471 we should be doubling size here */
             int new_size = (INTERNAL_OPTION(vmarea_increment_size) + v->length);
             STATS_INC(num_vmareas_resized);
             v->buf = global_heap_realloc(v->buf, v->size, new_size,
-                                         sizeof(struct vm_area_t)
-                                         HEAPACCT(ACCT_VMAREAS));
+                                         sizeof(struct vm_area_t) HEAPACCT(ACCT_VMAREAS));
             v->size = new_size;
         }
         ASSERT(v->buf != NULL);
@@ -848,8 +857,8 @@ vm_area_merge_fraglists(vm_area_t *dst, vm_area_t *src)
 {
     /* caller must hold write lock for vector of course: FIXME: assert that here */
     LOG(THREAD_GET, LOG_VMAREAS, 3,
-        "\tmerging frag lists for "PFX"-"PFX" and "PFX"-"PFX"\n",
-        src->start, src->end, dst->start, dst->end);
+        "\tmerging frag lists for " PFX "-" PFX " and " PFX "-" PFX "\n", src->start,
+        src->end, dst->start, dst->end);
     if (dst->custom.frags == NULL)
         dst->custom.frags = src->custom.frags;
     else if (src->custom.frags == NULL)
@@ -863,8 +872,8 @@ vm_area_merge_fraglists(vm_area_t *dst, vm_area_t *src)
         FRAG_PREV_ASSIGN(top1, FRAG_PREV(top2));
         FRAG_PREV_ASSIGN(top2, tmp);
         DOLOG(4, LOG_VMAREAS, {
-            print_fraglist(get_thread_private_dcontext(),
-                           dst, "after merging fraglists:");
+            print_fraglist(get_thread_private_dcontext(), dst,
+                           "after merging fraglists:");
         });
     }
 }
@@ -878,21 +887,21 @@ vm_area_merge_fraglists(vm_area_t *dst, vm_area_t *src)
  *   somewhere to a thread vector and forget to clear last_area.
  * Adds a new area to v, merging it with adjacent areas of the same type.
  * A new area is only allowed to overlap an old area of a different type if it
- *   meets certain criteria (see asserts below).  For VM_WAS_FUTURE and 
- *   VM_ONCE_ONLY we may clear the flag from an existing region if the new 
- *   region doesn't have the flag and overlaps the existing region.  Otherwise 
+ *   meets certain criteria (see asserts below).  For VM_WAS_FUTURE and
+ *   VM_ONCE_ONLY we may clear the flag from an existing region if the new
+ *   region doesn't have the flag and overlaps the existing region.  Otherwise
  *   the new area is split such that the overlapping portion remains part of
  *   the old area.  This tries to keep entire new area from becoming selfmod
  *   for instance. FIXME : for VM_WAS_FUTURE and VM_ONCE_ONLY may want to split
  *   region if only paritally overlapping
- * 
+ *
  * FIXME: change add_vm_area to return NULL when merged, and otherwise
  * return the new complete area, so callers don't have to do a separate lookup
  * to access the added area.
  */
 static void
-add_vm_area(vm_area_vector_t *v, app_pc start, app_pc end,
-            uint vm_flags, uint frag_flags, void *data _IF_DEBUG(char *comment))
+add_vm_area(vm_area_vector_t *v, app_pc start, app_pc end, uint vm_flags, uint frag_flags,
+            void *data _IF_DEBUG(char *comment))
 {
     int i, j, diff;
     /* if we have overlap, we extend an existing area -- else we add a new area */
@@ -902,21 +911,21 @@ add_vm_area(vm_area_vector_t *v, app_pc start, app_pc end,
     ASSERT(start < end);
 
     ASSERT_VMAREA_VECTOR_PROTECTED(v, WRITE);
-    LOG(GLOBAL, LOG_VMAREAS, 4, "in add_vm_area "PFX" "PFX" %s\n", start, end, comment);
+    LOG(GLOBAL, LOG_VMAREAS, 4, "in add_vm_area " PFX " " PFX " %s\n", start, end,
+        comment);
     /* N.B.: new area could span multiple existing areas! */
     for (i = 0; i < v->length; i++) {
         /* look for overlap, or adjacency of same type (including all flags, and never
-         * merge adjacent if keeping write counts) 
+         * merge adjacent if keeping write counts)
          */
         if ((start < v->buf[i].end && end > v->buf[i].start) ||
             (start <= v->buf[i].end && end >= v->buf[i].start &&
-             vm_flags == v->buf[i].vm_flags &&
-             frag_flags == v->buf[i].frag_flags &&
+             vm_flags == v->buf[i].vm_flags && frag_flags == v->buf[i].frag_flags &&
              /* never merge coarse-grain */
              !TEST(FRAG_COARSE_GRAIN, v->buf[i].frag_flags) &&
              !TEST(VECTOR_NEVER_MERGE_ADJACENT, v->flags) &&
              (v->should_merge_func == NULL ||
-              v->should_merge_func(true/*adjacent*/, data, v->buf[i].custom.client)))) {
+              v->should_merge_func(true /*adjacent*/, data, v->buf[i].custom.client)))) {
             ASSERT(!(start < v->buf[i].end && end > v->buf[i].start) ||
                    !TEST(VECTOR_NEVER_OVERLAP, v->flags));
             if (overlap_start == -1) {
@@ -930,10 +939,11 @@ add_vm_area(vm_area_vector_t *v, app_pc start, app_pc end,
             DOLOG(4, LOG_VMAREAS, {
                 LOG(GLOBAL, LOG_VMAREAS, 1,
                     "==================================================\n"
-                    "add_vm_area "PFX"-"PFX" %s %x-%x overlaps "PFX"-"PFX" %s %x-%x\n",
-                    start, end, comment, vm_flags, frag_flags,
-                    v->buf[i].start, v->buf[i].end,
-                    v->buf[i].comment, v->buf[i].vm_flags, v->buf[i].frag_flags);
+                    "add_vm_area " PFX "-" PFX " %s %x-%x overlaps " PFX "-" PFX
+                    " %s %x-%x\n",
+                    start, end, comment, vm_flags, frag_flags, v->buf[i].start,
+                    v->buf[i].end, v->buf[i].comment, v->buf[i].vm_flags,
+                    v->buf[i].frag_flags);
                 print_vm_areas(v, GLOBAL);
                 /* rank order problem if holding heap_unit_lock, so only print
                  * if not holding a lock for v right now, though ok to print
@@ -951,33 +961,32 @@ add_vm_area(vm_area_vector_t *v, app_pc start, app_pc end,
                     "==================================================\n\n");
             });
 
-            /* we have some restrictions on overlapping regions with 
+            /* we have some restrictions on overlapping regions with
              * different flags */
 
             /* no restrictions on WAS_FUTURE flag, but if new region is
-             * not was future and old region is then should drop from old 
+             * not was future and old region is then should drop from old
              * region FIXME : partial overlap? we don't really care about
              * this flag anyways */
             if (TEST(VM_WAS_FUTURE, v->buf[i].vm_flags) &&
                 !TEST(VM_WAS_FUTURE, vm_flags)) {
                 v->buf[i].vm_flags &= ~VM_WAS_FUTURE;
                 LOG(GLOBAL, LOG_VMAREAS, 1,
-                    "Warning : removing was_future flag from area "PFX
-                    "-"PFX" %s that overlaps new area "PFX"-"PFX" %s\n",
-                     v->buf[i].start, v->buf[i].end, v->buf[i].comment,
-                    start, end, comment);
+                    "Warning : removing was_future flag from area " PFX "-" PFX
+                    " %s that overlaps new area " PFX "-" PFX " %s\n",
+                    v->buf[i].start, v->buf[i].end, v->buf[i].comment, start, end,
+                    comment);
             }
             /* no restrictions on ONCE_ONLY flag, but if new region is not
              * should drop fom existing region FIXME : partial overlap? is
              * not much of an additional security risk */
-            if (TEST(VM_ONCE_ONLY, v->buf[i].vm_flags) &&
-                !TEST(VM_ONCE_ONLY, vm_flags)) {
+            if (TEST(VM_ONCE_ONLY, v->buf[i].vm_flags) && !TEST(VM_ONCE_ONLY, vm_flags)) {
                 v->buf[i].vm_flags &= ~VM_ONCE_ONLY;
                 LOG(GLOBAL, LOG_VMAREAS, 1,
-                    "Warning : removing once_only flag from area "PFX
-                    "-"PFX" %s that overlaps new area "PFX"-"PFX" %s\n",
-                     v->buf[i].start, v->buf[i].end, v->buf[i].comment,
-                    start, end, comment);
+                    "Warning : removing once_only flag from area " PFX "-" PFX
+                    " %s that overlaps new area " PFX "-" PFX " %s\n",
+                    v->buf[i].start, v->buf[i].end, v->buf[i].comment, start, end,
+                    comment);
             }
             /* shouldn't be adding unmod image over existing not unmod image,
              * reverse could happen with os region merging though */
@@ -986,8 +995,7 @@ add_vm_area(vm_area_vector_t *v, app_pc start, app_pc end,
             /* for VM_WRITABLE only allow new region to not be writable and
              * existing region to be writable to handle cases of os region
              * merging due to our consistency protection changes */
-            ASSERT(TEST(VM_WRITABLE, v->buf[i].vm_flags) ||
-                   !TEST(VM_WRITABLE, vm_flags));
+            ASSERT(TEST(VM_WRITABLE, v->buf[i].vm_flags) || !TEST(VM_WRITABLE, vm_flags));
             /* FIXME: case 7877: if new is VM_MADE_READONLY and old is not, we
              * must mark old overlapping portion as VM_MADE_READONLY.  Things only
              * worked now b/c VM_MADE_READONLY==VM_WRITABLE, so we can add
@@ -1003,34 +1011,33 @@ add_vm_area(vm_area_vector_t *v, app_pc start, app_pc end,
              */
 #endif
             /* disallow any other vm_flag differences */
-            DODEBUG({ flagignore = VM_UNMOD_IMAGE | VM_WAS_FUTURE |
-                          VM_ONCE_ONLY | VM_WRITABLE; });
+            DODEBUG({
+                flagignore = VM_UNMOD_IMAGE | VM_WAS_FUTURE | VM_ONCE_ONLY | VM_WRITABLE;
+            });
 #ifdef PROGRAM_SHEPHERDING
             DODEBUG({ flagignore = flagignore | VM_PATTERN_REVERIFY; });
 #endif
             ASSERT((v->buf[i].vm_flags & ~flagignore) == (vm_flags & ~flagignore));
-            
+
             /* new region must be more innocent with respect to selfmod */
-            ASSERT(TEST(FRAG_SELFMOD_SANDBOXED, v->buf[i].frag_flags) || 
+            ASSERT(TEST(FRAG_SELFMOD_SANDBOXED, v->buf[i].frag_flags) ||
                    !TEST(FRAG_SELFMOD_SANDBOXED, frag_flags));
             /* disallow other frag_flag differences */
 #ifndef PROGRAM_SHEPHERDING
-            ASSERT((v->buf[i].frag_flags & ~FRAG_SELFMOD_SANDBOXED) == 
+            ASSERT((v->buf[i].frag_flags & ~FRAG_SELFMOD_SANDBOXED) ==
                    (frag_flags & ~FRAG_SELFMOD_SANDBOXED));
 #else
-# ifdef DGC_DIAGNOSTICS
-            /* FIXME : no restrictions on differing FRAG_DYNGEN_RESTRICTED 
+#    ifdef DGC_DIAGNOSTICS
+            /* FIXME : no restrictions on differing FRAG_DYNGEN_RESTRICTED
              * flags? */
-            ASSERT((v->buf[i].frag_flags & 
-                    ~(FRAG_SELFMOD_SANDBOXED|FRAG_DYNGEN|FRAG_DYNGEN_RESTRICTED)) == 
-                   (frag_flags & 
-                    ~(FRAG_SELFMOD_SANDBOXED|FRAG_DYNGEN|FRAG_DYNGEN_RESTRICTED)));
-# else
-            ASSERT((v->buf[i].frag_flags & 
-                    ~(FRAG_SELFMOD_SANDBOXED|FRAG_DYNGEN)) == 
-                   (frag_flags & 
-                    ~(FRAG_SELFMOD_SANDBOXED|FRAG_DYNGEN)));
-# endif
+            ASSERT((v->buf[i].frag_flags &
+                    ~(FRAG_SELFMOD_SANDBOXED | FRAG_DYNGEN | FRAG_DYNGEN_RESTRICTED)) ==
+                   (frag_flags &
+                    ~(FRAG_SELFMOD_SANDBOXED | FRAG_DYNGEN | FRAG_DYNGEN_RESTRICTED)));
+#    else
+            ASSERT((v->buf[i].frag_flags & ~(FRAG_SELFMOD_SANDBOXED | FRAG_DYNGEN)) ==
+                   (frag_flags & ~(FRAG_SELFMOD_SANDBOXED | FRAG_DYNGEN)));
+#    endif
             /* shouldn't add non-dyngen overlapping existing dyngen, FIXME
              * is the reverse possible? right now we allow it */
             ASSERT(TEST(FRAG_DYNGEN, frag_flags) ||
@@ -1043,21 +1050,20 @@ add_vm_area(vm_area_vector_t *v, app_pc start, app_pc end,
             /* for overlapping region: must overlap same type -- else split */
             if ((vm_flags != v->buf[i].vm_flags || frag_flags != v->buf[i].frag_flags) &&
                 (v->should_merge_func == NULL ||
-                 !v->should_merge_func(false/*not adjacent*/,
-                                       data, v->buf[i].custom.client))) {
+                 !v->should_merge_func(false /*not adjacent*/, data,
+                                       v->buf[i].custom.client))) {
                 LOG(GLOBAL, LOG_VMAREAS, 1,
-                    "add_vm_area "PFX"-"PFX" %s vm_flags=0x%08x "
-                    "frag_flags=0x%08x\n  overlaps diff type "PFX"-"PFX" %s"
-                    "vm_flags=0x%08x frag_flags=0x%08x\n  in vect at "PFX"\n",
-                    start, end, comment, vm_flags, frag_flags,
-                    v->buf[i].start, v->buf[i].end, v->buf[i].comment,
-                    v->buf[i].vm_flags, v->buf[i].frag_flags, v);
+                    "add_vm_area " PFX "-" PFX " %s vm_flags=0x%08x "
+                    "frag_flags=0x%08x\n  overlaps diff type " PFX "-" PFX " %s"
+                    "vm_flags=0x%08x frag_flags=0x%08x\n  in vect at " PFX "\n",
+                    start, end, comment, vm_flags, frag_flags, v->buf[i].start,
+                    v->buf[i].end, v->buf[i].comment, v->buf[i].vm_flags,
+                    v->buf[i].frag_flags, v);
                 LOG(GLOBAL, LOG_VMAREAS, 3,
-                    "before splitting b/c adding "PFX"-"PFX":\n",
-                    start, end);
+                    "before splitting b/c adding " PFX "-" PFX ":\n", start, end);
                 DOLOG(3, LOG_VMAREAS, { print_vm_areas(v, GLOBAL); });
 
-                /* split off the overlapping part from the new region 
+                /* split off the overlapping part from the new region
                  * reasoning: old regions get marked selfmod, then see new code,
                  * its region overlaps old selfmod -- don't make new all selfmod,
                  * split off the part that hasn't been proved selfmod yet.
@@ -1069,7 +1075,7 @@ add_vm_area(vm_area_vector_t *v, app_pc start, app_pc end,
                         void *add_data = data;
                         /* need two areas, one for either side */
                         LOG(GLOBAL, LOG_VMAREAS, 3,
-                            "=> will add "PFX"-"PFX" after i\n", v->buf[i].end, end);
+                            "=> will add " PFX "-" PFX " after i\n", v->buf[i].end, end);
                         /* safe to recurse here, new area will be after the area
                          * we are currently looking at in the vector */
                         if (v->split_payload_func != NULL)
@@ -1086,7 +1092,7 @@ add_vm_area(vm_area_vector_t *v, app_pc start, app_pc end,
                         overlap_start = -1;
                     }
                     LOG(GLOBAL, LOG_VMAREAS, 3,
-                        "=> will add/merge "PFX"-"PFX" before i\n", start, end);
+                        "=> will add/merge " PFX "-" PFX " before i\n", start, end);
                     overlap_end = i;
                     break;
                 } else if (end > v->buf[i].end) {
@@ -1094,7 +1100,7 @@ add_vm_area(vm_area_vector_t *v, app_pc start, app_pc end,
                      * can't act now since don't know areas overlapping beyond i
                      */
                     LOG(GLOBAL, LOG_VMAREAS, 3,
-                        "=> ignoring "PFX"-"PFX", only adding "PFX"-"PFX"\n",
+                        "=> ignoring " PFX "-" PFX ", only adding " PFX "-" PFX "\n",
                         start, v->buf[i].end, v->buf[i].end, end);
                     start = v->buf[i].end;
                     /* reset overlap vars */
@@ -1103,7 +1109,8 @@ add_vm_area(vm_area_vector_t *v, app_pc start, app_pc end,
                 } else {
                     /* completely inside -- ok, we'll leave it that way and won't split */
                     LOG(GLOBAL, LOG_VMAREAS, 3,
-                        "=> ignoring "PFX"-"PFX", forcing to be part of "PFX"-"PFX"\n",
+                        "=> ignoring " PFX "-" PFX ", forcing to be part of " PFX "-" PFX
+                        "\n",
                         start, end, v->buf[i].start, v->buf[i].end);
                 }
                 ASSERT(end > start);
@@ -1117,33 +1124,34 @@ add_vm_area(vm_area_vector_t *v, app_pc start, app_pc end,
 
     if (overlap_start == -1) {
         /* brand-new area, goes before v->buf[i] */
-        struct vm_area_t new_area = {start, end, vm_flags, frag_flags, /* rest 0 */};
+        struct vm_area_t new_area = { start, end, vm_flags, frag_flags, /* rest 0 */ };
 #ifdef DEBUG
         /* get comment */
         size_t len = strlen(comment);
         ASSERT(len < 1024);
-        new_area.comment = (char *) global_heap_alloc(len+1 HEAPACCT(ACCT_VMAREAS));
+        new_area.comment = (char *)global_heap_alloc(len + 1 HEAPACCT(ACCT_VMAREAS));
         strncpy(new_area.comment, comment, len);
-        new_area.comment[len]  = '\0'; /* if max no null */
+        new_area.comment[len] = '\0'; /* if max no null */
 #endif
         new_area.custom.client = data;
-        LOG(GLOBAL, LOG_VMAREAS, 3, "=> adding "PFX"-"PFX"\n", start, end);
+        LOG(GLOBAL, LOG_VMAREAS, 3, "=> adding " PFX "-" PFX "\n", start, end);
         vm_area_vector_check_size(v);
         /* shift subsequent entries */
         for (j = v->length; j > i; j--)
-            v->buf[j] = v->buf[j-1];
+            v->buf[j] = v->buf[j - 1];
         v->buf[i] = new_area;
         /* assumption: no overlaps between areas in list! */
 #ifdef DEBUG
-        if (!((i == 0 || v->buf[i-1].end <= v->buf[i].start) &&
-              (i == v->length || v->buf[i].end <= v->buf[i+1].start))) {
+        if (!((i == 0 || v->buf[i - 1].end <= v->buf[i].start) &&
+              (i == v->length || v->buf[i].end <= v->buf[i + 1].start))) {
             LOG(GLOBAL, LOG_VMAREAS, 1,
-                "ERROR: add_vm_area illegal overlap "PFX" "PFX" %s\n", start, end, comment);
+                "ERROR: add_vm_area illegal overlap " PFX " " PFX " %s\n", start, end,
+                comment);
             print_vm_areas(v, GLOBAL);
         }
 #endif
-        ASSERT((i == 0 || v->buf[i-1].end <= v->buf[i].start) &&
-               (i == v->length || v->buf[i].end <= v->buf[i+1].start));
+        ASSERT((i == 0 || v->buf[i - 1].end <= v->buf[i].start) &&
+               (i == v->length || v->buf[i].end <= v->buf[i + 1].start));
         v->length++;
         STATS_TRACK_MAX(max_vmareas_length, v->length);
         DOSTATS({
@@ -1165,14 +1173,14 @@ add_vm_area(vm_area_vector_t *v, app_pc start, app_pc end,
          */
         if (overlap_end == -1)
             overlap_end = v->length;
-        LOG(GLOBAL, LOG_VMAREAS, 3, "=> changing "PFX"-"PFX,
+        LOG(GLOBAL, LOG_VMAREAS, 3, "=> changing " PFX "-" PFX,
             v->buf[overlap_start].start, v->buf[overlap_start].end);
         if (start < v->buf[overlap_start].start)
             v->buf[overlap_start].start = start;
-        if (end > v->buf[overlap_end-1].end)
+        if (end > v->buf[overlap_end - 1].end)
             v->buf[overlap_start].end = end;
         else
-            v->buf[overlap_start].end = v->buf[overlap_end-1].end;
+            v->buf[overlap_start].end = v->buf[overlap_end - 1].end;
         if (v->merge_payload_func != NULL) {
             v->buf[overlap_start].custom.client =
                 v->merge_payload_func(data, v->buf[overlap_start].custom.client);
@@ -1180,23 +1188,22 @@ add_vm_area(vm_area_vector_t *v, app_pc start, app_pc end,
             /* if a merge exists we assume it will free if necessary */
             v->free_payload_func(v->buf[overlap_start].custom.client);
         }
-        LOG(GLOBAL, LOG_VMAREAS, 3, " to "PFX"-"PFX"\n",
-            v->buf[overlap_start].start, v->buf[overlap_start].end);
+        LOG(GLOBAL, LOG_VMAREAS, 3, " to " PFX "-" PFX "\n", v->buf[overlap_start].start,
+            v->buf[overlap_start].end);
         /* when merge, use which comment?  could combine them all
          * FIXME
          */
         /* now delete */
-        for (i = overlap_start+1; i < overlap_end; i++) {
-            LOG(GLOBAL, LOG_VMAREAS, 3, "=> completely removing "PFX"-"PFX" %s\n",
+        for (i = overlap_start + 1; i < overlap_end; i++) {
+            LOG(GLOBAL, LOG_VMAREAS, 3, "=> completely removing " PFX "-" PFX " %s\n",
                 v->buf[i].start, v->buf[i].end, v->buf[i].comment);
 #ifdef DEBUG
-            global_heap_free(v->buf[i].comment, strlen(v->buf[i].comment)+1
-                             HEAPACCT(ACCT_VMAREAS));
+            global_heap_free(v->buf[i].comment,
+                             strlen(v->buf[i].comment) + 1 HEAPACCT(ACCT_VMAREAS));
 #endif
             if (v->merge_payload_func != NULL) {
-                v->buf[overlap_start].custom.client =
-                    v->merge_payload_func(v->buf[overlap_start].custom.client,
-                                          v->buf[i].custom.client);
+                v->buf[overlap_start].custom.client = v->merge_payload_func(
+                    v->buf[overlap_start].custom.client, v->buf[i].custom.client);
             } else if (v->free_payload_func != NULL) {
                 /* if a merge exists we assume it will free if necessary */
                 v->free_payload_func(v->buf[i].custom.client);
@@ -1210,9 +1217,9 @@ add_vm_area(vm_area_vector_t *v, app_pc start, app_pc end,
             if (TEST(VECTOR_FRAGMENT_LIST, v->flags) && v->buf[i].custom.frags != NULL)
                 vm_area_merge_fraglists(&v->buf[overlap_start], &v->buf[i]);
         }
-        diff = overlap_end - (overlap_start+1);
-        for (i = overlap_start+1; i < v->length-diff; i++)
-            v->buf[i] = v->buf[i+diff];
+        diff = overlap_end - (overlap_start + 1);
+        for (i = overlap_start + 1; i < v->length - diff; i++)
+            v->buf[i] = v->buf[i + diff];
         v->length -= diff;
         i = overlap_start; /* for return value */
         if (TEST(VECTOR_FRAGMENT_LIST, v->flags) && v->buf[i].custom.frags != NULL) {
@@ -1228,7 +1235,7 @@ add_vm_area(vm_area_vector_t *v, app_pc start, app_pc end,
 static void
 adjust_coarse_unit_bounds(vm_area_t *area, bool if_invalid)
 {
-    coarse_info_t *info = (coarse_info_t *) area->custom.client;
+    coarse_info_t *info = (coarse_info_t *)area->custom.client;
     ASSERT(TEST(FRAG_COARSE_GRAIN, area->frag_flags));
     ASSERT(!RUNNING_WITHOUT_CODE_CACHE());
     ASSERT(info != NULL);
@@ -1276,14 +1283,14 @@ remove_vm_area(vm_area_vector_t *v, app_pc start, app_pc end, bool restore_prot)
     int i, diff;
     int overlap_start = -1, overlap_end = -1;
     bool add_new_area = false;
-    vm_area_t new_area = {0};     /* used only when add_new_area, wimpy compiler */
+    vm_area_t new_area = { 0 }; /* used only when add_new_area, wimpy compiler */
     /* FIXME: cleaner test? shared_data copies flags, but uses
      * custom.frags and not custom.client
      */
     bool official_coarse_vector = (v == executable_areas);
 
     ASSERT_VMAREA_VECTOR_PROTECTED(v, WRITE);
-    LOG(GLOBAL, LOG_VMAREAS, 4, "in remove_vm_area "PFX" "PFX"\n", start, end);
+    LOG(GLOBAL, LOG_VMAREAS, 4, "in remove_vm_area " PFX " " PFX "\n", start, end);
     /* N.B.: removed area could span multiple areas! */
     for (i = 0; i < v->length; i++) {
         /* look for overlap */
@@ -1305,7 +1312,7 @@ remove_vm_area(vm_area_vector_t *v, app_pc start, app_pc end, bool restore_prot)
      */
     if (start > v->buf[overlap_start].start) {
         /* need to split? */
-        if (overlap_start == overlap_end-1 && end < v->buf[overlap_start].end) {
+        if (overlap_start == overlap_end - 1 && end < v->buf[overlap_start].end) {
             /* don't call add_vm_area now, that will mess up our vector */
             new_area = v->buf[overlap_start]; /* make a copy */
             new_area.start = end;
@@ -1313,7 +1320,7 @@ remove_vm_area(vm_area_vector_t *v, app_pc start, app_pc end, bool restore_prot)
             add_new_area = true;
         }
         /* move ending bound backward */
-        LOG(GLOBAL, LOG_VMAREAS, 3, "\tchanging "PFX"-"PFX" to "PFX"-"PFX"\n",
+        LOG(GLOBAL, LOG_VMAREAS, 3, "\tchanging " PFX "-" PFX " to " PFX "-" PFX "\n",
             v->buf[overlap_start].start, v->buf[overlap_start].end,
             v->buf[overlap_start].start, start);
         if (restore_prot && TEST(VM_MADE_READONLY, v->buf[overlap_start].vm_flags)) {
@@ -1323,30 +1330,31 @@ remove_vm_area(vm_area_vector_t *v, app_pc start, app_pc end, bool restore_prot)
         /* FIXME: add a vmvector callback function for changing bounds? */
         if (TEST(FRAG_COARSE_GRAIN, v->buf[overlap_start].frag_flags) &&
             official_coarse_vector) {
-            adjust_coarse_unit_bounds(&v->buf[overlap_start], false/*leave invalid*/);
+            adjust_coarse_unit_bounds(&v->buf[overlap_start], false /*leave invalid*/);
         }
         overlap_start++; /* don't delete me */
     }
-    if (end < v->buf[overlap_end-1].end) {
+    if (end < v->buf[overlap_end - 1].end) {
         /* move starting bound forward */
-        LOG(GLOBAL, LOG_VMAREAS, 3, "\tchanging "PFX"-"PFX" to "PFX"-"PFX"\n",
-            v->buf[overlap_end-1].start, v->buf[overlap_end-1].end,
-            end, v->buf[overlap_end-1].end);
-        if (restore_prot && TEST(VM_MADE_READONLY, v->buf[overlap_end-1].vm_flags)) {
-            vm_make_writable(v->buf[overlap_end-1].start, end - v->buf[overlap_end-1].start);
+        LOG(GLOBAL, LOG_VMAREAS, 3, "\tchanging " PFX "-" PFX " to " PFX "-" PFX "\n",
+            v->buf[overlap_end - 1].start, v->buf[overlap_end - 1].end, end,
+            v->buf[overlap_end - 1].end);
+        if (restore_prot && TEST(VM_MADE_READONLY, v->buf[overlap_end - 1].vm_flags)) {
+            vm_make_writable(v->buf[overlap_end - 1].start,
+                             end - v->buf[overlap_end - 1].start);
         }
-        v->buf[overlap_end-1].start = end;
+        v->buf[overlap_end - 1].start = end;
         /* FIXME: add a vmvector callback function for changing bounds? */
-        if (TEST(FRAG_COARSE_GRAIN, v->buf[overlap_end-1].frag_flags) &&
+        if (TEST(FRAG_COARSE_GRAIN, v->buf[overlap_end - 1].frag_flags) &&
             official_coarse_vector) {
-            adjust_coarse_unit_bounds(&v->buf[overlap_end-1], false/*leave invalid*/);
+            adjust_coarse_unit_bounds(&v->buf[overlap_end - 1], false /*leave invalid*/);
         }
         overlap_end--; /* don't delete me */
     }
     /* now delete */
     if (overlap_start < overlap_end) {
         for (i = overlap_start; i < overlap_end; i++) {
-            LOG(GLOBAL, LOG_VMAREAS, 3, "\tcompletely removing "PFX"-"PFX" %s\n",
+            LOG(GLOBAL, LOG_VMAREAS, 3, "\tcompletely removing " PFX "-" PFX " %s\n",
                 v->buf[i].start, v->buf[i].end, v->buf[i].comment);
             if (restore_prot && TEST(VM_MADE_READONLY, v->buf[i].vm_flags)) {
                 vm_make_writable(v->buf[i].start, v->buf[i].end - v->buf[i].start);
@@ -1356,9 +1364,8 @@ remove_vm_area(vm_area_vector_t *v, app_pc start, app_pc end, bool restore_prot)
              * VM_EXECUTED_FROM.  Could add bounds to callback params, but
              * vm_flags are not exposed to vmvector interface...
              */
-            if (TEST(FRAG_COARSE_GRAIN, v->buf[i].frag_flags) &&
-                official_coarse_vector) {
-                coarse_info_t *info = (coarse_info_t *) v->buf[i].custom.client;
+            if (TEST(FRAG_COARSE_GRAIN, v->buf[i].frag_flags) && official_coarse_vector) {
+                coarse_info_t *info = (coarse_info_t *)v->buf[i].custom.client;
                 coarse_info_t *next_info;
                 ASSERT(info != NULL);
                 ASSERT(!RUNNING_WITHOUT_CODE_CACHE());
@@ -1394,16 +1401,17 @@ remove_vm_area(vm_area_vector_t *v, app_pc start, app_pc end, bool restore_prot)
                 v->free_payload_func(v->buf[i].custom.client);
             }
 #ifdef DEBUG
-            global_heap_free(v->buf[i].comment, strlen(v->buf[i].comment)+1
-                             HEAPACCT(ACCT_VMAREAS));
+            global_heap_free(v->buf[i].comment,
+                             strlen(v->buf[i].comment) + 1 HEAPACCT(ACCT_VMAREAS));
 #endif
             /* frags list should always be null here (flush should have happened,
              * etc.) */
-            ASSERT(!TEST(VECTOR_FRAGMENT_LIST, v->flags) || v->buf[i].custom.frags == NULL);
+            ASSERT(!TEST(VECTOR_FRAGMENT_LIST, v->flags) ||
+                   v->buf[i].custom.frags == NULL);
         }
         diff = overlap_end - overlap_start;
-        for (i = overlap_start; i < v->length-diff; i++)
-            v->buf[i] = v->buf[i+diff];
+        for (i = overlap_start; i < v->length - diff; i++)
+            v->buf[i] = v->buf[i + diff];
 #ifdef DEBUG
         memset(v->buf + v->length - diff, 0, diff * sizeof(vm_area_t));
 #endif
@@ -1421,7 +1429,8 @@ remove_vm_area(vm_area_vector_t *v, app_pc start, app_pc end, bool restore_prot)
          * -unsafe_ignore_IAT_writes) we can have VM_ADD_TO_SHARED_DATA set
          */
         new_area.vm_flags &= ~VM_ADD_TO_SHARED_DATA;
-        LOG(GLOBAL, LOG_VMAREAS, 3, "\tadding "PFX"-"PFX"\n", new_area.start, new_area.end);
+        LOG(GLOBAL, LOG_VMAREAS, 3, "\tadding " PFX "-" PFX "\n", new_area.start,
+            new_area.end);
         /* we copied v->buf[overlap_start] above and so already have a copy
          * of the client field
          */
@@ -1429,8 +1438,8 @@ remove_vm_area(vm_area_vector_t *v, app_pc start, app_pc end, bool restore_prot)
             new_area.custom.client = v->split_payload_func(new_area.custom.client);
         } /* else, just keep the copy */
         add_vm_area(v, new_area.start, new_area.end, new_area.vm_flags,
-                    new_area.frag_flags, new_area.custom.client
-                    _IF_DEBUG(new_area.comment));
+                    new_area.frag_flags,
+                    new_area.custom.client _IF_DEBUG(new_area.comment));
     }
     DOLOG(5, LOG_VMAREAS, { print_vm_areas(v, GLOBAL); });
     return true;
@@ -1448,8 +1457,8 @@ remove_vm_area(vm_area_vector_t *v, app_pc start, app_pc end, bool restore_prot)
  * or by being its owning thread if it has no lock.
  */
 static bool
-binary_search(vm_area_vector_t *v, app_pc start, app_pc end, vm_area_t **area/*OUT*/,
-              int *index/*OUT*/, bool first)
+binary_search(vm_area_vector_t *v, app_pc start, app_pc end, vm_area_t **area /*OUT*/,
+              int *index /*OUT*/, bool first)
 {
     /* BINARY SEARCH -- assumes the vector is kept sorted by add & remove! */
     int min = 0;
@@ -1458,7 +1467,7 @@ binary_search(vm_area_vector_t *v, app_pc start, app_pc end, vm_area_t **area/*O
     ASSERT(start < end || end == NULL /* wraparound */);
 
     ASSERT_VMAREA_VECTOR_PROTECTED(v, READWRITE);
-    LOG(GLOBAL, LOG_VMAREAS, 7, "Binary search for "PFX"-"PFX" on this vector:\n",
+    LOG(GLOBAL, LOG_VMAREAS, 7, "Binary search for " PFX "-" PFX " on this vector:\n",
         start, end);
     DOLOG(7, LOG_VMAREAS, { print_vm_areas(v, GLOBAL); });
     /* binary search */
@@ -1472,7 +1481,7 @@ binary_search(vm_area_vector_t *v, app_pc start, app_pc end, vm_area_t **area/*O
             if (area != NULL || index != NULL) {
                 if (first) {
                     /* caller wants 1st matching area */
-                    for (; i >= 1 && v->buf[i-1].end > start; i--)
+                    for (; i >= 1 && v->buf[i - 1].end > start; i--)
                         ;
                 }
                 /* returning pointer to volatile array dangerous -- see comment above */
@@ -1481,13 +1490,14 @@ binary_search(vm_area_vector_t *v, app_pc start, app_pc end, vm_area_t **area/*O
                 if (index != NULL)
                     *index = i;
             }
-            LOG(GLOBAL, LOG_VMAREAS, 7, "\tfound "PFX"-"PFX" in area "PFX"-"PFX"\n",
-                start, end, v->buf[i].start, v->buf[i].end);
+            LOG(GLOBAL, LOG_VMAREAS, 7,
+                "\tfound " PFX "-" PFX " in area " PFX "-" PFX "\n", start, end,
+                v->buf[i].start, v->buf[i].end);
             return true;
         }
     }
     /* now max < min */
-    LOG(GLOBAL, LOG_VMAREAS, 7, "\tdid not find "PFX"-"PFX"!\n", start, end);
+    LOG(GLOBAL, LOG_VMAREAS, 7, "\tdid not find " PFX "-" PFX "!\n", start, end);
     if (index != NULL) {
         ASSERT((max < 0 || v->buf[max].end <= start) &&
                (min > v->length - 1 || v->buf[min].start >= end));
@@ -1512,7 +1522,7 @@ static bool
 lookup_addr(vm_area_vector_t *v, app_pc addr, vm_area_t **area)
 {
     /* binary search asserts v is protected */
-    return binary_search(v, addr, addr+1/*open end*/, area, NULL, false);
+    return binary_search(v, addr, addr + 1 /*open end*/, area, NULL, false);
 }
 
 /* returns true if the passed in area overlaps any known executable areas
@@ -1532,18 +1542,17 @@ void
 vm_areas_reset_init(void)
 {
     memset(shared_data, 0, sizeof(*shared_data));
-    VMVECTOR_INITIALIZE_VECTOR(&shared_data->areas,
-                               VECTOR_SHARED | VECTOR_FRAGMENT_LIST, shared_vm_areas);
+    VMVECTOR_INITIALIZE_VECTOR(&shared_data->areas, VECTOR_SHARED | VECTOR_FRAGMENT_LIST,
+                               shared_vm_areas);
 }
 
 void
 dynamo_vm_areas_init(void)
 {
-    VMVECTOR_ALLOC_VECTOR(dynamo_areas, GLOBAL_DCONTEXT, VECTOR_SHARED,
-                          dynamo_areas);
+    VMVECTOR_ALLOC_VECTOR(dynamo_areas, GLOBAL_DCONTEXT, VECTOR_SHARED, dynamo_areas);
 }
 
-/* calls find_executable_vm_areas to get per-process map 
+/* calls find_executable_vm_areas to get per-process map
  * N.B.: add_dynamo_vm_area can be called before this init routine!
  * N.B.: this is called after vm_areas_thread_init()
  */
@@ -1564,35 +1573,35 @@ vm_areas_init(void)
                           patch_proof_areas);
     VMVECTOR_ALLOC_VECTOR(emulate_write_areas, GLOBAL_DCONTEXT, VECTOR_SHARED,
                           emulate_write_areas);
-    VMVECTOR_ALLOC_VECTOR(IAT_areas, GLOBAL_DCONTEXT, VECTOR_SHARED,
-                          IAT_areas);
+    VMVECTOR_ALLOC_VECTOR(IAT_areas, GLOBAL_DCONTEXT, VECTOR_SHARED, IAT_areas);
     VMVECTOR_ALLOC_VECTOR(written_areas, GLOBAL_DCONTEXT,
-                          VECTOR_SHARED | VECTOR_NEVER_MERGE,
-                          written_areas);
+                          VECTOR_SHARED | VECTOR_NEVER_MERGE, written_areas);
     vmvector_set_callbacks(written_areas, free_written_area, NULL, NULL, NULL);
 #ifdef PROGRAM_SHEPHERDING
     VMVECTOR_ALLOC_VECTOR(futureexec_areas, GLOBAL_DCONTEXT, VECTOR_SHARED,
                           futureexec_areas);
-# ifdef WINDOWS
+#    ifdef WINDOWS
     VMVECTOR_ALLOC_VECTOR(app_flushed_areas, GLOBAL_DCONTEXT, VECTOR_SHARED,
                           app_flushed_areas);
-# endif
+#    endif
 #endif
     VMVECTOR_ALLOC_VECTOR(native_exec_areas, GLOBAL_DCONTEXT, VECTOR_SHARED,
                           native_exec_areas);
 
-    shared_data = HEAP_TYPE_ALLOC(GLOBAL_DCONTEXT, thread_data_t, ACCT_VMAREAS, PROTECTED);
+    shared_data =
+        HEAP_TYPE_ALLOC(GLOBAL_DCONTEXT, thread_data_t, ACCT_VMAREAS, PROTECTED);
 
-    todelete = HEAP_TYPE_ALLOC(GLOBAL_DCONTEXT, deletion_lists_t, ACCT_VMAREAS, PROTECTED);
+    todelete =
+        HEAP_TYPE_ALLOC(GLOBAL_DCONTEXT, deletion_lists_t, ACCT_VMAREAS, PROTECTED);
     memset(todelete, 0, sizeof(*todelete));
 
-    coarse_to_delete = HEAP_TYPE_ALLOC(GLOBAL_DCONTEXT, coarse_info_t *,
-                                       ACCT_VMAREAS, PROTECTED);
+    coarse_to_delete =
+        HEAP_TYPE_ALLOC(GLOBAL_DCONTEXT, coarse_info_t *, ACCT_VMAREAS, PROTECTED);
     *coarse_to_delete = NULL;
 
     if (DYNAMO_OPTION(unloaded_target_exception)) {
-        last_deallocated = HEAP_TYPE_ALLOC(GLOBAL_DCONTEXT, last_deallocated_t, 
-                                           ACCT_VMAREAS, PROTECTED);
+        last_deallocated =
+            HEAP_TYPE_ALLOC(GLOBAL_DCONTEXT, last_deallocated_t, ACCT_VMAREAS, PROTECTED);
         memset(last_deallocated, 0, sizeof(*last_deallocated));
     } else
         ASSERT(last_deallocated == NULL);
@@ -1606,7 +1615,7 @@ vm_areas_init(void)
     areas = find_dynamo_library_vm_areas();
     dynamo_vm_areas_unlock();
 
-    /* initialize executable list 
+    /* initialize executable list
      * this routine calls app_memory_allocation() w/ dcontext==NULL and so we
      * won't go adding rwx regions, like the linux stack, to our list, even w/
      * -executable_if_alloc
@@ -1618,7 +1627,8 @@ vm_areas_init(void)
             print_executable_areas(GLOBAL);
         }
         LOG(GLOBAL, LOG_VMAREAS, 2,
-            "--------------------------------------------------------------------------\n");
+            "--------------------------------------------------------------------------"
+            "\n");
     });
 
     return areas;
@@ -1628,14 +1638,15 @@ static void
 vm_areas_statistics(void)
 {
 #ifdef PROGRAM_SHEPHERDING
-    DOLOG(1, LOG_VMAREAS|LOG_STATS, {
-        uint top; uint bottom;
-        divide_uint64_print(GLOBAL_STAT(looked_up_in_last_area), 
+    DOLOG(1, LOG_VMAREAS | LOG_STATS, {
+        uint top;
+        uint bottom;
+        divide_uint64_print(GLOBAL_STAT(looked_up_in_last_area),
                             GLOBAL_STAT(checked_addresses), true, 2, &top, &bottom);
-        LOG(GLOBAL, LOG_VMAREAS|LOG_STATS, 1,
+        LOG(GLOBAL, LOG_VMAREAS | LOG_STATS, 1,
             "Code Origin: %d address lookups, %d in last area, hit ratio %u.%.2u\n",
-            GLOBAL_STAT(checked_addresses), GLOBAL_STAT(looked_up_in_last_area),
-            top, bottom);
+            GLOBAL_STAT(checked_addresses), GLOBAL_STAT(looked_up_in_last_area), top,
+            bottom);
     });
 #endif /* PROGRAM_SHEPHERDING */
     DOLOG(1, LOG_VMAREAS, {
@@ -1655,7 +1666,7 @@ vm_areas_reset_free(void)
          * else we'd have to free the frags lists and entries here
          */
         ASSERT(todelete->shared_delete == NULL);
-        ASSERT(todelete->shared_delete_tail == NULL); 
+        ASSERT(todelete->shared_delete_tail == NULL);
         /* FIXME: don't free lock so init has less work */
         vmvector_free_vector(GLOBAL_DCONTEXT, &shared_data->areas);
     }
@@ -1707,12 +1718,12 @@ vm_areas_exit(void)
     ASSERT(coarse_to_delete != NULL);
     /* should be freed immediately after each use, during a no-exec flush */
     ASSERT(*coarse_to_delete == NULL);
-    HEAP_TYPE_FREE(GLOBAL_DCONTEXT, coarse_to_delete, coarse_info_t *,
-                   ACCT_VMAREAS, PROTECTED);
+    HEAP_TYPE_FREE(GLOBAL_DCONTEXT, coarse_to_delete, coarse_info_t *, ACCT_VMAREAS,
+                   PROTECTED);
 
     if (DYNAMO_OPTION(unloaded_target_exception)) {
-        HEAP_TYPE_FREE(GLOBAL_DCONTEXT, last_deallocated, 
-                       last_deallocated_t, ACCT_VMAREAS, PROTECTED);
+        HEAP_TYPE_FREE(GLOBAL_DCONTEXT, last_deallocated, last_deallocated_t,
+                       ACCT_VMAREAS, PROTECTED);
         last_deallocated = NULL;
     } else
         ASSERT(last_deallocated == NULL);
@@ -1732,7 +1743,7 @@ vm_areas_exit(void)
     DOLOG(1, LOG_VMAREAS, {
         if (written_areas->buf != NULL) {
             LOG(GLOBAL, LOG_VMAREAS, 1, "Code write and selfmod exec counts:\n");
-            print_written_areas(GLOBAL); 
+            print_written_areas(GLOBAL);
             LOG(GLOBAL, LOG_VMAREAS, 1, "\n");
         }
     });
@@ -1756,11 +1767,11 @@ vm_areas_exit(void)
     vmvector_delete_vector(GLOBAL_DCONTEXT, futureexec_areas);
     futureexec_areas = NULL;
     DELETE_LOCK(threads_killed_lock);
-# ifdef WINDOWS
+#    ifdef WINDOWS
     ASSERT(DYNAMO_OPTION(xdata_rct) || vmvector_empty(app_flushed_areas));
     vmvector_delete_vector(GLOBAL_DCONTEXT, app_flushed_areas);
     app_flushed_areas = NULL;
-# endif
+#    endif
 #endif
 #ifdef SIMULATE_ATTACK
     DELETE_LOCK(simulate_lock);
@@ -1775,10 +1786,10 @@ vm_areas_exit(void)
 void
 vm_areas_thread_reset_init(dcontext_t *dcontext)
 {
-    thread_data_t *data = (thread_data_t *) dcontext->vm_areas_field;
+    thread_data_t *data = (thread_data_t *)dcontext->vm_areas_field;
     memset(dcontext->vm_areas_field, 0, sizeof(thread_data_t));
     VMVECTOR_INITIALIZE_VECTOR(&data->areas, VECTOR_FRAGMENT_LIST, thread_vm_areas);
-    /* data->areas.lock is never used, but we may want to grab it one day, 
+    /* data->areas.lock is never used, but we may want to grab it one day,
        e.g. to print other thread areas */
 }
 
@@ -1794,10 +1805,10 @@ vm_areas_thread_init(dcontext_t *dcontext)
 void
 vm_areas_thread_reset_free(dcontext_t *dcontext)
 {
-    /* we free the local areas vector so it will match fragments post-reset 
+    /* we free the local areas vector so it will match fragments post-reset
      * FIXME: put it in nonpersistent heap
      */
-    thread_data_t *data = (thread_data_t *) dcontext->vm_areas_field;
+    thread_data_t *data = (thread_data_t *)dcontext->vm_areas_field;
     /* yes, we end up using global heap for the thread-local area
      * vector...not a big deal, but FIXME sometime
      */
@@ -1810,12 +1821,13 @@ vm_areas_thread_exit(dcontext_t *dcontext)
     vm_areas_thread_reset_free(dcontext);
 #ifdef DEBUG
     /* for non-debug we do fast exit path and don't free local heap */
-    HEAP_TYPE_FREE(dcontext, dcontext->vm_areas_field, thread_data_t, ACCT_OTHER, PROTECTED);
+    HEAP_TYPE_FREE(dcontext, dcontext->vm_areas_field, thread_data_t, ACCT_OTHER,
+                   PROTECTED);
 #endif
 }
 
 /****************************************************************************
- * external interface to vm_area_vector_t 
+ * external interface to vm_area_vector_t
  *
  * FIXME: add user data field to vector and to add routine
  * FIXME: have init and destroy routines so don't have to expose
@@ -1823,11 +1835,10 @@ vm_areas_thread_exit(dcontext_t *dcontext)
  */
 
 void
-vmvector_set_callbacks(vm_area_vector_t *v,
-                       void (*free_func)(void*),
-                       void *(*split_func)(void*),
-                       bool (*should_merge_func)(bool, void*, void*),
-                       void *(*merge_func)(void*, void*))
+vmvector_set_callbacks(vm_area_vector_t *v, void (*free_func)(void *),
+                       void *(*split_func)(void *),
+                       bool (*should_merge_func)(bool, void *, void *),
+                       void *(*merge_func)(void *, void *))
 {
     bool release_lock; /* 'true' means this routine needs to unlock */
     ASSERT(v != NULL);
@@ -1875,8 +1886,8 @@ vmvector_remove(vm_area_vector_t *v, app_pc start, app_pc end)
  * returns false if not found
  */
 bool
-vmvector_remove_containing_area(vm_area_vector_t *v, app_pc pc, 
-                                app_pc *area_start /* OUT optional */, 
+vmvector_remove_containing_area(vm_area_vector_t *v, app_pc pc,
+                                app_pc *area_start /* OUT optional */,
                                 app_pc *area_end /* OUT optional */)
 {
     vm_area_t *a;
@@ -1898,7 +1909,6 @@ vmvector_remove_containing_area(vm_area_vector_t *v, app_pc pc,
     UNLOCK_VECTOR(v, release_lock, write);
     return ok;
 }
-
 
 bool
 vmvector_overlap(vm_area_vector_t *v, app_pc start, app_pc end)
@@ -1925,20 +1935,19 @@ vmvector_lookup(vm_area_vector_t *v, app_pc pc)
     vmvector_lookup_data(v, pc, NULL, NULL, &data);
     return data;
 }
-  
+
 /* Looks up if pc is in a vmarea and optionally returns the areas's bounds
  * and any custom data. NOTE: Access to custom data needs explicit
  * synchronization in addition to vm_area_vector_t's locks!
  */
 bool
-vmvector_lookup_data(vm_area_vector_t *v, app_pc pc,
-                     app_pc *start /* OUT */, app_pc *end /* OUT */,
-                     void **data /* OUT */)
+vmvector_lookup_data(vm_area_vector_t *v, app_pc pc, app_pc *start /* OUT */,
+                     app_pc *end /* OUT */, void **data /* OUT */)
 {
     bool overlap;
     vm_area_t *area = NULL;
     bool release_lock; /* 'true' means this routine needs to unlock */
-    
+
     LOCK_VECTOR(v, release_lock, read);
     ASSERT_OWN_READWRITE_LOCK(SHOULD_LOCK_VECTOR(v), &v->lock);
     overlap = lookup_addr(v, pc, &area);
@@ -1961,16 +1970,16 @@ vmvector_lookup_data(vm_area_vector_t *v, app_pc pc,
  * should this routine do both to avoid an extra binary search?
  */
 bool
-vmvector_lookup_prev_next(vm_area_vector_t *v, app_pc pc,
-                          OUT app_pc *prev, OUT app_pc *next)
+vmvector_lookup_prev_next(vm_area_vector_t *v, app_pc pc, OUT app_pc *prev,
+                          OUT app_pc *next)
 {
     bool success;
     int index;
     bool release_lock; /* 'true' means this routine needs to unlock */
-    
+
     LOCK_VECTOR(v, release_lock, read);
     ASSERT_OWN_READWRITE_LOCK(SHOULD_LOCK_VECTOR(v), &v->lock);
-    success = !binary_search(v, pc, pc+1, NULL, &index, false);
+    success = !binary_search(v, pc, pc + 1, NULL, &index, false);
     if (success) {
         if (prev != NULL) {
             if (index == -1)
@@ -1980,9 +1989,9 @@ vmvector_lookup_prev_next(vm_area_vector_t *v, app_pc pc,
         }
         if (next != NULL) {
             if (index >= v->length - 1)
-                *next = (app_pc) POINTER_MAX;
+                *next = (app_pc)POINTER_MAX;
             else
-                *next = v->buf[index+1].start;
+                *next = v->buf[index + 1].start;
         }
     }
     UNLOCK_VECTOR(v, release_lock, read);
@@ -2041,7 +2050,7 @@ vmvector_reset_vector(dcontext_t *dcontext, vm_area_vector_t *v)
                  * custom.frags and not custom.client
                  */
                 v == executable_areas) {
-                coarse_info_t *info = (coarse_info_t *) v->buf[i].custom.client;
+                coarse_info_t *info = (coarse_info_t *)v->buf[i].custom.client;
                 coarse_info_t *next_info;
                 ASSERT(!RUNNING_WITHOUT_CODE_CACHE());
                 ASSERT(info != NULL);
@@ -2054,14 +2063,15 @@ vmvector_reset_vector(dcontext_t *dcontext, vm_area_vector_t *v)
                 }
                 v->buf[i].custom.client = NULL;
             }
-            global_heap_free(v->buf[i].comment, strlen(v->buf[i].comment)+1
-                             HEAPACCT(ACCT_VMAREAS));
+            global_heap_free(v->buf[i].comment,
+                             strlen(v->buf[i].comment) + 1 HEAPACCT(ACCT_VMAREAS));
         }
     });
     /* with thread shared cache it is in fact possible to have no thread local vmareas */
     if (v->buf != NULL) {
         /* FIXME: walk through and make sure frags lists are all freed */
-        global_heap_free(v->buf, v->size*sizeof(struct vm_area_t) HEAPACCT(ACCT_VMAREAS));
+        global_heap_free(v->buf,
+                         v->size * sizeof(struct vm_area_t) HEAPACCT(ACCT_VMAREAS));
         v->size = 0;
         v->length = 0;
         v->buf = NULL;
@@ -2125,12 +2135,12 @@ vmvector_iterator_startover(vmvector_iterator_t *vmvi)
  * has to be initialized with vmvector_iterator_start, and should be
  * called only when vmvector_iterator_hasnext() is true
  *
- * returns custom data and 
- * sets the area boundaries in area_start and area_end 
+ * returns custom data and
+ * sets the area boundaries in area_start and area_end
  *
  * does not increment the iterator
  */
-void*
+void *
 vmvector_iterator_peek(vmvector_iterator_t *vmvi, /* IN/OUT */
                        app_pc *area_start /* OUT */, app_pc *area_end /* OUT */)
 {
@@ -2149,10 +2159,10 @@ vmvector_iterator_peek(vmvector_iterator_t *vmvi, /* IN/OUT */
  * has to be initialized with vmvector_iterator_start, and should be
  * called only when vmvector_iterator_hasnext() is true
  *
- * returns custom data and 
- * sets the area boundaries in area_start and area_end 
+ * returns custom data and
+ * sets the area boundaries in area_start and area_end
  */
-void*
+void *
 vmvector_iterator_next(vmvector_iterator_t *vmvi, /* IN/OUT */
                        app_pc *area_start /* OUT */, app_pc *area_end /* OUT */)
 {
@@ -2168,7 +2178,7 @@ vmvector_iterator_stop(vmvector_iterator_t *vmvi)
     if (SHOULD_LOCK_VECTOR(vmvi->vector))
         read_unlock(&vmvi->vector->lock);
     DODEBUG({
-        vmvi->vector = NULL;    /* crash incorrect reuse */
+        vmvi->vector = NULL; /* crash incorrect reuse */
         vmvi->index = -1;
     });
 }
@@ -2210,8 +2220,8 @@ print_written_areas(file_t outf)
 static void
 free_written_area(void *data)
 {
-    HEAP_TYPE_FREE(GLOBAL_DCONTEXT, (ro_vs_sandbox_data_t *) data,
-                   ro_vs_sandbox_data_t, ACCT_VMAREAS, UNPROTECTED);
+    HEAP_TYPE_FREE(GLOBAL_DCONTEXT, (ro_vs_sandbox_data_t *)data, ro_vs_sandbox_data_t,
+                   ACCT_VMAREAS, UNPROTECTED);
 }
 
 /* Functions as a lookup routine if an entry is already present.
@@ -2219,8 +2229,8 @@ free_written_area(void *data)
  * case an entry for [start, end) is added.
  */
 static bool
-add_written_area(vm_area_vector_t *v, app_pc tag, app_pc start,
-                 app_pc end, vm_area_t **area)
+add_written_area(vm_area_vector_t *v, app_pc tag, app_pc start, app_pc end,
+                 vm_area_t **area)
 {
     vm_area_t *a = NULL;
     bool already;
@@ -2232,8 +2242,7 @@ add_written_area(vm_area_vector_t *v, app_pc tag, app_pc start,
     /* re-adding fails for written_areas since no merging, so lookup first */
     already = lookup_addr(v, tag, &a);
     if (!already) {
-        LOG(GLOBAL, LOG_VMAREAS, 2,
-            "new written executable vm area: "PFX"-"PFX"\n",
+        LOG(GLOBAL, LOG_VMAREAS, 2, "new written executable vm area: " PFX "-" PFX "\n",
             start, end);
         /* case 9179: With no flags, any overlap (in non-tag portion of [start,
          * end)) will result in a merge: so we'll inherit and share counts from
@@ -2242,7 +2251,7 @@ add_written_area(vm_area_vector_t *v, app_pc tag, app_pc start,
          * first region, since that's how add_vm_area does the merge.
          */
         add_vm_area(v, start, end, /* no flags */ 0, 0, NULL _IF_DEBUG(""));
-        DEBUG_DECLARE(ok = ) lookup_addr(v, tag, &a);
+        DEBUG_DECLARE(ok =) lookup_addr(v, tag, &a);
         ASSERT(ok && a != NULL);
         /* If we merged, we already have an ro2s struct */
         /* FIXME: now that we have merge callback support, should just pass
@@ -2253,9 +2262,8 @@ add_written_area(vm_area_vector_t *v, app_pc tag, app_pc start,
              * unprotected.  Attacker changing selfmod_execs or written_count
              * shouldn't be able to cause problems.
              */
-            ro_vs_sandbox_data_t *ro2s =
-                HEAP_TYPE_ALLOC(GLOBAL_DCONTEXT, ro_vs_sandbox_data_t,
-                                ACCT_VMAREAS, UNPROTECTED);
+            ro_vs_sandbox_data_t *ro2s = HEAP_TYPE_ALLOC(
+                GLOBAL_DCONTEXT, ro_vs_sandbox_data_t, ACCT_VMAREAS, UNPROTECTED);
             /* selfmod_execs is inc-ed from the cache, and if it crosses a cache
              * line we could have a problem with large thresholds.  We assert on
              * 32-bit alignment here, which our heap alloc currently provides, to
@@ -2263,11 +2271,11 @@ add_written_area(vm_area_vector_t *v, app_pc tag, app_pc start,
              */
             ASSERT(ALIGNED(ro2s, sizeof(uint)));
             memset(ro2s, 0, sizeof(*ro2s));
-            a->custom.client = (void *) ro2s;
+            a->custom.client = (void *)ro2s;
         }
     } else {
         LOG(GLOBAL, LOG_VMAREAS, 3,
-            "request for written area "PFX"-"PFX" vs existing "PFX"-"PFX"\n",
+            "request for written area " PFX "-" PFX " vs existing " PFX "-" PFX "\n",
             start, end, a->start, a->end);
     }
     ASSERT(a != NULL);
@@ -2282,29 +2290,27 @@ add_written_area(vm_area_vector_t *v, app_pc tag, app_pc start,
  */
 static bool
 add_executable_vm_area_check_IAT(app_pc *start /*IN/OUT*/, app_pc *end /*IN/OUT*/,
-                                 uint vm_flags,
-                                 vm_area_t **existing_area /*OUT*/,
+                                 uint vm_flags, vm_area_t **existing_area /*OUT*/,
                                  coarse_info_t **info_out /*OUT*/,
                                  coarse_info_t **tofree /*OUT*/,
-                                 app_pc *delay_start /*OUT*/,
-                                 app_pc *delay_end /*OUT*/)
+                                 app_pc *delay_start /*OUT*/, app_pc *delay_end /*OUT*/)
 {
     bool keep_coarse = false;
     app_pc IAT_start = NULL, IAT_end = NULL;
     app_pc orig_start = *start, orig_end = *end;
     ASSERT(existing_area != NULL && info_out != NULL && tofree != NULL);
     ASSERT(delay_start != NULL && delay_end != NULL);
-    if (DYNAMO_OPTION(coarse_merge_iat) &&
-        get_module_base(*start) != NULL &&
+    if (DYNAMO_OPTION(coarse_merge_iat) && get_module_base(*start) != NULL &&
         get_IAT_section_bounds(get_module_base(*start), &IAT_start, &IAT_end) &&
         /* case 1094{5,7}: to match the assumptions of case 10600 we adjust
          * to post-IAT even if the IAT is in the middle, if it's toward the front
          */
         (*start >= IAT_start || (IAT_start - *start < *end - IAT_end)) &&
-        *start < IAT_end &&
-        /* be paranoid: multi-page IAT where hooker fooled our loader matching
-         * could add just 1st page of IAT? */
-        *end > IAT_end /* for == avoid an empty region */) {
+        *start<IAT_end &&
+               /* be paranoid: multi-page IAT where hooker fooled our loader matching
+                * could add just 1st page of IAT? */
+               * end>
+            IAT_end /* for == avoid an empty region */) {
         /* If a pre-IAT region exists, split if off separately (case 10945).
          * We want to keep as coarse, but we need the post-IAT region to be the
          * primary coarse and the one we try to load a pcache for: so we delay
@@ -2314,7 +2320,7 @@ add_executable_vm_area_check_IAT(app_pc *start /*IN/OUT*/, app_pc *end /*IN/OUT*
          */
         if (orig_start < IAT_start) {
             LOG(GLOBAL, LOG_VMAREAS, 2,
-                "splitting pre-IAT "PFX"-"PFX" off from exec area "PFX"-"PFX"\n",
+                "splitting pre-IAT " PFX "-" PFX " off from exec area " PFX "-" PFX "\n",
                 orig_start, IAT_start, orig_start, orig_end);
             *delay_start = orig_start;
             *delay_end = IAT_start;
@@ -2331,11 +2337,11 @@ add_executable_vm_area_check_IAT(app_pc *start /*IN/OUT*/, app_pc *end /*IN/OUT*
         *start = IAT_end;
         ASSERT(*end > *start);
         LOG(GLOBAL, LOG_VMAREAS, 2,
-            "adjusting exec area "PFX"-"PFX" to post-IAT "PFX"-"PFX"\n",
+            "adjusting exec area " PFX "-" PFX " to post-IAT " PFX "-" PFX "\n",
             orig_start, *end, *start, *end);
     } else {
         LOG(GLOBAL, LOG_VMAREAS, 2,
-            "NOT adjusting exec area "PFX"-"PFX" vs IAT "PFX"-"PFX"\n",
+            "NOT adjusting exec area " PFX "-" PFX " vs IAT " PFX "-" PFX "\n",
             orig_start, *end, IAT_start, IAT_end);
     }
     if (TEST(VM_UNMOD_IMAGE, vm_flags))
@@ -2349,19 +2355,18 @@ add_executable_vm_area_check_IAT(app_pc *start /*IN/OUT*/, app_pc *end /*IN/OUT*
          * .orpc at page 1, IAT on page 2, and .text continuing on
          */
         ASSERT(ALIGNED(*end, PAGE_SIZE));
-        if (DYNAMO_OPTION(coarse_merge_iat) &&
-            vm_flags == 0 /* no other flags */ &&
+        if (DYNAMO_OPTION(coarse_merge_iat) && vm_flags == 0 /* no other flags */ &&
             /* FIXME: used our stored bounds */
-            is_IAT(orig_start, orig_end, true/*page-align*/, NULL, NULL) &&
+            is_IAT(orig_start, orig_end, true /*page-align*/, NULL, NULL) &&
             is_module_patch_region(GLOBAL_DCONTEXT, orig_start, orig_end,
-                                   true/*be conservative*/) &&
+                                   true /*be conservative*/) &&
             /* We stored the IAT code at +rw time */
             os_module_cmp_IAT_code(orig_start)) {
             vm_area_t *area = NULL;
-            bool all_new = !executable_vm_area_overlap(orig_start, orig_end-1,
-                                                       true/*wlock*/);
+            bool all_new =
+                !executable_vm_area_overlap(orig_start, orig_end - 1, true /*wlock*/);
             ASSERT(IAT_start != NULL); /* should have found bounds above */
-            if (all_new && /* elseif assumes next call happened */
+            if (all_new &&             /* elseif assumes next call happened */
                 lookup_addr(executable_areas, *end, &area) &&
                 TEST(FRAG_COARSE_GRAIN, area->frag_flags) &&
                 /* Only merge if no execution has yet occurred: else this
@@ -2374,11 +2379,11 @@ add_executable_vm_area_check_IAT(app_pc *start /*IN/OUT*/, app_pc *end /*IN/OUT*
                 /* Case 8640: merge IAT page back in to coarse area.
                  * Easier to merge here than in add_vm_area.
                  */
-                coarse_info_t *info = (coarse_info_t *) area->custom.client;
+                coarse_info_t *info = (coarse_info_t *)area->custom.client;
                 keep_coarse = true;
                 LOG(GLOBAL, LOG_VMAREAS, 2,
-                    "merging post-IAT ("PFX"-"PFX") with "PFX"-"PFX"\n",
-                    IAT_end, orig_end, area->start, area->end);
+                    "merging post-IAT (" PFX "-" PFX ") with " PFX "-" PFX "\n", IAT_end,
+                    orig_end, area->start, area->end);
                 ASSERT(area != NULL);
                 ASSERT(area->start == *end);
                 ASSERT(IAT_end > orig_start && IAT_end < area->start);
@@ -2400,8 +2405,8 @@ add_executable_vm_area_check_IAT(app_pc *start /*IN/OUT*/, app_pc *end /*IN/OUT*
                     *info_out = info;
                     STATS_INC(coarse_marked_valid);
                     LOG(GLOBAL, LOG_VMAREAS, 2,
-                        "\tkeeping now-valid info %s "PFX"-"PFX"\n",
-                        info->module, info->base_pc, info->end_pc);
+                        "\tkeeping now-valid info %s " PFX "-" PFX "\n", info->module,
+                        info->base_pc, info->end_pc);
                 } else {
                     /* Go ahead and merge, but don't use this pcache */
                     ASSERT_CURIOSITY(false && "post-rebind pcache bounds mismatch");
@@ -2421,19 +2426,20 @@ add_executable_vm_area_check_IAT(app_pc *start /*IN/OUT*/, app_pc *end /*IN/OUT*
                  */
                 ASSERT(!lookup_addr(executable_areas, *start, NULL));
                 LOG(GLOBAL, LOG_VMAREAS, 2,
-                    "marking IAT/code region ("PFX"-"PFX" vs "PFX"-"PFX") as coarse\n",
+                    "marking IAT/code region (" PFX "-" PFX " vs " PFX "-" PFX
+                    ") as coarse\n",
                     IAT_start, IAT_end, orig_start, orig_end);
                 keep_coarse = true;
                 STATS_INC(coarse_merge_IAT); /* we use same stat */
             } else {
                 LOG(GLOBAL, LOG_VMAREAS, 2,
-                    "NOT merging IAT-containing "PFX"-"PFX": abuts non-inv-coarse\n",
+                    "NOT merging IAT-containing " PFX "-" PFX ": abuts non-inv-coarse\n",
                     orig_start, orig_end);
                 DODEBUG({
                     if (all_new && area != NULL &&
                         TEST(FRAG_COARSE_GRAIN, area->frag_flags) &&
                         TEST(VM_EXECUTED_FROM, area->vm_flags)) {
-                        coarse_info_t *info = (coarse_info_t *) area->custom.client;
+                        coarse_info_t *info = (coarse_info_t *)area->custom.client;
                         ASSERT(!info->persisted);
                         ASSERT(!TEST(PERSCACHE_CODE_INVALID, info->flags));
                     }
@@ -2441,12 +2447,12 @@ add_executable_vm_area_check_IAT(app_pc *start /*IN/OUT*/, app_pc *end /*IN/OUT*
             }
         } else {
             LOG(GLOBAL, LOG_VMAREAS, 2,
-                "NOT merging .text "PFX"-"PFX" vs IAT "PFX"-"PFX" %d %d %d %d %d\n",
-                orig_start, orig_end, IAT_start, IAT_end,
-                DYNAMO_OPTION(coarse_merge_iat), vm_flags == 0,
-                is_IAT(orig_start, *end, true/*page-align*/, NULL, NULL),
+                "NOT merging .text " PFX "-" PFX " vs IAT " PFX "-" PFX
+                " %d %d %d %d %d\n",
+                orig_start, orig_end, IAT_start, IAT_end, DYNAMO_OPTION(coarse_merge_iat),
+                vm_flags == 0, is_IAT(orig_start, *end, true /*page-align*/, NULL, NULL),
                 is_module_patch_region(GLOBAL_DCONTEXT, orig_start, orig_end,
-                                       true/*be conservative*/),
+                                       true /*be conservative*/),
                 os_module_cmp_IAT_code(orig_start));
         }
     }
@@ -2460,8 +2466,8 @@ add_executable_vm_area_helper(app_pc start, app_pc end, uint vm_flags, uint frag
 {
     ASSERT_OWN_WRITE_LOCK(true, &executable_areas->lock);
 
-    add_vm_area(executable_areas, start, end,
-                vm_flags, frag_flags, NULL _IF_DEBUG(comment));
+    add_vm_area(executable_areas, start, end, vm_flags, frag_flags,
+                NULL _IF_DEBUG(comment));
 
     if (TEST(VM_WRITABLE, vm_flags)) {
         /* N.B.: the writable flag indicates the natural state of the memory,
@@ -2472,8 +2478,8 @@ add_executable_vm_area_helper(app_pc start, app_pc end, uint vm_flags, uint frag
          * with the generated routines or something
          */
         LOG(GLOBAL, LOG_VMAREAS, 2,
-            "WARNING: new executable vm area is writable: "PFX"-"PFX" %s\n",
-            start, end, comment);
+            "WARNING: new executable vm area is writable: " PFX "-" PFX " %s\n", start,
+            end, comment);
 #if 0
         /* this syslog causes services.exe to hang (ref case 666) once case 666
          * is fixed re-enable if desired FIXME */
@@ -2481,8 +2487,7 @@ add_executable_vm_area_helper(app_pc start, app_pc end, uint vm_flags, uint frag
 #endif
     }
 #ifdef PROGRAM_SHEPHERDING
-    if (!DYNAMO_OPTION(selfmod_futureexec) &&
-        TEST(FRAG_SELFMOD_SANDBOXED, frag_flags)) {
+    if (!DYNAMO_OPTION(selfmod_futureexec) && TEST(FRAG_SELFMOD_SANDBOXED, frag_flags)) {
         /* We do not need future entries for selfmod regions.  We mark
          * the futures as once-only when they are selfmod at future add time, and
          * here we catch those who weren't selfmod then but are now.
@@ -2492,34 +2497,34 @@ add_executable_vm_area_helper(app_pc start, app_pc end, uint vm_flags, uint frag
 #endif
     if (TEST(FRAG_COARSE_GRAIN, frag_flags)) {
         vm_area_t *area = NULL;
-        DEBUG_DECLARE(bool found = )
-            lookup_addr(executable_areas, start, &area);
+        DEBUG_DECLARE(bool found =)
+        lookup_addr(executable_areas, start, &area);
         ASSERT(found && area != NULL);
         /* case 9521: always have one non-frozen coarse unit per coarse region */
         if (info == NULL || info->frozen) {
-            coarse_info_t *new_info = coarse_unit_create(start, end,
-                                                         (info == NULL) ? NULL :
-                                                         &info->module_md5,
-                                                         true/*for execution*/);
-            LOG(GLOBAL, LOG_VMAREAS, 1, "new %scoarse unit %s "PFX"-"PFX"\n",
+            coarse_info_t *new_info =
+                coarse_unit_create(start, end, (info == NULL) ? NULL : &info->module_md5,
+                                   true /*for execution*/);
+            LOG(GLOBAL, LOG_VMAREAS, 1, "new %scoarse unit %s " PFX "-" PFX "\n",
                 info == NULL ? "" : "secondary ", new_info->module, start, end);
             if (info == NULL)
                 info = new_info;
             else
                 info->non_frozen = new_info;
         }
-        area->custom.client = (void *) info;
+        area->custom.client = (void *)info;
     }
     DOLOG(2, LOG_VMAREAS, {
         /* new area could have been split into multiple */
-        print_contig_vm_areas(executable_areas, start, end, GLOBAL, "new executable vm area: ");
+        print_contig_vm_areas(executable_areas, start, end, GLOBAL,
+                              "new executable vm area: ");
     });
 }
 
 /* NOTE : caller is responsible for ensuring that consistency conditions are
  * met, thus if the region is writable the caller must either mark it read
- * only or pass in the VM_DELAY_READONLY flag in which case 
- * check_thread_vm_area will mark it read only when a thread goes to build a 
+ * only or pass in the VM_DELAY_READONLY flag in which case
+ * check_thread_vm_area will mark it read only when a thread goes to build a
  * block from the region */
 static bool
 add_executable_vm_area(app_pc start, app_pc end, uint vm_flags, uint frag_flags,
@@ -2530,18 +2535,16 @@ add_executable_vm_area(app_pc start, app_pc end, uint vm_flags, uint frag_flags,
     coarse_info_t *tofree = NULL;
     app_pc delay_start = NULL, delay_end = NULL;
     /* only expect to see the *_READONLY flags on WRITABLE regions */
-    ASSERT(!TEST(VM_DELAY_READONLY, vm_flags) ||
-           TEST(VM_WRITABLE, vm_flags));
-    ASSERT(!TEST(VM_MADE_READONLY, vm_flags) ||
-           TEST(VM_WRITABLE, vm_flags));
+    ASSERT(!TEST(VM_DELAY_READONLY, vm_flags) || TEST(VM_WRITABLE, vm_flags));
+    ASSERT(!TEST(VM_MADE_READONLY, vm_flags) || TEST(VM_WRITABLE, vm_flags));
 #ifdef DEBUG /* can't use DODEBUG b/c of ifdef inside */
     {
         /* we only expect certain flags */
-        uint expect = VM_WRITABLE|VM_UNMOD_IMAGE|VM_MADE_READONLY|
-            VM_DELAY_READONLY|VM_WAS_FUTURE|VM_EXECUTED_FROM|VM_DRIVER_ADDRESS;
-# ifdef PROGRAM_SHEPHERDING
+        uint expect = VM_WRITABLE | VM_UNMOD_IMAGE | VM_MADE_READONLY |
+            VM_DELAY_READONLY | VM_WAS_FUTURE | VM_EXECUTED_FROM | VM_DRIVER_ADDRESS;
+#    ifdef PROGRAM_SHEPHERDING
         expect |= VM_PATTERN_REVERIFY;
-# endif
+#    endif
         ASSERT(!TESTANY(~expect, vm_flags));
     }
 #endif /* DEBUG */
@@ -2561,9 +2564,8 @@ add_executable_vm_area(app_pc start, app_pc end, uint vm_flags, uint frag_flags,
     ASSERT(!TEST(FRAG_COARSE_GRAIN, frag_flags) || !have_writelock);
     if (TEST(FRAG_COARSE_GRAIN, frag_flags) && !have_writelock) {
 #ifdef WINDOWS
-        if (!add_executable_vm_area_check_IAT(&start, &end, vm_flags,
-                                              &existing_area, &info, &tofree,
-                                              &delay_start, &delay_end))
+        if (!add_executable_vm_area_check_IAT(&start, &end, vm_flags, &existing_area,
+                                              &info, &tofree, &delay_start, &delay_end))
             frag_flags &= ~FRAG_COARSE_GRAIN;
 #else
         ASSERT(TEST(VM_UNMOD_IMAGE, vm_flags));
@@ -2580,12 +2582,13 @@ add_executable_vm_area(app_pc start, app_pc end, uint vm_flags, uint frag_flags,
              * right now for rac_entries_resurrect() w/ private after-call
              * which won't happen w/ -coarse_units that requires shared bbs.
              */
-            info = coarse_unit_load(dcontext == NULL ? GLOBAL_DCONTEXT : dcontext,
-                                    start, end, true/*for execution*/);
+            info = coarse_unit_load(dcontext == NULL ? GLOBAL_DCONTEXT : dcontext, start,
+                                    end, true /*for execution*/);
             if (info != NULL) {
                 ASSERT(info->base_pc >= start && info->end_pc <= end);
                 LOG(GLOBAL, LOG_VMAREAS, 1,
-                    "using persisted coarse unit %s "PFX"-"PFX" for "PFX"-"PFX"\n",
+                    "using persisted coarse unit %s " PFX "-" PFX " for " PFX "-" PFX
+                    "\n",
                     info->module, info->base_pc, info->end_pc, start, end);
                 /* Case 8640/9653/8639: adjust region bounds so that a
                  * cache consistency event outside the persisted region
@@ -2598,15 +2601,13 @@ add_executable_vm_area(app_pc start, app_pc end, uint vm_flags, uint frag_flags,
                  * up front here.  For 4.4 we should move this to 1st exec.
                  */
                 if (info->base_pc > start) {
-                    add_executable_vm_area_helper(start, info->base_pc,
-                                                  vm_flags, frag_flags, NULL
-                                                  _IF_DEBUG(comment));
+                    add_executable_vm_area_helper(start, info->base_pc, vm_flags,
+                                                  frag_flags, NULL _IF_DEBUG(comment));
                     start = info->base_pc;
                 }
                 if (info->end_pc < end) {
-                    add_executable_vm_area_helper(info->end_pc, end,
-                                                  vm_flags, frag_flags, NULL
-                                                  _IF_DEBUG(comment));
+                    add_executable_vm_area_helper(info->end_pc, end, vm_flags, frag_flags,
+                                                  NULL _IF_DEBUG(comment));
                     end = info->end_pc;
                 }
                 ASSERT(info->frozen && info->persisted);
@@ -2627,8 +2628,8 @@ add_executable_vm_area(app_pc start, app_pc end, uint vm_flags, uint frag_flags,
     }
 
     if (existing_area == NULL) {
-        add_executable_vm_area_helper(start, end, vm_flags, frag_flags, info
-                                      _IF_DEBUG(comment));
+        add_executable_vm_area_helper(start, end, vm_flags, frag_flags,
+                                      info _IF_DEBUG(comment));
     } else {
         /* we shouldn't need the other parts of _helper() */
         ASSERT(!TEST(VM_WRITABLE, vm_flags));
@@ -2640,13 +2641,14 @@ add_executable_vm_area(app_pc start, app_pc end, uint vm_flags, uint frag_flags,
 
     if (delay_start != NULL) {
         ASSERT(delay_end > delay_start);
-        add_executable_vm_area_helper(delay_start, delay_end, vm_flags, frag_flags, NULL
-                                      _IF_DEBUG(comment));
+        add_executable_vm_area_helper(delay_start, delay_end, vm_flags, frag_flags,
+                                      NULL _IF_DEBUG(comment));
     }
 
     DOLOG(2, LOG_VMAREAS, {
         /* new area could have been split into multiple */
-        print_contig_vm_areas(executable_areas, start, end, GLOBAL, "new executable vm area: ");
+        print_contig_vm_areas(executable_areas, start, end, GLOBAL,
+                              "new executable vm area: ");
     });
 
     if (!have_writelock) {
@@ -2661,8 +2663,8 @@ add_executable_vm_area(app_pc start, app_pc end, uint vm_flags, uint frag_flags,
          * must free down here.  FIXME: this should move to 1st exec for 4.4.
          */
         ASSERT(tofree->non_frozen == NULL);
-        coarse_unit_reset_free(GLOBAL_DCONTEXT, tofree, false/*no locks*/,
-                               true/*unlink*/, true/*give up primary*/);
+        coarse_unit_reset_free(GLOBAL_DCONTEXT, tofree, false /*no locks*/,
+                               true /*unlink*/, true /*give up primary*/);
         coarse_unit_free(GLOBAL_DCONTEXT, tofree);
     }
     return true;
@@ -2675,11 +2677,12 @@ add_executable_vm_area(app_pc start, app_pc end, uint vm_flags, uint frag_flags,
 bool
 add_executable_region(app_pc start, size_t size _IF_DEBUG(char *comment))
 {
-    return add_executable_vm_area(start, start+size, 0, 0, false/*no lock*/
+    return add_executable_vm_area(start, start + size, 0, 0,
+                                  false /*no lock*/
                                   _IF_DEBUG(comment));
 }
 
-/* remove an executable area from the area list 
+/* remove an executable area from the area list
  * the caller is responsible for ensuring that all threads' local vm lists
  * are updated by calling flush_fragments_and_remove_region (can't just
  * remove local vm areas and leave existing fragments hanging...)
@@ -2688,24 +2691,24 @@ static bool
 remove_executable_vm_area(app_pc start, app_pc end, bool have_writelock)
 {
     bool ok;
-    LOG(GLOBAL, LOG_VMAREAS, 2, "removing executable vm area: "PFX"-"PFX"\n",
-        start, end);
+    LOG(GLOBAL, LOG_VMAREAS, 2, "removing executable vm area: " PFX "-" PFX "\n", start,
+        end);
     if (!have_writelock)
         write_lock(&executable_areas->lock);
-    ok = remove_vm_area(executable_areas, start, end, true/*restore writability!*/);
+    ok = remove_vm_area(executable_areas, start, end, true /*restore writability!*/);
     if (!have_writelock)
         write_unlock(&executable_areas->lock);
     return ok;
 }
 
 /* removes a region from the executable list */
-/* NOTE :the caller is responsible for ensuring that all threads' local 
+/* NOTE :the caller is responsible for ensuring that all threads' local
  * vm lists are updated by calling flush_fragments_and_remove_region
  */
 bool
 remove_executable_region(app_pc start, size_t size, bool have_writelock)
 {
-    return remove_executable_vm_area(start, start+size, have_writelock);
+    return remove_executable_vm_area(start, start + size, have_writelock);
 }
 
 /* case 10995: we have to delay freeing un-executed coarse units until
@@ -2724,7 +2727,7 @@ free_nonexec_coarse_and_unlock(void)
      */
     ASSERT_OWN_WRITE_LOCK(true, &executable_areas->lock);
     ASSERT(coarse_to_delete != NULL);
-    if (coarse_to_delete != NULL/*paranoid*/ && *coarse_to_delete != NULL) {
+    if (coarse_to_delete != NULL /*paranoid*/ && *coarse_to_delete != NULL) {
         freed_any = true;
         info = *coarse_to_delete;
         *coarse_to_delete = NULL;
@@ -2743,9 +2746,8 @@ free_nonexec_coarse_and_unlock(void)
                 ASSERT(info->incoming == NULL);
                 ASSERT(!coarse_unit_outgoing_linked(GLOBAL_DCONTEXT, info));
             }
-            coarse_unit_reset_free(GLOBAL_DCONTEXT, info,
-                                   false/*no locks*/, false/*!unlink*/,
-                                   true/*give up primary*/);
+            coarse_unit_reset_free(GLOBAL_DCONTEXT, info, false /*no locks*/,
+                                   false /*!unlink*/, true /*give up primary*/);
             coarse_unit_free(GLOBAL_DCONTEXT, info);
             info = next_info;
         }
@@ -2754,19 +2756,18 @@ free_nonexec_coarse_and_unlock(void)
 }
 
 #ifdef PROGRAM_SHEPHERDING
-/* add a "future executable area" (e.g., mapped EW) to the future list 
+/* add a "future executable area" (e.g., mapped EW) to the future list
  *
  * FIXME: now that this is vmareas.c-internal we should change it to
  * take in direct VM_ flags, and make separate flags for each future-adding
  * code origins policy.  Then we can have policy-specific removal from future list.
  */
 static bool
-add_futureexec_vm_area(app_pc start, app_pc end, bool once_only
-                       _IF_DEBUG(char *comment))
+add_futureexec_vm_area(app_pc start, app_pc end, bool once_only _IF_DEBUG(char *comment))
 {
     /* FIXME: don't add portions that overlap w/ exec areas */
-    LOG(GLOBAL, LOG_VMAREAS, 2, "new FUTURE executable vm area: "PFX"-"PFX" %s%s\n",
-        start, end, (once_only?"ONCE ":""), comment);
+    LOG(GLOBAL, LOG_VMAREAS, 2, "new FUTURE executable vm area: " PFX "-" PFX " %s%s\n",
+        start, end, (once_only ? "ONCE " : ""), comment);
 
     if (DYNAMO_OPTION(unloaded_target_exception)) {
         /* case 9371 - to avoid possible misclassification in a tight race
@@ -2777,8 +2778,7 @@ add_futureexec_vm_area(app_pc start, app_pc end, bool once_only
     }
 
     write_lock(&futureexec_areas->lock);
-    add_vm_area(futureexec_areas, start, end,
-                (once_only ? VM_ONCE_ONLY : 0),
+    add_vm_area(futureexec_areas, start, end, (once_only ? VM_ONCE_ONLY : 0),
                 0 /* frag_flags */, NULL _IF_DEBUG(comment));
     write_unlock(&futureexec_areas->lock);
     return true;
@@ -2789,7 +2789,7 @@ static bool
 remove_futureexec_vm_area(app_pc start, app_pc end)
 {
     bool ok;
-    LOG(GLOBAL, LOG_VMAREAS, 2, "removing FUTURE executable vm area: "PFX"-"PFX"\n",
+    LOG(GLOBAL, LOG_VMAREAS, 2, "removing FUTURE executable vm area: " PFX "-" PFX "\n",
         start, end);
     write_lock(&futureexec_areas->lock);
     ok = remove_vm_area(futureexec_areas, start, end, false);
@@ -2820,7 +2820,7 @@ is_executable_address(app_pc addr)
     return found;
 }
 
-/* returns any VM_ flags associated with addr's vm area 
+/* returns any VM_ flags associated with addr's vm area
  * returns 0 if no area is found
  * cf. get_executable_area_flags() for FRAG_ flags
  */
@@ -2839,8 +2839,8 @@ get_executable_area_vm_flags(app_pc addr, uint *vm_flags)
 }
 
 /* if addr is an executable area, returns true and returns in *flags
- *   any FRAG_ flags associated with addr's vm area 
- * returns false if area not found 
+ *   any FRAG_ flags associated with addr's vm area
+ * returns false if area not found
  *
  * cf. get_executable_area_vm_flags() for VM_ flags
  */
@@ -2869,7 +2869,9 @@ get_coarse_info_internal(app_pc addr, bool init, bool have_shvm_lock)
 {
     coarse_info_t *coarse = NULL;
     vm_area_t *area = NULL;
-    vm_area_t area_copy = {0,};
+    vm_area_t area_copy = {
+        0,
+    };
     bool is_coarse = false;
     bool add_to_shared = false;
     bool reset_unit = false;
@@ -2879,7 +2881,7 @@ get_coarse_info_internal(app_pc addr, bool init, bool have_shvm_lock)
     if (lookup_addr(executable_areas, addr, &area)) {
         ASSERT(area != NULL);
         /* The custom field is initialized to 0 in add_vm_area */
-        coarse = (coarse_info_t *) area->custom.client;
+        coarse = (coarse_info_t *)area->custom.client;
         is_coarse = TEST(FRAG_COARSE_GRAIN, area->frag_flags);
         /* We always create coarse_info_t up front in add_executable_vm_area */
         ASSERT((is_coarse && coarse != NULL) || (!is_coarse && coarse == NULL));
@@ -2889,7 +2891,7 @@ get_coarse_info_internal(app_pc addr, bool init, bool have_shvm_lock)
             reset_unit = true;
             /* We do need to adjust coarse unit bounds for 4.3 when we don't see
              * the rebind +rx event */
-            adjust_coarse_unit_bounds(area, true/*even if invalid*/);
+            adjust_coarse_unit_bounds(area, true /*even if invalid*/);
             STATS_INC(coarse_executed_invalid);
             /* FIXME for 4.4: validation won't happen post-rebind like 4.3, so we
              * will always get here marked as invalid.  Here we'll do full md5
@@ -2917,9 +2919,9 @@ get_coarse_info_internal(app_pc addr, bool init, bool have_shvm_lock)
          */
         ASSERT(coarse->base_pc == area_copy.start && coarse->end_pc == area_copy.end);
         if (reset_unit) {
-            coarse_unit_reset_free(get_thread_private_dcontext(),
-                                   coarse, false/*no locks*/, true/*unlink*/,
-                                   true/*give up primary*/);
+            coarse_unit_reset_free(get_thread_private_dcontext(), coarse,
+                                   false /*no locks*/, true /*unlink*/,
+                                   true /*give up primary*/);
         }
         if (add_to_shared) {
             if (!have_shvm_lock)
@@ -2928,11 +2930,11 @@ get_coarse_info_internal(app_pc addr, bool init, bool have_shvm_lock)
             /* avoid double-add from a race */
             if (!lookup_addr(&shared_data->areas, coarse->base_pc, NULL)) {
                 LOG(GLOBAL, LOG_VMAREAS, 2,
-                    "adding coarse region "PFX"-"PFX" to shared vm areas\n",
+                    "adding coarse region " PFX "-" PFX " to shared vm areas\n",
                     area_copy.start, area_copy.end);
                 add_vm_area(&shared_data->areas, area_copy.start, area_copy.end,
-                            area_copy.vm_flags, area_copy.frag_flags, NULL
-                            _IF_DEBUG(area_copy.comment));
+                            area_copy.vm_flags, area_copy.frag_flags,
+                            NULL _IF_DEBUG(area_copy.comment));
             }
             if (!have_shvm_lock)
                 SHARED_VECTOR_RWLOCK(&shared_data->areas, write, unlock);
@@ -2946,7 +2948,7 @@ get_coarse_info_internal(app_pc addr, bool init, bool have_shvm_lock)
 coarse_info_t *
 get_executable_area_coarse_info(app_pc addr)
 {
-    return get_coarse_info_internal(addr, true/*init*/, false/*no lock*/);
+    return get_coarse_info_internal(addr, true /*init*/, false /*no lock*/);
 }
 
 /* Ensures there is a non-frozen coarse unit for the executable_areas region
@@ -2957,19 +2959,18 @@ mark_executable_area_coarse_frozen(coarse_info_t *frozen)
 {
     vm_area_t *area = NULL;
     coarse_info_t *info;
-    ASSERT(frozen->frozen); /* caller should mark */
+    ASSERT(frozen->frozen);              /* caller should mark */
     write_lock(&executable_areas->lock); /* since writing flags */
     if (lookup_addr(executable_areas, frozen->base_pc, &area)) {
         ASSERT(area != NULL);
         /* The custom field is initialized to 0 in add_vm_area */
         if (area->custom.client != NULL) {
             ASSERT(TEST(FRAG_COARSE_GRAIN, area->frag_flags));
-            info = (coarse_info_t *) area->custom.client;
+            info = (coarse_info_t *)area->custom.client;
             ASSERT(info == frozen && frozen->non_frozen == NULL);
             info = coarse_unit_create(frozen->base_pc, frozen->end_pc,
-                                      &frozen->module_md5, true/*for execution*/);
-            LOG(GLOBAL, LOG_VMAREAS, 1,
-                "new secondary coarse unit %s "PFX"-"PFX"\n",
+                                      &frozen->module_md5, true /*for execution*/);
+            LOG(GLOBAL, LOG_VMAREAS, 1, "new secondary coarse unit %s " PFX "-" PFX "\n",
                 info->module, frozen->base_pc, frozen->end_pc);
             frozen->non_frozen = info;
         } else
@@ -2979,8 +2980,8 @@ mark_executable_area_coarse_frozen(coarse_info_t *frozen)
 }
 
 /* iterates through all executable areas overlapping the pages touched
- * by the region addr_[start,end) 
- * if are_all_matching is false 
+ * by the region addr_[start,end)
+ * if are_all_matching is false
  *    returns true if any overlapping region has matching vm_flags and frag_flags;
  *    false otherwise
  * if are_all_matching is true
@@ -2990,9 +2991,10 @@ mark_executable_area_coarse_frozen(coarse_info_t *frozen)
  * a match of 0 matches all
  */
 static bool
-executable_areas_match_flags(app_pc addr_start, app_pc addr_end, bool *found_area, 
+executable_areas_match_flags(app_pc addr_start, app_pc addr_end, bool *found_area,
                              bool are_all_matching /* ALL when true,
-                                                      EXISTS when false */,
+                                                      EXISTS when false */
+                             ,
                              uint match_vm_flags, uint match_frag_flags)
 {
     /* binary search below will assure that we hold an executable_areas lock */
@@ -3003,10 +3005,9 @@ executable_areas_match_flags(app_pc addr_start, app_pc addr_end, bool *found_are
         *found_area = false;
     ASSERT(page_start < page_end || page_end == NULL); /* wraparound */
     /* We have subpage regions from some of our rules, we should return true
-     * if any area on the list that overlaps the pages enclosing the addr_[start,end) 
+     * if any area on the list that overlaps the pages enclosing the addr_[start,end)
      * region is writable */
-    while (binary_search(executable_areas, page_start, 
-                         page_end, &area, NULL, true)) {
+    while (binary_search(executable_areas, page_start, page_end, &area, NULL, true)) {
         if (found_area != NULL)
             *found_area = true;
         /* TESTALL will return true for a match of 0 */
@@ -3024,10 +3025,10 @@ executable_areas_match_flags(app_pc addr_start, app_pc addr_end, bool *found_are
         else
             break;
     }
-    return are_all_matching;    /* false for EXISTS, true for ALL */
+    return are_all_matching; /* false for EXISTS, true for ALL */
 }
 
-/* returns true if addr is on a page that was marked writable by the 
+/* returns true if addr is on a page that was marked writable by the
  * application but that we marked RO b/c it contains executable code
  * does NOT check if addr is executable, only that something on its page is!
  */
@@ -3036,16 +3037,15 @@ is_executable_area_writable(app_pc addr)
 {
     bool writable;
     read_lock(&executable_areas->lock);
-    writable = executable_areas_match_flags(addr, addr+1 /* open ended */, 
-                                            NULL, false /* EXISTS */,
-                                            VM_MADE_READONLY, 0);
+    writable = executable_areas_match_flags(addr, addr + 1 /* open ended */, NULL,
+                                            false /* EXISTS */, VM_MADE_READONLY, 0);
     read_unlock(&executable_areas->lock);
     return writable;
 }
 
 #if defined(DEBUG) /* since only used for a stat right now */
 /* returns true if region [start, end) overlaps pages that match match_vm_flags
- * e.g. VM_WRITABLE is set when all pages marked writable by the 
+ * e.g. VM_WRITABLE is set when all pages marked writable by the
  *      application but that we marked RO b/c they contain executable code.
  *
  * Does NOT check if region is executable, only that something
@@ -3054,13 +3054,13 @@ is_executable_area_writable(app_pc addr)
  * region exists.
  */
 static bool
-is_executable_area_writable_overlap(app_pc start, app_pc end,
-                                    bool are_all_matching, uint match_vm_flags)
+is_executable_area_writable_overlap(app_pc start, app_pc end, bool are_all_matching,
+                                    uint match_vm_flags)
 {
     bool writable;
     read_lock(&executable_areas->lock);
-    writable = executable_areas_match_flags(start, end, NULL, 
-                                            are_all_matching, match_vm_flags, 0);
+    writable = executable_areas_match_flags(start, end, NULL, are_all_matching,
+                                            match_vm_flags, 0);
     read_unlock(&executable_areas->lock);
     return writable;
 }
@@ -3074,8 +3074,8 @@ executable_vm_area_coarse_overlap(app_pc start, app_pc end)
 {
     bool match;
     read_lock(&executable_areas->lock);
-    match = executable_areas_match_flags(start, end, NULL, false/*exists, not all*/,
-                                         0, FRAG_COARSE_GRAIN);
+    match = executable_areas_match_flags(start, end, NULL, false /*exists, not all*/, 0,
+                                         FRAG_COARSE_GRAIN);
     read_unlock(&executable_areas->lock);
     return match;
 }
@@ -3088,7 +3088,7 @@ executable_vm_area_persisted_overlap(app_pc start, app_pc end)
 {
     bool match;
     read_lock(&executable_areas->lock);
-    match = executable_areas_match_flags(start, end, NULL, false/*exists, not all*/,
+    match = executable_areas_match_flags(start, end, NULL, false /*exists, not all*/,
                                          VM_PERSISTED_CACHE, 0);
     read_unlock(&executable_areas->lock);
     return match;
@@ -3100,7 +3100,7 @@ executable_vm_area_executed_from(app_pc start, app_pc end)
 {
     bool match;
     read_lock(&executable_areas->lock);
-    match = executable_areas_match_flags(start, end, NULL, false/*exists, not all*/,
+    match = executable_areas_match_flags(start, end, NULL, false /*exists, not all*/,
                                          VM_EXECUTED_FROM, 0);
     read_unlock(&executable_areas->lock);
     return match;
@@ -3124,23 +3124,22 @@ executable_vm_area_executed_from(app_pc start, app_pc end)
  * the regular overlap_start.
  */
 bool
-executable_area_overlap_bounds(app_pc start, app_pc end,
-                               app_pc *overlap_start/*OUT*/, app_pc *overlap_end/*OUT*/,
-                               uint frag_flags, bool contig)
+executable_area_overlap_bounds(app_pc start, app_pc end, app_pc *overlap_start /*OUT*/,
+                               app_pc *overlap_end /*OUT*/, uint frag_flags, bool contig)
 {
     int start_index, end_index; /* must be signed */
-    int i; /* must be signed */
+    int i;                      /* must be signed */
     ASSERT(overlap_start != NULL && overlap_end != NULL);
     read_lock(&executable_areas->lock);
 
     /* Find first overlapping region */
-    if (!binary_search(executable_areas, start, end, NULL, &start_index, true/*first*/))
+    if (!binary_search(executable_areas, start, end, NULL, &start_index, true /*first*/))
         return false;
     ASSERT(start_index >= 0);
     if (frag_flags != 0) {
         for (i = start_index - 1; i >= 0; i--) {
             if ((contig &&
-                 executable_areas->buf[i].end != executable_areas->buf[i+1].start) ||
+                 executable_areas->buf[i].end != executable_areas->buf[i + 1].start) ||
                 (TESTALL(frag_flags, executable_areas->buf[i].frag_flags) !=
                  TESTALL(frag_flags, executable_areas->buf[start_index].frag_flags)))
                 break;
@@ -3151,13 +3150,13 @@ executable_area_overlap_bounds(app_pc start, app_pc end,
         *overlap_start = executable_areas->buf[start_index].start;
 
     /* Now find region just at or before end */
-    binary_search(executable_areas, end-1, end, NULL, &end_index, true/*first*/);
+    binary_search(executable_areas, end - 1, end, NULL, &end_index, true /*first*/);
     ASSERT(end_index >= 0); /* else 1st binary search would have failed */
     ASSERT(end_index >= start_index);
     if (end_index < executable_areas->length - 1 && frag_flags != 0) {
         for (i = end_index + 1; i < executable_areas->length; i++) {
             if ((contig &&
-                 executable_areas->buf[i].start != executable_areas->buf[i-1].end) ||
+                 executable_areas->buf[i].start != executable_areas->buf[i - 1].end) ||
                 (TESTALL(frag_flags, executable_areas->buf[i].frag_flags) !=
                  TESTALL(frag_flags, executable_areas->buf[end_index].frag_flags)))
                 break;
@@ -3182,27 +3181,27 @@ vm_area_coarse_iter_start(vmvector_iterator_t *vmvi, app_pc start)
     ASSERT_OWN_READ_LOCK(true, &executable_areas->lock);
     /* Find first overlapping region */
     if (start != NULL &&
-        binary_search(executable_areas, start, start+1, NULL,
-                      &start_index, true/*first*/)) {
+        binary_search(executable_areas, start, start + 1, NULL, &start_index,
+                      true /*first*/)) {
         ASSERT(start_index >= 0);
         vmvi->index = start_index - 1 /*since next is +1*/;
     }
 }
 static bool
 vm_area_coarse_iter_find_next(vmvector_iterator_t *vmvi, app_pc end, bool mutate,
-                              coarse_info_t **info_out/*OUT*/)
+                              coarse_info_t **info_out /*OUT*/)
 {
     int forw;
     ASSERT_VMAREA_VECTOR_PROTECTED(vmvi->vector, READWRITE);
     ASSERT(vmvi->vector == executable_areas);
     for (forw = 1; vmvi->index + forw < vmvi->vector->length; forw++) {
-        if (end != NULL && executable_areas->buf[vmvi->index+forw].start >= end)
+        if (end != NULL && executable_areas->buf[vmvi->index + forw].start >= end)
             break;
         if (TEST(FRAG_COARSE_GRAIN,
-                 executable_areas->buf[vmvi->index+forw].frag_flags)) {
-            coarse_info_t *info = executable_areas->buf[vmvi->index+forw].custom.client;
+                 executable_areas->buf[vmvi->index + forw].frag_flags)) {
+            coarse_info_t *info = executable_areas->buf[vmvi->index + forw].custom.client;
             if (mutate)
-                vmvi->index = vmvi->index+forw;
+                vmvi->index = vmvi->index + forw;
             ASSERT(info != NULL); /* we always allocate up front */
             if (info_out != NULL)
                 *info_out = info;
@@ -3214,14 +3213,14 @@ vm_area_coarse_iter_find_next(vmvector_iterator_t *vmvi, app_pc end, bool mutate
 bool
 vm_area_coarse_iter_hasnext(vmvector_iterator_t *vmvi, app_pc end)
 {
-    return vm_area_coarse_iter_find_next(vmvi, end, false/*no mutate*/, NULL);
+    return vm_area_coarse_iter_find_next(vmvi, end, false /*no mutate*/, NULL);
 }
 /* May want to return region bounds if have callers who care about that. */
 coarse_info_t *
 vm_area_coarse_iter_next(vmvector_iterator_t *vmvi, app_pc end)
 {
     coarse_info_t *info = NULL;
-    vm_area_coarse_iter_find_next(vmvi, end, true/*mutate*/, &info);
+    vm_area_coarse_iter_find_next(vmvi, end, true /*mutate*/, &info);
     return info;
 }
 void
@@ -3241,17 +3240,16 @@ is_executable_area_on_all_selfmod_pages(app_pc start, app_pc end)
     bool all_selfmod;
     bool found;
     read_lock(&executable_areas->lock);
-    all_selfmod = executable_areas_match_flags(start, end,
-                                               &found, true /* ALL */,
-                                               0, FRAG_SELFMOD_SANDBOXED);
+    all_selfmod = executable_areas_match_flags(start, end, &found, true /* ALL */, 0,
+                                               FRAG_SELFMOD_SANDBOXED);
     read_unlock(&executable_areas->lock);
     /* we require at least one area to be present */
     return all_selfmod && found;
 }
 
 /* Meant to be called from a seg fault handler.
- * Returns true if addr is on a page that was marked writable by the 
- * application but that we marked RO b/c it contains executable code, OR if 
+ * Returns true if addr is on a page that was marked writable by the
+ * application but that we marked RO b/c it contains executable code, OR if
  * addr is on a writable page (since another thread could have removed addr
  * from exec list before seg fault handler was scheduled).
  * does NOT check if addr is executable, only that something on its page is!
@@ -3261,15 +3259,14 @@ was_executable_area_writable(app_pc addr)
 {
     bool found_area = false, was_writable = false;
     read_lock(&executable_areas->lock);
-    was_writable = executable_areas_match_flags(addr, addr+1, &found_area, 
-                                                false /* EXISTS */,
-                                                VM_MADE_READONLY, 0);
+    was_writable = executable_areas_match_flags(addr, addr + 1, &found_area,
+                                                false /* EXISTS */, VM_MADE_READONLY, 0);
     /* seg fault could have happened, then area was made writable before
      * thread w/ exception was scheduled.
      * we assume that area was writable at time of seg fault if it's
      * exec writable now (above) OR no area was found and it's writable now
      * and not on DR area list (below).
-     * Need to check DR area list since a write to protected DR area from code 
+     * Need to check DR area list since a write to protected DR area from code
      * cache can end up here, as DR area may be made writable once in fault handler
      * due to self-protection un-protection for entering DR!
      * FIXME: checking for threads_ever_created==1 could further rule out other
@@ -3338,7 +3335,7 @@ update_dynamo_vm_areas(bool have_writelock)
     DODEBUG({ dynamo_areas_synching = true; });
     /* check again with lock, and repeat until done since
      * could require more memory in the middle for vm area vector
-     */ 
+     */
     while (!dynamo_areas_uptodate) {
         dynamo_areas_uptodate = true;
         heap_vmareas_synch_units();
@@ -3365,8 +3362,8 @@ void
 mark_dynamo_vm_areas_stale(void)
 {
     /* ok to ask for locks or mark stale before dynamo_areas is allocated */
-    ASSERT((dynamo_areas == NULL && get_num_threads() <= 1 /*must be only DR thread*/)
-           || self_owns_write_lock(&dynamo_areas->lock));
+    ASSERT((dynamo_areas == NULL && get_num_threads() <= 1 /*must be only DR thread*/) ||
+           self_owns_write_lock(&dynamo_areas->lock));
     dynamo_areas_uptodate = false;
 }
 
@@ -3384,7 +3381,7 @@ dynamo_vm_areas_lock(void)
     if (self_owns_write_lock(&dynamo_areas->lock)) {
         dynamo_areas_recursion++;
         /* we have a 5-deep path:
-         *   global_heap_alloc | heap_create_unit | get_guarded_real_memory | 
+         *   global_heap_alloc | heap_create_unit | get_guarded_real_memory |
          *   heap_low_on_memory | release_guarded_real_memory
          */
         ASSERT_CURIOSITY(dynamo_areas_recursion <= 4);
@@ -3427,7 +3424,7 @@ dynamo_vm_areas_start_reading(void)
 {
     read_lock(&dynamo_areas->lock);
     while (!dynamo_areas_uptodate) {
-        /* switch to write lock 
+        /* switch to write lock
          * cannot rely on uptodate value prior to a lock so must
          * grab read and then check it, and back out if necessary
          * as we have no reader->writer transition
@@ -3456,15 +3453,15 @@ dynamo_vm_areas_done_reading(void)
  * w/ the app executing from it -- thus caller must hold DR areas write lock!
  */
 bool
-add_dynamo_vm_area(app_pc start, app_pc end, uint prot, bool unmod_image
-                   _IF_DEBUG(char *comment))
+add_dynamo_vm_area(app_pc start, app_pc end, uint prot,
+                   bool unmod_image _IF_DEBUG(char *comment))
 {
     uint vm_flags = (TEST(MEMPROT_WRITE, prot) ? VM_WRITABLE : 0) |
-                    (unmod_image ? VM_UNMOD_IMAGE : 0);
+        (unmod_image ? VM_UNMOD_IMAGE : 0);
     /* case 3045: areas inside the vmheap reservation are not added to the list */
     ASSERT(!is_vmm_reserved_address(start, end - start));
-    LOG(GLOBAL, LOG_VMAREAS, 2, "new dynamo vm area: "PFX"-"PFX" %s\n",
-        start, end, comment);
+    LOG(GLOBAL, LOG_VMAREAS, 2, "new dynamo vm area: " PFX "-" PFX " %s\n", start, end,
+        comment);
     ASSERT(dynamo_areas != NULL);
     ASSERT_OWN_WRITE_LOCK(true, &dynamo_areas->lock);
     if (!dynamo_areas_uptodate)
@@ -3477,7 +3474,7 @@ add_dynamo_vm_area(app_pc start, app_pc end, uint prot, bool unmod_image
     return true;
 }
 
-/* remove dynamo-internal area from the dynamo-internal area list 
+/* remove dynamo-internal area from the dynamo-internal area list
  * this should be atomic wrt the memory being freed to avoid races
  * w/ it being re-used and problems w/ the app executing from it --
  * thus caller must hold DR areas write lock!
@@ -3487,15 +3484,14 @@ remove_dynamo_vm_area(app_pc start, app_pc end)
 {
     bool ok;
     DEBUG_DECLARE(bool removed);
-    LOG(GLOBAL, LOG_VMAREAS, 2, "removing dynamo vm area: "PFX"-"PFX"\n",
-        start, end);
+    LOG(GLOBAL, LOG_VMAREAS, 2, "removing dynamo vm area: " PFX "-" PFX "\n", start, end);
     ASSERT(dynamo_areas != NULL);
     ASSERT_OWN_WRITE_LOCK(true, &dynamo_areas->lock);
     if (!dynamo_areas_uptodate)
         update_dynamo_vm_areas(true);
     ok = remove_vm_area(dynamo_areas, start, end, false);
-    DEBUG_DECLARE(removed = )
-        remove_from_all_memory_areas(start, end);
+    DEBUG_DECLARE(removed =)
+    remove_from_all_memory_areas(start, end);
     ASSERT(removed);
     return ok;
 }
@@ -3506,19 +3502,18 @@ remove_dynamo_vm_area(app_pc start, app_pc end)
  * throughout the entire walk.
  */
 bool
-add_dynamo_heap_vm_area(app_pc start, app_pc end, bool writable, bool unmod_image
-                        _IF_DEBUG(char *comment))
+add_dynamo_heap_vm_area(app_pc start, app_pc end, bool writable,
+                        bool unmod_image _IF_DEBUG(char *comment))
 {
-    LOG(GLOBAL, LOG_VMAREAS, 2, "new dynamo vm area: "PFX"-"PFX" %s\n",
-        start, end, comment);
+    LOG(GLOBAL, LOG_VMAREAS, 2, "new dynamo vm area: " PFX "-" PFX " %s\n", start, end,
+        comment);
     ASSERT(!vm_area_overlap(dynamo_areas, start, end));
     /* case 3045: areas inside the vmheap reservation are not added to the list */
     ASSERT(!is_vmm_reserved_address(start, end - start));
     /* add_vm_area will assert that write lock is held */
-    add_vm_area(dynamo_areas, start, end, 
-                VM_DR_HEAP |
-                (writable ? VM_WRITABLE : 0) |
-                (unmod_image ? VM_UNMOD_IMAGE : 0),
+    add_vm_area(dynamo_areas, start, end,
+                VM_DR_HEAP | (writable ? VM_WRITABLE : 0) |
+                    (unmod_image ? VM_UNMOD_IMAGE : 0),
                 0 /* frag_flags */, NULL _IF_DEBUG(comment));
     return true;
 }
@@ -3530,11 +3525,11 @@ add_dynamo_heap_vm_area(app_pc start, app_pc end, bool writable, bool unmod_imag
 bool
 is_dynamo_area_buffer(byte *heap_unit_start_pc)
 {
-    return (void*)heap_unit_start_pc == dynamo_areas->buf;
+    return (void *)heap_unit_start_pc == dynamo_areas->buf;
 }
 
 /* assumes caller holds dynamo_areas->lock */
-void 
+void
 remove_dynamo_heap_areas(void)
 {
     int i;
@@ -3583,9 +3578,9 @@ is_pretend_writable_address(app_pc addr)
 {
     bool found;
     ASSERT(DYNAMO_OPTION(handle_DR_modify) == DR_MODIFY_NOP ||
-           DYNAMO_OPTION(handle_ntdll_modify) == DR_MODIFY_NOP
-           || !IS_STRING_OPTION_EMPTY(patch_proof_list) 
-           || !IS_STRING_OPTION_EMPTY(patch_proof_default_list));
+           DYNAMO_OPTION(handle_ntdll_modify) == DR_MODIFY_NOP ||
+           !IS_STRING_OPTION_EMPTY(patch_proof_list) ||
+           !IS_STRING_OPTION_EMPTY(patch_proof_default_list));
     read_lock(&pretend_writable_areas->lock);
     found = lookup_addr(pretend_writable_areas, addr, NULL);
     read_unlock(&pretend_writable_areas->lock);
@@ -3677,27 +3672,27 @@ static bool
 is_on_stack(dcontext_t *dcontext, app_pc pc, vm_area_t *area)
 {
     byte *stack_base, *stack_top; /* "official" stack */
-    byte *esp = (byte *) get_mcontext(dcontext)->xsp;
+    byte *esp = (byte *)get_mcontext(dcontext)->xsp;
     byte *esp_base;
     size_t size;
     bool ok, query_esp = true;
     /* First check the area if we're supplied one. */
     if (area != NULL) {
         LOG(THREAD, LOG_VMAREAS, 3,
-            "stack vs "PFX": area "PFX".."PFX", esp "PFX"\n",
-            pc, area->start, area->end, esp);
+            "stack vs " PFX ": area " PFX ".." PFX ", esp " PFX "\n", pc, area->start,
+            area->end, esp);
         ASSERT(pc >= area->start && pc < area->end);
         if (esp >= area->start && esp < area->end)
             return true;
     }
     /* Now check the "official" stack bounds.  These are cached so cheap to
-     * look up.  Xref case 8180, these might not always be available, 
+     * look up.  Xref case 8180, these might not always be available,
      * get_stack_bounds() takes care of any asserts on availability. */
     ok = get_stack_bounds(dcontext, &stack_base, &stack_top);
     if (ok) {
         LOG(THREAD, LOG_VMAREAS, 3,
-            "stack vs "PFX": official "PFX".."PFX", esp "PFX"\n",
-            pc, stack_base, stack_top, esp);
+            "stack vs " PFX ": official " PFX ".." PFX ", esp " PFX "\n", pc, stack_base,
+            stack_top, esp);
         ASSERT(stack_base < stack_top);
         if (pc >= stack_base && pc < stack_top)
             return true;
@@ -3710,8 +3705,8 @@ is_on_stack(dcontext_t *dcontext, app_pc pc, vm_area_t *area)
         ok = get_memory_info(esp, &esp_base, &size, NULL);
         ASSERT(ok);
         LOG(THREAD, LOG_VMAREAS, 3,
-            "stack vs "PFX": region "PFX".."PFX", esp "PFX"\n",
-            pc, esp_base, esp_base+size, esp);
+            "stack vs " PFX ": region " PFX ".." PFX ", esp " PFX "\n", pc, esp_base,
+            esp_base + size, esp);
         /* FIXME - stack could be split into multiple os regions by prot
          * differences, could check alloc base equivalence. */
         if (pc >= esp_base && pc < esp_base + size)
@@ -3748,28 +3743,29 @@ check_origins_bb_pattern(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t
 /* The following two arrays need to be in synch with enum action_type_t defined in
  * vmareas.h.
  */
-#define MESSAGE_EXEC_VIOLATION "Execution security violation was intercepted!\n"
-#define MESSAGE_CONTACT_VENDOR "Contact your vendor for a security vulnerability fix.\n"
-const char * const action_message[] = {
+#    define MESSAGE_EXEC_VIOLATION "Execution security violation was intercepted!\n"
+#    define MESSAGE_CONTACT_VENDOR \
+        "Contact your vendor for a security vulnerability fix.\n"
+const char *const action_message[] = {
     /* no trailing newlines for SYSLOG_INTERNAL */
     MESSAGE_EXEC_VIOLATION MESSAGE_CONTACT_VENDOR "Program terminated.",
     MESSAGE_EXEC_VIOLATION MESSAGE_CONTACT_VENDOR "Program continuing!",
-    MESSAGE_EXEC_VIOLATION MESSAGE_CONTACT_VENDOR "Program continuing after terminating thread.",
-    MESSAGE_EXEC_VIOLATION MESSAGE_CONTACT_VENDOR "Program continuing after throwing an exception."
+    MESSAGE_EXEC_VIOLATION MESSAGE_CONTACT_VENDOR
+    "Program continuing after terminating thread.",
+    MESSAGE_EXEC_VIOLATION MESSAGE_CONTACT_VENDOR
+    "Program continuing after throwing an exception."
 };
 
 /* event log message IDs */
-#ifdef WINDOWS
+#    ifdef WINDOWS
 const uint action_event_id[] = {
-    MSG_SEC_VIOLATION_TERMINATED,
-    MSG_SEC_VIOLATION_CONTINUE,
-    MSG_SEC_VIOLATION_THREAD,
-    MSG_SEC_VIOLATION_EXCEPTION,
-# ifdef HOT_PATCHING_INTERFACE
+    MSG_SEC_VIOLATION_TERMINATED, MSG_SEC_VIOLATION_CONTINUE,
+    MSG_SEC_VIOLATION_THREAD,     MSG_SEC_VIOLATION_EXCEPTION,
+#        ifdef HOT_PATCHING_INTERFACE
     MSG_HOT_PATCH_VIOLATION,
-# endif
+#        endif
 };
-#endif
+#    endif
 
 /* fills the target component of a threat ID */
 static void
@@ -3778,13 +3774,12 @@ fill_security_violation_target(char name[MAXIMUM_VIOLATION_NAME_LENGTH],
 {
     int i;
     for (i = 0; i < 4; i++)
-        name[i + 5] = (char) ((target_contents[i] % 10) + '0');
+        name[i + 5] = (char)((target_contents[i] % 10) + '0');
 }
 
 static void
-get_security_violation_name(dcontext_t *dcontext, 
-                            app_pc addr, char *name, int name_length, 
-                            security_violation_t violation_type, 
+get_security_violation_name(dcontext_t *dcontext, app_pc addr, char *name,
+                            int name_length, security_violation_t violation_type,
                             const char *threat_id)
 {
     ptr_uint_t addr_as_int;
@@ -3794,47 +3789,44 @@ get_security_violation_name(dcontext_t *dcontext,
     ASSERT(name_length >= MAXIMUM_VIOLATION_NAME_LENGTH);
 
     /* Hot patches & process_control use their own threat IDs. */
-    if (IF_HOTP(violation_type == HOT_PATCH_DETECTOR_VIOLATION || 
+    if (IF_HOTP(violation_type == HOT_PATCH_DETECTOR_VIOLATION ||
                 violation_type == HOT_PATCH_PROTECTOR_VIOLATION ||)
-        IF_PROC_CTL(violation_type == PROCESS_CONTROL_VIOLATION ||) false) {
+            IF_PROC_CTL(violation_type == PROCESS_CONTROL_VIOLATION ||) false) {
         ASSERT(threat_id != NULL);
         strncpy(name, threat_id, MAXIMUM_VIOLATION_NAME_LENGTH);
     } else {
         bool unreadable_addr = false;
-        byte target_contents[4];    /* 4 instruction bytes read from target */
-        ASSERT(threat_id == NULL);  /* Supplied only for hot patch violations.*/
+        byte target_contents[4];   /* 4 instruction bytes read from target */
+        ASSERT(threat_id == NULL); /* Supplied only for hot patch violations.*/
 
-        /* First four characters are alphabetics calculated from the address 
+        /* First four characters are alphabetics calculated from the address
            of the beginning of the basic block from which the violating
            contol transfer instruction originated.  Ideally we would use the
-           exact CTI address rather than the beginning of its block, but 
-           we don't want to translate it back to an app address to reduce 
+           exact CTI address rather than the beginning of its block, but
+           we don't want to translate it back to an app address to reduce
            possible failure points on this critical path. */
         name_addr = dcontext->last_fragment->tag;
-#ifdef WINDOWS
+#    ifdef WINDOWS
         /* Move PC relative to preferred base for consistent naming */
         name_addr += get_module_preferred_base_delta(name_addr);
-#endif
-        addr_as_int = (ptr_uint_t) name_addr;
+#    endif
+        addr_as_int = (ptr_uint_t)name_addr;
         for (i = 0; i < 4; i++) {
-            name[i] = (char) ((addr_as_int % 26) + 'A');
+            name[i] = (char)((addr_as_int % 26) + 'A');
             addr_as_int /= 256;
         }
 
         /* Fifth character is a '.' */
         name[4] = '.';
 
-        unreadable_addr = !safe_read(addr, 
-                                     sizeof(target_contents), &target_contents);
+        unreadable_addr = !safe_read(addr, sizeof(target_contents), &target_contents);
 
         /* if at unreadable memory see if an ASLR preferred address can be used */
         if (unreadable_addr) {
-            app_pc likely_target_pc = 
-                aslr_possible_preferred_address(addr);
+            app_pc likely_target_pc = aslr_possible_preferred_address(addr);
             if (likely_target_pc != NULL) {
-                unreadable_addr = 
-                    !safe_read(likely_target_pc, 
-                               sizeof(target_contents), &target_contents);
+                unreadable_addr = !safe_read(likely_target_pc, sizeof(target_contents),
+                                             &target_contents);
             } else {
                 unreadable_addr = true;
             }
@@ -3850,59 +3842,58 @@ get_security_violation_name(dcontext_t *dcontext,
     }
 
     /* Tenth character is a '.' */
-    name[9] = '.';    
+    name[9] = '.';
 
     /* Next character indicates the security violation type;
      * sequential letter choices used rather than semantic ones to
      * obfuscate meaning.   */
     switch (violation_type) {
-    case STACK_EXECUTION_VIOLATION:    name[10] = 'A'; break;
-    case HEAP_EXECUTION_VIOLATION:     name[10] = 'B'; break;
-    case RETURN_TARGET_VIOLATION:      name[10] = 'C'; break;
-    case RETURN_DIRECT_RCT_VIOLATION:  name[10] = 'D'; ASSERT_NOT_IMPLEMENTED(false); break;
-    case INDIRECT_CALL_RCT_VIOLATION:  name[10] = 'E'; break;
-    case INDIRECT_JUMP_RCT_VIOLATION:  name[10] = 'F'; break;
-#ifdef HOT_PATCHING_INTERFACE
-    case HOT_PATCH_DETECTOR_VIOLATION: name[10] = 'H'; break;
-    case HOT_PATCH_PROTECTOR_VIOLATION:name[10] = 'P'; break;
-#endif
-#ifdef PROCESS_CONTROL
-    case PROCESS_CONTROL_VIOLATION:    name[10] = 'K'; break;
-#endif
-#ifdef GBOP
-    case GBOP_SOURCE_VIOLATION:        name[10] = 'O'; break;
-#endif
-    case ASLR_TARGET_VIOLATION:        name[10] = 'R'; break;
-    case ATTACK_SIM_NUDGE_VIOLATION: /* share w/ normal attack sim */
-    case ATTACK_SIMULATION_VIOLATION:  name[10] = 'S'; break;
-    case APC_THREAD_SHELLCODE_VIOLATION: 
-        /* injected shellcode threat names are custom generated */
-        ASSERT_NOT_REACHED(); 
-        name[10] = 'B'; 
+    case STACK_EXECUTION_VIOLATION: name[10] = 'A'; break;
+    case HEAP_EXECUTION_VIOLATION: name[10] = 'B'; break;
+    case RETURN_TARGET_VIOLATION: name[10] = 'C'; break;
+    case RETURN_DIRECT_RCT_VIOLATION:
+        name[10] = 'D';
+        ASSERT_NOT_IMPLEMENTED(false);
         break;
-    default:
-        name[10] = 'X';
+    case INDIRECT_CALL_RCT_VIOLATION: name[10] = 'E'; break;
+    case INDIRECT_JUMP_RCT_VIOLATION: name[10] = 'F'; break;
+#    ifdef HOT_PATCHING_INTERFACE
+    case HOT_PATCH_DETECTOR_VIOLATION: name[10] = 'H'; break;
+    case HOT_PATCH_PROTECTOR_VIOLATION: name[10] = 'P'; break;
+#    endif
+#    ifdef PROCESS_CONTROL
+    case PROCESS_CONTROL_VIOLATION: name[10] = 'K'; break;
+#    endif
+#    ifdef GBOP
+    case GBOP_SOURCE_VIOLATION: name[10] = 'O'; break;
+#    endif
+    case ASLR_TARGET_VIOLATION: name[10] = 'R'; break;
+    case ATTACK_SIM_NUDGE_VIOLATION: /* share w/ normal attack sim */
+    case ATTACK_SIMULATION_VIOLATION: name[10] = 'S'; break;
+    case APC_THREAD_SHELLCODE_VIOLATION:
+        /* injected shellcode threat names are custom generated */
         ASSERT_NOT_REACHED();
+        name[10] = 'B';
+        break;
+    default: name[10] = 'X'; ASSERT_NOT_REACHED();
     }
 
     /* Null-terminate */
-    name[11] = '\0';    
+    name[11] = '\0';
 
     LOG(GLOBAL, LOG_ALL, 1, "Security violation name: %s\n", name);
 }
 
-
 bool
 is_exempt_threat_name(const char *name)
 {
-    if (DYNAMO_OPTION(exempt_threat) && 
-        !IS_STRING_OPTION_EMPTY(exempt_threat_list)) {
+    if (DYNAMO_OPTION(exempt_threat) && !IS_STRING_OPTION_EMPTY(exempt_threat_list)) {
         bool onlist;
         string_option_read_lock();
         onlist = check_filter_with_wildcards(DYNAMO_OPTION(exempt_threat_list), name);
         string_option_read_unlock();
         if (onlist) {
-            LOG(THREAD_GET, LOG_INTERP|LOG_VMAREAS, 1,
+            LOG(THREAD_GET, LOG_INTERP | LOG_VMAREAS, 1,
                 "WARNING: threat %s is on exempt list, suppressing violation\n", name);
             SYSLOG_INTERNAL_WARNING_ONCE("threat %s exempt", name);
             STATS_INC(num_exempt_threat);
@@ -3918,11 +3909,11 @@ is_exempt_threat_name(const char *name)
  */
 START_DATA_SECTION(FREQ_PROTECTED_SECTION, "w");
 
-/* Report security violation to all outputs - syslog, diagnostics, and interactive 
+/* Report security violation to all outputs - syslog, diagnostics, and interactive
  * returns false if violation was not reported
  */
 static bool
-security_violation_report(app_pc addr, security_violation_t violation_type, 
+security_violation_report(app_pc addr, security_violation_t violation_type,
                           const char *name, action_type_t action)
 {
     bool dump_forensics = true;
@@ -3930,11 +3921,13 @@ security_violation_report(app_pc addr, security_violation_t violation_type,
     if (!IS_STRING_OPTION_EMPTY(silent_block_threat_list)) {
         bool onlist;
         string_option_read_lock();
-        onlist = check_filter_with_wildcards(DYNAMO_OPTION(silent_block_threat_list), name);
+        onlist =
+            check_filter_with_wildcards(DYNAMO_OPTION(silent_block_threat_list), name);
         string_option_read_unlock();
         if (onlist) {
-            LOG(THREAD_GET, LOG_INTERP|LOG_VMAREAS, 1,
-                "WARNING: threat %s is on silent block list, suppressing reporting\n", name);
+            LOG(THREAD_GET, LOG_INTERP | LOG_VMAREAS, 1,
+                "WARNING: threat %s is on silent block list, suppressing reporting\n",
+                name);
             SYSLOG_INTERNAL_WARNING_ONCE("threat %s silently blocked", name);
             STATS_INC(num_silently_blocked_threat);
             return false;
@@ -3948,53 +3941,51 @@ security_violation_report(app_pc addr, security_violation_t violation_type,
         static bool reached_max = false;
         /* do not report in any way if report threshold is reached */
         DO_THRESHOLD_SAFE(dynamo_options.report_max, FREQ_PROTECTED_SECTION,
-                          {/* < report_max */}, {
-            /* >= report_max */
-            if (!reached_max) {
-                reached_max = true;
-                SYSLOG(SYSLOG_WARNING, WARNING_REPORT_THRESHOLD, 2, 
-                       get_application_name(), get_application_pid());
-            }
-            return false;
-        });
+                          { /* < report_max */ }, {
+                              /* >= report_max */
+                              if (!reached_max) {
+                                  reached_max = true;
+                                  SYSLOG(SYSLOG_WARNING, WARNING_REPORT_THRESHOLD, 2,
+                                         get_application_name(), get_application_pid());
+                              }
+                              return false;
+                          });
     }
 
     /* options already synchronized by security_violation() */
     if ((TEST(DUMPCORE_SECURITY_VIOLATION, DYNAMO_OPTION(dumpcore_mask))
-#ifdef HOT_PATCHING_INTERFACE   /* Part of fix for 5367. */
-         && violation_type != HOT_PATCH_DETECTOR_VIOLATION
-         && violation_type != HOT_PATCH_PROTECTOR_VIOLATION
-#endif
-        )
-#ifdef HOT_PATCHING_INTERFACE   /* Part of fix for 5367. */
+#    ifdef HOT_PATCHING_INTERFACE /* Part of fix for 5367. */
+         && violation_type != HOT_PATCH_DETECTOR_VIOLATION &&
+         violation_type != HOT_PATCH_PROTECTOR_VIOLATION
+#    endif
+         )
+#    ifdef HOT_PATCHING_INTERFACE /* Part of fix for 5367. */
         /* Dump core if violation was for hot patch detector/protector and
          * the corresponding dumpcore_mask flag was set.
          */
         || (TEST(DUMPCORE_HOTP_DETECTION, DYNAMO_OPTION(dumpcore_mask)) &&
-         violation_type == HOT_PATCH_DETECTOR_VIOLATION) ||
+            violation_type == HOT_PATCH_DETECTOR_VIOLATION) ||
         (TEST(DUMPCORE_HOTP_PROTECTION, DYNAMO_OPTION(dumpcore_mask)) &&
          violation_type == HOT_PATCH_PROTECTOR_VIOLATION)
-#endif
-       ) {
+#    endif
+    ) {
         DO_THRESHOLD_SAFE(DYNAMO_OPTION(dumpcore_violation_threshold),
-                          FREQ_PROTECTED_SECTION, os_dump_core(name) /* < threshold */,);
+                          FREQ_PROTECTED_SECTION, os_dump_core(name) /* < threshold */, );
     }
 
-#ifdef HOT_PATCHING_INTERFACE
+#    ifdef HOT_PATCHING_INTERFACE
     if (violation_type == HOT_PATCH_DETECTOR_VIOLATION ||
         violation_type == HOT_PATCH_PROTECTOR_VIOLATION) {
-        SYSLOG_CUSTOM_NOTIFY(SYSLOG_ERROR,
-                             IF_WINDOWS_ELSE_0(MSG_HOT_PATCH_VIOLATION), 3, 
-                             (char *) action_message[action], get_application_name(), 
+        SYSLOG_CUSTOM_NOTIFY(SYSLOG_ERROR, IF_WINDOWS_ELSE_0(MSG_HOT_PATCH_VIOLATION), 3,
+                             (char *)action_message[action], get_application_name(),
                              get_application_pid(), name);
     } else
-#endif
-        SYSLOG_CUSTOM_NOTIFY(SYSLOG_ERROR,
-                             IF_WINDOWS_ELSE_0(action_event_id[action]), 3, 
-                             (char *) action_message[action], get_application_name(), 
+#    endif
+        SYSLOG_CUSTOM_NOTIFY(SYSLOG_ERROR, IF_WINDOWS_ELSE_0(action_event_id[action]), 3,
+                             (char *)action_message[action], get_application_name(),
                              get_application_pid(), name);
 
-#ifdef HOT_PATCHING_INTERFACE
+#    ifdef HOT_PATCHING_INTERFACE
     /* Part of fix for 5367.  For hot patches core dumps and forensics should
      * be generated only if needed, which is not the case for other violations.
      */
@@ -4002,12 +3993,12 @@ security_violation_report(app_pc addr, security_violation_t violation_type,
         (violation_type == HOT_PATCH_DETECTOR_VIOLATION ||
          violation_type == HOT_PATCH_PROTECTOR_VIOLATION))
         dump_forensics = false;
-#endif
-#ifdef PROCESS_CONTROL
-    if (!DYNAMO_OPTION(pc_diagnostics) &&           /* Case 11023. */
+#    endif
+#    ifdef PROCESS_CONTROL
+    if (!DYNAMO_OPTION(pc_diagnostics) && /* Case 11023. */
         violation_type == PROCESS_CONTROL_VIOLATION)
         dump_forensics = false;
-#endif
+#    endif
     /* report_max (above) will limit the number of files created */
     if (dump_forensics)
         report_diagnostics(action_message[action], name, violation_type);
@@ -4015,10 +4006,10 @@ security_violation_report(app_pc addr, security_violation_t violation_type,
     return true;
 }
 
-/* attack handling - reports violation and decides on action - possibly terminates the process
- * N.B.: we make assumptions about whether the callers of this routine hold
+/* attack handling - reports violation and decides on action - possibly terminates the
+ * process N.B.: we make assumptions about whether the callers of this routine hold
  * various locks, so be careful when adding new callers.
- * 
+ *
  * type_handling prescribes per-type handling and is combined with
  * global options.  It can be used to specify whether to take an
  * action (and may request specific alternative handling with
@@ -4031,11 +4022,11 @@ security_violation_report(app_pc addr, security_violation_t violation_type,
  */
 static action_type_t
 security_violation_internal_main(dcontext_t *dcontext, app_pc addr,
-                                 security_violation_t violation_type, 
+                                 security_violation_t violation_type,
                                  security_option_t type_handling, const char *threat_id,
                                  const action_type_t desired_action,
                                  read_write_lock_t *lock,
-                                 security_violation_t *result_type/*OUT*/)
+                                 security_violation_t *result_type /*OUT*/)
 {
     /* All violations except hot patch ones will request the safest solution, i.e.,
      * to terminate the process.  Based on the options used, different ones may be
@@ -4047,22 +4038,22 @@ security_violation_internal_main(dcontext_t *dcontext, app_pc addr,
     char name[MAXIMUM_VIOLATION_NAME_LENGTH];
     bool action_selected = false;
     bool found_unsupported = false;
-#ifdef HOT_PATCHING_INTERFACE
+#    ifdef HOT_PATCHING_INTERFACE
     /* Passing the hotp lock as an argument is ugly, but it is the cleanest way
-     * to release the hotp lock for case 7988, otherwise, will have to release 
+     * to release the hotp lock for case 7988, otherwise, will have to release
      * it in hotp_event_notify and re-acquire it after reporting - really ugly.
-     * Anyway, cleaning up the interface to security_violation is in plan 
+     * Anyway, cleaning up the interface to security_violation is in plan
      * for Marlin, a FIXME, case 8079.
      */
     ASSERT((DYNAMO_OPTION(hot_patching) && lock == hotp_get_lock()) || lock == NULL);
-#else
+#    else
     ASSERT(lock == NULL);
-#endif
+#    endif
     /* though ASLR handling is currently not using this routine */
     ASSERT(violation_type != ASLR_TARGET_VIOLATION);
 
     DOLOG(2, LOG_ALL, {
-        SYSLOG_INTERNAL_INFO("security_violation("PFX", %d)", addr, violation_type);
+        SYSLOG_INTERNAL_INFO("security_violation(" PFX ", %d)", addr, violation_type);
         LOG(THREAD, LOG_VMAREAS, 2, "executable areas are:\n");
         print_executable_areas(THREAD);
         LOG(THREAD, LOG_VMAREAS, 2, "future executable areas are:\n");
@@ -4074,35 +4065,34 @@ security_violation_internal_main(dcontext_t *dcontext, app_pc addr,
     /* case 8075: we no longer unprot .data on the violation path */
     ASSERT(check_should_be_protected(DATASEC_RARELY_PROT));
 
-    /* CHECK: all options for attack handling and reporting are dynamic, synchronized only once */
-    synchronize_dynamic_options(); 
+    /* CHECK: all options for attack handling and reporting are dynamic, synchronized only
+     * once */
+    synchronize_dynamic_options();
 
-#ifdef HOT_PATCHING_INTERFACE
-    if (violation_type == HOT_PATCH_DETECTOR_VIOLATION || 
+#    ifdef HOT_PATCHING_INTERFACE
+    if (violation_type == HOT_PATCH_DETECTOR_VIOLATION ||
         violation_type == HOT_PATCH_PROTECTOR_VIOLATION) {
-        /* For hot patches, the action is provided by the hot patch writer; 
+        /* For hot patches, the action is provided by the hot patch writer;
          * nothing should be selected here.
          */
         action_selected = true;
     }
-#endif
-#ifdef PROCESS_CONTROL
+#    endif
+#    ifdef PROCESS_CONTROL
     /* A process control violation (which can only happen if process control is
      * turned on) results in the process being killed unless it is running in
      * detect mode.
      */
     if (violation_type == PROCESS_CONTROL_VIOLATION) {
         ASSERT(IS_PROCESS_CONTROL_ON());
-        ASSERT((action == ACTION_TERMINATE_PROCESS &&
-                !DYNAMO_OPTION(pc_detect_mode)) ||
+        ASSERT((action == ACTION_TERMINATE_PROCESS && !DYNAMO_OPTION(pc_detect_mode)) ||
                (action == ACTION_CONTINUE && DYNAMO_OPTION(pc_detect_mode)));
         action_selected = true;
     }
-#endif
+#    endif
     /* one last chance to avoid a violation */
-    get_security_violation_name(dcontext, addr, name,
-                                MAXIMUM_VIOLATION_NAME_LENGTH, violation_type,
-                                threat_id);
+    get_security_violation_name(dcontext, addr, name, MAXIMUM_VIOLATION_NAME_LENGTH,
+                                violation_type, threat_id);
     if (!IS_STRING_OPTION_EMPTY(exempt_threat_list)) {
         if (is_exempt_threat_name(name)) {
             if (result_type != NULL)
@@ -4119,39 +4109,41 @@ security_violation_internal_main(dcontext_t *dcontext, app_pc addr,
      * while we're nolinking due to init-extra-vmareas on the frags list!
      */
 
-    /* diagnose_violation_mode says to check if would have allowed if were allowing patterns */
-    if (dynamo_options.diagnose_violation_mode && !dynamo_options.executable_if_trampoline) {
+    /* diagnose_violation_mode says to check if would have allowed if were allowing
+     * patterns */
+    if (dynamo_options.diagnose_violation_mode &&
+        !dynamo_options.executable_if_trampoline) {
         size_t junk;
-        if (check_origins_bb_pattern(dcontext, addr, (app_pc *) &junk, &junk,
-                                     (uint *) &junk, (uint *) &junk)
-            == ALLOWING_OK) {
+        if (check_origins_bb_pattern(dcontext, addr, (app_pc *)&junk, &junk,
+                                     (uint *)&junk, (uint *)&junk) == ALLOWING_OK) {
             /* FIXME: change later user-visible message to indicate this may be
              * a false positive
              */
             SYSLOG_INTERNAL_WARNING_ONCE("would have allowed pattern DGC.");
         }
     }
-#ifdef DGC_DIAGNOSTICS
+#    ifdef DGC_DIAGNOSTICS
     LOG(GLOBAL, LOG_VMAREAS, 1, "violating basic block target:\n");
     DOLOG(1, LOG_VMAREAS, { disassemble_app_bb(dcontext, addr, GLOBAL); });
-#endif
+#    endif
     /* for non-debug build, give some info on violating block */
     DODEBUG({
         if (is_readable_without_exception(addr, 12)) {
-            SYSLOG_INTERNAL_WARNING("violating basic block target @"PFX": "
-                                    "%x %x %x %x %x %x %x %x %x %x %x %x", addr, 
-                                    *addr, *(addr+1), *(addr+2), *(addr+3), *(addr+4), 
-                                    *(addr+5), *(addr+6), *(addr+7), *(addr+8), 
-                                    *(addr+9), *(addr+10), *(addr+11));
+            SYSLOG_INTERNAL_WARNING("violating basic block target @" PFX ": "
+                                    "%x %x %x %x %x %x %x %x %x %x %x %x",
+                                    addr, *addr, *(addr + 1), *(addr + 2), *(addr + 3),
+                                    *(addr + 4), *(addr + 5), *(addr + 6), *(addr + 7),
+                                    *(addr + 8), *(addr + 9), *(addr + 10), *(addr + 11));
         } else
-            SYSLOG_INTERNAL_WARNING("violating basic block target @"PFX": not readable!",
-                                    addr);
+            SYSLOG_INTERNAL_WARNING(
+                "violating basic block target @" PFX ": not readable!", addr);
     });
 
-    if (DYNAMO_OPTION(detect_mode) && !TEST(OPTION_BLOCK_IGNORE_DETECT, type_handling)
+    if (DYNAMO_OPTION(detect_mode) &&
+        !TEST(OPTION_BLOCK_IGNORE_DETECT, type_handling)
         /* As of today, detect mode for hot patches is set using modes files. */
-        IF_HOTP(&& violation_type != HOT_PATCH_DETECTOR_VIOLATION 
-                && violation_type != HOT_PATCH_PROTECTOR_VIOLATION)) {
+        IF_HOTP(&&violation_type != HOT_PATCH_DETECTOR_VIOLATION &&
+                violation_type != HOT_PATCH_PROTECTOR_VIOLATION)) {
         bool allow = true;
         /* would be nice to keep the count going when no max, so if dynamically impose
          * one later all the previous ones count toward it, but then have to worry about
@@ -4159,51 +4151,53 @@ security_violation_internal_main(dcontext_t *dcontext, app_pc addr,
          */
         if (DYNAMO_OPTION(detect_mode_max) > 0) {
             /* global counter for violations in all threads */
-            DO_THRESHOLD_SAFE(DYNAMO_OPTION(detect_mode_max), FREQ_PROTECTED_SECTION,
-                              {/* < max */
-                                  LOG(GLOBAL, LOG_ALL, 1, 
-                                      "security_violation: allowing violation #%d [max %d], tid=%d\n", 
-                                      do_threshold_cur, DYNAMO_OPTION(detect_mode_max),
-                                      get_thread_id());
-                              },
-                              {/* >= max */
-                                  allow = false;
-                                  LOG(GLOBAL, LOG_ALL, 1, 
-                                      "security_violation: reached maximum allowed %d, tid=%d\n", 
-                                      DYNAMO_OPTION(detect_mode_max), get_thread_id());
-                              });
+            DO_THRESHOLD_SAFE(
+                DYNAMO_OPTION(detect_mode_max), FREQ_PROTECTED_SECTION,
+                { /* < max */
+                  LOG(GLOBAL, LOG_ALL, 1,
+                      "security_violation: allowing violation #%d [max %d], tid=%d\n",
+                      do_threshold_cur, DYNAMO_OPTION(detect_mode_max), get_thread_id());
+                },
+                { /* >= max */
+                  allow = false;
+                  LOG(GLOBAL, LOG_ALL, 1,
+                      "security_violation: reached maximum allowed %d, tid=%d\n",
+                      DYNAMO_OPTION(detect_mode_max), get_thread_id());
+                });
         } else {
-            LOG(GLOBAL, LOG_ALL, 1, 
-                "security_violation: allowing violation, no max, tid=%d\n", get_thread_id());
+            LOG(GLOBAL, LOG_ALL, 1,
+                "security_violation: allowing violation, no max, tid=%d\n",
+                get_thread_id());
         }
         if (allow) {
             /* we have priority over other handling options */
             action = ACTION_CONTINUE;
             action_selected = true;
             mark_module_exempted(addr);
-       }
+        }
     }
 
     /* FIXME: case 2144 we need to TEST(OPTION_BLOCK early on so that
      * we do not impact the counters, in addition we need to
      * TEST(OPTION_HANDLING to specify an alternative attack handling
-     * (e.g. -throw_exception if default is -kill_thread) 
+     * (e.g. -throw_exception if default is -kill_thread)
      * FIXME: We may also want a different message to allow 'staging' events to be
      * considered differently, maybe with a DO_ONCE semantics...
      */
 
     /* decide on specific attack handling action if not continuing */
     if (!action_selected && DYNAMO_OPTION(throw_exception)) {
-        thread_data_t *thread_local = (thread_data_t *) dcontext->vm_areas_field;
+        thread_data_t *thread_local = (thread_data_t *)dcontext->vm_areas_field;
         /* maintain a thread local counter to bail out and avoid infinite exceptions */
-        if (thread_local->thrown_exceptions < DYNAMO_OPTION(throw_exception_max_per_thread)) {
-#  ifdef WINDOWS
+        if (thread_local->thrown_exceptions <
+            DYNAMO_OPTION(throw_exception_max_per_thread)) {
+#    ifdef WINDOWS
             /* If can't verify consistent SEH chain should fall through to kill path */
             /* UnhandledExceptionFilter is always installed. */
             /* There is no point in throwing an exception if no other
                handlers are installed to unwind.
-               We may still get there when our exception is not handled, 
-               but at least cleanup code will be given a chance. 
+               We may still get there when our exception is not handled,
+               but at least cleanup code will be given a chance.
             */
             enum {
                 MIN_SEH_DEPTH = 1
@@ -4211,62 +4205,64 @@ security_violation_internal_main(dcontext_t *dcontext, app_pc addr,
             };
             int seh_chain_depth = exception_frame_chain_depth(dcontext);
             if (seh_chain_depth > MIN_SEH_DEPTH) {
-                /* note the check is best effort, 
+                /* note the check is best effort,
                    e.g. attacked handler can still point to valid RET */
                 bool global_max_reached = true;
                 /* check global counter as well */
-                DO_THRESHOLD_SAFE(DYNAMO_OPTION(throw_exception_max),
-                                  FREQ_PROTECTED_SECTION,
-                                  {global_max_reached = false;}, 
-                                  {global_max_reached = true;});
+                DO_THRESHOLD_SAFE(
+                    DYNAMO_OPTION(throw_exception_max), FREQ_PROTECTED_SECTION,
+                    { global_max_reached = false; }, { global_max_reached = true; });
                 if (!global_max_reached) {
                     thread_local->thrown_exceptions++;
-                    LOG(GLOBAL, LOG_ALL, 1, 
-                        "security_violation: throwing exception %d for this thread [max pt %d] [global max %d]\n", 
+                    LOG(GLOBAL, LOG_ALL, 1,
+                        "security_violation: throwing exception %d for this thread [max "
+                        "pt %d] [global max %d]\n",
                         thread_local->thrown_exceptions,
-                        dynamo_options.throw_exception_max_per_thread, 
+                        dynamo_options.throw_exception_max_per_thread,
                         dynamo_options.throw_exception_max);
                     action = ACTION_THROW_EXCEPTION;
                     action_selected = true;
                 }
             } else {
-                LOG(GLOBAL, LOG_ALL, 1, 
-                    "security_violation: SEH chain invalid [%d], better kill\n", seh_chain_depth);
+                LOG(GLOBAL, LOG_ALL, 1,
+                    "security_violation: SEH chain invalid [%d], better kill\n",
+                    seh_chain_depth);
             }
-#  else
+#    else
             ASSERT_NOT_IMPLEMENTED(false);
-#  endif /* WINDOWS */
+#    endif /* WINDOWS */
         } else {
-            LOG(GLOBAL, LOG_ALL, 1, 
+            LOG(GLOBAL, LOG_ALL, 1,
                 "security_violation: reached maximum exception count, kill now\n");
         }
     }
-    
+
     /* kill process or maybe thread */
     if (!action_selected) {
         ASSERT(action == ACTION_TERMINATE_PROCESS);
         if (DYNAMO_OPTION(kill_thread)) {
             /* check global counter as well */
-            DO_THRESHOLD_SAFE(DYNAMO_OPTION(kill_thread_max), FREQ_PROTECTED_SECTION,
-                {/* < max */
-                    LOG(GLOBAL, LOG_ALL, 1, 
-                        "security_violation: \t killing thread #%d [max %d], tid=%d\n", 
-                        do_threshold_cur, DYNAMO_OPTION(kill_thread_max),
-                        get_thread_id());
-                    /* FIXME: can't check if get_num_threads()==1 then say we're killing process
-                     * because it is possible that another thread has not been scheduled yet 
-                     * and we wouldn't have seen it.
-                     * Still, only our message will be wrong if we end up killing the process, 
-                     * when we terminate the last thread 
-                     */
-                    action = ACTION_TERMINATE_THREAD;
-                    action_selected = true;
+            DO_THRESHOLD_SAFE(
+                DYNAMO_OPTION(kill_thread_max), FREQ_PROTECTED_SECTION,
+                { /* < max */
+                  LOG(GLOBAL, LOG_ALL, 1,
+                      "security_violation: \t killing thread #%d [max %d], tid=%d\n",
+                      do_threshold_cur, DYNAMO_OPTION(kill_thread_max), get_thread_id());
+                  /* FIXME: can't check if get_num_threads()==1 then say we're killing
+                   * process because it is possible that another thread has not been
+                   * scheduled yet and we wouldn't have seen it. Still, only our message
+                   * will be wrong if we end up killing the process, when we terminate the
+                   * last thread
+                   */
+                  action = ACTION_TERMINATE_THREAD;
+                  action_selected = true;
                 },
-                {/* >= max */
-                    LOG(GLOBAL, LOG_ALL, 1, 
-                        "security_violation: reached maximum thread kill, kill process now\n");
-                    action = ACTION_TERMINATE_PROCESS;
-                    action_selected = true;
+                { /* >= max */
+                  LOG(GLOBAL, LOG_ALL, 1,
+                      "security_violation: reached maximum thread kill, kill process "
+                      "now\n");
+                  action = ACTION_TERMINATE_PROCESS;
+                  action_selected = true;
                 });
         } else {
             action = ACTION_TERMINATE_PROCESS;
@@ -4275,21 +4271,21 @@ security_violation_internal_main(dcontext_t *dcontext, app_pc addr,
     }
     ASSERT(action_selected);
 
-#ifdef CLIENT_INTERFACE
-    /* Case 9712: Inform the client of the security violation and 
+#    ifdef CLIENT_INTERFACE
+    /* Case 9712: Inform the client of the security violation and
      * give it a chance to modify the action.
      */
     if (!IS_INTERNAL_STRING_OPTION_EMPTY(client_lib)) {
         instrument_security_violation(dcontext, addr, violation_type, &action);
     }
-#endif
+#    endif
 
     /* now we know what is the chosen action and we can report */
-    if (TEST(OPTION_REPORT, type_handling)) 
+    if (TEST(OPTION_REPORT, type_handling))
         security_violation_report(addr, violation_type, name, action);
 
-    /* FIXME: walking the loader data structures at arbitrary 
-     * points is dangerous due to data races with other threads 
+    /* FIXME: walking the loader data structures at arbitrary
+     * points is dangerous due to data races with other threads
      * -- see is_module_being_initialized and get_module_name */
     if (check_for_unsupported_modules()) {
         /* found an unsupported module */
@@ -4299,20 +4295,17 @@ security_violation_internal_main(dcontext_t *dcontext, app_pc addr,
          * check isn't actually sufficient to ensure we get a dump file
          * (if for instance already got several violations) but it's good
          * enough */
-        if (TEST(DUMPCORE_UNSUPPORTED_APP, 
-                 DYNAMO_OPTION(dumpcore_mask)) &&
-            !TEST(DUMPCORE_SECURITY_VIOLATION, 
-                  DYNAMO_OPTION(dumpcore_mask))) {
+        if (TEST(DUMPCORE_UNSUPPORTED_APP, DYNAMO_OPTION(dumpcore_mask)) &&
+            !TEST(DUMPCORE_SECURITY_VIOLATION, DYNAMO_OPTION(dumpcore_mask))) {
             os_dump_core("unsupported module");
         }
     }
 
-#ifdef WINDOWS
+#    ifdef WINDOWS
     if (ACTION_TERMINATE_PROCESS == action &&
-        (TEST(DETACH_UNHANDLED_VIOLATION, 
-              DYNAMO_OPTION(internal_detach_mask)) || 
-         (found_unsupported && TEST(DETACH_UNSUPPORTED_MODULE, 
-                                    DYNAMO_OPTION(internal_detach_mask))))) {
+        (TEST(DETACH_UNHANDLED_VIOLATION, DYNAMO_OPTION(internal_detach_mask)) ||
+         (found_unsupported &&
+          TEST(DETACH_UNSUPPORTED_MODULE, DYNAMO_OPTION(internal_detach_mask))))) {
         /* set pc to right value and detach */
         get_mcontext(dcontext)->pc = addr;
         /* FIXME - currently detach_internal creates a new thread to do the
@@ -4327,35 +4320,35 @@ security_violation_internal_main(dcontext_t *dcontext, app_pc addr,
         dynamo_options.dynamic_options = false;
         dynamo_options.detect_mode = true;
         dynamo_options.detect_mode_max = 0; /* no limit on detections */
-        dynamo_options.report_max = 1; /* don't report any more */
+        dynamo_options.report_max = 1;      /* don't report any more */
         options_restore_readonly();
         action = ACTION_CONTINUE;
     }
-#endif
+#    endif
 
     /* FIXME: move this into hotp code like we've done for bb building so we
      * don't need to pass the lock in anymore
      */
-#ifdef HOT_PATCHING_INTERFACE
-    /* Fix for case 7988.  Release the hotp lock when the remediation action 
-     * is to terminate the {thread,process} or to throw an exception, otherwise 
+#    ifdef HOT_PATCHING_INTERFACE
+    /* Fix for case 7988.  Release the hotp lock when the remediation action
+     * is to terminate the {thread,process} or to throw an exception, otherwise
      * we will deadlock trying to access the hotp_vul_table in another thread.
      */
-    if (lock != NULL && (action == ACTION_TERMINATE_THREAD ||
-                         action == ACTION_TERMINATE_PROCESS ||
-                         action == ACTION_THROW_EXCEPTION)) {
-#ifdef GBOP
+    if (lock != NULL &&
+        (action == ACTION_TERMINATE_THREAD || action == ACTION_TERMINATE_PROCESS ||
+         action == ACTION_THROW_EXCEPTION)) {
+#        ifdef GBOP
         ASSERT(violation_type == HOT_PATCH_DETECTOR_VIOLATION ||
                violation_type == HOT_PATCH_PROTECTOR_VIOLATION ||
                violation_type == GBOP_SOURCE_VIOLATION);
-#else
+#        else
         ASSERT(violation_type == HOT_PATCH_DETECTOR_VIOLATION ||
                violation_type == HOT_PATCH_PROTECTOR_VIOLATION);
-#endif
+#        endif
         ASSERT_OWN_READ_LOCK(true, lock);
         read_unlock(lock);
     }
-#endif
+#    endif
 
     if (result_type != NULL)
         *result_type = violation_type;
@@ -4378,13 +4371,13 @@ security_violation_action(dcontext_t *dcontext, action_type_t action, app_pc add
            FIXME: If we are about the kill the process anyways,
            it may be safer to stop_the_world,
            so attacks in this time window do not get through.
-           
+
            TODO: On the other hand sleeping in one thread,
            while the rest are preparing for controlled shutdown sounds better,
            yet we have no way of telling them that process death is pending.
         */
         /* FIXME: shouldn't we suspend all other threads for the messagebox too? */
-        
+
         /* For services you can get a similar effect to -timeout on kill process
            by settings in Services\service properties\Recovery.
            Restart service after x minutes.
@@ -4403,7 +4396,7 @@ security_violation_action(dcontext_t *dcontext, action_type_t action, app_pc add
         uint terminate_flags_t = TERMINATE_PROCESS;
         if (is_self_couldbelinking()) {
             /* must be nolinking for terminate cleanup to avoid deadlock w/ flush */
-            enter_nolinking(dcontext, NULL, false/*not a real cache transition*/);
+            enter_nolinking(dcontext, NULL, false /*not a real cache transition*/);
         }
         if (action == ACTION_TERMINATE_THREAD) {
             terminate_flags_t = TERMINATE_THREAD;
@@ -4413,10 +4406,10 @@ security_violation_action(dcontext_t *dcontext, action_type_t action, app_pc add
             ASSERT(action == ACTION_TERMINATE_PROCESS &&
                    terminate_flags_t == TERMINATE_PROCESS);
         }
-#ifdef HOT_PATCHING_INTERFACE
+#    ifdef HOT_PATCHING_INTERFACE
         ASSERT(!DYNAMO_OPTION(hot_patching) ||
-               !READ_LOCK_HELD(hotp_get_lock()));   /* See case 7998. */
-#endif
+               !READ_LOCK_HELD(hotp_get_lock())); /* See case 7998. */
+#    endif
         os_terminate(dcontext, terminate_flags_t);
         ASSERT_NOT_REACHED();
     }
@@ -4429,32 +4422,27 @@ security_violation_main(dcontext_t *dcontext, app_pc addr,
                         security_violation_t violation_type,
                         security_option_t type_handling)
 {
-    return security_violation_internal_main(dcontext, addr, violation_type, 
-                                            type_handling, NULL, 
-                                            ACTION_TERMINATE_PROCESS, NULL, NULL);
+    return security_violation_internal_main(dcontext, addr, violation_type, type_handling,
+                                            NULL, ACTION_TERMINATE_PROCESS, NULL, NULL);
 }
 
 /* See security_violation_internal_main() for further comments.
  *
  * Returns ALLOWING_BAD if on exempt_threat_list, or if in detect mode
  * returns the passed violation_type (a negative value)
- * Does not return if protection action is taken.  
+ * Does not return if protection action is taken.
  */
 security_violation_t
 security_violation_internal(dcontext_t *dcontext, app_pc addr,
-                            security_violation_t violation_type, 
+                            security_violation_t violation_type,
                             security_option_t type_handling, const char *threat_id,
-                            const action_type_t desired_action,
-                            read_write_lock_t *lock)
+                            const action_type_t desired_action, read_write_lock_t *lock)
 {
     security_violation_t result_type;
     action_type_t action =
-        security_violation_internal_main(dcontext, addr, violation_type, 
-                                         type_handling, threat_id, desired_action,
-                                         lock, &result_type);
-    DOKSTATS(if (ACTION_CONTINUE != action) {
-        KSTOP_REWIND_UNTIL(dispatch_num_exits);
-    });
+        security_violation_internal_main(dcontext, addr, violation_type, type_handling,
+                                         threat_id, desired_action, lock, &result_type);
+    DOKSTATS(if (ACTION_CONTINUE != action) { KSTOP_REWIND_UNTIL(dispatch_num_exits); });
     if (action != ACTION_CONTINUE)
         security_violation_action(dcontext, action, addr);
     return result_type;
@@ -4466,13 +4454,11 @@ security_violation_internal(dcontext_t *dcontext, app_pc addr,
  * shouldn't have to change the interface.
  */
 security_violation_t
-security_violation(dcontext_t *dcontext, app_pc addr,
-                   security_violation_t violation_type, 
+security_violation(dcontext_t *dcontext, app_pc addr, security_violation_t violation_type,
                    security_option_t type_handling)
 {
-    return security_violation_internal(dcontext, addr, violation_type, 
-                                       type_handling, NULL, 
-                                       ACTION_TERMINATE_PROCESS, NULL);
+    return security_violation_internal(dcontext, addr, violation_type, type_handling,
+                                       NULL, ACTION_TERMINATE_PROCESS, NULL);
 }
 
 /* back to normal section */
@@ -4486,10 +4472,10 @@ is_dyngen_vsyscall(app_pc addr)
     /* CHECK: likely to be true on all Linux versions by the time we ship */
     /* if vsyscall_page_start == 0, then this exception doesn't apply */
     /* Note vsyscall_page_start is a global defined in the corresponding os.c files */
-    if (vsyscall_page_start == 0) 
+    if (vsyscall_page_start == 0)
         return false;
-    return (addr >= (app_pc) vsyscall_page_start && 
-            addr < (app_pc) (vsyscall_page_start+PAGE_SIZE));
+    return (addr >= (app_pc)vsyscall_page_start &&
+            addr < (app_pc)(vsyscall_page_start + PAGE_SIZE));
 }
 
 bool
@@ -4551,8 +4537,7 @@ check_trampoline_displaced_code(dcontext_t *dcontext, app_pc addr, bool on_stack
     if (on_stack || !is_direct_jmp_to_image(dcontext, last))
         return false;
     ASSERT(instr_length(dcontext, last) == JMP_LONG_LENGTH);
-    for (in = instrlist_first(ilist);
-         in != NULL/*sanity*/ && in != last;
+    for (in = instrlist_first(ilist); in != NULL /*sanity*/ && in != last;
          in = instr_get_next(in)) {
         /* build_app_bb_ilist should fully decode everything */
         ASSERT(instr_opcode_valid(in));
@@ -4570,22 +4555,20 @@ check_trampoline_displaced_code(dcontext_t *dcontext, app_pc addr, bool on_stack
     ASSERT(in != NULL);
     if (in == last) {
         app_pc target;
-        LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 3,
-            "check_trampoline_displaced_code @"PFX": size=%d\n",
-            addr, size);
-        DOLOG(3, LOG_INTERP|LOG_VMAREAS, {
-            instrlist_disassemble(dcontext, addr, ilist, THREAD);
-        });
+        LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 3,
+            "check_trampoline_displaced_code @" PFX ": size=%d\n", addr, size);
+        DOLOG(3, LOG_INTERP | LOG_VMAREAS,
+              { instrlist_disassemble(dcontext, addr, ilist, THREAD); });
         /* is_direct_jmp_to_image should have checked for us */
         ASSERT(opnd_is_near_pc(instr_get_target(last)));
         target = opnd_get_pc(instr_get_target(last));
         if (is_readable_without_exception(target - size, JMP_LONG_LENGTH)) {
             instr_t *tramp = instr_create(dcontext);
             /* Ensure a racy unmap causing a decode crash is passed to the app */
-            set_thread_decode_page_start(dcontext, (app_pc) PAGE_START(target - size));
+            set_thread_decode_page_start(dcontext, (app_pc)PAGE_START(target - size));
             target = decode_cti(dcontext, target - size, tramp);
-            if (target != NULL && instr_opcode_valid(tramp) &&
-                instr_is_ubr(tramp) && opnd_is_near_pc(instr_get_target(tramp))) {
+            if (target != NULL && instr_opcode_valid(tramp) && instr_is_ubr(tramp) &&
+                opnd_is_near_pc(instr_get_target(tramp))) {
                 app_pc hook = opnd_get_pc(instr_get_target(tramp));
                 /* FIXME: could be tighter by ensuring that hook targets a jmp
                  * or call right before addr but that may be too specific.
@@ -4594,8 +4577,9 @@ check_trampoline_displaced_code(dcontext_t *dcontext, app_pc addr, bool on_stack
                  */
                 if (PAGE_START(hook) == PAGE_START(addr)) {
                     *len = size + JMP_LONG_LENGTH;
-                    LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 2,
-                        "WARNING: allowing hook-displaced code "PFX" -> "PFX" -> "PFX"\n",
+                    LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 2,
+                        "WARNING: allowing hook-displaced code " PFX " -> " PFX " -> " PFX
+                        "\n",
                         addr, target, hook);
                     SYSLOG_INTERNAL_WARNING_ONCE("hook-displaced code allowed.");
                     STATS_INC(trampolines_displaced_code);
@@ -4642,21 +4626,21 @@ check_origins_bb_pattern(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t
     LOG(GLOBAL, LOG_VMAREAS, 3, "check_origins_bb_pattern:\n");
     DOLOG(3, LOG_VMAREAS, { instrlist_disassemble(dcontext, addr, ilist, GLOBAL); });
 
-#ifndef X86
+#    ifndef X86
     /* FIXME: move the x86-specific analysis to an x86/ file! */
     ASSERT_NOT_IMPLEMENTED();
-#endif
+#    endif
 
-#ifdef LINUX
+#    ifdef LINUX
     /* is this a sigreturn pattern placed by kernel on the stack or vsyscall page? */
     if (is_signal_restorer_code(addr, &len)) {
-        LOG(GLOBAL, LOG_INTERP|LOG_VMAREAS, 2,
-            "found signal restorer code @"PFX", allowing it\n", addr);
+        LOG(GLOBAL, LOG_INTERP | LOG_VMAREAS, 2,
+            "found signal restorer code @" PFX ", allowing it\n", addr);
         SYSLOG_INTERNAL_WARNING_ONCE("signal restorer code allowed.");
         res = ALLOWING_OK;
         goto check_origins_bb_pattern_exit;
     }
-#endif
+#    endif
 
     /* is this a closure trampoline that looks like this:
      *   mov immed -> 0x4(esp)             (put frame ptr directly in slot)
@@ -4683,7 +4667,7 @@ check_origins_bb_pattern(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t
               opnd_get_disp(op) == 4 && opnd_get_scale(op) == REG_NULL);
 
         if (!ok && opnd_is_reg(op) && opnd_get_size(instr_get_src(first, 0)) == OPSZ_4) {
-            uint immed = (uint) opnd_get_immed_int(instr_get_src(first, 0));
+            uint immed = (uint)opnd_get_immed_int(instr_get_src(first, 0));
             /* require immed be addr for ecx, non-addr plus on heap for eax */
             /* FIXME: PAGE_SIZE is arbitrary restriction, assuming eax values
              * are small indices, and it's a nice way to distinguish pointers
@@ -4715,8 +4699,8 @@ check_origins_bb_pattern(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t
             ok = TEST(LINK_CALL, dcontext->last_exit->flags);
         }
         if (ok) {
-            LOG(GLOBAL, LOG_INTERP|LOG_VMAREAS, 2,
-                "WARNING: found trampoline block @"PFX", allowing it\n", addr);
+            LOG(GLOBAL, LOG_INTERP | LOG_VMAREAS, 2,
+                "WARNING: found trampoline block @" PFX ", allowing it\n", addr);
             SYSLOG_INTERNAL_WARNING_ONCE("trampoline DGC allowed.");
             res = ALLOWING_OK;
             goto check_origins_bb_pattern_exit;
@@ -4738,8 +4722,8 @@ check_origins_bb_pattern(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t
             if (instr_get_next(in) == NULL && /* only 2 instrs in this bb */
                 is_direct_jmp_to_image(dcontext, in)) {
                 len += instr_length(dcontext, in);
-                LOG(GLOBAL, LOG_INTERP|LOG_VMAREAS, 2,
-                    "WARNING: found push/jmp block @"PFX", allowing it\n", addr);
+                LOG(GLOBAL, LOG_INTERP | LOG_VMAREAS, 2,
+                    "WARNING: found push/jmp block @" PFX ", allowing it\n", addr);
                 SYSLOG_INTERNAL_WARNING_ONCE("push/jmp DGC allowed.");
                 res = ALLOWING_OK;
                 goto check_origins_bb_pattern_exit;
@@ -4747,30 +4731,30 @@ check_origins_bb_pattern(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t
         }
     }
 
-    /* look for the DGC ret on the stack that office xp uses, beyond TOS! 
+    /* look for the DGC ret on the stack that office xp uses, beyond TOS!
      * it varies between having no arg or having an immed arg -- my guess
      * is they use it to handle varargs with stdcall: callee must
      * clean up args but has to deal w/ dynamically varying #args, so
      * they use DGC ret, only alternative is jmp* and no ret
      */
     if (instr_is_return(first) && on_stack &&
-        addr < (app_pc) get_mcontext(dcontext)->xsp) { /* beyond TOS */
-        ASSERT(instr_get_next(first) == NULL); /* bb should have only ret in it */
+        addr < (app_pc)get_mcontext(dcontext)->xsp) { /* beyond TOS */
+        ASSERT(instr_get_next(first) == NULL);        /* bb should have only ret in it */
         len = instr_length(dcontext, first);
-        LOG(GLOBAL, LOG_INTERP|LOG_VMAREAS, 2,
-            "WARNING: found ret-beyond-TOS @"PFX", allowing it\n", addr);
+        LOG(GLOBAL, LOG_INTERP | LOG_VMAREAS, 2,
+            "WARNING: found ret-beyond-TOS @" PFX ", allowing it\n", addr);
         SYSLOG_INTERNAL_WARNING_ONCE("ret-beyond-TOS DGC allowed.");
         res = ALLOWING_OK;
         goto check_origins_bb_pattern_exit;
     }
 
-    if (DYNAMO_OPTION(trampoline_dirjmp) &&
-        !on_stack && is_direct_jmp_to_image(dcontext, first)) {
+    if (DYNAMO_OPTION(trampoline_dirjmp) && !on_stack &&
+        is_direct_jmp_to_image(dcontext, first)) {
         /* should be a lone jmp */
         ASSERT(instr_get_next(first) == NULL);
         len = instr_length(dcontext, first);
-        LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 2,
-            "WARNING: allowing targeted direct jmp @"PFX"\n", addr);
+        LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 2,
+            "WARNING: allowing targeted direct jmp @" PFX "\n", addr);
         SYSLOG_INTERNAL_WARNING_ONCE("trampoline direct jmp allowed.");
         STATS_INC(trampolines_direct_jmps);
         res = ALLOWING_OK;
@@ -4780,8 +4764,7 @@ check_origins_bb_pattern(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t
     /* allow a .NET COM method table: a lone direct call on the heap, and a
      * ret immediately preceding it (see case 3558 and case 3564)
      */
-    if (DYNAMO_OPTION(trampoline_dircall) &&
-        !on_stack && instr_is_call_direct(first)) {
+    if (DYNAMO_OPTION(trampoline_dircall) && !on_stack && instr_is_call_direct(first)) {
         len = instr_length(dcontext, first);
         /* ignore rest of ilist -- may or may not follow call for real bb, as
          * will have separate calls to check_thread_vm_area() and thus
@@ -4789,8 +4772,8 @@ check_origins_bb_pattern(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t
          * not really a security hole at all as attack could have sent control
          * directly to target
          */
-        LOG(GLOBAL, LOG_INTERP|LOG_VMAREAS, 2,
-            "WARNING: allowing targeted direct call @"PFX"\n", addr);
+        LOG(GLOBAL, LOG_INTERP | LOG_VMAREAS, 2,
+            "WARNING: allowing targeted direct call @" PFX "\n", addr);
         SYSLOG_INTERNAL_WARNING_ONCE("trampoline direct call allowed.");
         STATS_INC(trampolines_direct_calls);
         res = ALLOWING_OK;
@@ -4806,7 +4789,7 @@ check_origins_bb_pattern(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t
              */
             /* A racy unmap could cause a fault here so we track the page
              * that's being decoded. */
-            set_thread_decode_page_start(dcontext, (app_pc) PAGE_START(nxt_pc));
+            set_thread_decode_page_start(dcontext, (app_pc)PAGE_START(nxt_pc));
             nxt_pc = decode_cti(dcontext, nxt_pc, nxt);
             if (nxt_pc != NULL && instr_opcode_valid(nxt) && instr_is_call_direct(nxt)) {
                 /* actually we don't get here w/ current native_exec early-gateway
@@ -4815,8 +4798,8 @@ check_origins_bb_pattern(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t
                 ASSERT_NOT_TESTED();
                 instr_destroy(dcontext, nxt);
                 len = instr_length(dcontext, first);
-                LOG(GLOBAL, LOG_INTERP|LOG_VMAREAS, 2,
-                    "WARNING: allowing .NET COM ret in method table @"PFX"\n", addr);
+                LOG(GLOBAL, LOG_INTERP | LOG_VMAREAS, 2,
+                    "WARNING: allowing .NET COM ret in method table @" PFX "\n", addr);
                 SYSLOG_INTERNAL_WARNING_ONCE(".NET COM method table ret allowed.");
                 STATS_INC(trampolines_com_rets);
                 res = ALLOWING_OK;
@@ -4832,12 +4815,12 @@ check_origins_bb_pattern(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t
         goto check_origins_bb_pattern_exit;
     }
 
- check_origins_bb_pattern_exit:
+check_origins_bb_pattern_exit:
     if (res == ALLOWING_OK) {
         /* bb matches pattern, let's allow it, but only this block, not entire region! */
-        LOG(GLOBAL, LOG_INTERP|LOG_VMAREAS, 2,
-            "Trimming exec area "PFX"-"PFX" to match pattern bb "PFX"-"PFX"\n",
-            *base, *base+*size, addr, addr+len);
+        LOG(GLOBAL, LOG_INTERP | LOG_VMAREAS, 2,
+            "Trimming exec area " PFX "-" PFX " to match pattern bb " PFX "-" PFX "\n",
+            *base, *base + *size, addr, addr + len);
         *base = addr;
         ASSERT(len > 0);
         *size = len;
@@ -4859,17 +4842,18 @@ check_origins_bb_pattern(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t
  * NOTE - regions are required to intersect */
 static void
 check_origins_trim_region_helper(app_pc *base /*INOUT*/, size_t *size /*INOUT*/,
-                                 app_pc start, app_pc end) {
+                                 app_pc start, app_pc end)
+{
     app_pc original_base = *base;
     ASSERT(*base + *size > *base); /* shouldn't overflow */
-    ASSERT(start < end); /* [start, end) should be an actual region */
-    ASSERT(*base + *size > start &&  *base < end); /* region must intersect */
-    LOG(GLOBAL, LOG_INTERP|LOG_VMAREAS, 2,
-        "Trimming exec area "PFX"-"PFX" to intersect area "PFX"-"PFX"\n",
-        *base, *base+*size, start, end);
+    ASSERT(start < end);           /* [start, end) should be an actual region */
+    ASSERT(*base + *size > start && *base < end); /* region must intersect */
+    LOG(GLOBAL, LOG_INTERP | LOG_VMAREAS, 2,
+        "Trimming exec area " PFX "-" PFX " to intersect area " PFX "-" PFX "\n", *base,
+        *base + *size, start, end);
     *base = MAX(*base, start);
     /* don't use new base here! (case 8152) */
-    *size = MIN(original_base+*size, end) - *base;
+    *size = MIN(original_base + *size, end) - *base;
 }
 
 /* Checks if the given PC is trusted and to what level
@@ -4884,20 +4868,20 @@ check_origins_helper(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t *si
 
     if (is_dyngen_vsyscall(addr) && *size == PAGE_SIZE && (prot & MEMPROT_WRITE) == 0) {
         /* FIXME: don't allow anyone to make this region writable? */
-        LOG(GLOBAL, LOG_INTERP|LOG_VMAREAS, 2,
-            PFX" is the vsyscall page, ok to execute\n", addr);
+        LOG(GLOBAL, LOG_INTERP | LOG_VMAREAS, 2,
+            PFX " is the vsyscall page, ok to execute\n", addr);
         return ALLOWING_OK;
     }
-#if 0
+#    if 0
     /* this syslog causes services.exe to hang (ref case 666) once case 666
      * is fixed re-enable if desired FIXME */
     SYSLOG_INTERNAL_WARNING_ONCE("executing region at "PFX" not on executable list.",
                                  addr);
-#else
-    LOG(GLOBAL, LOG_VMAREAS, 1, 
-        "executing region at "PFX" not on executable list. Thread %d\n", 
-        addr, dcontext->owning_thread);
-#endif
+#    else
+    LOG(GLOBAL, LOG_VMAREAS, 1,
+        "executing region at " PFX " not on executable list. Thread %d\n", addr,
+        dcontext->owning_thread);
+#    endif
 
     if (USING_FUTURE_EXEC_LIST) {
         bool ok;
@@ -4907,20 +4891,20 @@ check_origins_helper(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t *si
         if (!ok)
             read_unlock(&futureexec_areas->lock);
         else {
-            LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 2,
-                "WARNING: pc = "PFX" is future executable, allowing\n", addr);
-            LOG(GLOBAL, LOG_INTERP|LOG_VMAREAS, 2,
-                "WARNING: pc = "PFX" is future executable, allowing\n", addr);
-#if 0
+            LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 2,
+                "WARNING: pc = " PFX " is future executable, allowing\n", addr);
+            LOG(GLOBAL, LOG_INTERP | LOG_VMAREAS, 2,
+                "WARNING: pc = " PFX " is future executable, allowing\n", addr);
+#    if 0
             /* this syslog causes services.exe to hang (ref case 666) 
              * once case 666 is fixed re-enable if desired FIXME */
             SYSLOG_INTERNAL_WARNING_ONCE("future executable region allowed.");
-#else
+#    else
             DODEBUG_ONCE(LOG(GLOBAL, LOG_ALL, 1, "future executable region allowed."));
-#endif
-            if (*base < fut_area->start || *base+*size > fut_area->end) {
-                check_origins_trim_region_helper(base, size,
-                                                 fut_area->start, fut_area->end);
+#    endif
+            if (*base < fut_area->start || *base + *size > fut_area->end) {
+                check_origins_trim_region_helper(base, size, fut_area->start,
+                                                 fut_area->end);
             }
             once_only = TEST(VM_ONCE_ONLY, fut_area->vm_flags);
             /* now done w/ fut_area */
@@ -4934,10 +4918,11 @@ check_origins_helper(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t *si
                  * besides, we don't see the write-exec iter scheme for the stack.
                  */
                 STATS_INC(num_exec_future_stack);
-                LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 2,
-                    "future exec "PFX"-"PFX" is on stack, removing from future list\n",
-                    *base, *base+*size);
-                ok = remove_futureexec_vm_area(*base, *base+*size);
+                LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 2,
+                    "future exec " PFX "-" PFX
+                    " is on stack, removing from future list\n",
+                    *base, *base + *size);
+                ok = remove_futureexec_vm_area(*base, *base + *size);
                 ASSERT(ok);
             } else {
                 STATS_INC(num_exec_future_heap);
@@ -4945,14 +4930,15 @@ check_origins_helper(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t *si
                     /* if on all-selfmod pages, then we shouldn't need to keep it on
                      * the futureexec list
                      */
-                    if (is_executable_area_on_all_selfmod_pages(*base, *base+*size))
+                    if (is_executable_area_on_all_selfmod_pages(*base, *base + *size))
                         once_only = true;
                 }
                 if (once_only) {
-                    LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 2,
-                        "future exec "PFX"-"PFX" is once-only, removing from future list\n",
-                        *base, *base+*size);
-                    ok = remove_futureexec_vm_area(*base, *base+*size);
+                    LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 2,
+                        "future exec " PFX "-" PFX
+                        " is once-only, removing from future list\n",
+                        *base, *base + *size);
+                    ok = remove_futureexec_vm_area(*base, *base + *size);
                     ASSERT(ok);
                     STATS_INC(num_exec_future_once);
                 }
@@ -4962,10 +4948,8 @@ check_origins_helper(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t *si
         }
     }
 
-    if (DYNAMO_OPTION(executable_if_text) ||
-        DYNAMO_OPTION(executable_if_rx_text) ||
-        (DYNAMO_OPTION(exempt_text) ||
-        !IS_STRING_OPTION_EMPTY(exempt_text_list))) {
+    if (DYNAMO_OPTION(executable_if_text) || DYNAMO_OPTION(executable_if_rx_text) ||
+        (DYNAMO_OPTION(exempt_text) || !IS_STRING_OPTION_EMPTY(exempt_text_list))) {
         app_pc modbase = get_module_base(addr);
         if (modbase != NULL) { /* PE, and is readable */
             /* note that it could still be a PRIVATE mapping */
@@ -4976,16 +4960,17 @@ check_origins_helper(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t *si
             if (is_in_code_section(modbase, addr, &sec_start, &sec_end)) {
                 bool allow = false;
                 if (DYNAMO_OPTION(executable_if_text)) {
-                    LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 2,
-                        "exec region is in code section of module @"PFX" (%s), allowing\n",
-                        modbase, modname == NULL? "<invalid name>" : modname);
+                    LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 2,
+                        "exec region is in code section of module @" PFX
+                        " (%s), allowing\n",
+                        modbase, modname == NULL ? "<invalid name>" : modname);
                     STATS_INC(num_text);
                     mark_module_exempted(addr);
                     allow = true;
                 } else {
                     uint prot = 0;
                     list_default_or_append_t deflist = LIST_NO_MATCH;
-                    /* Xref case 10526, in the common case app_mem_prot_change() adds 
+                    /* Xref case 10526, in the common case app_mem_prot_change() adds
                      * this region, however it can miss -> rx transitions if they
                      * overlapped more then one section (fixing it to do so would
                      * require signifigant restructuring of that routine, see comments
@@ -5002,46 +4987,49 @@ check_origins_helper(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t *si
                     if (!allow && modname != NULL) {
                         bool onlist;
                         string_option_read_lock();
-                        LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 3,
+                        LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 3,
                             "exec region is in code section of module %s, vs list %s\n",
                             modname, DYNAMO_OPTION(exempt_text_list));
                         onlist = check_filter(DYNAMO_OPTION(exempt_text_list), modname);
                         string_option_read_unlock();
                         if (onlist) {
-                            LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 2,
-                                "module %s is on text list, allowing execution\n", modname);
+                            LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 2,
+                                "module %s is on text list, allowing execution\n",
+                                modname);
                             STATS_INC(num_text_list);
                             SYSLOG_INTERNAL_WARNING_ONCE("code origins: module %s text "
-                                                         "section exempt", modname);
+                                                         "section exempt",
+                                                         modname);
                             mark_module_exempted(addr);
                             allow = true;
                         }
                     }
 
                     if (!allow && modname != NULL) {
-                        deflist =
-                            check_list_default_and_append(dynamo_options.
-                                                          exempt_mapped_image_text_default_list,
-                                                          dynamo_options.
-                                                          exempt_mapped_image_text_list,
-                                                          modname);
+                        deflist = check_list_default_and_append(
+                            dynamo_options.exempt_mapped_image_text_default_list,
+                            dynamo_options.exempt_mapped_image_text_list, modname);
                     }
                     if (deflist != LIST_NO_MATCH) {
                         bool image_mapping = is_mapped_as_image(modbase);
                         if (image_mapping) {
-                            LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 2,
+                            LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 2,
                                 "module %s is on text list, of a mapped IMAGE"
-                                " allowing execution\n", modname);
+                                " allowing execution\n",
+                                modname);
                             STATS_INC(num_image_text_list);
-                            SYSLOG_INTERNAL_WARNING_ONCE("code origins: module %s IMAGE text "
-                                                         "section exempt", modname);
+                            SYSLOG_INTERNAL_WARNING_ONCE(
+                                "code origins: module %s IMAGE text "
+                                "section exempt",
+                                modname);
                             if (deflist == LIST_ON_APPEND) /* case 9799: not default */
                                 mark_module_exempted(addr);
                             allow = true;
                         } else {
                             ASSERT_NOT_TESTED();
                             SYSLOG_INTERNAL_WARNING_ONCE("code origins: module %s text "
-                                                         "not IMAGE, attack!", modname);
+                                                         "not IMAGE, attack!",
+                                                         modname);
                         }
                     }
                 }
@@ -5060,7 +5048,7 @@ check_origins_helper(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t *si
          !IS_STRING_OPTION_EMPTY(exempt_dot_data_list)) ||
         (DYNAMO_OPTION(exempt_dot_data_x) &&
          !IS_STRING_OPTION_EMPTY(exempt_dot_data_x_list))) {
-        /* FIXME: get_module_base() is called all over in this function. 
+        /* FIXME: get_module_base() is called all over in this function.
          *        This function could do with some refactoring. */
         app_pc modbase = get_module_base(addr);
         if (modbase != NULL) {
@@ -5075,34 +5063,36 @@ check_origins_helper(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t *si
                     !IS_STRING_OPTION_EMPTY(exempt_dot_data_list)) {
                     if (modname != NULL) {
                         string_option_read_lock();
-                        LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 3,
-                            "exec region is in data of module %s, vs list %s\n",
-                            modname, DYNAMO_OPTION(exempt_dot_data_list));
-                        onlist = check_filter(DYNAMO_OPTION(exempt_dot_data_list), modname);
+                        LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 3,
+                            "exec region is in data of module %s, vs list %s\n", modname,
+                            DYNAMO_OPTION(exempt_dot_data_list));
+                        onlist =
+                            check_filter(DYNAMO_OPTION(exempt_dot_data_list), modname);
                         string_option_read_unlock();
                         DOSTATS({
-                            if (onlist) 
+                            if (onlist)
                                 STATS_INC(num_dot_data_list);
                         });
                     }
                 }
                 DOSTATS({
-                    if (DYNAMO_OPTION(executable_if_dot_data)) 
+                    if (DYNAMO_OPTION(executable_if_dot_data))
                         STATS_INC(num_dot_data);
                 });
                 if (onlist || DYNAMO_OPTION(executable_if_dot_data)) {
-                    LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 2,
+                    LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 2,
                         "exec region is in .data section of module %s\n",
-                        modname == NULL? "<invalid name>" : modname);
+                        modname == NULL ? "<invalid name>" : modname);
                     SYSLOG_INTERNAL_WARNING_ONCE(
-                            "code origins: .data section of module %s exempt",
-                            modname == NULL? "<invalid name>" : modname);
+                        "code origins: .data section of module %s exempt",
+                        modname == NULL ? "<invalid name>" : modname);
                     /* case 9799: FIXME: we don't want to mark as exempted for the
                      * default modules on the list: should split into a separate
                      * default list so we can tell!  Those modules will have private
                      * pcaches if in a process w/ ANY exemption options */
                     mark_module_exempted(addr);
-                    allow = true;;
+                    allow = true;
+                    ;
                 }
                 if (!allow && get_memory_info(addr, NULL, NULL, &prot) &&
                     TEST(MEMPROT_EXEC, prot)) {
@@ -5112,28 +5102,29 @@ check_origins_helper(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t *si
                         !IS_STRING_OPTION_EMPTY(exempt_dot_data_x_list)) {
                         if (modname != NULL) {
                             string_option_read_lock();
-                            LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 3,
+                            LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 3,
                                 "exec region is in x data of module %s, vs list %s\n",
                                 modname, DYNAMO_OPTION(exempt_dot_data_x_list));
-                            onlist = check_filter_with_wildcards(DYNAMO_OPTION(exempt_dot_data_x_list), modname);
+                            onlist = check_filter_with_wildcards(
+                                DYNAMO_OPTION(exempt_dot_data_x_list), modname);
                             string_option_read_unlock();
                             DOSTATS({
-                                if (onlist) 
+                                if (onlist)
                                     STATS_INC(num_dot_data_x_list);
                             });
                         }
                         DOSTATS({
-                            if (DYNAMO_OPTION(executable_if_dot_data_x)) 
+                            if (DYNAMO_OPTION(executable_if_dot_data_x))
                                 STATS_INC(num_dot_data_x);
                         });
                     }
                     if (DYNAMO_OPTION(executable_if_dot_data_x) || onlist) {
-                        LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 2,
+                        LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 2,
                             "exec region is in x .data section of module %s\n",
-                            modname == NULL? "<invalid name>" : modname);
+                            modname == NULL ? "<invalid name>" : modname);
                         SYSLOG_INTERNAL_WARNING_ONCE(
-                                "code origins: .data section of module %s exempt",
-                                modname == NULL? "<invalid name>" : modname);
+                            "code origins: .data section of module %s exempt",
+                            modname == NULL ? "<invalid name>" : modname);
                         /* case 9799: FIXME: we don't want to mark as exempted for
                          * the default modules on the list: should split into a
                          * separate default list so we can tell!  Those modules will
@@ -5153,8 +5144,7 @@ check_origins_helper(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t *si
     }
 
     if (DYNAMO_OPTION(executable_if_image) ||
-        (DYNAMO_OPTION(exempt_image) &&
-         !IS_STRING_OPTION_EMPTY(exempt_image_list)) ||
+        (DYNAMO_OPTION(exempt_image) && !IS_STRING_OPTION_EMPTY(exempt_image_list)) ||
         !moduledb_exempt_list_empty(MODULEDB_EXEMPT_IMAGE)) {
         app_pc modbase = get_module_base(addr);
         if (modbase != NULL) {
@@ -5162,29 +5152,26 @@ check_origins_helper(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t *si
              * used to limit to just certain sections).  FIXME - we could use the
              * relaxed is_in_any_section here, but other relaxations (such as dll2heap)
              * exclude the entire module so need to match that to prevent there being
-             * non exemptable areas. */                
+             * non exemptable areas. */
             bool onlist = false;
             bool mark_exempted = true;
             if (!DYNAMO_OPTION(executable_if_image)) {
                 if (modname != NULL) {
                     string_option_read_lock();
-                    LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 3,
-                        "exec region is in image of module %s, vs list %s\n",
-                        modname, DYNAMO_OPTION(exempt_image_list));
-                    onlist = check_filter(DYNAMO_OPTION(exempt_image_list),
-                                          modname);
+                    LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 3,
+                        "exec region is in image of module %s, vs list %s\n", modname,
+                        DYNAMO_OPTION(exempt_image_list));
+                    onlist = check_filter(DYNAMO_OPTION(exempt_image_list), modname);
                     string_option_read_unlock();
                     DOSTATS({
-                        if (onlist) 
+                        if (onlist)
                             STATS_INC(num_exempt_image_list);
                     });
-                    if (!onlist &&
-                        !moduledb_exempt_list_empty(MODULEDB_EXEMPT_IMAGE)) {
+                    if (!onlist && !moduledb_exempt_list_empty(MODULEDB_EXEMPT_IMAGE)) {
                         onlist =
-                            moduledb_check_exempt_list(MODULEDB_EXEMPT_IMAGE,
-                                                       modname);
+                            moduledb_check_exempt_list(MODULEDB_EXEMPT_IMAGE, modname);
                         DOSTATS({
-                            if (onlist) 
+                            if (onlist)
                                 STATS_INC(num_moduledb_exempt_image);
                         });
                         /* FIXME - could be that a later policy would
@@ -5199,9 +5186,9 @@ check_origins_helper(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t *si
                              */
                             mark_exempted = false;
                             moduledb_report_exemption("Moduledb image exemption"
-                                                      " "PFX" to "PFX" from "
-                                                      "module %s", *base,
-                                                      *base + *size, modname);
+                                                      " " PFX " to " PFX " from "
+                                                      "module %s",
+                                                      *base, *base + *size, modname);
                         }
                     }
                 }
@@ -5209,19 +5196,20 @@ check_origins_helper(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t *si
                 STATS_INC(num_exempt_image);
             }
             if (onlist || DYNAMO_OPTION(executable_if_image)) {
-                LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 2,
-                        "exec region is in the loaded image of module %s\n",
+                LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 2,
+                    "exec region is in the loaded image of module %s\n",
                     modname == NULL ? "<invalid name>" : modname);
                 SYSLOG_INTERNAL_WARNING_ONCE("code origins: loaded image of module %s"
-                                             "exempt", modname == NULL ?
-                                             "<invalid name>" : modname);
+                                             "exempt",
+                                             modname == NULL ? "<invalid name>"
+                                                             : modname);
                 if (mark_exempted)
                     mark_module_exempted(addr);
                 return ALLOWING_OK;
             }
         }
     }
-    
+
     if (((DYNAMO_OPTION(exempt_dll2heap) &&
           !IS_STRING_OPTION_EMPTY(exempt_dll2heap_list)) ||
          !moduledb_exempt_list_empty(MODULEDB_EXEMPT_DLL2HEAP) ||
@@ -5232,14 +5220,14 @@ check_origins_helper(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t *si
         !LINKSTUB_FAKE(dcontext->last_exit)) {
         /* no cutting corners here -- find exact module that exit cti is from */
         app_pc modbase;
-        app_pc translated_pc = 
-            recreate_app_pc(dcontext, EXIT_CTI_PC(dcontext->last_fragment,
-                                                  dcontext->last_exit),
-                            dcontext->last_fragment);
+        app_pc translated_pc = recreate_app_pc(
+            dcontext, EXIT_CTI_PC(dcontext->last_fragment, dcontext->last_exit),
+            dcontext->last_fragment);
         ASSERT(translated_pc != NULL);
         modbase = get_module_base(translated_pc);
-        LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 3,
-            "check_origins: dll2heap and dll2stack for "PFX": cache "PFX" => app "PFX" == mod "PFX"\n",
+        LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 3,
+            "check_origins: dll2heap and dll2stack for " PFX ": cache " PFX " => app " PFX
+            " == mod " PFX "\n",
             addr, EXIT_CTI_PC(dcontext->last_fragment, dcontext->last_exit),
             translated_pc, modbase);
         if (modbase != NULL) { /* PE, and is readable */
@@ -5247,18 +5235,18 @@ check_origins_helper(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t *si
                 bool onheaplist = false, onstacklist = false;
                 bool on_moddb_heaplist = false, on_moddb_stacklist = false;
                 string_option_read_lock();
-                LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 3,
+                LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 3,
                     "source region is in module %s\n", modname);
                 if (DYNAMO_OPTION(exempt_dll2heap)) {
-                    onheaplist = check_filter(DYNAMO_OPTION(exempt_dll2heap_list),
-                                              modname);
-                    LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 3, "exempt heap list: %s\n",
+                    onheaplist =
+                        check_filter(DYNAMO_OPTION(exempt_dll2heap_list), modname);
+                    LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 3, "exempt heap list: %s\n",
                         DYNAMO_OPTION(exempt_dll2heap_list));
                 }
                 if (DYNAMO_OPTION(exempt_dll2stack)) {
-                    onstacklist = check_filter(DYNAMO_OPTION(exempt_dll2stack_list),
-                                               modname);
-                    LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 3, "exempt stack list: %s\n",
+                    onstacklist =
+                        check_filter(DYNAMO_OPTION(exempt_dll2stack_list), modname);
+                    LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 3, "exempt stack list: %s\n",
                         DYNAMO_OPTION(exempt_dll2stack_list));
                 }
                 string_option_read_unlock();
@@ -5273,36 +5261,39 @@ check_origins_helper(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t *si
 
                 /* make sure targeting non-stack, non-module memory */
                 if ((onheaplist || on_moddb_heaplist) &&
-                    !is_on_stack(dcontext, addr, NULL) &&
-                    get_module_base(addr) == NULL) {
-                    LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 2,
+                    !is_on_stack(dcontext, addr, NULL) && get_module_base(addr) == NULL) {
+                    LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 2,
                         "source module %s is on exempt list, target is heap => allowing "
-                        "execution\n", modname);
+                        "execution\n",
+                        modname);
                     if (on_moddb_heaplist) {
                         STATS_INC(num_moduledb_exempt_dll2heap);
-                        moduledb_report_exemption("Moduledb dll2heap exemption "PFX" to"
-                                                  " "PFX" from module %s",
+                        moduledb_report_exemption("Moduledb dll2heap exemption " PFX " to"
+                                                  " " PFX " from module %s",
                                                   translated_pc, addr, modname);
                     } else {
                         STATS_INC(num_exempt_dll2heap);
                         SYSLOG_INTERNAL_WARNING_ONCE("code origins: dll2heap from %s "
-                                                     "exempt", modname);
+                                                     "exempt",
+                                                     modname);
                     }
                     return ALLOWING_OK;
                 }
                 if ((onstacklist || on_moddb_stacklist) &&
                     is_on_stack(dcontext, addr, NULL)) {
-                    LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 2,
+                    LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 2,
                         "source module %s is on exempt list, target is stack => allowing"
-                        "execution\n", modname);
+                        "execution\n",
+                        modname);
                     if (on_moddb_stacklist) {
                         STATS_INC(num_moduledb_exempt_dll2stack);
-                        moduledb_report_exemption("Moduledb dll2stack exemption "PFX" "
-                                                  "to "PFX" from module %s",
+                        moduledb_report_exemption("Moduledb dll2stack exemption " PFX " "
+                                                  "to " PFX " from module %s",
                                                   translated_pc, addr, modname);
                     } else {
                         SYSLOG_INTERNAL_WARNING_ONCE("code origins: dll2stack from %s is"
-                                                     " exempt", modname);
+                                                     " exempt",
+                                                     modname);
                         STATS_INC(num_exempt_dll2stack);
                     }
                     return ALLOWING_OK;
@@ -5313,8 +5304,8 @@ check_origins_helper(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t *si
 
     if (dynamo_options.executable_if_trampoline) {
         /* check for specific bb patterns we allow */
-        if (check_origins_bb_pattern(dcontext, addr, base, size, vm_flags, frag_flags)
-            == ALLOWING_OK) {
+        if (check_origins_bb_pattern(dcontext, addr, base, size, vm_flags, frag_flags) ==
+            ALLOWING_OK) {
             DOSTATS({
                 if (is_on_stack(dcontext, addr, NULL)) {
                     STATS_INC(num_trampolines_stack);
@@ -5329,8 +5320,8 @@ check_origins_helper(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t *si
     if (DYNAMO_OPTION(executable_if_driver)) {
         if (TEST(VM_DRIVER_ADDRESS, *vm_flags)) {
             ASSERT(*size == PAGE_SIZE);
-            LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 2,
-                "check origins: pc = "PFX" is in a new driver area\n", addr);
+            LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 2,
+                "check origins: pc = " PFX " is in a new driver area\n", addr);
             STATS_INC(num_driver_areas);
             return ALLOWING_OK;
         }
@@ -5338,32 +5329,33 @@ check_origins_helper(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t *si
 
     if (is_on_stack(dcontext, addr, NULL)) {
         /* WARNING: stack check not bulletproof since attackers control esp */
-        LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 2,
-            "check origins: pc = "PFX" is on the stack\n", addr);
+        LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 2,
+            "check origins: pc = " PFX " is on the stack\n", addr);
         STATS_INC(num_stack_violations);
         if (!dynamo_options.executable_stack) {
-            LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 1,
-                "ERROR: Address "PFX" on the stack is not executable!\n",
-                addr);
+            LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 1,
+                "ERROR: Address " PFX " on the stack is not executable!\n", addr);
             return STACK_EXECUTION_VIOLATION;
         } else {
-            LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 1,
-                "WARNING: Execution violation @ stack address "PFX" detected. "
-                "Continuing...\n", addr);
+            LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 1,
+                "WARNING: Execution violation @ stack address " PFX " detected. "
+                "Continuing...\n",
+                addr);
             return ALLOWING_BAD;
         }
     } else {
         STATS_INC(num_heap_violations);
         if (!dynamo_options.executable_heap) {
-            LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 1,
-                "ERROR: Address "PFX" on the heap is not executable!\n", addr);
-            SYSLOG_INTERNAL_WARNING_ONCE("Address "PFX" on the heap is not executable",
+            LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 1,
+                "ERROR: Address " PFX " on the heap is not executable!\n", addr);
+            SYSLOG_INTERNAL_WARNING_ONCE("Address " PFX " on the heap is not executable",
                                          addr);
             return HEAP_EXECUTION_VIOLATION;
         } else {
-            LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 1,
-                "WARNING: Execution violation @ heap address "PFX" detected. "
-                "Continuing...\n", addr);
+            LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 1,
+                "WARNING: Execution violation @ heap address " PFX " detected. "
+                "Continuing...\n",
+                addr);
             return ALLOWING_BAD;
         }
     }
@@ -5374,40 +5366,38 @@ check_origins_helper(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t *si
 
 /* It is up to the caller to raise a violation if return value is < 0 */
 static INLINE_ONCE int
-check_origins(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t *size,
-              uint prot, uint *vm_flags, uint *frag_flags, bool xfer)
+check_origins(dcontext_t *dcontext, app_pc addr, app_pc *base, size_t *size, uint prot,
+              uint *vm_flags, uint *frag_flags, bool xfer)
 {
     security_violation_t res;
     /* Many exemptions need to know the module name, so we obtain here */
     char modname_buf[MAX_MODNAME_INTERNAL];
-    const char *modname =
-        os_get_module_name_buf_strdup(addr, modname_buf,
-                                      BUFFER_SIZE_ELEMENTS(modname_buf)
-                                      HEAPACCT(ACCT_VMAREAS));
+    const char *modname = os_get_module_name_buf_strdup(
+        addr, modname_buf, BUFFER_SIZE_ELEMENTS(modname_buf) HEAPACCT(ACCT_VMAREAS));
 
     ASSERT(DYNAMO_OPTION(code_origins));
-    LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 3,
-        "check origins: pc = "PFX"\n", addr);
+    LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 3, "check origins: pc = " PFX "\n", addr);
     res = check_origins_helper(dcontext, addr, base, size, prot, vm_flags, frag_flags,
                                modname);
-# ifdef DGC_DIAGNOSTICS
+#    ifdef DGC_DIAGNOSTICS
     if (res != ALLOWING_OK) {
         /* set flag so we can call this area BAD in the future */
         *frag_flags |= FRAG_DYNGEN_RESTRICTED;
     }
-# endif
+#    endif
     if (res < 0) {
         /* if_x shouldn't have to check here, should catch all regions marked x
          * at DR init time or app allocation time
          */
         /* FIXME: turn these into a SYSLOG_INTERNAL_WARNING_ONCE(in case an
-         * external agent has added that code) 
+         * external agent has added that code)
          * and then we'd need to add them now.
          * FIXME: xref case 3742
          */
-        ASSERT_BUG_NUM(3742, !DYNAMO_OPTION(executable_if_x) || !TEST(MEMPROT_EXEC, prot));
-        ASSERT(!DYNAMO_OPTION(executable_if_rx) || !TEST(MEMPROT_EXEC, prot) || 
-                              TEST(MEMPROT_WRITE, prot));
+        ASSERT_BUG_NUM(3742,
+                       !DYNAMO_OPTION(executable_if_x) || !TEST(MEMPROT_EXEC, prot));
+        ASSERT(!DYNAMO_OPTION(executable_if_rx) || !TEST(MEMPROT_EXEC, prot) ||
+               TEST(MEMPROT_WRITE, prot));
     }
     if (modname != NULL && modname != modname_buf)
         dr_strfree(modname HEAPACCT(ACCT_VMAREAS));
@@ -5443,9 +5433,9 @@ vm_area_fragment_self_write(dcontext_t *dcontext, app_pc tag)
         start = area->start;
         end = area->end;
         read_unlock(&executable_areas->lock);
-        LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 1,
-            "WARNING: code on stack "PFX"-"PFX" @tag "PFX" written to\n",
-            start, end, tag);
+        LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 1,
+            "WARNING: code on stack " PFX "-" PFX " @tag " PFX " written to\n", start,
+            end, tag);
         SYSLOG_INTERNAL_WARNING_ONCE("executable code on stack written to.");
         /* FIXME: fragment could extend into multiple areas, we should flush
          * them all to cover the written-to region (which we don't know)
@@ -5462,23 +5452,23 @@ vm_area_fragment_self_write(dcontext_t *dcontext, app_pc tag)
 #ifdef SIMULATE_ATTACK
 
 enum {
-    SIMULATE_INIT       = 0,
-    SIMULATE_GENERIC    = 1,
-    SIMULATE_AT_ADDR    = 2,
+    SIMULATE_INIT = 0,
+    SIMULATE_GENERIC = 1,
+    SIMULATE_AT_ADDR = 2,
     SIMULATE_AT_FRAGNUM = 4,
     SIMULATE_WIPE_STACK = 8,
-    SIMULATE_OVER       = 0x1000,
+    SIMULATE_OVER = 0x1000,
 };
 
 /* attack simulation list */
 /* comma separated list of simulate points.
      @fragnum
         fragment number available only in DEBUG builds
-     0xfragpc 
-        will test addr only whenever check_thread_vm_area is called 
-        start of bb, pc at end of direct cti instr, target of direct cti, 
+     0xfragpc
+        will test addr only whenever check_thread_vm_area is called
+        start of bb, pc at end of direct cti instr, target of direct cti,
         pc at end of final instr in bb
-     s: prefix wipes the stack 
+     s: prefix wipes the stack
    Ex: -simulate_at @100,s:@150,0x77e9e8d6,s:0x77e9e8f0,@777,@2000,s:@19999,@29999
 */
 /* simulate_at is modified in place, hence caller needs to synchronize
@@ -5489,45 +5479,44 @@ next_simulate_at_fragment(char **tokpos /* OUT */, int *action /* OUT */)
     char *fragnum;
 
     // assumes sscanf won't get confused with the ,s
-    for(fragnum = *tokpos; fragnum; fragnum = *tokpos) {
+    for (fragnum = *tokpos; fragnum; fragnum = *tokpos) {
         int num;
         *tokpos = strchr(fragnum, ','); /* next ptr */
-        if (*tokpos) 
+        if (*tokpos)
             (*tokpos)++;
 
         if (sscanf(fragnum, PIFX, &num) == 1) {
-            LOG(GLOBAL, LOG_VMAREAS, 1, 
-                "next_simulate_at_fragment: %s="PIFX" addr\n", fragnum, num);
+            LOG(GLOBAL, LOG_VMAREAS, 1, "next_simulate_at_fragment: %s=" PIFX " addr\n",
+                fragnum, num);
             *action = SIMULATE_AT_ADDR;
             return num;
-        } else if (sscanf(fragnum, "s:"PIFX, &num) == 1) {
-            LOG(GLOBAL, LOG_VMAREAS, 1, 
-                "next_simulate_at_fragment: wipe stack %s="PIFX"\n", fragnum, num);
+        } else if (sscanf(fragnum, "s:" PIFX, &num) == 1) {
+            LOG(GLOBAL, LOG_VMAREAS, 1,
+                "next_simulate_at_fragment: wipe stack %s=" PIFX "\n", fragnum, num);
             *action = SIMULATE_WIPE_STACK | SIMULATE_AT_ADDR;
             return num;
-        } 
-#ifdef DEBUG                    /* for fragment count */
+        }
+#    ifdef DEBUG /* for fragment count */
         else if (sscanf(fragnum, "s:@%d", &num) == 1) {
-            LOG(GLOBAL, LOG_VMAREAS, 1, 
-                "next_simulate_at_fragment: wipe stack %s=%d\n", fragnum, num);
+            LOG(GLOBAL, LOG_VMAREAS, 1, "next_simulate_at_fragment: wipe stack %s=%d\n",
+                fragnum, num);
             *action = SIMULATE_WIPE_STACK | SIMULATE_AT_FRAGNUM;
             return num;
         } else if (sscanf(fragnum, "@%d", &num) == 1) {
-            LOG(GLOBAL, LOG_VMAREAS, 1, 
-                "next_simulate_at_fragment: %s=%d num\n", fragnum, num);
+            LOG(GLOBAL, LOG_VMAREAS, 1, "next_simulate_at_fragment: %s=%d num\n", fragnum,
+                num);
             *action = SIMULATE_AT_FRAGNUM;
             return num;
         }
-#endif
+#    endif
         else {
-            LOG(GLOBAL, LOG_VMAREAS, 1, 
-                "next_simulate_at_fragment: frg=%s ignored\n", fragnum);
+            LOG(GLOBAL, LOG_VMAREAS, 1, "next_simulate_at_fragment: frg=%s ignored\n",
+                fragnum);
         }
     }
 
     *action = SIMULATE_OVER;
-    LOG(GLOBAL, LOG_VMAREAS, 1, 
-        "next_simulate_at_fragment: simulate attack over\n");
+    LOG(GLOBAL, LOG_VMAREAS, 1, "next_simulate_at_fragment: simulate attack over\n");
 
     return 0;
 }
@@ -5536,7 +5525,7 @@ void
 simulate_attack(dcontext_t *dcontext, app_pc pc)
 {
     static char *tokpos;
-    static int next_frag = 0;   /* number or address */
+    static int next_frag = 0; /* number or address */
     static int action = SIMULATE_INIT;
 
     bool attack = false;
@@ -5550,19 +5539,21 @@ simulate_attack(dcontext_t *dcontext, app_pc pc)
     }
 
     if (attack) {
-        LOG(GLOBAL, LOG_VMAREAS, 1,
-            "SIMULATE ATTACK for "PFX" @%d frags\n", pc, GLOBAL_STAT(num_fragments));
-        
+        LOG(GLOBAL, LOG_VMAREAS, 1, "SIMULATE ATTACK for " PFX " @%d frags\n", pc,
+            GLOBAL_STAT(num_fragments));
+
         if (TEST(SIMULATE_WIPE_STACK, action)) {
             reg_t esp = get_mcontext(dcontext)->xsp;
             uint overflow_size = 1024;
-            LOG(THREAD_GET, LOG_VMAREAS, 1, "simulate_attack: wipe stack "PFX"-"PFX"\n", 
-                esp, esp + overflow_size-1);
+            LOG(THREAD_GET, LOG_VMAREAS, 1,
+                "simulate_attack: wipe stack " PFX "-" PFX "\n", esp,
+                esp + overflow_size - 1);
 
             /* wipe out a good portion of the app stack */
-            memset((void*)esp, 0xbf, overflow_size); /* LOOK for 0xbf in the log */
-            LOG(THREAD_GET, LOG_VMAREAS, 1, "simulate_attack: wiped stack "PFX"-"PFX"\n", 
-                esp, esp + overflow_size-1);
+            memset((void *)esp, 0xbf, overflow_size); /* LOOK for 0xbf in the log */
+            LOG(THREAD_GET, LOG_VMAREAS, 1,
+                "simulate_attack: wiped stack " PFX "-" PFX "\n", esp,
+                esp + overflow_size - 1);
 
             /* FIXME: we may want to just wipe the stack and return to app */
         }
@@ -5587,7 +5578,7 @@ simulate_attack(dcontext_t *dcontext, app_pc pc)
 
     if (attack) {
         security_violation(dcontext, pc, ATTACK_SIMULATION_VIOLATION,
-                           OPTION_BLOCK|OPTION_REPORT);
+                           OPTION_BLOCK | OPTION_REPORT);
     }
 }
 #endif /* SIMULATE_ATTACK */
@@ -5600,16 +5591,16 @@ print_entry(dcontext_t *dcontext, fragment_t *entry, char *prefix)
         LOG(THREAD, LOG_VMAREAS, 1, "%s<NULL>\n", prefix);
     else if (FRAG_MULTI(entry)) {
         if (FRAG_MULTI_INIT(entry)) {
-            LOG(THREAD, LOG_VMAREAS, 1, "%s"PFX" <init: tag="PFX"> pc="PFX"\n",
+            LOG(THREAD, LOG_VMAREAS, 1, "%s" PFX " <init: tag=" PFX "> pc=" PFX "\n",
                 prefix, entry, FRAG_FRAG(entry), FRAG_PC(entry));
         } else {
-            LOG(THREAD, LOG_VMAREAS, 1, "%s"PFX" F="PFX" pc="PFX"\n",
-                prefix, entry, FRAG_FRAG(entry), FRAG_PC(entry));
+            LOG(THREAD, LOG_VMAREAS, 1, "%s" PFX " F=" PFX " pc=" PFX "\n", prefix, entry,
+                FRAG_FRAG(entry), FRAG_PC(entry));
         }
     } else {
-        fragment_t *f = (fragment_t *) entry;
-        LOG(THREAD, LOG_VMAREAS, 1, "%s"PFX" F%d tag="PFX"\n",
-            prefix, f, f->id, f->tag);
+        fragment_t *f = (fragment_t *)entry;
+        LOG(THREAD, LOG_VMAREAS, 1, "%s" PFX " F%d tag=" PFX "\n", prefix, f, f->id,
+            f->tag);
     }
 }
 
@@ -5617,7 +5608,7 @@ static void
 print_fraglist(dcontext_t *dcontext, vm_area_t *area, char *prefix)
 {
     fragment_t *entry, *last;
-    LOG(THREAD, LOG_VMAREAS, 1, "%sFragments for area ("PFX") "PFX".."PFX"\n",
+    LOG(THREAD, LOG_VMAREAS, 1, "%sFragments for area (" PFX ") " PFX ".." PFX "\n",
         prefix, area, area->start, area->end);
     for (entry = area->custom.frags, last = NULL; entry != NULL;
          last = entry, entry = FRAG_NEXT(entry)) {
@@ -5633,12 +5624,13 @@ print_fraglist(dcontext_t *dcontext, vm_area_t *area, char *prefix)
             /* check for also in same area == inconsistency in data structs */
             if (FRAG_PC(also) >= area->start && FRAG_PC(also) < area->end) {
                 if (FRAG_MULTI_INIT(also)) {
-                    LOG(THREAD, LOG_VMAREAS, 1, "WARNING: self-also frag tag "PFX"\n",
+                    LOG(THREAD, LOG_VMAREAS, 1, "WARNING: self-also frag tag " PFX "\n",
                         FRAG_FRAG(also));
                 } else {
                     fragment_t *f = FRAG_FRAG(also);
-                    LOG(THREAD, LOG_VMAREAS, 1, "WARNING: self-also frag F%d("PFX")%s\n",
-                        f->id, f->tag, TEST(FRAG_IS_TRACE, f->flags) ? " trace" : "");
+                    LOG(THREAD, LOG_VMAREAS, 1,
+                        "WARNING: self-also frag F%d(" PFX ")%s\n", f->id, f->tag,
+                        TEST(FRAG_IS_TRACE, f->flags) ? " trace" : "");
                 }
                 /* not an assertion b/c we sometimes print prior to cleaning */
             }
@@ -5667,18 +5659,17 @@ print_frag_arealist(dcontext_t *dcontext, fragment_t *f)
 {
     fragment_t *entry;
     if (FRAG_MULTI(f)) {
-        LOG(THREAD, LOG_VMAREAS, 1, "Areas for F="PFX" ("PFX")\n",
-            FRAG_FRAG(f), FRAG_PC(f));
+        LOG(THREAD, LOG_VMAREAS, 1, "Areas for F=" PFX " (" PFX ")\n", FRAG_FRAG(f),
+            FRAG_PC(f));
     } else
-        LOG(THREAD, LOG_VMAREAS, 1, "Areas for F%d ("PFX")\n", f->id, f->tag);
+        LOG(THREAD, LOG_VMAREAS, 1, "Areas for F%d (" PFX ")\n", f->id, f->tag);
     for (entry = f; entry != NULL; entry = FRAG_ALSO(entry)) {
         print_entry(dcontext, entry, "\t");
     }
 }
 #endif /* DEBUG && INTERNAL */
 
-
-/* adds entry to front of area's frags list 
+/* adds entry to front of area's frags list
  * caller must synchronize modification of area
  * FIXME: how assert that caller has done that w/o asking for whole vector
  * to be passed in, or having backpointer from area?
@@ -5702,25 +5693,24 @@ prepend_entry_to_fraglist(vm_area_t *area, fragment_t *entry)
  * sticks tag in for f (will be fixed in vm_area_add_fragment, once f is created)
  */
 static fragment_t *
-prepend_fraglist(dcontext_t *dcontext, vm_area_t *area, app_pc entry_pc,
-                 app_pc tag, fragment_t *prev)
+prepend_fraglist(dcontext_t *dcontext, vm_area_t *area, app_pc entry_pc, app_pc tag,
+                 fragment_t *prev)
 {
-    multi_entry_t *e = (multi_entry_t *)
-        nonpersistent_heap_alloc(dcontext, sizeof(multi_entry_t) HEAPACCT(ACCT_VMAREA_MULTI));
-    fragment_t * entry = (fragment_t *) e;
+    multi_entry_t *e = (multi_entry_t *)nonpersistent_heap_alloc(
+        dcontext, sizeof(multi_entry_t) HEAPACCT(ACCT_VMAREA_MULTI));
+    fragment_t *entry = (fragment_t *)e;
     e->flags = FRAG_FAKE | FRAG_IS_EXTRA_VMAREA | /* distinguish from fragment_t */
-        FRAG_IS_EXTRA_VMAREA_INIT; /* indicate f field is a tag, not a fragment_t yet */
+        FRAG_IS_EXTRA_VMAREA_INIT;   /* indicate f field is a tag, not a fragment_t yet */
     if (dcontext == GLOBAL_DCONTEXT) /* shared */
         e->flags |= FRAG_SHARED;
-    e->f = (fragment_t *) tag; /* placeholder */
+    e->f = (fragment_t *)tag; /* placeholder */
     e->pc = entry_pc;
     if (prev != NULL)
         FRAG_ALSO_ASSIGN(prev, entry);
     FRAG_ALSO_ASSIGN(entry, NULL);
     prepend_entry_to_fraglist(area, entry);
-    DOLOG(7, LOG_VMAREAS, {
-        print_fraglist(dcontext, area, "after prepend_fraglist, ");
-    });
+    DOLOG(7, LOG_VMAREAS,
+          { print_fraglist(dcontext, area, "after prepend_fraglist, "); });
     return entry;
 }
 
@@ -5743,12 +5733,11 @@ dyngen_diagnostics(dcontext_t *dcontext, app_pc pc, app_pc base_pc, size_t size,
 
     print_symbolic_address(pc, buf, sizeof(buf), false);
     LOG(GLOBAL, LOG_VMAREAS, 1,
-        "DYNGEN in %d: target="PFX" => "PFX"-"PFX" %s%s%s%s%s %s\n",
-        dcontext->owning_thread, pc, base_pc, base_pc+size,
-        ((prot & MEMPROT_READ) != 0) ? "R":"",
-        ((prot & MEMPROT_WRITE) != 0)? "W":"",
-        ((prot & MEMPROT_EXEC) != 0) ? "E":"",
-        future ? " future":" BAD", stack ? " stack":"", buf);
+        "DYNGEN in %d: target=" PFX " => " PFX "-" PFX " %s%s%s%s%s %s\n",
+        dcontext->owning_thread, pc, base_pc, base_pc + size,
+        ((prot & MEMPROT_READ) != 0) ? "R" : "", ((prot & MEMPROT_WRITE) != 0) ? "W" : "",
+        ((prot & MEMPROT_EXEC) != 0) ? "E" : "", future ? " future" : " BAD",
+        stack ? " stack" : "", buf);
 
     if (LINKSTUB_FAKE(dcontext->last_exit)) {
         LOG(GLOBAL, LOG_VMAREAS, 1,
@@ -5760,22 +5749,18 @@ dyngen_diagnostics(dcontext_t *dcontext, app_pc pc, app_pc base_pc, size_t size,
      * here and instead just print type from last_exit, since recreate
      * may fail
      */
-    translated_pc = 
-        recreate_app_pc(dcontext, EXIT_CTI_PC(dcontext->last_fragment,
-                                              dcontext->last_exit),
-                        dcontext->last_fragment);
+    translated_pc = recreate_app_pc(
+        dcontext, EXIT_CTI_PC(dcontext->last_fragment, dcontext->last_exit),
+        dcontext->last_fragment);
     if (translated_pc != NULL) {
         print_symbolic_address(translated_pc, buf, sizeof(buf), false);
-        LOG(GLOBAL, LOG_VMAREAS, 1,
-            "source=F%d("PFX") @"PFX" \"%s\"\n",
-            dcontext->last_fragment->id,
-            dcontext->last_fragment->tag,
+        LOG(GLOBAL, LOG_VMAREAS, 1, "source=F%d(" PFX ") @" PFX " \"%s\"\n",
+            dcontext->last_fragment->id, dcontext->last_fragment->tag,
             EXIT_CTI_PC(dcontext->last_fragment, dcontext->last_exit), buf);
         disassemble_with_bytes(dcontext, translated_pc, main_logfile);
     }
-    DOLOG(4, LOG_VMAREAS, {
-        disassemble_fragment(dcontext, dcontext->last_fragment, false);
-    });
+    DOLOG(4, LOG_VMAREAS,
+          { disassemble_fragment(dcontext, dcontext->last_fragment, false); });
 }
 #endif
 
@@ -5783,7 +5768,7 @@ dyngen_diagnostics(dcontext_t *dcontext, app_pc pc, app_pc base_pc, size_t size,
  * APPLICATION MEMORY STATE TRACKING
  */
 
-/* newly allocated or mapped in memory region, returns true if added to exec list 
+/* newly allocated or mapped in memory region, returns true if added to exec list
  * ok to pass in NULL for dcontext -- in fact, assumes dcontext is NULL at initialization
  */
 bool
@@ -5795,15 +5780,16 @@ app_memory_allocation(dcontext_t *dcontext, app_pc base, size_t size, uint prot,
      * performance hit?  DR itself could allocate memory that was freed
      * externally -- but our DR overlap checks would catch that.
      */
-    ASSERT_CURIOSITY(!executable_vm_area_overlap(base, base + size, false/*have no lock*/));
+    ASSERT_CURIOSITY(
+        !executable_vm_area_overlap(base, base + size, false /*have no lock*/));
 #ifdef PROGRAM_SHEPHERDING
     DODEBUG({
         /* case 4175 - reallocations will overlap with no easy way to
-         * enforce this 
+         * enforce this
          */
         if (futureexec_vm_area_overlap(base, base + size)) {
-            SYSLOG_INTERNAL_WARNING_ONCE("existing future area overlapping ["PFX", "
-                                         PFX")", base, base + size);
+            SYSLOG_INTERNAL_WARNING_ONCE(
+                "existing future area overlapping [" PFX ", " PFX ")", base, base + size);
         }
     });
 #endif
@@ -5823,8 +5809,8 @@ app_memory_allocation(dcontext_t *dcontext, app_pc base, size_t size, uint prot,
             return false;
     }
 
-    LOG(GLOBAL, LOG_VMAREAS, 1, "New +x app memory region: "PFX"-"PFX" %s\n",
-        base, base+size, memprot_string(prot));
+    LOG(GLOBAL, LOG_VMAREAS, 1, "New +x app memory region: " PFX "-" PFX " %s\n", base,
+        base + size, memprot_string(prot));
 
     if (!TEST(MEMPROT_WRITE, prot)) {
         uint frag_flags = 0;
@@ -5833,26 +5819,28 @@ app_memory_allocation(dcontext_t *dcontext, app_pc base, size_t size, uint prot,
             frag_flags |= FRAG_COARSE_GRAIN;
         }
         add_executable_vm_area(base, base + size, image ? VM_UNMOD_IMAGE : 0, frag_flags,
-                               false/*no lock*/ _IF_DEBUG(comment));
+                               false /*no lock*/ _IF_DEBUG(comment));
         return true;
-    } else if (dcontext==NULL || !is_on_stack(dcontext, base, NULL)) {
+    } else if (dcontext == NULL || !is_on_stack(dcontext, base, NULL)) {
         LOG(GLOBAL, LOG_VMAREAS, 1,
-            "WARNING: "PFX"-"PFX" is writable, NOT adding to executable list\n",
-            base, base+size);
+            "WARNING: " PFX "-" PFX " is writable, NOT adding to executable list\n", base,
+            base + size);
 
 #ifdef PROGRAM_SHEPHERDING
         if (DYNAMO_OPTION(executable_if_x)) {
             LOG(GLOBAL, LOG_VMAREAS, 1,
-                "app_memory_allocation: New future exec region b/c x: "PFX"-"PFX" %s\n",
-                base, base+size, memprot_string(prot));
+                "app_memory_allocation: New future exec region b/c x: " PFX "-" PFX
+                " %s\n",
+                base, base + size, memprot_string(prot));
             STATS_INC(num_mark_if_x);
-            add_futureexec_vm_area(base, base+size, false/*permanent*/
+            add_futureexec_vm_area(base, base + size,
+                                   false /*permanent*/
                                    _IF_DEBUG("alloc executable_if_x"));
             mark_module_exempted(base);
         } else if (DYNAMO_OPTION(executable_if_alloc)) {
             bool future = false;
             /* rwx regions are not added at init time unless in images */
-# ifdef WINDOWS
+#    ifdef WINDOWS
             if (image) {
                 /* anything marked rwx in an image is added to future list
                  * otherwise it is not added -- must be separately allocated,
@@ -5860,8 +5848,8 @@ app_memory_allocation(dcontext_t *dcontext, app_pc base, size_t size, uint prot,
                  */
                 future = true;
                 LOG(GLOBAL, LOG_VMAREAS, 1,
-                    "New future exec region b/c x from image: "PFX"-"PFX" %s\n",
-                    base, base+size, memprot_string(prot));
+                    "New future exec region b/c x from image: " PFX "-" PFX " %s\n", base,
+                    base + size, memprot_string(prot));
             } else if (dcontext != NULL && dcontext->alloc_no_reserve) {
                 /* we only add a region marked rwx at allocation time to the
                  * future list if it is allocated and reserved at the same time
@@ -5869,23 +5857,25 @@ app_memory_allocation(dcontext_t *dcontext, app_pc base, size_t size, uint prot,
                  */
                 future = true;
                 LOG(GLOBAL, LOG_VMAREAS, 1,
-                    "New future exec region b/c x @alloc & no reserve: "PFX"-"PFX" %s\n",
-                    base, base+size, memprot_string(prot));
+                    "New future exec region b/c x @alloc & no reserve: " PFX "-" PFX
+                    " %s\n",
+                    base, base + size, memprot_string(prot));
             }
-# else
+#    else
             if (dcontext != NULL || image) {
-                /* can't distinguish stack -- saved at init time since we don't add rwx then,
-                 * but what about stacks whose creation we see?  FIXME
+                /* can't distinguish stack -- saved at init time since we don't add rwx
+                 * then, but what about stacks whose creation we see?  FIXME
                  */
                 future = true;
                 LOG(GLOBAL, LOG_VMAREAS, 1,
-                    "New future exec region b/c x @alloc: "PFX"-"PFX" %s\n",
-                    base, base+size, memprot_string(prot));
+                    "New future exec region b/c x @alloc: " PFX "-" PFX " %s\n", base,
+                    base + size, memprot_string(prot));
             }
-# endif
+#    endif
             if (future) {
                 STATS_INC(num_alloc_exec);
-                add_futureexec_vm_area(base, base+size, false/*permanent*/
+                add_futureexec_vm_area(base, base + size,
+                                       false /*permanent*/
                                        _IF_DEBUG("alloc x"));
             }
         }
@@ -5905,14 +5895,13 @@ app_memory_deallocation(dcontext_t *dcontext, app_pc base, size_t size,
      * policies that are independent of rwx bits -- if any overlap we remove,
      * no shortcuts
      */
-    if (executable_vm_area_overlap(base, base + size, false/*have no lock*/)) {
+    if (executable_vm_area_overlap(base, base + size, false /*have no lock*/)) {
         /* ok for overlap to have changed in between, flush checks again */
         flush_fragments_and_remove_region(dcontext, base, size, own_initexit_lock,
-                                          true/*free futures*/);
+                                          true /*free futures*/);
 
 #ifdef RETURN_AFTER_CALL
-        if (DYNAMO_OPTION(ret_after_call) && !image 
-            && !DYNAMO_OPTION(rac_dgc_sticky)) {
+        if (DYNAMO_OPTION(ret_after_call) && !image && !DYNAMO_OPTION(rac_dgc_sticky)) {
             /* we can have after call targets in DGC in addition to DLLs */
             /* Note IMAGE mappings are handled in process_image() on
              * Windows, so that they can be handled more efficiently
@@ -5957,14 +5946,14 @@ app_memory_deallocation(dcontext_t *dcontext, app_pc base, size_t size,
              * them, considering the common case should be that this
              * is an app memory deallocation that has nothing to do
              * with us.
-             * 
+             *
              * FIXME: for now just checking if base is declared DGC,
              * and ignoring any others possible vm_areas for the same
              * OS region, so we may still have a leak.
              */
             if (is_dyngen_code(base)) {
                 ASSERT_NOT_TESTED();
-                invalidate_after_call_target_range(dcontext, base, base+size);
+                invalidate_after_call_target_range(dcontext, base, base + size);
             }
         }
 #endif /* RETURN_AFTER_CALL */
@@ -5974,7 +5963,7 @@ app_memory_deallocation(dcontext_t *dcontext, app_pc base, size_t size,
     if (USING_FUTURE_EXEC_LIST && futureexec_vm_area_overlap(base, base + size)) {
         remove_futureexec_vm_area(base, base + size);
         LOG(GLOBAL, LOG_VMAREAS, 2,
-            "removing future exec "PFX"-"PFX" since now freed\n", base, base+size);
+            "removing future exec " PFX "-" PFX " since now freed\n", base, base + size);
     }
 #endif
 }
@@ -5982,28 +5971,26 @@ app_memory_deallocation(dcontext_t *dcontext, app_pc base, size_t size,
 /* A convenience routine that starts the two-phase flushing protocol */
 /* Note this is not flush_fragments_and_remove_region */
 static bool
-flush_and_remove_executable_vm_area(dcontext_t *dcontext, 
-                                    app_pc base, size_t size)
+flush_and_remove_executable_vm_area(dcontext_t *dcontext, app_pc base, size_t size)
 {
     DEBUG_DECLARE(bool res;)
-    flush_fragments_in_region_start(dcontext, base, size, 
-                                    false /* don't own initexit_lock */,
-                                    false /* case 2236: keep futures */,
-                                    true /* exec invalid */,
-                                    false /* don't force synchall */
-                                    _IF_DGCDIAG(NULL));
-    DEBUG_DECLARE(res = )
-        remove_executable_vm_area(base, base + size, true/*have lock*/);
+    flush_fragments_in_region_start(
+        dcontext, base, size, false /* don't own initexit_lock */,
+        false /* case 2236: keep futures */, true /* exec invalid */,
+        false /* don't force synchall */
+        _IF_DGCDIAG(NULL));
+    DEBUG_DECLARE(res =)
+    remove_executable_vm_area(base, base + size, true /*have lock*/);
     DODEBUG(if (!res) {
-        /* area doesn't have to be executable in fact when called 
+        /* area doesn't have to be executable in fact when called
          * on executable_if_hook path
          */
         LOG(THREAD, LOG_VMAREAS, 2,
             "\tregion was in fact not on executable_areas, so nothing to remove\n");
     });
     /* making sure there is no overlap now */
-    ASSERT(!executable_vm_area_overlap(base, base+size, true /* holding lock */));
-            
+    ASSERT(!executable_vm_area_overlap(base, base + size, true /* holding lock */));
+
     return true;
 }
 
@@ -6027,26 +6014,25 @@ tamper_resistant_region_add(app_pc start, app_pc end)
     tamper_resistant_region_end = end;
 }
 
-/* returns true if [start, end) overlaps with a tamper_resistant region 
+/* returns true if [start, end) overlaps with a tamper_resistant region
  * as needed for DYNAMO_OPTION(handle_ntdll_modify)
  */
 bool
 tamper_resistant_region_overlap(app_pc start, app_pc end)
 {
-    return (end > tamper_resistant_region_start && 
-            start < tamper_resistant_region_end);
+    return (end > tamper_resistant_region_start && start < tamper_resistant_region_end);
 }
 
-/* memory region base:base+size now has privileges prot 
+/* memory region base:base+size now has privileges prot
  * returns a value from the enum in vmareas->h about whether to perform the
  * system call or not and if not what the return code to the app should be
  */
-/* FIXME : This is called before the system call that will change 
+/* FIXME : This is called before the system call that will change
  * the memory permission which could be race condition prone! If another
- * thread executes from a region added by this function before the system call 
+ * thread executes from a region added by this function before the system call
  * goes through we could get a disconnect on what the memory premissions of the
- * region really are vs what vmareas expects for consistency, see bug 2833 
-*/
+ * region really are vs what vmareas expects for consistency, see bug 2833
+ */
 /* N.B.: be careful about leaving code read-only and returning
  * PRETEND_APP_MEM_PROT_CHANGE or SUBSET_APP_MEM_PROT_CHANGE, or other
  * cases where mixed with native execution we may have incorrect page settings -
@@ -6059,13 +6045,13 @@ tamper_resistant_region_overlap(app_pc start, app_pc end)
  * previous state, so eliminating it should be carefully; see case 6669.
  */
 uint
-app_memory_protection_change(dcontext_t *dcontext, app_pc base, size_t size, 
-                             uint prot, /* platform independent MEMPROT_ */
+app_memory_protection_change(dcontext_t *dcontext, app_pc base, size_t size,
+                             uint prot,         /* platform independent MEMPROT_ */
                              uint *new_memprot, /* OUT */
                              uint *old_memprot /* OPTIONAL OUT*/)
 {
-    /* FIXME: look up whether image, etc. here?  
-     * but could overlap multiple regions! 
+    /* FIXME: look up whether image, etc. here?
+     * but could overlap multiple regions!
      */
     bool is_executable;
 
@@ -6074,9 +6060,10 @@ app_memory_protection_change(dcontext_t *dcontext, app_pc base, size_t size,
     bool dr_overlap = DYNAMO_OPTION(handle_DR_modify) != DR_MODIFY_OFF /* we don't care */
         && dynamo_vm_area_overlap(base, base + size);
 
-    bool system_overlap = DYNAMO_OPTION(handle_ntdll_modify) != DR_MODIFY_OFF /* we don't care */
+    bool system_overlap =
+        DYNAMO_OPTION(handle_ntdll_modify) != DR_MODIFY_OFF /* we don't care */
         && tamper_resistant_region_overlap(base, base + size);
-    
+
     bool patch_proof_overlap = false;
 #ifdef WINDOWS
     uint frag_flags;
@@ -6093,14 +6080,16 @@ app_memory_protection_change(dcontext_t *dcontext, app_pc base, size_t size,
     ASSERT(base != NULL);
     if (patch_proof_overlap) {
         app_pc modbase = get_module_base(base);
-        bool loader = is_module_patch_region(dcontext, base, base+size,
-                                             false/*be liberal: don't miss loader*/);
-        bool patching_code = is_range_in_code_section(modbase, base, base+size,
-                                                      NULL, NULL);
-        bool patching_IAT = is_IAT(base, base+size, true/*page-align*/, NULL, NULL);
-        /* FIXME: [perf] could have added CODE sections instead of modules to patch_proof_areas */
+        bool loader = is_module_patch_region(dcontext, base, base + size,
+                                             false /*be liberal: don't miss loader*/);
+        bool patching_code =
+            is_range_in_code_section(modbase, base, base + size, NULL, NULL);
+        bool patching_IAT = is_IAT(base, base + size, true /*page-align*/, NULL, NULL);
+        /* FIXME: [perf] could have added CODE sections instead of modules to
+         * patch_proof_areas */
         /* FIXME: [minor perf] is_module_patch_region already collected these */
-        /* FIXME: [minor perf] same check is done later for all IATs for emulate_IAT_writes */
+        /* FIXME: [minor perf] same check is done later for all IATs for
+         * emulate_IAT_writes */
 
         bool patch_proof_IAT = false; /* NYI - case 6622 */
         /* FIXME: case 6622 IAT hooker protection for some modules is
@@ -6113,10 +6102,12 @@ app_memory_protection_change(dcontext_t *dcontext, app_pc base, size_t size,
             /* even if it is not the loader we protect IAT sections only */
             (!patching_IAT || patch_proof_IAT);
 
-        LOG(THREAD, LOG_VMAREAS, 1, "patch proof module "PFX"-"PFX" modified %s, by %s,%s=>%s\n",
-            base, base+size,
-            patching_code ? "code!" : "data --ok",
-            loader ? "loader --ok" : patching_code ? "hooker!" : "loader or hooker",
+        LOG(THREAD, LOG_VMAREAS, 1,
+            "patch proof module " PFX "-" PFX " modified %s, by %s,%s=>%s\n", base,
+            base + size, patching_code ? "code!" : "data --ok",
+            loader              ? "loader --ok"
+                : patching_code ? "hooker!"
+                                : "loader or hooker",
             patching_IAT ? "IAT hooker" : "patching!",
             patch_proof_overlap ? "SQUASH" : "allow");
         /* curiosly the loader modifies the .reloc section of Dell\QuickSet\dadkeyb.dll */
@@ -6154,7 +6145,7 @@ app_memory_protection_change(dcontext_t *dcontext, app_pc base, size_t size,
         }
 
         /* we can't be both pretend writable and emulate write */
-        ASSERT(!vmvector_overlap(emulate_write_areas, base, base+size));
+        ASSERT(!vmvector_overlap(emulate_write_areas, base, base + size));
 
         if (how_handle == DR_MODIFY_HALT) {
             /* Until we've fixed our DR area list problems and gotten shim.dll to work,
@@ -6162,10 +6153,10 @@ app_memory_protection_change(dcontext_t *dcontext, app_pc base, size_t size,
              */
             report_dynamorio_problem(dcontext, DUMPCORE_SECURITY_VIOLATION, NULL, NULL,
                                      "Application changing protections of "
-                                     "%s memory @"PFX"-"PFX,
-                                     target_area_name, base, base+size);
-            /* FIXME: walking the loader data structures at arbitrary 
-             * points is dangerous due to data races with other threads 
+                                     "%s memory @" PFX "-" PFX,
+                                     target_area_name, base, base + size);
+            /* FIXME: walking the loader data structures at arbitrary
+             * points is dangerous due to data races with other threads
              * -- see is_module_being_initialized and get_module_name
              */
             check_for_unsupported_modules();
@@ -6173,8 +6164,8 @@ app_memory_protection_change(dcontext_t *dcontext, app_pc base, size_t size,
             ASSERT_NOT_REACHED();
         } else {
             SYSLOG_INTERNAL_WARNING("Application changing protections of "
-                                    "%s memory @"PFX"-"PFX, 
-                                    target_area_name, base, base+size);
+                                    "%s memory @" PFX "-" PFX,
+                                    target_area_name, base, base + size);
             if (how_handle == DR_MODIFY_NOP) {
                 /* we use a separate list, rather than a flag on DR areas, as the
                  * affected region could include non-DR memory
@@ -6191,14 +6182,16 @@ app_memory_protection_change(dcontext_t *dcontext, app_pc base, size_t size,
                 ASSERT(ALIGNED(size, PAGE_SIZE));
                 write_lock(&pretend_writable_areas->lock);
                 if (TEST(MEMPROT_WRITE, prot)) {
-                    LOG(THREAD, LOG_VMAREAS, 2, "adding pretend-writable region "PFX"-"PFX"\n",
-                        base, base+size);
-                    add_vm_area(pretend_writable_areas, base, base+size,
-                                true, 0, NULL _IF_DEBUG("DR_MODIFY_NOP"));
+                    LOG(THREAD, LOG_VMAREAS, 2,
+                        "adding pretend-writable region " PFX "-" PFX "\n", base,
+                        base + size);
+                    add_vm_area(pretend_writable_areas, base, base + size, true, 0,
+                                NULL _IF_DEBUG("DR_MODIFY_NOP"));
                 } else {
-                    LOG(THREAD, LOG_VMAREAS, 2, "removing pretend-writable region "PFX"-"PFX"\n",
-                        base, base+size);
-                    remove_vm_area(pretend_writable_areas, base, base+size, false);
+                    LOG(THREAD, LOG_VMAREAS, 2,
+                        "removing pretend-writable region " PFX "-" PFX "\n", base,
+                        base + size);
+                    remove_vm_area(pretend_writable_areas, base, base + size, false);
                 }
                 write_unlock(&pretend_writable_areas->lock);
                 LOG(THREAD, LOG_VMAREAS, 2, "turning system call into a nop\n");
@@ -6227,16 +6220,16 @@ app_memory_protection_change(dcontext_t *dcontext, app_pc base, size_t size,
     }
 
     /* DR areas may have changed, but we still have to remove from pretend list */
-    if (USING_PRETEND_WRITABLE() && !TEST(MEMPROT_WRITE, prot) && 
-        pretend_writable_vm_area_overlap(base, base+size)) {
+    if (USING_PRETEND_WRITABLE() && !TEST(MEMPROT_WRITE, prot) &&
+        pretend_writable_vm_area_overlap(base, base + size)) {
         ASSERT_NOT_TESTED();
         /* FIXME: again we have the race -- if we could go from read to write
          * it would be a simple fix, else have to grab write up front, or check again
          */
         write_lock(&pretend_writable_areas->lock);
-        LOG(THREAD, LOG_VMAREAS, 2, "removing pretend-writable region "PFX"-"PFX"\n",
-            base, base+size);
-        remove_vm_area(pretend_writable_areas, base, base+size, false);
+        LOG(THREAD, LOG_VMAREAS, 2, "removing pretend-writable region " PFX "-" PFX "\n",
+            base, base + size);
+        remove_vm_area(pretend_writable_areas, base, base + size, false);
         write_unlock(&pretend_writable_areas->lock);
     }
 
@@ -6253,9 +6246,9 @@ app_memory_protection_change(dcontext_t *dcontext, app_pc base, size_t size,
              */
             DEBUG_DECLARE(bool ok =) remove_futureexec_vm_area(base, base + size);
             ASSERT(ok);
-            LOG(THREAD, LOG_SYSCALLS|LOG_VMAREAS, 1,
-                "future region "PFX"-"PFX" is being made non-x, removing\n",
-                base, base + size);
+            LOG(THREAD, LOG_SYSCALLS | LOG_VMAREAS, 1,
+                "future region " PFX "-" PFX " is being made non-x, removing\n", base,
+                base + size);
         } else {
             /* Maybe nothing is changed in fact. */
             /* In fact this happens when a protection size larger than
@@ -6270,10 +6263,10 @@ app_memory_protection_change(dcontext_t *dcontext, app_pc base, size_t size,
              * again
              */
             /* xref case 3102 - where we don't care about VM_WRITABLE */
-#if 0 /* this syslog may causes services.exe to hang (ref case 666)  */
+#    if 0 /* this syslog may causes services.exe to hang (ref case 666)  */
             SYSLOG_INTERNAL_WARNING("future executable area overlapping with "PFX"-"PFX" made %s",
                                     base, base + size, memprot_string(prot));
-#endif
+#    endif
         }
     }
 #endif
@@ -6285,87 +6278,86 @@ app_memory_protection_change(dcontext_t *dcontext, app_pc base, size_t size,
      * next protection change (hooker restoring IAT privileges).
      * FIXME: should make the ->rx restoration syscall a NOP for performance
      */
-    if (DYNAMO_OPTION(emulate_IAT_writes) &&
-        !vmvector_empty(emulate_write_areas) &&
-        vmvector_overlap(emulate_write_areas, base, base+size)) {
-        LOG(THREAD, LOG_SYSCALLS|LOG_VMAREAS, 2,
-            "removing emulation region "PFX"-"PFX"\n", base, base+size);
-        vmvector_remove(emulate_write_areas, base, base+size);
+    if (DYNAMO_OPTION(emulate_IAT_writes) && !vmvector_empty(emulate_write_areas) &&
+        vmvector_overlap(emulate_write_areas, base, base + size)) {
+        LOG(THREAD, LOG_SYSCALLS | LOG_VMAREAS, 2,
+            "removing emulation region " PFX "-" PFX "\n", base, base + size);
+        vmvector_remove(emulate_write_areas, base, base + size);
     }
 #endif
 
-    /* look for calls making code writable! 
+    /* look for calls making code writable!
      * cache is_executable here w/o holding lock -- if decide to perform state
      * change via flushing, we'll re-check overlap there and all will be atomic
      * at that point, no reason to try and make atomic from here, will hit
      * deadlock issues w/ thread_initexit_lock
      */
-    is_executable = executable_vm_area_overlap(base, base + size, false/*have no lock*/);
+    is_executable = executable_vm_area_overlap(base, base + size, false /*have no lock*/);
     if (is_executable && TEST(MEMPROT_WRITE, prot) && !TEST(MEMPROT_EXEC, prot)) {
 #ifdef WINDOWS
         app_pc IAT_start, IAT_end;
         /* Could not page-align and ask for original params but some hookers
          * page-align even when targeting only IAT */
-        bool is_iat = is_IAT(base, base+size, true/*page-align*/, &IAT_start, &IAT_end);
-        bool is_patch = is_module_patch_region(dcontext, base, base+size,
-                                               true/*be conservative*/);
+        bool is_iat =
+            is_IAT(base, base + size, true /*page-align*/, &IAT_start, &IAT_end);
+        bool is_patch =
+            is_module_patch_region(dcontext, base, base + size, true /*be conservative*/);
         DOSTATS({
             if (is_iat && is_patch)
                 STATS_INC(num_app_rebinds);
         });
-#ifdef PROGRAM_SHEPHERDING
-        /* This potentially unsafe option is superseded by -coarse_merge_iat 
+#    ifdef PROGRAM_SHEPHERDING
+        /* This potentially unsafe option is superseded by -coarse_merge_iat
          * FIXME: this should be available for !PROGRAM_SHEPHERDING
          */
         if (DYNAMO_OPTION(unsafe_ignore_IAT_writes) && is_iat && is_patch) {
             /* do nothing: let go writable and then come back */
-            LOG(THREAD, LOG_SYSCALLS|LOG_VMAREAS, 1,
+            LOG(THREAD, LOG_SYSCALLS | LOG_VMAREAS, 1,
                 "WARNING: letting IAT be written w/o flushing: potentially unsafe\n");
             return DO_APP_MEM_PROT_CHANGE; /* let syscall go through */
         }
-#endif
+#    endif
         /* Case 11072: must match these conditions w/ the assert on freeing */
         if (DYNAMO_OPTION(coarse_units) && DYNAMO_OPTION(coarse_merge_iat) &&
-# ifdef PROGRAM_SHEPHERDING
+#    ifdef PROGRAM_SHEPHERDING
             /* Ensure we'll re-mark as valid */
             (DYNAMO_OPTION(executable_if_rx_text) ||
              DYNAMO_OPTION(executable_after_load)) &&
-# endif
-            is_iat && is_patch &&
-            !executable_vm_area_executed_from(IAT_start, IAT_end) &&
+#    endif
+            is_iat && is_patch && !executable_vm_area_executed_from(IAT_start, IAT_end) &&
             /* case 10830/11072: ensure currently marked coarse-grain to avoid
              * blessing the IAT region as coarse when it was in fact made non-coarse
              * due to a rebase (or anything else) prior to a rebind.  check the end,
              * since we may have adjusted the exec area bounds to be post-IAT.
              */
-            get_executable_area_flags(base+size-1, &frag_flags) &&
+            get_executable_area_flags(base + size - 1, &frag_flags) &&
             TEST(FRAG_COARSE_GRAIN, frag_flags)) {
-            coarse_info_t *info = 
-                get_coarse_info_internal(IAT_end, false/*no init*/, false/*no lock*/);
+            coarse_info_t *info =
+                get_coarse_info_internal(IAT_end, false /*no init*/, false /*no lock*/);
             /* loader rebinding
              * We cmp and free the stored code at +rx time; if that doesn't happen,
              * we free at module unload time.
              */
             DEBUG_DECLARE(bool success =)
-                os_module_store_IAT_code(base);
+            os_module_store_IAT_code(base);
             ASSERT(success);
             ASSERT(!RUNNING_WITHOUT_CODE_CACHE()); /* FRAG_COARSE_GRAIN excludes */
-            LOG(GLOBAL, LOG_VMAREAS, 2,
-                "storing IAT code for "PFX"-"PFX"\n", IAT_start, IAT_end);
+            LOG(GLOBAL, LOG_VMAREAS, 2, "storing IAT code for " PFX "-" PFX "\n",
+                IAT_start, IAT_end);
             if (info != NULL) {
                 /* Only expect to do this for empty or persisted units */
                 ASSERT(info->cache == NULL ||
                        (info->persisted && info->non_frozen != NULL &&
                         info->non_frozen->cache == NULL));
                 /* Do not reset/free during flush as we hope to see a validating
-                 * event soon. 
+                 * event soon.
                  */
                 ASSERT(!TEST(PERSCACHE_CODE_INVALID, info->flags));
                 info->flags |= PERSCACHE_CODE_INVALID;
                 STATS_INC(coarse_marked_invalid);
             }
         }
-# ifdef PROGRAM_SHEPHERDING
+#    ifdef PROGRAM_SHEPHERDING
         if (DYNAMO_OPTION(emulate_IAT_writes) && is_iat &&
             /* We do NOT want to emulate hundreds of writes by the loader -- we
              * assume no other thread will execute in the module until it's
@@ -6380,9 +6372,8 @@ app_memory_protection_change(dcontext_t *dcontext, app_pc base, size_t size,
              * for when we have the IAT read-only to protect it security-wise.
              */
             /* unfortunately we have to flush to be conservative */
-            should_finish_flushing =
-                flush_and_remove_executable_vm_area(dcontext, IAT_start,
-                                                    IAT_end - IAT_start);
+            should_finish_flushing = flush_and_remove_executable_vm_area(
+                dcontext, IAT_start, IAT_end - IAT_start);
             /* a write to IAT gets emulated, but to elsewhere on page is a code mod */
             vmvector_add(emulate_write_areas, IAT_start, IAT_end, NULL);
             /* must release the exec areas lock, even if expect no flush */
@@ -6390,7 +6381,7 @@ app_memory_protection_change(dcontext_t *dcontext, app_pc base, size_t size,
                 flush_fragments_in_region_finish(dcontext,
                                                  false /*don't keep initexit_lock*/);
             }
-            LOG(THREAD, LOG_SYSCALLS|LOG_VMAREAS, 1,
+            LOG(THREAD, LOG_SYSCALLS | LOG_VMAREAS, 1,
                 "executable region == IAT so not marking %s, emulating writes\n",
                 memprot_string(prot));
             /* now leave as read-only.
@@ -6407,13 +6398,13 @@ app_memory_protection_change(dcontext_t *dcontext, app_pc base, size_t size,
             }
             return PRETEND_APP_MEM_PROT_CHANGE;
         }
-# endif /* PROGRAM_SHEPHERDING */
-#endif /* WINDOWS */
-        /* being made writable but non-executable! 
+#    endif /* PROGRAM_SHEPHERDING */
+#endif     /* WINDOWS */
+        /* being made writable but non-executable!
          * kill all current fragments in the region (since a
          * non-executable region is ignored by flush routine)
          */
-        LOG(THREAD, LOG_SYSCALLS|LOG_VMAREAS, 1,
+        LOG(THREAD, LOG_SYSCALLS | LOG_VMAREAS, 1,
             "WARNING: executable region being made writable and non-executable\n");
         flush_fragments_and_remove_region(dcontext, base, size,
                                           false /* don't own initexit_lock */,
@@ -6421,67 +6412,67 @@ app_memory_protection_change(dcontext_t *dcontext, app_pc base, size_t size,
 #ifdef HOT_PATCHING_INTERFACE
         if (DYNAMO_OPTION(hotp_only))
             hotp_only_mem_prot_change(base, size, true, false);
-#endif 
-    }
-    else if (is_executable && TESTALL(MEMPROT_WRITE | MEMPROT_EXEC, prot)) {
+#endif
+    } else if (is_executable && TESTALL(MEMPROT_WRITE | MEMPROT_EXEC, prot)) {
         /* Need to flush all fragments in [base, base+size), unless
-         * they are ALL already writable 
+         * they are ALL already writable
          */
         DOSTATS({
             /* If all the overlapping executable areas are VM_WRITABLE|
              * VM_DELAY_READONLY then we could optimize away the flush since
-             * we haven't made any portion of this region read only for 
+             * we haven't made any portion of this region read only for
              * consistency purposes.  We haven't implemented this optimization
              * as it's quite rare (though does happen xref case 8104) and
              * previous implementations of this optimization proved buggy. */
-            if (is_executable_area_writable_overlap(base, base + size, 
-                                                     true /* ALL regions are: */,
-                                                     VM_WRITABLE|VM_DELAY_READONLY)) {
+            if (is_executable_area_writable_overlap(base, base + size,
+                                                    true /* ALL regions are: */,
+                                                    VM_WRITABLE | VM_DELAY_READONLY)) {
                 STATS_INC(num_possible_app_to_rwx_skip_flush);
             }
         });
         /* executable region being made writable
          * flush all current fragments, and mark as non-executable
          */
-        LOG(THREAD, LOG_SYSCALLS|LOG_VMAREAS, 1,
-            "WARNING: executable region "PFX"-"PFX" is being made writable!\n"
+        LOG(THREAD, LOG_SYSCALLS | LOG_VMAREAS, 1,
+            "WARNING: executable region " PFX "-" PFX " is being made writable!\n"
             "\tRemoving from executable list\n",
             base, base + size);
         /* use two-part flush to make futureexec & exec changes atomic w/ flush */
-        should_finish_flushing = flush_and_remove_executable_vm_area(dcontext, base, size);
+        should_finish_flushing =
+            flush_and_remove_executable_vm_area(dcontext, base, size);
         /* we flush_fragments_finish after security checks to keep them atomic */
-    } 
-    else if (is_executable && is_executable_area_writable(base) &&
-             !TEST(MEMPROT_WRITE, prot) && TEST(MEMPROT_EXEC, prot)) {
+    } else if (is_executable && is_executable_area_writable(base) &&
+               !TEST(MEMPROT_WRITE, prot) && TEST(MEMPROT_EXEC, prot)) {
         /* executable & writable region being made read-only
          * make sure any future write faults are given to app, not us
          */
-        LOG(THREAD, LOG_SYSCALLS|LOG_VMAREAS, 1,
-            "executable writable region "PFX"-"PFX" => read-only!\n",
-            base, base + size);
+        LOG(THREAD, LOG_SYSCALLS | LOG_VMAREAS, 1,
+            "executable writable region " PFX "-" PFX " => read-only!\n", base,
+            base + size);
         /* remove writable exec area, then add read-only exec area */
         /* use two-part flush to make futureexec & exec changes atomic w/ flush */
-        should_finish_flushing = flush_and_remove_executable_vm_area(dcontext, base, size);
+        should_finish_flushing =
+            flush_and_remove_executable_vm_area(dcontext, base, size);
         /* FIXME: this is wrong -- this will make all pieces in the middle executable,
          * which is not what we want -- we want all pieces ON THE EXEC LIST to
          * change from rw to r.  thus this should be like the change-to-selfmod case
          * in handle_modified_code => add new vector routine?  (case 3570)
          */
-        add_executable_vm_area(base, base + size,
-                               0 /* not image? FIXME */, 0,
-                               should_finish_flushing/* own lock if flushed */
-                               _IF_DEBUG("protection change"));
+        add_executable_vm_area(base, base + size, 0 /* not image? FIXME */, 0,
+                               should_finish_flushing /* own lock if flushed */
+                                   _IF_DEBUG("protection change"));
     }
-    /* also look for calls making data executable 
+    /* also look for calls making data executable
      * FIXME: perhaps should do a write_keep for this is_executable, to bind
      * to the subsequent exec areas changes -- though case 2833 would still be there
      */
     else if (!is_executable && TEST(MEMPROT_EXEC, prot)) {
         if (TEST(MEMPROT_WRITE, prot)) {
             /* do NOT add to executable list if writable */
-            LOG(THREAD, LOG_SYSCALLS|LOG_VMAREAS, 1,
-                "WARNING: data region "PFX"-"PFX" made executable and "
-                "writable, not adding to exec list\n", base, base + size);
+            LOG(THREAD, LOG_SYSCALLS | LOG_VMAREAS, 1,
+                "WARNING: data region " PFX "-" PFX " made executable and "
+                "writable, not adding to exec list\n",
+                base, base + size);
         } else {
             bool add_to_exec_list = false;
 #ifdef WINDOWS
@@ -6490,8 +6481,8 @@ app_memory_protection_change(dcontext_t *dcontext, app_pc base, size_t size,
 #endif
             uint frag_flags = 0;
             DEBUG_DECLARE(char *comment = "";)
-            LOG(THREAD, LOG_SYSCALLS|LOG_VMAREAS, 1,
-                "WARNING: data region "PFX" is being made executable\n", base);
+            LOG(THREAD, LOG_SYSCALLS | LOG_VMAREAS, 1,
+                "WARNING: data region " PFX " is being made executable\n", base);
 #ifdef PROGRAM_SHEPHERDING
             /* if on future, no reason to add to exec list now
              * if once-only, no reason to add to exec list and remove from future
@@ -6499,12 +6490,11 @@ app_memory_protection_change(dcontext_t *dcontext, app_pc base, size_t size,
              */
             /* none of our policies allow this on the stack */
             if (is_address_on_stack(dcontext, base)) {
-                LOG(THREAD, LOG_VMAREAS, 2,
-                    "not allowing data->x for stack region\n");
-# ifdef WINDOWS
+                LOG(THREAD, LOG_VMAREAS, 2, "not allowing data->x for stack region\n");
+#    ifdef WINDOWS
             } else if (DYNAMO_OPTION(executable_after_load) &&
-                       is_module_patch_region(dcontext, base, base+size,
-                                              false/*be liberal: can't miss loader*/)) {
+                       is_module_patch_region(dcontext, base, base + size,
+                                              false /*be liberal: can't miss loader*/)) {
                 STATS_INC(num_mark_after_load);
                 add_to_exec_list = true;
                 check_iat = true;
@@ -6512,9 +6502,9 @@ app_memory_protection_change(dcontext_t *dcontext, app_pc base, size_t size,
                 LOG(THREAD, LOG_VMAREAS, 2,
                     "module is being initialized, adding region to executable list\n");
 
-# endif
+#    endif
             } else if (DYNAMO_OPTION(executable_if_rx_text)) {
-                /* FIXME: this should be moved out of the if (!executable) branch? 
+                /* FIXME: this should be moved out of the if (!executable) branch?
                  * to where executable_if_x is handled
                  */
                 /* NOTE - xref case 10526, the check here is insufficient to implement
@@ -6526,8 +6516,8 @@ app_memory_protection_change(dcontext_t *dcontext, app_pc base, size_t size,
                  * this check here to catch the common case but extend
                  * check_origins_helper to catch anything unusual. */
                 app_pc modbase = get_module_base(base);
-                if (modbase != NULL && 
-                    is_range_in_code_section(modbase, base, base+size, NULL, NULL)) {
+                if (modbase != NULL &&
+                    is_range_in_code_section(modbase, base, base + size, NULL, NULL)) {
                     STATS_INC(num_2rx_text);
                     add_to_exec_list = true;
                     IF_WINDOWS(check_iat = true;)
@@ -6535,8 +6525,8 @@ app_memory_protection_change(dcontext_t *dcontext, app_pc base, size_t size,
                     LOG(THREAD, LOG_VMAREAS, 2,
                         "adding code region being marked rx to executable list\n");
                 }
-            } /* Don't use an  else if here, the else if for 
-               * -executable_if_rx_text if doesn't check all its 
+            } /* Don't use an  else if here, the else if for
+               * -executable_if_rx_text if doesn't check all its
                * conditionals in the first if */
 
             if (DYNAMO_OPTION(executable_if_rx)) {
@@ -6544,8 +6534,9 @@ app_memory_protection_change(dcontext_t *dcontext, app_pc base, size_t size,
                 add_to_exec_list = true;
                 mark_module_exempted(base);
                 DODEBUG({ comment = "if_rx"; });
-                LOG(THREAD, LOG_VMAREAS, 2, "adding region marked only rx "
-                                            "to executable list\n");
+                LOG(THREAD, LOG_VMAREAS, 2,
+                    "adding region marked only rx "
+                    "to executable list\n");
             }
 #else
             add_to_exec_list = true;
@@ -6554,10 +6545,10 @@ app_memory_protection_change(dcontext_t *dcontext, app_pc base, size_t size,
 #ifdef WINDOWS
             if (check_iat) {
                 if (DYNAMO_OPTION(coarse_units) && DYNAMO_OPTION(coarse_merge_iat) &&
-                    is_IAT(base, base+size, true/*page-align*/, NULL, NULL))
+                    is_IAT(base, base + size, true /*page-align*/, NULL, NULL))
                     free_iat = true;
                 LOG(THREAD, LOG_VMAREAS, 2,
-                    "IAT is being made rx again "PFX"-"PFX"\n", base, base+size);
+                    "IAT is being made rx again " PFX "-" PFX "\n", base, base + size);
                 if (!RUNNING_WITHOUT_CODE_CACHE()) {
                     /* case 8640: let add_executable_vm_area() decide whether to
                      * keep the coarse-grain flag
@@ -6572,37 +6563,36 @@ app_memory_protection_change(dcontext_t *dcontext, app_pc base, size_t size,
             if (add_to_exec_list) {
                 /* FIXME : see note at top of function about bug 2833 */
                 ASSERT(!TEST(MEMPROT_WRITE, prot)); /* sanity check */
-                add_executable_vm_area(base, base + size, 
-                                       0 /* not an unmodified image */, frag_flags,
-                                       false/*no lock*/ _IF_DEBUG(comment));
+                add_executable_vm_area(base, base + size, 0 /* not an unmodified image */,
+                                       frag_flags, false /*no lock*/ _IF_DEBUG(comment));
             }
 #ifdef WINDOWS
             if (free_iat) {
                 DEBUG_DECLARE(bool had_iat =)
-                    os_module_free_IAT_code(base);
+                os_module_free_IAT_code(base);
                 DEBUG_DECLARE(app_pc text_start;)
                 DEBUG_DECLARE(app_pc text_end;)
                 DEBUG_DECLARE(app_pc iat_start;)
                 DEBUG_DECLARE(app_pc iat_end;)
                 /* calculate IAT bounds */
-                ASSERT(is_IAT(base, base+size, true/*page-align*/,
-                              &iat_start, &iat_end));
+                ASSERT(
+                    is_IAT(base, base + size, true /*page-align*/, &iat_start, &iat_end));
                 ASSERT(had_iat ||
                        /* duplicate the reasons we wouldn't have stored the IAT: */
-                       !is_module_patch_region(dcontext, base, base+size,
-                                               true/*be conservative*/) ||
+                       !is_module_patch_region(dcontext, base, base + size,
+                                               true /*be conservative*/) ||
                        executable_vm_area_executed_from(iat_start, iat_end) ||
                        /* case 11072: rebase prior to rebind prevents IAT storage */
                        (get_module_preferred_base_delta(base) != 0 &&
-                        is_in_code_section(get_module_base(base), base,
-                                           &text_start, &text_end) &&
+                        is_in_code_section(get_module_base(base), base, &text_start,
+                                           &text_end) &&
                         iat_start >= text_start && iat_end <= text_end));
             }
 #endif
 #ifdef HOT_PATCHING_INTERFACE
             if (DYNAMO_OPTION(hotp_only))
                 hotp_only_mem_prot_change(base, size, false, true);
-#endif 
+#endif
         }
     }
 
@@ -6613,24 +6603,25 @@ app_memory_protection_change(dcontext_t *dcontext, app_pc base, size_t size,
      */
     if (DYNAMO_OPTION(executable_if_x) && TEST(MEMPROT_EXEC, prot)) {
         /* The executable_if_x policy considers all code marked ..x to be executable */
-        
+
         /* Note that executable_if_rx may have added a region directly
          * to the executable_areas, while here we only add to the futureexec_areas
          * FIXME: move executable_if_rx checks as an 'else if' following this if.
          */
         LOG(GLOBAL, LOG_VMAREAS, 1,
-            "New future region b/c x, "PFX"-"PFX" %s, was %sexecutable\n",
-            base, base+size, memprot_string(prot), is_executable ? "" : "not ");
+            "New future region b/c x, " PFX "-" PFX " %s, was %sexecutable\n", base,
+            base + size, memprot_string(prot), is_executable ? "" : "not ");
         STATS_INC(num_mark_if_x);
-        add_futureexec_vm_area(base, base+size, false/*permanent*/
-                               _IF_DEBUG(TEST(MEMPROT_WRITE, prot) ? 
-                                         "executable_if_x protect exec .wx" :
-                                         "executable_if_x protect exec .-x"
-                                         ));
+        add_futureexec_vm_area(base, base + size,
+                               false /*permanent*/
+                               _IF_DEBUG(TEST(MEMPROT_WRITE, prot)
+                                             ? "executable_if_x protect exec .wx"
+                                             : "executable_if_x protect exec .-x"));
         mark_module_exempted(base);
-    } else if (DYNAMO_OPTION(executable_if_hook) && TESTALL(MEMPROT_WRITE | MEMPROT_EXEC, prot)) {
+    } else if (DYNAMO_OPTION(executable_if_hook) &&
+               TESTALL(MEMPROT_WRITE | MEMPROT_EXEC, prot)) {
         /* Note here we're strict in requesting a .WX setting by the
-         * hooker, won't be surprising if some don't do even this 
+         * hooker, won't be surprising if some don't do even this
          */
         /* FIXME: could restrict to sub-page piece of text section,
          * since should only be targeting 4 or 5 byte area
@@ -6640,23 +6631,23 @@ app_memory_protection_change(dcontext_t *dcontext, app_pc base, size_t size,
             /* FIXME - xref case 10526, if the base - base+size overlaps more than
              * one section then this policy won't apply, though not clear if we'd want
              * it to for such an unusual hooker. */
-            if (is_range_in_code_section(modbase, base, base+size, NULL, NULL)) {
+            if (is_range_in_code_section(modbase, base, base + size, NULL, NULL)) {
                 uint vm_flags;
-                DOLOG(2, LOG_INTERP|LOG_VMAREAS, {
+                DOLOG(2, LOG_INTERP | LOG_VMAREAS, {
                     char modname[MAX_MODNAME_INTERNAL];
                     os_get_module_name_buf(modbase, modname,
                                            BUFFER_SIZE_ELEMENTS(modname));
-                    LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 2,
-                        "adding hook to future list: "PFX"-"PFX" in code of "
-                        "module @"PFX" == %s made rwx\n",
-                        base, base+size, modbase,
-                        modname == NULL? "<invalid name>" : modname);
+                    LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 2,
+                        "adding hook to future list: " PFX "-" PFX " in code of "
+                        "module @" PFX " == %s made rwx\n",
+                        base, base + size, modbase,
+                        modname == NULL ? "<invalid name>" : modname);
                 });
                 STATS_INC(num_hook);
 
                 /* add as a once-only future area */
-                add_futureexec_vm_area(base, base + size, 
-                                       true/*once-only*/
+                add_futureexec_vm_area(base, base + size,
+                                       true /*once-only*/
                                        _IF_DEBUG(memprot_string(prot)));
                 /* This is text section, leave area on executable list
                  * so app can execute here, write, and then execute
@@ -6687,13 +6678,14 @@ app_memory_protection_change(dcontext_t *dcontext, app_pc base, size_t size,
                 if (!DYNAMO_OPTION(sandbox_writable))
                     vm_flags |= VM_DELAY_READONLY;
 
-                add_executable_vm_area(base, base + size, vm_flags,
-                                       0, should_finish_flushing/* own the lock if
-                                                                   we have flushed */
-                                       _IF_DEBUG("prot chg text rx->rwx not yet written"));
+                add_executable_vm_area(
+                    base, base + size, vm_flags, 0,
+                    should_finish_flushing /* own the lock if
+                                              we have flushed */
+                        _IF_DEBUG("prot chg text rx->rwx not yet written"));
                 /* leave read only since we are leaving on exec list */
                 if (should_finish_flushing) {
-                    flush_fragments_in_region_finish(dcontext, 
+                    flush_fragments_in_region_finish(dcontext,
                                                      false /*don't keep initexit_lock*/);
                 }
 
@@ -6719,7 +6711,7 @@ app_memory_protection_change(dcontext_t *dcontext, app_pc base, size_t size,
                  * so ok to use only the memprot supported flags.
                  */
                 prot &= ~MEMPROT_WRITE;
-                ASSERT_CURIOSITY(TESTALL(MEMPROT_READ|MEMPROT_EXEC, prot));
+                ASSERT_CURIOSITY(TESTALL(MEMPROT_READ | MEMPROT_EXEC, prot));
 
                 *new_memprot = prot;
                 return SUBSET_APP_MEM_PROT_CHANGE;
@@ -6738,7 +6730,7 @@ app_memory_protection_change(dcontext_t *dcontext, app_pc base, size_t size,
 void
 app_memory_flush(dcontext_t *dcontext, app_pc base, size_t size, uint prot)
 {
-# ifdef PROGRAM_SHEPHERDING
+#    ifdef PROGRAM_SHEPHERDING
     if (DYNAMO_OPTION(executable_if_flush)) {
         /* We want to ignore the loader calling flush, since our current
          * impl makes a flush region permanently executable.
@@ -6746,8 +6738,8 @@ app_memory_flush(dcontext_t *dcontext, app_pc base, size_t size, uint prot)
          * seen real DGC marking rx before flushing as well, so we use
          * our module-being-loaded test:
          */
-        if (!is_module_patch_region(dcontext, base, base+size,
-                                    false/*be liberal: don't miss loader*/)) {
+        if (!is_module_patch_region(dcontext, base, base + size,
+                                    false /*be liberal: don't miss loader*/)) {
             /* FIXME case 280: we'd like to always be once-only, but writes
              * to data on the same page make it hard to do that.
              */
@@ -6756,20 +6748,20 @@ app_memory_flush(dcontext_t *dcontext, app_pc base, size_t size, uint prot)
              * regions on our future list
              */
             LOG(GLOBAL, LOG_VMAREAS, 1,
-                "New future exec region b/c flushed: "PFX"-"PFX" %s\n",
-                base, base+size, memprot_string(prot));
+                "New future exec region b/c flushed: " PFX "-" PFX " %s\n", base,
+                base + size, memprot_string(prot));
             if (!DYNAMO_OPTION(selfmod_futureexec) &&
-                is_executable_area_on_all_selfmod_pages(base, base+size)) {
+                is_executable_area_on_all_selfmod_pages(base, base + size)) {
                 /* for selfmod we can be onceonly, as writes to data on the
                  * same page won't kick us off the executable list
                  */
                 onceonly = true;
             }
-            add_futureexec_vm_area(base, base + size, onceonly
-                                   _IF_DEBUG("NtFlushInstructionCache"));
+            add_futureexec_vm_area(base, base + size,
+                                   onceonly _IF_DEBUG("NtFlushInstructionCache"));
             if (DYNAMO_OPTION(xdata_rct)) {
                 /* FIXME: for now we only care about start pc */
-                vmvector_add(app_flushed_areas, base, base+1, NULL);
+                vmvector_add(app_flushed_areas, base, base + 1, NULL);
                 /* FIXME: remove when region de-allocated? */
             }
             DOSTATS({
@@ -6790,12 +6782,12 @@ app_memory_flush(dcontext_t *dcontext, app_pc base, size_t size, uint prot)
             STATS_INC(num_NT_flush_loader);
         }
     }
-# else
+#    else
     /* NOP */
-# endif /* PROGRAM_SHEPHERDING */
+#    endif /* PROGRAM_SHEPHERDING */
 }
 
-# ifdef PROGRAM_SHEPHERDING
+#    ifdef PROGRAM_SHEPHERDING
 bool
 was_address_flush_start(dcontext_t *dcontext, app_pc pc)
 {
@@ -6808,7 +6800,7 @@ was_address_flush_start(dcontext_t *dcontext, app_pc pc)
      */
     return vmvector_overlap(app_flushed_areas, pc, pc + 1);
 }
-# endif
+#    endif
 #endif
 
 /****************************************************************************/
@@ -6819,7 +6811,7 @@ static void
 handle_delay_readonly(dcontext_t *dcontext, app_pc pc, vm_area_t *area)
 {
     ASSERT_OWN_WRITE_LOCK(true, &executable_areas->lock);
-    ASSERT(TESTALL(VM_DELAY_READONLY|VM_WRITABLE, area->vm_flags));
+    ASSERT(TESTALL(VM_DELAY_READONLY | VM_WRITABLE, area->vm_flags));
     /* should never get a selfmod region here, to be marked selfmod
      * would already have had to execute (to get faulting write)
      * so region would already have had to go through here */
@@ -6828,9 +6820,9 @@ handle_delay_readonly(dcontext_t *dcontext, app_pc pc, vm_area_t *area)
         vm_make_unwritable(area->start, area->end - area->start);
         area->vm_flags |= VM_MADE_READONLY;
     } else {
-        /* this could happen if app changed mem protection on its 
+        /* this could happen if app changed mem protection on its
          * stack that triggered us adding a delay_readonly writable
-         * region to the executable list in 
+         * region to the executable list in
          * app_memory_protection_change() */
         ASSERT_CURIOSITY(false);
         area->frag_flags |= FRAG_SELFMOD_SANDBOXED;
@@ -6838,7 +6830,7 @@ handle_delay_readonly(dcontext_t *dcontext, app_pc pc, vm_area_t *area)
     area->vm_flags &= ~VM_DELAY_READONLY;
     LOG(GLOBAL, LOG_VMAREAS, 2,
         "\tMarking existing wx vm_area_t ro for consistency, "
-        "area "PFX" - "PFX", target pc "PFX"\n",
+        "area " PFX " - " PFX ", target pc " PFX "\n",
         area->start, area->end, pc);
     STATS_INC(num_delayed_rw2r);
 }
@@ -6889,7 +6881,7 @@ check_thread_vm_area_cleanup(dcontext_t *dcontext, bool abort, bool clean_bb,
         }
         if (clean_bb) {
             /* clean up bb_building_lock and IR */
-            bb_build_abort(dcontext, false/*don't call back*/);
+            bb_build_abort(dcontext, false /*don't call back*/);
         }
     }
 }
@@ -6905,11 +6897,10 @@ check_thread_vm_area_abort(dcontext_t *dcontext, void **vmlist, uint flags)
         !TEST(FRAG_SHARED, flags)) { /* yes, reverse logic, see comment above */
         data = shared_data;
     } else {
-        data = (thread_data_t *) dcontext->vm_areas_field;
+        data = (thread_data_t *)dcontext->vm_areas_field;
     }
-    check_thread_vm_area_cleanup(dcontext, true, false/*caller takes care of bb*/,
-                                 data, vmlist,
-                                 self_owns_write_lock(&executable_areas->lock),
+    check_thread_vm_area_cleanup(dcontext, true, false /*caller takes care of bb*/, data,
+                                 vmlist, self_owns_write_lock(&executable_areas->lock),
                                  self_owns_write_lock(&data->areas.lock));
 }
 
@@ -6946,15 +6937,15 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
     bool shared_to_private = false;
     /* used for new area */
     app_pc base_pc = 0;
-    size_t size = 0;                  /* set only for unknown areas */
-    uint prot = 0;              /* set only for unknown areas */
+    size_t size = 0; /* set only for unknown areas */
+    uint prot = 0;   /* set only for unknown areas */
     /* both area and local_area either point to thread-local vector, for which
      * we do not need a lock, or to a shared area, for which we hold
      * a read or a write lock (either is sufficient) the entire time
      */
     vm_area_t *area = NULL;
     vm_area_t *local_area = NULL; /* entry for this thread */
-    vm_area_t area_copy; /* local copy, so can let go of lock */
+    vm_area_t area_copy;          /* local copy, so can let go of lock */
     /* the flags we don't allow a direct cti to bridge if different */
     const uint frag_flags_cmp = FRAG_SELFMOD_SANDBOXED | FRAG_COARSE_GRAIN
 #ifdef PROGRAM_SHEPHERDING
@@ -6989,7 +6980,7 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
         !TEST(FRAG_TEMP_PRIVATE, *flags) &&
         !TEST(FRAG_SHARED, *flags)) { /* yes, reverse logic, see comment above */
         data = shared_data;
-        DODEBUG({new_area_prefix = "new shared vm area: ";});
+        DODEBUG({ new_area_prefix = "new shared vm area: "; });
         if (vmlist == NULL) { /* not making any state changes to vm lists */
             /* need read access only, for lookup and holding ptr into vector */
             SHARED_VECTOR_RWLOCK(&data->areas, read, lock);
@@ -7001,14 +6992,13 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
             SHARED_VECTOR_RWLOCK(&data->areas, write, lock);
         }
     } else {
-        DODEBUG({new_area_prefix = "new vm area for thread: ";});
-        data = (thread_data_t *) dcontext->vm_areas_field;
+        DODEBUG({ new_area_prefix = "new vm area for thread: "; });
+        data = (thread_data_t *)dcontext->vm_areas_field;
         if (DYNAMO_OPTION(shared_bbs) && TEST(FRAG_SHARED, *flags))
             shared_to_private = true;
     }
 
-    LOG(THREAD, LOG_INTERP|LOG_VMAREAS, 4,
-        "check_thread_vm_area: pc = "PFX"\n", pc);
+    LOG(THREAD, LOG_INTERP | LOG_VMAREAS, 4, "check_thread_vm_area: pc = " PFX "\n", pc);
 
     /* no lock on data->areas needed if thread-local,
      * if shared we grabbed either read or write lock above
@@ -7055,7 +7045,7 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
                 own_execareas_writelock = true;
                 ok = lookup_addr(executable_areas, pc, &area);
             }
-            if (ok && TEST(VM_DELAY_READONLY, area->vm_flags)) 
+            if (ok && TEST(VM_DELAY_READONLY, area->vm_flags))
                 handle_delay_readonly(dcontext, pc, area);
         }
         if ((!ok || (ok && vmlist != NULL && !TEST(VM_EXECUTED_FROM, area->vm_flags))) &&
@@ -7102,10 +7092,11 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
                 read_unlock(&executable_areas->lock);
         }
         /* if ok we should not own the readlock but we can't assert on that */
-        ASSERT(ok || (self_owns_write_lock(&executable_areas->lock) &&
-                      own_execareas_writelock
-                      IF_HOTP(&& (!DYNAMO_OPTION(hot_patching) ||
-                                  self_owns_write_lock(hotp_get_lock())))));
+        ASSERT(
+            ok ||
+            (self_owns_write_lock(&executable_areas->lock) &&
+             own_execareas_writelock IF_HOTP(&&(!DYNAMO_OPTION(hot_patching) ||
+                                                self_owns_write_lock(hotp_get_lock())))));
         if (!ok) {
             /* we no longer allow execution from arbitrary dr mem, our dll is
              * on the executable list and we specifically add the callback
@@ -7132,12 +7123,11 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
                  * address, and not dealing with a race instead.
                  */
 
-                if (!is_user_address(pc) && 
-                    is_readable_without_exception_try(pc, 1)) {
+                if (!is_user_address(pc) && is_readable_without_exception_try(pc, 1)) {
                     SYSLOG_INTERNAL_WARNING_ONCE(
-                       "Readable kernel address space memory at "PFX".\n"
-                       "case 9022 seen with Kaspersky AV", 
-                       pc);
+                        "Readable kernel address space memory at " PFX ".\n"
+                        "case 9022 seen with Kaspersky AV",
+                        pc);
                     /* FIXME: we're constructing these flags with the
                      * intent to allow this region, any other
                      * characteristics are hard to validate
@@ -7174,7 +7164,7 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
                      * SANDBOX_FLAG for these fragments since it is
                      * not clear that we can control any writes to
                      * them from kernel space FIXME: may be
-                     * unnecessary in the case of Kaspersky.  
+                     * unnecessary in the case of Kaspersky.
                      * insert_selfmod_sandbox() will suppress
                      * sandbox2ro_threshold for VM_DRIVER_ADDRESS areas
                      */
@@ -7188,24 +7178,25 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
                  * longer on our list.
                  */
                 is_being_unloaded = is_unreadable_or_currently_unloaded_region(pc);
-                /* note here we'll forge an exception to the app, 
+                /* note here we'll forge an exception to the app,
                  * even if the address is practically still readable
                  */
                 if (is_being_unloaded) {
                     STATS_INC(num_unloaded_race_code_origins);
                     SYSLOG_INTERNAL_WARNING_ONCE("Application executing from unloaded "
-                                                 "address "PFX"\n", pc);
+                                                 "address " PFX "\n",
+                                                 pc);
                 }
             }
 
-            /* if target unreadable, app will die, so make sure we don't die 
+            /* if target unreadable, app will die, so make sure we don't die
              * instead, NOTE we treat dr memory as unreadable because of app
              * races (see bug 2574) and the fact that we don't yet expect
              * targeted attacks against dr */
             /* case 9330 tracks a violation while we are unloading,
              * but address shouldn't be on a new futureexec_area (case 9371)
              */
-#ifdef WINDOWS 
+#ifdef WINDOWS
             if (in_private_library(pc)) {
                 /* Privately-loaded libs are put on the DR list, and if the app
                  * ends up executing from them they can come here.  We assert
@@ -7215,14 +7206,14 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
                  */
                 if (private_lib_handle_cb(dcontext, pc)) {
                     /* Did the native call and set up to interpret at retaddr */
-                    check_thread_vm_area_cleanup(dcontext, true/*redirecting*/,
-                                                 true/*clean bb*/, data, vmlist,
-                                                 own_execareas_writelock,
-                                                 caller_execareas_writelock);
+                    check_thread_vm_area_cleanup(
+                        dcontext, true /*redirecting*/, true /*clean bb*/, data, vmlist,
+                        own_execareas_writelock, caller_execareas_writelock);
                     /* avoid assert in dispatch_enter_dynamorio() */
                     dcontext->whereami = WHERE_TRAMPOLINE;
-                    set_last_exit(dcontext, (linkstub_t *)
-                                  get_ibl_sourceless_linkstub(LINK_RETURN, 0));
+                    set_last_exit(
+                        dcontext,
+                        (linkstub_t *)get_ibl_sourceless_linkstub(LINK_RETURN, 0));
                     if (is_couldbelinking(dcontext))
                         enter_nolinking(dcontext, NULL, false);
                     KSTART(fcache_default);
@@ -7230,15 +7221,16 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
                                          get_mcontext(dcontext));
                     ASSERT_NOT_REACHED();
                 }
-                CLIENT_ASSERT(false, "privately-loaded library executed by app: "
+                CLIENT_ASSERT(false,
+                              "privately-loaded library executed by app: "
                               "please report this transparency violation");
             }
 #endif
-            if ((is_in_dr IF_WINDOWS(&& !in_private_library(pc))) ||
-                !is_allocated_mem || prot == 0/*no access flags*/ || is_being_unloaded) {
+            if ((is_in_dr IF_WINDOWS(&&!in_private_library(pc))) || !is_allocated_mem ||
+                prot == 0 /*no access flags*/ || is_being_unloaded) {
                 if (xfer) {
-                    /* don't follow cti, wait for app to get there and then 
-                     * handle this (might be pathological case where cti is 
+                    /* don't follow cti, wait for app to get there and then
+                     * handle this (might be pathological case where cti is
                      * never really followed)
                      */
 
@@ -7254,7 +7246,7 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
                      */
 
                     LOG(THREAD, LOG_VMAREAS, 3,
-                        "cti targets %s "PFX", stopping bb here\n", 
+                        "cti targets %s " PFX ", stopping bb here\n",
                         is_in_dr ? "dr" : "unreadable", pc);
                     result = false;
                     goto check_thread_return;
@@ -7263,7 +7255,7 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
                      * instruction being decoded generated it
                      */
                     /* FIXME : might be pathalogical selfmod case where
-                     * app in fact jumps out of block before reaching the 
+                     * app in fact jumps out of block before reaching the
                      * unreadable memory */
                     if (vmlist == NULL) {
                         /* Case 9376: check_origins_bb_pattern() can get here
@@ -7274,42 +7266,43 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
                                              "unreadable memory");
                     }
                     LOG(GLOBAL, LOG_VMAREAS, 1,
-                        "application tried to execute from %s "PFX" is_allocated_mem=%d prot=0x%x\n",
+                        "application tried to execute from %s " PFX
+                        " is_allocated_mem=%d prot=0x%x\n",
                         is_in_dr ? "dr" : "unreadable", pc, is_allocated_mem, prot);
                     LOG(THREAD, LOG_VMAREAS, 1,
-                        "application tried to execute from %s "PFX" is_allocated_mem=%d prot=0x%x\n",
+                        "application tried to execute from %s " PFX
+                        " is_allocated_mem=%d prot=0x%x\n",
                         is_in_dr ? "dr" : "unreadable", pc, is_allocated_mem, prot);
                     DOLOG(1, LOG_VMAREAS, {
                         dump_callstack((app_pc)get_mcontext(dcontext)->xsi,
-                                       (app_pc)get_mcontext(dcontext)->xbp, 
-                                       THREAD, DUMP_NOT_XML);
+                                       (app_pc)get_mcontext(dcontext)->xbp, THREAD,
+                                       DUMP_NOT_XML);
                     });
-                    
-                    /* FIXME: what if the app masks it with an exception 
+
+                    /* FIXME: what if the app masks it with an exception
                      * handler? */
                     SYSLOG_INTERNAL_WARNING_ONCE(
-                        "Application tried to execute from %s memory "PFX".\n"
+                        "Application tried to execute from %s memory " PFX ".\n"
                         "This may be a result of an unsuccessful attack or a potential "
-                        "application vulnerability.", is_in_dr ? "dr" : "unreadable",
-                        pc);
-                    /* Not logged as a security violation, but still an 
-                     * external warning, We don't want to take blame for all 
-                     * program bugs that overwrite EIP with invalid addresses, 
-                     * yet it may help discovering new security holes. 
+                        "application vulnerability.",
+                        is_in_dr ? "dr" : "unreadable", pc);
+                    /* Not logged as a security violation, but still an
+                     * external warning, We don't want to take blame for all
+                     * program bugs that overwrite EIP with invalid addresses,
+                     * yet it may help discovering new security holes.
                      * [Although, watching for crashes of 0x41414141 can't read
                      *  0x41414141 helps.]
                      *It may also be a failing attack..
                      */
 
-                    check_thread_vm_area_cleanup(dcontext, true/*abort*/,
-                                                 true/*clean bb*/, data, vmlist,
-                                                 own_execareas_writelock,
-                                                 caller_execareas_writelock);
+                    check_thread_vm_area_cleanup(
+                        dcontext, true /*abort*/, true /*clean bb*/, data, vmlist,
+                        own_execareas_writelock, caller_execareas_writelock);
 
                     /* Create an exception record for this failure */
-                    if (TEST(DUMPCORE_FORGE_UNREAD_EXEC,
-                             DYNAMO_OPTION(dumpcore_mask)))
-                        os_dump_core("Warning: App trying to execute from unreadable memory");
+                    if (TEST(DUMPCORE_FORGE_UNREAD_EXEC, DYNAMO_OPTION(dumpcore_mask)))
+                        os_dump_core(
+                            "Warning: App trying to execute from unreadable memory");
                     os_forge_exception(pc, UNREADABLE_MEMORY_EXECUTION_EXCEPTION);
                     ASSERT_NOT_REACHED();
                 }
@@ -7317,7 +7310,7 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
 
             /* set all flags that don't intermix now */
 #ifdef PROGRAM_SHEPHERDING
-# ifdef WINDOWS
+#    ifdef WINDOWS
             /* Don't classify the vsyscall code page as DGC for our purposes,
              * since we permit execution from that region. This is needed
              * for Windows XP/2003 pre-SP2 on which the code page is not
@@ -7327,7 +7320,7 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
              * during os init and remove this specialized check.
              */
             if (!is_dyngen_vsyscall(pc))
-# endif
+#    endif
                 frag_flags |= FRAG_DYNGEN;
 #endif
 #ifdef WINDOWS
@@ -7355,11 +7348,12 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
              * though we could wait if a xfer since the bb will not cross.
              */
             DEBUG_DECLARE(coarse_info_t *info =)
-                get_coarse_info_internal(pc, true/*init*/, true/*have shvm lock*/);
+            get_coarse_info_internal(pc, true /*init*/, true /*have shvm lock*/);
             ASSERT(info != NULL);
         }
         ASSERT(!TEST(FRAG_COARSE_GRAIN, area->frag_flags) ||
-               get_coarse_info_internal(pc, false/*no init*/, false/*no lock*/) != NULL);
+               get_coarse_info_internal(pc, false /*no init*/, false /*no lock*/) !=
+                   NULL);
         frag_flags |= area->frag_flags;
 
 #ifdef PROGRAM_SHEPHERDING
@@ -7379,14 +7373,14 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
             area = NULL; /* clear to force a re-verify */
             /* satisfy lock asumptions when area == NULL */
             if (!own_execareas_writelock) {
-# ifdef HOT_PATCHING_INTERFACE
+#    ifdef HOT_PATCHING_INTERFACE
                 if (DYNAMO_OPTION(hot_patching))
                     write_lock(hotp_get_lock()); /* case 8780 -- see comments above */
-# endif
+#    endif
                 write_lock(&executable_areas->lock);
                 own_execareas_writelock = true;
             }
-       }
+        }
 #endif
     }
 
@@ -7416,13 +7410,12 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
             read_lock(&written_areas->lock);
             ok = lookup_addr(written_areas, pc, &w_area);
             if (ok)
-                ro2s = (ro_vs_sandbox_data_t *) w_area->custom.client;
-            if (ok && ro2s->written_count >=
-                DYNAMO_OPTION(ro2sandbox_threshold)) {
+                ro2s = (ro_vs_sandbox_data_t *)w_area->custom.client;
+            if (ok && ro2s->written_count >= DYNAMO_OPTION(ro2sandbox_threshold)) {
                 LOG(GLOBAL, LOG_VMAREAS, 1,
-                    "new executable area "PFX"-"PFX" written >= %dX => "
+                    "new executable area " PFX "-" PFX " written >= %dX => "
                     "switch to sandboxing\n",
-                    base_pc, base_pc+size, DYNAMO_OPTION(ro2sandbox_threshold));
+                    base_pc, base_pc + size, DYNAMO_OPTION(ro2sandbox_threshold));
                 DOSTATS({
                     if (vmlist != NULL) /* don't count non-build calls */
                         STATS_INC(num_ro2sandbox);
@@ -7446,7 +7439,7 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
                  */
                 frag_flags |= SANDBOX_FLAG();
                 /* for sandboxing best to stay at single-page regions */
-                base_pc = (app_pc) PAGE_START(pc);
+                base_pc = (app_pc)PAGE_START(pc);
                 size = PAGE_SIZE;
                 /* We do not clear the written count as we're only doing one page
                  * here.  We want the next exec in the same region to also be
@@ -7454,7 +7447,8 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
                  */
                 DODEBUG({ ro2s->ro2s_xfers++; });
                 LOG(GLOBAL, LOG_VMAREAS, 2,
-                    "\tsandboxing just the page "PFX"-"PFX"\n", base_pc, base_pc+size);
+                    "\tsandboxing just the page " PFX "-" PFX "\n", base_pc,
+                    base_pc + size);
             }
             read_unlock(&written_areas->lock);
         } else
@@ -7492,12 +7486,12 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
         if (!allow) {
             LOG(THREAD, LOG_VMAREAS, 3,
                 "change in vm area flags (0x%08x vs. 0x%08x %d): "
-                "stopping at "PFX"\n", *flags, frag_flags,
-                TEST(FRAG_COARSE_GRAIN, *flags), pc);
+                "stopping at " PFX "\n",
+                *flags, frag_flags, TEST(FRAG_COARSE_GRAIN, *flags), pc);
             DOSTATS({
-                    if (TEST(FRAG_COARSE_GRAIN, frag_flags))
-                        STATS_INC(elisions_prevented_for_coarse);
-                });
+                if (TEST(FRAG_COARSE_GRAIN, frag_flags))
+                    STATS_INC(elisions_prevented_for_coarse);
+            });
             result = false;
             goto check_thread_return;
         }
@@ -7512,7 +7506,7 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
     /* N.B.: ibl entry removal (case 9636) assumes coarse fragments
      * stay bounded within a single FRAG_COARSE_GRAIN region
      */
-    if (TEST(FRAG_COARSE_GRAIN, frag_flags) && pc != tag/*don't cmp to nothing*/ &&
+    if (TEST(FRAG_COARSE_GRAIN, frag_flags) && pc != tag /*don't cmp to nothing*/ &&
         ((*flags & FRAG_COARSE_GRAIN) != (frag_flags & FRAG_COARSE_GRAIN) ||
          area == NULL || area->start > tag)) {
         *flags &= ~FRAG_COARSE_GRAIN;
@@ -7546,22 +7540,23 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
 
     if (area == NULL /* unknown area */) {
         LOG(GLOBAL, LOG_VMAREAS, 2,
-            "WARNING: "PFX" -> "PFX"-"PFX" %s%s is not on executable list (thread %d)\n",
-            pc, base_pc, base_pc+size,
-            ((prot & MEMPROT_WRITE) != 0)?"W":"", ((prot & MEMPROT_EXEC) != 0)?"E":"",
-            dcontext->owning_thread);
+            "WARNING: " PFX " -> " PFX "-" PFX
+            " %s%s is not on executable list (thread %d)\n",
+            pc, base_pc, base_pc + size, ((prot & MEMPROT_WRITE) != 0) ? "W" : "",
+            ((prot & MEMPROT_EXEC) != 0) ? "E" : "", dcontext->owning_thread);
         DOLOG(3, LOG_VMAREAS, { print_executable_areas(GLOBAL); });
         DODEBUG({
             if (is_on_stack(dcontext, pc, NULL))
-                SYSLOG_INTERNAL_WARNING_ONCE("executing region with pc "PFX" on "
-                                             "the stack.", pc);
+                SYSLOG_INTERNAL_WARNING_ONCE("executing region with pc " PFX " on "
+                                             "the stack.",
+                                             pc);
         });
 #ifdef DGC_DIAGNOSTICS
         dyngen_diagnostics(dcontext, pc, base_pc, size, prot);
 #endif
 
 #ifdef PROGRAM_SHEPHERDING
-        /* give origins checker a chance to change region 
+        /* give origins checker a chance to change region
          * N.B.: security violation reports in detect_mode assume that at
          * this point we aren't holding pointers into vectors, since the
          * shared vm write lock is released briefly for the diagnostic report.
@@ -7572,22 +7567,20 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
                                     &frag_flags, xfer);
             if (res < 0) {
                 if (!xfer) {
-                    action_type_t action =
-                        security_violation_main(dcontext, pc, res,
-                                                OPTION_BLOCK|OPTION_REPORT);
+                    action_type_t action = security_violation_main(
+                        dcontext, pc, res, OPTION_BLOCK | OPTION_REPORT);
                     if (action != ACTION_CONTINUE) {
-                        check_thread_vm_area_cleanup(dcontext, true/*abort*/,
-                                                     true/*clean bb*/, data, vmlist,
-                                                     own_execareas_writelock,
-                                                     caller_execareas_writelock);
+                        check_thread_vm_area_cleanup(
+                            dcontext, true /*abort*/, true /*clean bb*/, data, vmlist,
+                            own_execareas_writelock, caller_execareas_writelock);
                         security_violation_action(dcontext, action, pc);
                         ASSERT_NOT_REACHED();
                     }
                 } else {
                     /* if xfer, we simply don't follow the xfer */
                     LOG(THREAD, LOG_VMAREAS, 3,
-                        "xfer to "PFX" => violation, so stopping at "PFX"\n",
-                        base_pc, pc);
+                        "xfer to " PFX " => violation, so stopping at " PFX "\n", base_pc,
+                        pc);
                     result = false;
                     goto check_thread_return;
                 }
@@ -7617,11 +7610,11 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
             else {
 #endif
 #ifdef PROGRAM_SHEPHERDING
-                /* else, this can only happen for pattern reverification: no races! */ 
+                /* else, this can only happen for pattern reverification: no races! */
                 ASSERT(TEST(VM_PATTERN_REVERIFY, area->vm_flags) &&
                        TEST(FRAG_SELFMOD_SANDBOXED, area->frag_flags));
 #else
-                ASSERT_NOT_REACHED();
+            ASSERT_NOT_REACHED();
 #endif
 #ifdef FORENSICS_ACQUIRES_INITEXIT_LOCK
             }
@@ -7641,7 +7634,7 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
                  * with only the valid subpage on the origins list.  We don't mark
                  * pieces of a large region, for simplicity.
                  */
-                if (is_executable_area_on_all_selfmod_pages(base_pc, base_pc+size)) {
+                if (is_executable_area_on_all_selfmod_pages(base_pc, base_pc + size)) {
                     frag_flags |= SANDBOX_FLAG();
                 }
                 /* case 8308: We've added options to force certain regions to
@@ -7651,19 +7644,21 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
                  */
                 else if (DYNAMO_OPTION(sandbox_writable)) {
                     frag_flags |= SANDBOX_FLAG();
-                }
-                else if (DYNAMO_OPTION(sandbox_non_text)) {
+                } else if (DYNAMO_OPTION(sandbox_non_text)) {
                     app_pc modbase = get_module_base(base_pc);
-                    if (modbase == NULL || !is_range_in_code_section
-                        (modbase, base_pc, base_pc + size, NULL, NULL)) {
+                    if (modbase == NULL ||
+                        !is_range_in_code_section(modbase, base_pc, base_pc + size, NULL,
+                                                  NULL)) {
                         frag_flags |= SANDBOX_FLAG();
                     }
                 }
 
                 if (TEST(FRAG_SELFMOD_SANDBOXED, frag_flags)) {
                     LOG(GLOBAL, LOG_VMAREAS, 2,
-                        "\tNew executable region "PFX"-"PFX" is writable, but selfmod, "
-                        "so leaving as writable\n", base_pc, base_pc+size);
+                        "\tNew executable region " PFX "-" PFX
+                        " is writable, but selfmod, "
+                        "so leaving as writable\n",
+                        base_pc, base_pc + size);
                 } else if (INTERNAL_OPTION(cache_consistency)) {
                     /* Make entire region read-only
                      * If that's too big, i.e., it contains some data, the
@@ -7671,8 +7666,9 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
                      * fault in the region
                      */
                     LOG(GLOBAL, LOG_VMAREAS, 2,
-                        "\tNew executable region "PFX"-"PFX" is writable, "
-                        "making it read-only\n", base_pc, base_pc+size);
+                        "\tNew executable region " PFX "-" PFX " is writable, "
+                        "making it read-only\n",
+                        base_pc, base_pc + size);
 #if 0
                     /* this syslog causes services.exe to hang 
                      * (ref case 666) once case 666 is fixed re-enable if 
@@ -7686,15 +7682,16 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
             }
             /* now add the new region to the global list */
             ASSERT(!TEST(FRAG_COARSE_GRAIN, frag_flags)); /* else no pre-exec query */
-            add_executable_vm_area(base_pc, base_pc+size, vm_flags | VM_EXECUTED_FROM,
-                                   frag_flags, true/*own lock*/
+            add_executable_vm_area(base_pc, base_pc + size, vm_flags | VM_EXECUTED_FROM,
+                                   frag_flags,
+                                   true /*own lock*/
                                    _IF_DEBUG("unexpected vm area"));
             ok = lookup_addr(executable_areas, pc, &area);
             ASSERT(ok);
             DOLOG(2, LOG_VMAREAS, {
                 /* new area could have been split into multiple */
-                print_contig_vm_areas(executable_areas, base_pc, base_pc+size,
-                                      GLOBAL, "new executable vm area: ");
+                print_contig_vm_areas(executable_areas, base_pc, base_pc + size, GLOBAL,
+                                      "new executable vm area: ");
             });
         }
         ASSERT(area != NULL);
@@ -7705,16 +7702,18 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
         /* new area for this thread */
         ASSERT(TEST(VM_EXECUTED_FROM, area->vm_flags)); /* marked above */
 #ifdef DGC_DIAGNOSTICS
-        if (!TESTANY(VM_UNMOD_IMAGE|VM_WAS_FUTURE, area->vm_flags)) {
+        if (!TESTANY(VM_UNMOD_IMAGE | VM_WAS_FUTURE, area->vm_flags)) {
             LOG(GLOBAL, LOG_VMAREAS, 1,
-                "DYNGEN in %d: non-unmod-image exec area "PFX"-"PFX" %s\n",
+                "DYNGEN in %d: non-unmod-image exec area " PFX "-" PFX " %s\n",
                 get_thread_id(), area->start, area->end, area->comment);
         }
 #endif
 #ifdef PROGRAM_SHEPHERDING
         DOSTATS({
-            if (!TEST(VM_UNMOD_IMAGE, area->vm_flags) && TEST(VM_WAS_FUTURE, area->vm_flags)) {
-                /* increment for other threads (1st thread will be inc-ed in check_origins_helper) */
+            if (!TEST(VM_UNMOD_IMAGE, area->vm_flags) &&
+                TEST(VM_WAS_FUTURE, area->vm_flags)) {
+                /* increment for other threads (1st thread will be inc-ed in
+                 * check_origins_helper) */
                 if (is_on_stack(dcontext, area->start, area)) {
                     STATS_INC(num_exec_future_stack);
                 } else {
@@ -7722,21 +7721,22 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
                 }
             }
         });
-# ifdef WINDOWS
+#    ifdef WINDOWS
         DOSTATS({
-            if (!TEST(VM_UNMOD_IMAGE, area->vm_flags) && !TEST(VM_WAS_FUTURE, area->vm_flags))
+            if (!TEST(VM_UNMOD_IMAGE, area->vm_flags) &&
+                !TEST(VM_WAS_FUTURE, area->vm_flags))
                 STATS_INC(num_exec_after_load);
         });
-# endif
+#    endif
 #endif
-        
+
         add_vm_area(&data->areas, area->start, area->end, area->vm_flags,
                     area->frag_flags, NULL _IF_DEBUG(area->comment));
         /* get area for actual pc (new area could have been split up) */
         ok = lookup_addr(&data->areas, pc, &local_area);
         ASSERT(ok);
-        DOLOG(2, LOG_VMAREAS, { print_vm_area(&data->areas, local_area,
-                                              THREAD, new_area_prefix); });
+        DOLOG(2, LOG_VMAREAS,
+              { print_vm_area(&data->areas, local_area, THREAD, new_area_prefix); });
         DOLOG(5, LOG_VMAREAS, { print_vm_areas(&data->areas, THREAD); });
     }
 
@@ -7754,7 +7754,7 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
         /* vmlist has to point to front, so must walk every time
          * along the way check to see if existing entry points to this area
          */
-        for (entry = (fragment_t *) *vmlist, prev = NULL; entry != NULL;
+        for (entry = (fragment_t *)*vmlist, prev = NULL; entry != NULL;
              prev = entry, entry = FRAG_ALSO(entry)) {
             if (FRAG_PC(entry) >= local_area->start && FRAG_PC(entry) < local_area->end) {
                 already = true;
@@ -7763,18 +7763,17 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
         }
         if (!already) {
             /* always allocate global, will re-allocate later if not shared */
-            prev = prepend_fraglist(MULTI_ALLOC_DC(dcontext,
-                       (data == shared_data) ? FRAG_SHARED : 0),
-                       local_area, pc, tag, prev);
+            prev = prepend_fraglist(
+                MULTI_ALLOC_DC(dcontext, (data == shared_data) ? FRAG_SHARED : 0),
+                local_area, pc, tag, prev);
             ASSERT(FRAG_PREV(prev) != NULL);
             if (*vmlist == NULL) {
                 /* write back first */
-                *vmlist = (void *) prev;
+                *vmlist = (void *)prev;
             }
         }
-        DOLOG(6, LOG_VMAREAS, {
-            print_fraglist(dcontext, local_area, "after check_thread_vm_area, ");
-        });
+        DOLOG(6, LOG_VMAREAS,
+              { print_fraglist(dcontext, local_area, "after check_thread_vm_area, "); });
         DOLOG(7, LOG_VMAREAS, { print_fraglists(dcontext); });
     }
 
@@ -7784,7 +7783,7 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
         ASSERT(*stop != NULL);
     }
     result = true;
-    
+
     /* we are building a real bb, assert consistency checks */
     DODEBUG({
         uint prot2;
@@ -7795,16 +7794,15 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
         /* TODO(peter): We haven't implemented make_unwritable yet, so we ignore
          * this check for now. Modules are allocated in RWX memory, so this
          * check will fail. */
-        ASSERT(!ok || !TEST(MEMPROT_WRITE, prot2) || 
+        ASSERT(!ok || !TEST(MEMPROT_WRITE, prot2) ||
                TEST(FRAG_SELFMOD_SANDBOXED, *flags));
 #endif
         ASSERT(is_readable_without_exception_try(pc, 1));
     });
 
- check_thread_return:
-    check_thread_vm_area_cleanup(dcontext, false/*not aborting*/,
-                                 false/*leave bb*/, data, vmlist,
-                                 own_execareas_writelock,
+check_thread_return:
+    check_thread_vm_area_cleanup(dcontext, false /*not aborting*/, false /*leave bb*/,
+                                 data, vmlist, own_execareas_writelock,
                                  caller_execareas_writelock);
     return result;
 }
@@ -7836,8 +7834,8 @@ set_thread_decode_page_start(dcontext_t *dcontext, app_pc page_pc)
         return;
     }
 #endif
-    data = (thread_data_t *) dcontext->vm_areas_field;
-    ASSERT(page_pc == (app_pc) PAGE_START(page_pc));
+    data = (thread_data_t *)dcontext->vm_areas_field;
+    ASSERT(page_pc == (app_pc)PAGE_START(page_pc));
     data->last_decode_area_page_pc = page_pc;
     data->last_decode_area_valid = true;
 }
@@ -7845,7 +7843,7 @@ set_thread_decode_page_start(dcontext_t *dcontext, app_pc page_pc)
 /* Check if address is in the last area that passed the check_thread_vm_area tests.
  * Used for testing for an application race condition (case 845),
  * where code executed by one thread is unmapped by another.
- * The last decoded application pc should always be in the thread's last area. 
+ * The last decoded application pc should always be in the thread's last area.
  */
 bool
 check_in_last_thread_vm_area(dcontext_t *dcontext, app_pc pc)
@@ -7854,8 +7852,8 @@ check_in_last_thread_vm_area(dcontext_t *dcontext, app_pc pc)
     bool in_last = false;
     app_pc last_decode_area_page_pc;
     /* extra paranoia since called by intercept_exception */
-    if (is_readable_without_exception((app_pc)&dcontext->vm_areas_field, 4)) 
-        data = (thread_data_t *) dcontext->vm_areas_field;
+    if (is_readable_without_exception((app_pc)&dcontext->vm_areas_field, 4))
+        data = (thread_data_t *)dcontext->vm_areas_field;
     /* note that if data is NULL &data->last_area will not be readable either */
     if (is_readable_without_exception((app_pc)&data->last_area, 4) &&
         is_readable_without_exception((app_pc)&data->last_area->end, 4) &&
@@ -7887,9 +7885,10 @@ check_in_last_thread_vm_area(dcontext_t *dcontext, app_pc pc)
         /* I think the above "safety" checks are ridiculous so not doing them here */
         data->last_decode_area_valid) {
         /* Check the last decoded pc's current page and the page after. */
-        app_pc last_decode_page_end = last_decode_area_page_pc + 2*PAGE_SIZE;
+        app_pc last_decode_page_end = last_decode_area_page_pc + 2 * PAGE_SIZE;
         in_last = ((last_decode_page_end < last_decode_area_page_pc /* overflow */ ||
-                    pc < last_decode_page_end) && last_decode_area_page_pc <= pc);
+                    pc < last_decode_page_end) &&
+                   last_decode_area_page_pc <= pc);
     }
     return in_last;
 }
@@ -7903,18 +7902,18 @@ remove_shared_vmlist(dcontext_t *dcontext, void *vmlist, fragment_t *f,
                      void **local_vmlist)
 {
     vm_area_t *area = NULL;
-    fragment_t *entry = (fragment_t *) vmlist;
+    fragment_t *entry = (fragment_t *)vmlist;
     fragment_t *next;
     bool remove;
     bool ok;
     uint check_flags = 0;
     app_pc pc;
-    LOG(THREAD, LOG_VMAREAS, 4, "\tremoving shared vm data for F%d("PFX")\n",
-        f->id, f->tag);
+    LOG(THREAD, LOG_VMAREAS, 4, "\tremoving shared vm data for F%d(" PFX ")\n", f->id,
+        f->tag);
     SHARED_VECTOR_RWLOCK(&shared_data->areas, write, lock);
     while (entry != NULL) {
         ASSERT(FRAG_MULTI_INIT(entry));
-        ASSERT(FRAG_FRAG(entry) == (fragment_t *) f->tag); /* for this frag */
+        ASSERT(FRAG_FRAG(entry) == (fragment_t *)f->tag); /* for this frag */
         /* If area will become empty, remove it, since it was only added for
          * this bb that is not actually shared.
          * Case 8906: do NOT remove the area for coarse fragments, as they are
@@ -7964,18 +7963,18 @@ vm_area_add_fragment(dcontext_t *dcontext, fragment_t *f, void *vmlist)
 {
     thread_data_t *data;
     vm_area_t *area = NULL;
-    fragment_t *entry = (fragment_t *) vmlist;
+    fragment_t *entry = (fragment_t *)vmlist;
     fragment_t *prev = NULL;
 
-    LOG(THREAD, LOG_VMAREAS, 4, "vm_area_add_fragment for F%d("PFX")\n", f->id, f->tag);
+    LOG(THREAD, LOG_VMAREAS, 4, "vm_area_add_fragment for F%d(" PFX ")\n", f->id, f->tag);
 
     if (TEST(FRAG_COARSE_GRAIN, f->flags)) {
         /* We went ahead and built up vmlist since we might decide later to not
          * make a fragment coarse-grain.  If it is emitted as coarse-grain,
          * we need to clean up the vmlist as it is not needed.
          */
-        remove_shared_vmlist(dcontext, vmlist, f, NULL/*do not add local*/);
-        return;        
+        remove_shared_vmlist(dcontext, vmlist, f, NULL /*do not add local*/);
+        return;
     }
 
     if (TEST(FRAG_SHARED, f->flags)) {
@@ -7985,7 +7984,7 @@ vm_area_add_fragment(dcontext_t *dcontext, fragment_t *f, void *vmlist)
     } else if (!DYNAMO_OPTION(shared_bbs) ||
                /* should already be in private vmareas */
                TESTANY(FRAG_IS_TRACE | FRAG_TEMP_PRIVATE, f->flags))
-        data = (thread_data_t *) dcontext->vm_areas_field;
+        data = (thread_data_t *)dcontext->vm_areas_field;
     else {
         void *local_vmlist = NULL;
         /* turns out bb isn't shared, so we have to transfer also entries
@@ -7995,12 +7994,13 @@ vm_area_add_fragment(dcontext_t *dcontext, fragment_t *f, void *vmlist)
         ASSERT(dcontext != GLOBAL_DCONTEXT);
         /* only bbs do we build shared and then switch to private */
         ASSERT(!TEST(FRAG_IS_TRACE, f->flags));
-        data = (thread_data_t *) dcontext->vm_areas_field;
-        LOG(THREAD, LOG_VMAREAS, 4, "\tbb not shared, shifting vm data to thread-local\n");
+        data = (thread_data_t *)dcontext->vm_areas_field;
+        LOG(THREAD, LOG_VMAREAS, 4,
+            "\tbb not shared, shifting vm data to thread-local\n");
         remove_shared_vmlist(dcontext, vmlist, f, &local_vmlist);
         /* now proceed as though everything were local to begin with */
         vmlist = local_vmlist;
-        entry = (fragment_t *) vmlist;
+        entry = (fragment_t *)vmlist;
     }
 
     /* swap f for the first multi_entry_t (the one in region of f->tag) */
@@ -8012,8 +8012,8 @@ vm_area_add_fragment(dcontext_t *dcontext, fragment_t *f, void *vmlist)
     ASSERT(prev != NULL); /* prev is never null */
     if (FRAG_NEXT(prev) == NULL) {
         DEBUG_DECLARE(bool ok =)
-            /* need to know area */
-            lookup_addr(&data->areas, FRAG_PC(entry), &area);
+        /* need to know area */
+        lookup_addr(&data->areas, FRAG_PC(entry), &area);
         ASSERT(ok);
         /* remember: prev wraps around, next does not */
         ASSERT(area->custom.frags == entry);
@@ -8026,8 +8026,8 @@ vm_area_add_fragment(dcontext_t *dcontext, fragment_t *f, void *vmlist)
     if (FRAG_NEXT(f) == NULL) {
         if (area == NULL) {
             DEBUG_DECLARE(bool ok =)
-                /* need to know area for area->frags */
-                lookup_addr(&data->areas, FRAG_PC(entry), &area);
+            /* need to know area for area->frags */
+            lookup_addr(&data->areas, FRAG_PC(entry), &area);
             ASSERT(ok);
         }
         if (area->custom.frags == f) {
@@ -8054,7 +8054,7 @@ vm_area_add_fragment(dcontext_t *dcontext, fragment_t *f, void *vmlist)
     /* now put backpointers in */
     while (entry != NULL) {
         ASSERT(FRAG_MULTI_INIT(entry));
-        ASSERT(FRAG_FRAG(entry) == (fragment_t *) f->tag); /* for this frag */
+        ASSERT(FRAG_FRAG(entry) == (fragment_t *)f->tag); /* for this frag */
         DOLOG(4, LOG_VMAREAS, { print_entry(dcontext, entry, "\talso "); });
         FRAG_FRAG_ASSIGN(entry, f);
         /* remove the init flag now that the real fragment_t is in the f field
@@ -8067,7 +8067,7 @@ vm_area_add_fragment(dcontext_t *dcontext, fragment_t *f, void *vmlist)
     DOLOG(6, LOG_VMAREAS, { print_frag_arealist(dcontext, f); });
     DOLOG(7, LOG_VMAREAS, { print_fraglists(dcontext); });
 
-    /* can't release lock once done w/ prev/next values since alsos can 
+    /* can't release lock once done w/ prev/next values since alsos can
      * be changed as well by vm_area_clean_fraglist()!
      */
     SHARED_VECTOR_RWLOCK(&data->areas, write, unlock);
@@ -8093,14 +8093,14 @@ release_vm_areas_lock(dcontext_t *dcontext, uint flags)
  * and the change_linking_lock and passing true for have_locks.
  */
 bool
-vm_area_add_to_list(dcontext_t *dcontext, app_pc tag, void **vmlist,
-                    uint list_flags, fragment_t *f, bool have_locks)
+vm_area_add_to_list(dcontext_t *dcontext, app_pc tag, void **vmlist, uint list_flags,
+                    fragment_t *f, bool have_locks)
 {
     thread_data_t *src_data = GET_DATA(dcontext, f->flags);
     thread_data_t *tgt_data = GET_DATA(dcontext, list_flags);
     vm_area_t *area = NULL;
     bool ok;
-    fragment_t *prev = (fragment_t *) *vmlist;
+    fragment_t *prev = (fragment_t *)*vmlist;
     fragment_t *already;
     fragment_t *entry = f;
     bool success = true;
@@ -8143,7 +8143,7 @@ vm_area_add_to_list(dcontext_t *dcontext, app_pc tag, void **vmlist,
         ok = lookup_addr(&src_data->areas, FRAG_PC(entry), &area);
         ASSERT(ok);
         ok = false; /* whether found existing entry in area or not */
-        for (already = (fragment_t *) *vmlist; already != NULL;
+        for (already = (fragment_t *)*vmlist; already != NULL;
              already = FRAG_ALSO(already)) {
             ASSERT(FRAG_MULTI(already));
             if (FRAG_PC(already) >= area->start && FRAG_PC(already) < area->end) {
@@ -8153,7 +8153,8 @@ vm_area_add_to_list(dcontext_t *dcontext, app_pc tag, void **vmlist,
         }
         if (!ok) {
             /* found new area that trace is on */
-            /* src may be shared bb, its area may not be on tgt list (e.g., private trace) */
+            /* src may be shared bb, its area may not be on tgt list (e.g., private trace)
+             */
             if (src_data != tgt_data) { /* else, have area already */
                 vm_area_t *tgt_area = NULL;
                 ok = lookup_addr(&tgt_data->areas, FRAG_PC(entry), &tgt_area);
@@ -8173,18 +8174,18 @@ vm_area_add_to_list(dcontext_t *dcontext, app_pc tag, void **vmlist,
                 area = tgt_area;
             }
             ASSERT(area != NULL);
-            prev = prepend_fraglist(MULTI_ALLOC_DC(dcontext, list_flags),
-                                    area, FRAG_PC(entry), tag, prev);
+            prev = prepend_fraglist(MULTI_ALLOC_DC(dcontext, list_flags), area,
+                                    FRAG_PC(entry), tag, prev);
             if (*vmlist == NULL) {
                 /* write back first */
-                *vmlist = (void *) prev;
+                *vmlist = (void *)prev;
             }
         }
         entry = FRAG_ALSO(entry);
     }
-    DOLOG(6, LOG_VMAREAS, { print_frag_arealist(dcontext, (fragment_t *) *vmlist); });
+    DOLOG(6, LOG_VMAREAS, { print_frag_arealist(dcontext, (fragment_t *)*vmlist); });
     DOLOG(7, LOG_VMAREAS, { print_fraglists(dcontext); });
- vm_area_add_to_list_done:
+vm_area_add_to_list_done:
     if (lock) {
         if (src_data != tgt_data)
             SHARED_VECTOR_RWLOCK(&tgt_data->areas, write, unlock);
@@ -8218,8 +8219,8 @@ vm_list_overlaps(dcontext_t *dcontext, void *vmlist, app_pc start, app_pc end)
     bool ok;
     vm_area_t *area;
     bool result = false;
-    LOG(THREAD, LOG_VMAREAS, 4, "vm_list_overlaps "PFX" vs "PFX"-"PFX"\n",
-        vmlist, start, end);
+    LOG(THREAD, LOG_VMAREAS, 4, "vm_list_overlaps " PFX " vs " PFX "-" PFX "\n", vmlist,
+        start, end);
     /* don't assert if can't find anything -- see usage in handle_modified_code() */
     if (v == NULL)
         return false;
@@ -8262,7 +8263,7 @@ remove_fraglist_entry(dcontext_t *dcontext, fragment_t *entry, vm_area_t *area)
     if (FRAG_NEXT(prev) == NULL || FRAG_NEXT(entry) == NULL) {
         /* need to know area */
         DEBUG_DECLARE(bool ok =)
-            lookup_addr(vector, FRAG_PC(entry), &area);
+        lookup_addr(vector, FRAG_PC(entry), &area);
         ASSERT(ok);
         ASSERT(area != NULL);
     }
@@ -8306,8 +8307,8 @@ vm_area_clean_fraglist(dcontext_t *dcontext, vm_area_t *area)
 {
     fragment_t *entry, *next, *f;
     fragment_t *also, *also_prev, *also_next;
-    LOG(THREAD, LOG_VMAREAS, 4,
-        "vm_area_clean_fraglist for "PFX"-"PFX"\n", area->start, area->end);
+    LOG(THREAD, LOG_VMAREAS, 4, "vm_area_clean_fraglist for " PFX "-" PFX "\n",
+        area->start, area->end);
     DOLOG(6, LOG_VMAREAS, { print_fraglist(dcontext, area, "before cleaning "); });
     /* FIXME: would like to assert we hold write lock but only have area ptr */
     for (entry = area->custom.frags; entry != NULL; entry = next) {
@@ -8326,7 +8327,8 @@ vm_area_clean_fraglist(dcontext_t *dcontext, vm_area_t *area)
                 also_next = FRAG_ALSO(also);
                 if (pc >= area->start && pc < area->end) {
                     ASSERT(FRAG_FRAG(also) == f);
-                    DOLOG(5, LOG_VMAREAS, { print_entry(dcontext, also, "\tremoving "); });
+                    DOLOG(5, LOG_VMAREAS,
+                          { print_entry(dcontext, also, "\tremoving "); });
                     /* we have to remove from also chain ourselves */
                     FRAG_ALSO_ASSIGN(also_prev, also_next);
                     /* now remove from area frags list */
@@ -8340,7 +8342,8 @@ vm_area_clean_fraglist(dcontext_t *dcontext, vm_area_t *area)
                 /* Remove this multi entry */
                 DOLOG(5, LOG_VMAREAS, { print_entry(dcontext, entry, "\tremoving "); });
                 /* we have to remove from also chain ourselves */
-                for (also_prev = f; FRAG_ALSO(also_prev) != entry; also_prev = FRAG_ALSO(also_prev))
+                for (also_prev = f; FRAG_ALSO(also_prev) != entry;
+                     also_prev = FRAG_ALSO(also_prev))
                     ;
                 FRAG_ALSO_ASSIGN(also_prev, FRAG_ALSO(entry));
                 /* now remove from area frags list */
@@ -8363,13 +8366,12 @@ vm_area_remove_fragment(dcontext_t *dcontext, fragment_t *f)
     bool lock = writelock_if_not_already(vector);
 
     if (!multi) {
-        LOG(THREAD, LOG_VMAREAS, 4,
-            "vm_area_remove_fragment: F%d tag="PFX"\n", f->id, f->tag);
+        LOG(THREAD, LOG_VMAREAS, 4, "vm_area_remove_fragment: F%d tag=" PFX "\n", f->id,
+            f->tag);
         match = f;
     } else {
         /* we do get called for multi-entries from vm_area_destroy_list */
-        LOG(THREAD, LOG_VMAREAS, 4,
-            "vm_area_remove_fragment: entry "PFX"\n", f);
+        LOG(THREAD, LOG_VMAREAS, 4, "vm_area_remove_fragment: entry " PFX "\n", f);
         match = FRAG_FRAG(f);
     }
     ASSERT(FRAG_PREV(f) != NULL); /* prev wraps around, should never be null */
@@ -8385,7 +8387,7 @@ vm_area_remove_fragment(dcontext_t *dcontext, fragment_t *f)
     }
     if (!multi) /* else f may have been freed */
         FRAG_ALSO_ASSIGN(f, NULL);
-    
+
     DOLOG(7, LOG_VMAREAS, { print_fraglists(dcontext); });
 
     /* f may no longer exist if it is FRAG_MULTI */
@@ -8397,14 +8399,12 @@ vm_area_remove_fragment(dcontext_t *dcontext, fragment_t *f)
  * pending deletion entry
  */
 static void
-add_to_pending_list(dcontext_t *dcontext, fragment_t *f,
-                    uint refcount, uint flushtime
-                    _IF_DEBUG(app_pc start) _IF_DEBUG(app_pc end))
+add_to_pending_list(dcontext_t *dcontext, fragment_t *f, uint refcount,
+                    uint flushtime _IF_DEBUG(app_pc start) _IF_DEBUG(app_pc end))
 {
     pending_delete_t *pend;
     ASSERT_OWN_MUTEX(true, &shared_delete_lock);
-    pend = HEAP_TYPE_ALLOC(GLOBAL_DCONTEXT, pending_delete_t,
-                           ACCT_VMAREAS, PROTECTED);
+    pend = HEAP_TYPE_ALLOC(GLOBAL_DCONTEXT, pending_delete_t, ACCT_VMAREAS, PROTECTED);
     DODEBUG({
         pend->start = start;
         pend->end = end;
@@ -8415,7 +8415,7 @@ add_to_pending_list(dcontext_t *dcontext, fragment_t *f,
         pend->ref_count = refcount;
         pend->flushtime_deleted = flushtime;
         LOG(GLOBAL, LOG_VMAREAS, 2,
-            "deleted area ref count=%d timestamp=%u start="PFX" end="PFX"\n",
+            "deleted area ref count=%d timestamp=%u start=" PFX " end=" PFX "\n",
             pend->ref_count, pend->flushtime_deleted, start, end);
     }
     /* add to front of list */
@@ -8441,8 +8441,7 @@ add_to_pending_list(dcontext_t *dcontext, fragment_t *f,
     }
 
     STATS_INC(num_shared_flush_regions);
-    LOG(GLOBAL, LOG_VMAREAS, 3,
-        "Pending list after adding deleted vm area:\n");
+    LOG(GLOBAL, LOG_VMAREAS, 3, "Pending list after adding deleted vm area:\n");
     DOLOG(3, LOG_VMAREAS, { print_pending_list(GLOBAL); });
 }
 
@@ -8455,7 +8454,7 @@ print_lazy_deletion_list(dcontext_t *dcontext, char *msg)
     ASSERT_OWN_MUTEX(true, &lazy_delete_lock);
     LOG(THREAD, LOG_VMAREAS, 1, "%s", msg);
     for (f = todelete->lazy_delete_list; f != NULL; f = f->next_vmarea) {
-        LOG(THREAD, LOG_VMAREAS, 1, "\t%d: F%d ("PFX")\n", i, f->id, f->tag);
+        LOG(THREAD, LOG_VMAREAS, 1, "\t%d: F%d (" PFX ")\n", i, f->id, f->tag);
         i++;
     }
 }
@@ -8465,7 +8464,7 @@ print_lazy_deletion_list(dcontext_t *dcontext, char *msg)
 static void
 check_lazy_deletion_list_consistency(void)
 {
-    uint i =0;
+    uint i = 0;
     fragment_t *f;
     ASSERT_OWN_MUTEX(true, &lazy_delete_lock);
     for (f = todelete->lazy_delete_list; f != NULL; f = f->next_vmarea) {
@@ -8503,7 +8502,7 @@ remove_from_lazy_deletion_list(dcontext_t *dcontext, fragment_t *remove)
  */
 static void
 move_lazy_list_to_pending_delete(dcontext_t *dcontext)
-{ 
+{
     ASSERT_OWN_NO_LOCKS();
     ASSERT(is_self_couldbelinking());
     /* to properly set up ref count we MUST get a flushtime synched with a
@@ -8515,7 +8514,7 @@ move_lazy_list_to_pending_delete(dcontext_t *dcontext)
      * FIXME: should switch to a flag-triggered addition in dispatch
      * to avoid this nolinking trouble.
      */
-    enter_nolinking(dcontext, NULL, false/*not a cache transition*/);
+    enter_nolinking(dcontext, NULL, false /*not a cache transition*/);
     mutex_lock(&thread_initexit_lock);
     /* to ensure no deletion queue checks happen in the middle of our update */
     mutex_lock(&shared_cache_flush_lock);
@@ -8524,8 +8523,7 @@ move_lazy_list_to_pending_delete(dcontext_t *dcontext)
     if (todelete->move_pending) {
         /* it's possible for remove_from_lazy_deletion_list to drop the count */
         DODEBUG({
-            if (todelete->lazy_delete_count <=
-                DYNAMO_OPTION(lazy_deletion_max_pending)) {
+            if (todelete->lazy_delete_count <= DYNAMO_OPTION(lazy_deletion_max_pending)) {
                 SYSLOG_INTERNAL_WARNING_ONCE("lazy_delete_count dropped below "
                                              "threshold before move to pending");
             }
@@ -8539,8 +8537,8 @@ move_lazy_list_to_pending_delete(dcontext_t *dcontext)
                             /* we do count this thread, as we aren't checking the
                              * pending list here or inc-ing our flushtime
                              */
-                            get_num_threads(), flushtime_global
-                            _IF_DEBUG(NULL) _IF_DEBUG(NULL));
+                            get_num_threads(),
+                            flushtime_global _IF_DEBUG(NULL) _IF_DEBUG(NULL));
         todelete->lazy_delete_list = NULL;
         todelete->lazy_delete_tail = NULL;
         todelete->lazy_delete_count = 0;
@@ -8552,7 +8550,7 @@ move_lazy_list_to_pending_delete(dcontext_t *dcontext)
     mutex_unlock(&shared_delete_lock);
     mutex_unlock(&shared_cache_flush_lock);
     mutex_unlock(&thread_initexit_lock);
-    enter_couldbelinking(dcontext, NULL, false/*not a cache transition*/);
+    enter_couldbelinking(dcontext, NULL, false /*not a cache transition*/);
 }
 
 /* adds the list of fragments beginning with f and chained by {next,prev}_vmarea
@@ -8596,7 +8594,7 @@ add_to_lazy_deletion_list(dcontext_t *dcontext, fragment_t *f)
      * combined should ensure we delete these fragments
      */
     flushtime = flushtime_global + 1;
-    /* we support adding a string of fragments at once 
+    /* we support adding a string of fragments at once
      * FIXME: if a string is common, move to a data structure w/ a
      * single timestamp for a group of fragments -- though lazy_deletion_max_pending
      * sort of does that for us.
@@ -8650,17 +8648,15 @@ check_lazy_deletion_list(dcontext_t *dcontext, uint flushtime)
 {
     fragment_t *f, *next_f;
     mutex_lock(&lazy_delete_lock);
-    LOG(THREAD, LOG_VMAREAS, 3,
-        "checking lazy list @ timestamp %u\n", flushtime);
+    LOG(THREAD, LOG_VMAREAS, 3, "checking lazy list @ timestamp %u\n", flushtime);
     for (f = todelete->lazy_delete_list; f != NULL; f = next_f) {
         next_f = f->next_vmarea; /* may be freed so cache now */
-        LOG(THREAD, LOG_VMAREAS, 4,
-            "\tf->id %u vs %u\n", f->id, f->also.flushtime, flushtime);
+        LOG(THREAD, LOG_VMAREAS, 4, "\tf->id %u vs %u\n", f->id, f->also.flushtime,
+            flushtime);
         if (f->also.flushtime <= flushtime) {
             /* it is safe to free! */
             LOG(THREAD, LOG_VMAREAS, 3,
-                "freeing F%d on lazy deletion list @ timestamp %u\n",
-                f->id, flushtime);
+                "freeing F%d on lazy deletion list @ timestamp %u\n", f->id, flushtime);
             DOSTATS({
                 if (dcontext == GLOBAL_DCONTEXT) /* at exit */
                     STATS_INC(num_lazy_deletion_frees_atexit);
@@ -8677,8 +8673,8 @@ check_lazy_deletion_list(dcontext_t *dcontext, uint flushtime)
                 todelete->lazy_delete_tail = NULL;
             }
             fragment_delete(GLOBAL_DCONTEXT, f,
-                            FRAGDEL_NO_OUTPUT | FRAGDEL_NO_UNLINK |
-                            FRAGDEL_NO_HTABLE | FRAGDEL_NO_VMAREA);
+                            FRAGDEL_NO_OUTPUT | FRAGDEL_NO_UNLINK | FRAGDEL_NO_HTABLE |
+                                FRAGDEL_NO_VMAREA);
         } else {
             /* the lazy list is appended to and thus reverse-sorted, so
              * we can stop now as the oldest items are at the front
@@ -8698,7 +8694,7 @@ check_lazy_deletion_list(dcontext_t *dcontext, uint flushtime)
  * Caller should have already called vm_area_remove_fragment() on
  * each and chained them together via next_vmarea.
  * Caller must hold the shared_cache_flush_lock.
- * Returns the number of fragments unlinked 
+ * Returns the number of fragments unlinked
  */
 int
 unlink_fragments_for_deletion(dcontext_t *dcontext, fragment_t *list,
@@ -8733,9 +8729,8 @@ unlink_fragments_for_deletion(dcontext_t *dcontext, fragment_t *list,
 
     mutex_lock(&shared_delete_lock);
     /* add area's fragments as a new entry in the pending deletion list */
-    add_to_pending_list(dcontext, list,
-                        pending_delete_threads, flushtime_global
-                        _IF_DEBUG(NULL) _IF_DEBUG(NULL));
+    add_to_pending_list(dcontext, list, pending_delete_threads,
+                        flushtime_global _IF_DEBUG(NULL) _IF_DEBUG(NULL));
     mutex_unlock(&shared_delete_lock);
     STATS_ADD(list_entries_unlinked_for_deletion, num);
     return num;
@@ -8744,8 +8739,7 @@ unlink_fragments_for_deletion(dcontext_t *dcontext, fragment_t *list,
 /* returns the number of fragments unlinked */
 int
 vm_area_unlink_fragments(dcontext_t *dcontext, app_pc start, app_pc end,
-                         int pending_delete_threads
-                         _IF_DGCDIAG(app_pc written_pc))
+                         int pending_delete_threads _IF_DGCDIAG(app_pc written_pc))
 {
     thread_data_t *data = GET_DATA(dcontext, 0);
     fragment_t *entry, *next;
@@ -8772,9 +8766,9 @@ vm_area_unlink_fragments(dcontext_t *dcontext, app_pc start, app_pc end,
          */
         ASSERT_OWN_MUTEX(DYNAMO_OPTION(shared_deletion), &shared_cache_flush_lock);
     }
-    
-    LOG(THREAD, LOG_FRAGMENT|LOG_VMAREAS, 2, "vm_area_unlink_fragments "PFX".."PFX"\n",
-        start, end);
+
+    LOG(THREAD, LOG_FRAGMENT | LOG_VMAREAS, 2,
+        "vm_area_unlink_fragments " PFX ".." PFX "\n", start, end);
 
     /* walk backwards to avoid O(n^2)
      * FIXME case 9819: could use executable_area_overlap_bounds() to avoid linear walk
@@ -8782,12 +8776,12 @@ vm_area_unlink_fragments(dcontext_t *dcontext, app_pc start, app_pc end,
     for (i = data->areas.length - 1; i >= 0; i--) {
         /* look for overlap */
         if (start < data->areas.buf[i].end && end > data->areas.buf[i].start) {
-            LOG(THREAD, LOG_FRAGMENT|LOG_VMAREAS, 2,
-                "\tmarking region "PFX".."PFX" for deletion & unlinking all its frags\n",
+            LOG(THREAD, LOG_FRAGMENT | LOG_VMAREAS, 2,
+                "\tmarking region " PFX ".." PFX
+                " for deletion & unlinking all its frags\n",
                 data->areas.buf[i].start, data->areas.buf[i].end);
             data->areas.buf[i].vm_flags |= VM_DELETE_ME;
-            if (data->areas.buf[i].start < start ||
-                data->areas.buf[i].end > end) {
+            if (data->areas.buf[i].start < start || data->areas.buf[i].end > end) {
                 /* FIXME: best to only delete within asked-for flush area
                  * however, checking every fragment's bounds is way too expensive
                  * (surprisingly).  we've gone through several different schemes,
@@ -8798,11 +8792,10 @@ vm_area_unlink_fragments(dcontext_t *dcontext, app_pc start, app_pc end,
                  * if the caller holds fragment_t pointers and expects them not
                  * to be flushed (e.g., a faulting write on a read-only code region).
                  */
-                LOG(THREAD, LOG_FRAGMENT|LOG_VMAREAS, 2,
-                    "\tWARNING: region "PFX".."PFX" is larger than "
-                    "flush area "PFX".."PFX"\n",
-                    data->areas.buf[i].start, data->areas.buf[i].end,
-                    start, end);                    
+                LOG(THREAD, LOG_FRAGMENT | LOG_VMAREAS, 2,
+                    "\tWARNING: region " PFX ".." PFX " is larger than "
+                    "flush area " PFX ".." PFX "\n",
+                    data->areas.buf[i].start, data->areas.buf[i].end, start, end);
             }
             ASSERT(!TEST(FRAG_COARSE_GRAIN, data->areas.buf[i].frag_flags));
             for (entry = data->areas.buf[i].custom.frags; entry != NULL; entry = next) {
@@ -8816,14 +8809,14 @@ vm_area_unlink_fragments(dcontext_t *dcontext, app_pc start, app_pc end,
                     continue;
                 }
                 /* case 9118: call fragment_unlink_for_deletion() even if fragment
-                 * is already unlinked 
+                 * is already unlinked
                  */
                 if (!TEST(FRAG_WAS_DELETED, f->flags) || data == shared_data) {
-                    LOG(THREAD, LOG_FRAGMENT|LOG_VMAREAS, 5,
-                        "\tunlinking "PFX"%s F%d("PFX")\n",
-                        entry, FRAG_MULTI(entry) ? " multi": "", FRAG_ID(entry),
+                    LOG(THREAD, LOG_FRAGMENT | LOG_VMAREAS, 5,
+                        "\tunlinking " PFX "%s F%d(" PFX ")\n", entry,
+                        FRAG_MULTI(entry) ? " multi" : "", FRAG_ID(entry),
                         FRAG_PC(entry));
-                    /* need to remove also entries from other vm lists 
+                    /* need to remove also entries from other vm lists
                      * thread-private doesn't have to do this b/c only unlinking,
                      * so ok if encounter an also in same flush, except we
                      * now do incoming_remove_fragment() for thread-private for
@@ -8856,16 +8849,16 @@ vm_area_unlink_fragments(dcontext_t *dcontext, app_pc start, app_pc end,
                     if (written_pc != NULL) {
                         app_pc bb;
                         DOLOG(2, LOG_VMAREAS, {
-                            LOG(THREAD, LOG_VMAREAS, 1, "Flushing F%d "PFX":\n",
+                            LOG(THREAD, LOG_VMAREAS, 1, "Flushing F%d " PFX ":\n",
                                 FRAG_ID(entry), FRAG_PC(entry));
                             disassemble_fragment(dcontext, entry, false);
                             LOG(THREAD, LOG_VMAREAS, 1, "First app bb for frag:\n");
                             disassemble_app_bb(dcontext, FRAG_PC(entry), THREAD);
                         });
-                        if (fragment_overlaps(dcontext, entry, written_pc,
-                                              written_pc+1, false, NULL, &bb)) {
+                        if (fragment_overlaps(dcontext, entry, written_pc, written_pc + 1,
+                                              false, NULL, &bb)) {
                             LOG(THREAD, LOG_VMAREAS, 1,
-                                "Write target is actually inside app bb @"PFX":\n",
+                                "Write target is actually inside app bb @" PFX ":\n",
                                 written_pc);
                             disassemble_app_bb(dcontext, bb, THREAD);
                         }
@@ -8873,9 +8866,10 @@ vm_area_unlink_fragments(dcontext_t *dcontext, app_pc start, app_pc end,
 #endif
                     num++;
                 } else {
-                    LOG(THREAD, LOG_FRAGMENT|LOG_VMAREAS, 5,
-                        "\tnot unlinking "PFX"%s F%d("PFX") (already unlinked)\n",
-                        entry, FRAG_MULTI(entry) ? " multi": "", FRAG_ID(entry), FRAG_PC(entry));
+                    LOG(THREAD, LOG_FRAGMENT | LOG_VMAREAS, 5,
+                        "\tnot unlinking " PFX "%s F%d(" PFX ") (already unlinked)\n",
+                        entry, FRAG_MULTI(entry) ? " multi" : "", FRAG_ID(entry),
+                        FRAG_PC(entry));
                 }
                 /* let recreate_fragment_ilist() know that this fragment
                  * is pending deletion and might no longer match the app's
@@ -8884,15 +8878,16 @@ vm_area_unlink_fragments(dcontext_t *dcontext, app_pc start, app_pc end,
                 f->flags |= FRAG_WAS_DELETED;
             }
             DOLOG(6, LOG_VMAREAS, {
-                print_fraglist(dcontext, &data->areas.buf[i], "Fragments after unlinking\n");
+                print_fraglist(dcontext, &data->areas.buf[i],
+                               "Fragments after unlinking\n");
             });
             if (data == shared_data) {
                 if (data->areas.buf[i].custom.frags != NULL) {
                     /* add area's fragments as a new entry in the pending deletion list */
-                    add_to_pending_list(dcontext, data->areas.buf[i].custom.frags,
-                                        pending_delete_threads, flushtime_global
-                                        _IF_DEBUG(data->areas.buf[i].start)
-                                        _IF_DEBUG(data->areas.buf[i].end));
+                    add_to_pending_list(
+                        dcontext, data->areas.buf[i].custom.frags, pending_delete_threads,
+                        flushtime_global _IF_DEBUG(data->areas.buf[i].start)
+                            _IF_DEBUG(data->areas.buf[i].end));
                     /* frags are moved over completely */
                     data->areas.buf[i].custom.frags = NULL;
                     STATS_INC(num_shared_flush_regions);
@@ -8903,7 +8898,7 @@ vm_area_unlink_fragments(dcontext_t *dcontext, app_pc start, app_pc end,
                  */
                 LOG(THREAD, LOG_VMAREAS, 3, "Before removing vm area:\n");
                 DOLOG(3, LOG_VMAREAS, { print_vm_areas(&data->areas, THREAD); });
-                LOG(THREAD, LOG_VMAREAS, 2, "Removing shared vm area "PFX"-"PFX"\n",
+                LOG(THREAD, LOG_VMAREAS, 2, "Removing shared vm area " PFX "-" PFX "\n",
                     data->areas.buf[i].start, data->areas.buf[i].end);
                 remove_vm_area(&data->areas, data->areas.buf[i].start,
                                data->areas.buf[i].end, false);
@@ -8912,19 +8907,19 @@ vm_area_unlink_fragments(dcontext_t *dcontext, app_pc start, app_pc end,
             }
         }
     }
-    
+
     if (data == shared_data) {
         SHARED_VECTOR_RWLOCK(&data->areas, write, unlock);
         release_recursive_lock(&change_linking_lock);
         mutex_unlock(&shared_delete_lock);
     }
-    
-    LOG(THREAD, LOG_FRAGMENT|LOG_VMAREAS, 2, "  Unlinked %d frags\n", num);
+
+    LOG(THREAD, LOG_FRAGMENT | LOG_VMAREAS, 2, "  Unlinked %d frags\n", num);
     return num;
 }
 
 /* removes incoming links for all private fragments in the dcontext
- * thread that contain 'pc' 
+ * thread that contain 'pc'
  */
 void
 vm_area_unlink_incoming(dcontext_t *dcontext, app_pc pc)
@@ -8936,12 +8931,11 @@ vm_area_unlink_incoming(dcontext_t *dcontext, app_pc pc)
     data = GET_DATA(dcontext, 0);
 
     for (i = data->areas.length - 1; i >= 0; i--) {
-        if (pc >= data->areas.buf[i].start &&
-            pc <  data->areas.buf[i].end) {
+        if (pc >= data->areas.buf[i].start && pc < data->areas.buf[i].end) {
 
             fragment_t *entry;
-            for (entry = data->areas.buf[i].custom.frags; 
-                 entry != NULL; entry = FRAG_NEXT(entry)) {
+            for (entry = data->areas.buf[i].custom.frags; entry != NULL;
+                 entry = FRAG_NEXT(entry)) {
                 fragment_t *f = FRAG_FRAG(entry);
                 ASSERT(!TEST(FRAG_SHARED, f->flags));
 
@@ -8981,11 +8975,12 @@ vm_area_check_shared_pending(dcontext_t *dcontext, fragment_t *was_I_flushed)
     /* must pass in real dcontext, unless exiting or resetting */
     ASSERT(dcontext != GLOBAL_DCONTEXT || dynamo_exited || dynamo_resetting);
 
-    LOG(THREAD, LOG_FRAGMENT|LOG_VMAREAS, 2, 
+    LOG(THREAD, LOG_FRAGMENT | LOG_VMAREAS, 2,
         "thread %d (flushtime %d) walking pending deletion list (was_I_flushed==F%d)\n",
-        get_thread_id(), dcontext == GLOBAL_DCONTEXT ? flushtime_global :
-        get_flushtime_last_update(dcontext),
-        (was_I_flushed==NULL) ? -1 : was_I_flushed->id);
+        get_thread_id(),
+        dcontext == GLOBAL_DCONTEXT ? flushtime_global
+                                    : get_flushtime_last_update(dcontext),
+        (was_I_flushed == NULL) ? -1 : was_I_flushed->id);
     STATS_INC(num_shared_flush_walks);
 
     /* synch w/ anyone incrementing flushtime_global and using its
@@ -8993,12 +8988,12 @@ vm_area_check_shared_pending(dcontext_t *dcontext, fragment_t *was_I_flushed)
      * and lazy list transfers).
      */
     mutex_lock(&shared_cache_flush_lock);
-        
+
     /* check if was_I_flushed has been flushed, prior to dec ref count and
      * allowing anyone to be fully freed
      */
     if (was_I_flushed != NULL &&
-        TESTALL(FRAG_SHARED|FRAG_WAS_DELETED, was_I_flushed->flags)) {
+        TESTALL(FRAG_SHARED | FRAG_WAS_DELETED, was_I_flushed->flags)) {
         not_flushed = false;
         if (was_I_flushed == dcontext->last_fragment)
             last_exit_deleted(dcontext);
@@ -9009,7 +9004,7 @@ vm_area_check_shared_pending(dcontext_t *dcontext, fragment_t *was_I_flushed)
      * where a non-null was_I_flushed prevented this check from executing).
      */
     if (dcontext != GLOBAL_DCONTEXT && dcontext->last_fragment != NULL &&
-        TESTALL(FRAG_SHARED|FRAG_WAS_DELETED, dcontext->last_fragment->flags)) {
+        TESTALL(FRAG_SHARED | FRAG_WAS_DELETED, dcontext->last_fragment->flags)) {
         last_exit_deleted(dcontext);
     }
 
@@ -9017,9 +9012,9 @@ vm_area_check_shared_pending(dcontext_t *dcontext, fragment_t *was_I_flushed)
     for (pend = todelete->shared_delete; pend != NULL; pend = pend_nxt) {
         bool delete_area = false;
         pend_nxt = pend->next;
-        LOG(THREAD, LOG_FRAGMENT|LOG_VMAREAS, 2,
-            "  Considering #%d: "PFX".."PFX" flushtime %d\n",
-            i, pend->start, pend->end, pend->flushtime_deleted);
+        LOG(THREAD, LOG_FRAGMENT | LOG_VMAREAS, 2,
+            "  Considering #%d: " PFX ".." PFX " flushtime %d\n", i, pend->start,
+            pend->end, pend->flushtime_deleted);
         if (dcontext == GLOBAL_DCONTEXT) {
             /* indication that it's safe to free everything */
             delete_area = true;
@@ -9031,9 +9026,9 @@ vm_area_check_shared_pending(dcontext_t *dcontext, fragment_t *was_I_flushed)
             ASSERT(pend->ref_count > 0);
             pend->ref_count--;
             STATS_INC(num_shared_flush_refdec);
-            LOG(THREAD, LOG_FRAGMENT|LOG_VMAREAS, 2,
-                "\tdec => ref_count is now %d, flushtime diff is %d\n",
-                pend->ref_count, flushtime_global - pend->flushtime_deleted);
+            LOG(THREAD, LOG_FRAGMENT | LOG_VMAREAS, 2,
+                "\tdec => ref_count is now %d, flushtime diff is %d\n", pend->ref_count,
+                flushtime_global - pend->flushtime_deleted);
             delete_area = (pend->ref_count == 0);
             DODEBUG({
                 if (INTERNAL_OPTION(detect_dangling_fcache) && delete_area) {
@@ -9052,15 +9047,15 @@ vm_area_check_shared_pending(dcontext_t *dcontext, fragment_t *was_I_flushed)
                          */
                         /* should only get fragment_t here */
                         ASSERT(!FRAG_MULTI(entry));
-                        LOG(THREAD, LOG_FRAGMENT|LOG_VMAREAS, 4,
-                            "\tfilling F%d "PFX"-"PFX" with 0x%x\n",
-                            entry->id, entry->start_pc, entry->start_pc+entry->size,
+                        LOG(THREAD, LOG_FRAGMENT | LOG_VMAREAS, 4,
+                            "\tfilling F%d " PFX "-" PFX " with 0x%x\n", entry->id,
+                            entry->start_pc, entry->start_pc + entry->size,
                             DEBUGGER_INTERRUPT_BYTE);
                         memset(entry->start_pc, DEBUGGER_INTERRUPT_BYTE, entry->size);
                     }
                 }
             });
-            DOSTATS({ 
+            DOSTATS({
                 if (delete_area)
                     STATS_INC(num_shared_flush_refzero);
             });
@@ -9068,7 +9063,7 @@ vm_area_check_shared_pending(dcontext_t *dcontext, fragment_t *was_I_flushed)
             /* optimization: since we always pre-pend, can skip all the rest, as
              * they are guaranteed to have been ok-ed by us already
              */
-            LOG(THREAD, LOG_FRAGMENT|LOG_VMAREAS, 2,
+            LOG(THREAD, LOG_FRAGMENT | LOG_VMAREAS, 2,
                 "\t(aborting now since rest have already been ok-ed)\n");
             break;
         }
@@ -9103,23 +9098,23 @@ vm_area_check_shared_pending(dcontext_t *dcontext, fragment_t *was_I_flushed)
          * (fcache unit flushing relies on this order).
          */
         check_lazy_deletion_list(dcontext, pend->flushtime_deleted);
-        
+
         STATS_TRACK_MAX(num_shared_flush_maxdiff,
                         flushtime_global - pend->flushtime_deleted);
         DOSTATS({
             /* metric: # times flushtime diff is > #threads */
-            if (flushtime_global - pend->flushtime_deleted > (uint) get_num_threads())
+            if (flushtime_global - pend->flushtime_deleted > (uint)get_num_threads())
                 STATS_INC(num_shared_flush_diffthreads);
         });
-        LOG(THREAD, LOG_FRAGMENT|LOG_VMAREAS, 2,
-            "\tdeleting all fragments in region "PFX".."PFX" flushtime %u\n",
+        LOG(THREAD, LOG_FRAGMENT | LOG_VMAREAS, 2,
+            "\tdeleting all fragments in region " PFX ".." PFX " flushtime %u\n",
             pend->start, pend->end, pend->flushtime_deleted);
         ASSERT(pend->frags != NULL);
         for (entry = pend->frags; entry != NULL; entry = next) {
             next = FRAG_NEXT(entry);
-            LOG(THREAD, LOG_FRAGMENT|LOG_VMAREAS, 5,
-                "\tremoving "PFX"%s F%d("PFX")\n",
-                entry, FRAG_MULTI(entry) ? " multi": "", FRAG_ID(entry), FRAG_PC(entry));
+            LOG(THREAD, LOG_FRAGMENT | LOG_VMAREAS, 5,
+                "\tremoving " PFX "%s F%d(" PFX ")\n", entry,
+                FRAG_MULTI(entry) ? " multi" : "", FRAG_ID(entry), FRAG_PC(entry));
             if (FRAG_FRAG(entry) == was_I_flushed)
                 ASSERT(!not_flushed); /* should have been caught up top */
 #ifdef NATIVE_RETURN
@@ -9133,16 +9128,15 @@ vm_area_check_shared_pending(dcontext_t *dcontext, fragment_t *was_I_flushed)
              * to look up the area this fragment is in
              */
             fragment_delete(GLOBAL_DCONTEXT, FRAG_FRAG(entry),
-                            FRAGDEL_NO_OUTPUT | FRAGDEL_NO_UNLINK |
-                            FRAGDEL_NO_HTABLE | FRAGDEL_NO_VMAREA);
+                            FRAGDEL_NO_OUTPUT | FRAGDEL_NO_UNLINK | FRAGDEL_NO_HTABLE |
+                                FRAGDEL_NO_VMAREA);
             STATS_INC(num_fragments_deleted_consistency);
             num++;
         }
 
         ASSERT(todelete->shared_delete_count > 0);
         todelete->shared_delete_count--;
-        HEAP_TYPE_FREE(GLOBAL_DCONTEXT, pend, pending_delete_t,
-                       ACCT_VMAREAS, PROTECTED);
+        HEAP_TYPE_FREE(GLOBAL_DCONTEXT, pend, pending_delete_t, ACCT_VMAREAS, PROTECTED);
     }
 
     if (tofree != NULL) { /* if we freed something (careful: tofree is dangling) */
@@ -9153,15 +9147,14 @@ vm_area_check_shared_pending(dcontext_t *dcontext, fragment_t *was_I_flushed)
         if (todelete->shared_delete_tail == NULL)
             fcache_free_pending_units(dcontext, flushtime_global);
         else {
-            fcache_free_pending_units(dcontext,
-                                      todelete->shared_delete_tail->flushtime_deleted
-                                      - 1);
+            fcache_free_pending_units(
+                dcontext, todelete->shared_delete_tail->flushtime_deleted - 1);
         }
     }
-    
+
     if (dcontext == GLOBAL_DCONTEXT) { /* need to free everything */
-        check_lazy_deletion_list(dcontext, flushtime_global+1);
-        fcache_free_pending_units(dcontext, flushtime_global+1);
+        check_lazy_deletion_list(dcontext, flushtime_global + 1);
+        fcache_free_pending_units(dcontext, flushtime_global + 1);
         /* reset_every_nth_pending relies on this */
         ASSERT(todelete->shared_delete_count == 0);
     }
@@ -9169,16 +9162,16 @@ vm_area_check_shared_pending(dcontext_t *dcontext, fragment_t *was_I_flushed)
     STATS_TRACK_MAX(num_shared_flush_maxpending, i);
 
     /* last_area cleared in vm_area_unlink_fragments */
-    LOG(THREAD, LOG_FRAGMENT|LOG_VMAREAS, 2, 
-        "thread %d done walking pending list @flushtime %d\n",
-        get_thread_id(), flushtime_global);
+    LOG(THREAD, LOG_FRAGMENT | LOG_VMAREAS, 2,
+        "thread %d done walking pending list @flushtime %d\n", get_thread_id(),
+        flushtime_global);
     if (dcontext != GLOBAL_DCONTEXT) {
         /* update thread timestamp */
         set_flushtime_last_update(dcontext, flushtime_global);
     }
     mutex_unlock(&shared_cache_flush_lock);
 
-    LOG(THREAD, LOG_FRAGMENT|LOG_VMAREAS, 2, "  Flushed %d frags\n", num);
+    LOG(THREAD, LOG_FRAGMENT | LOG_VMAREAS, 2, "  Flushed %d frags\n", num);
     return not_flushed;
 }
 
@@ -9196,21 +9189,20 @@ vm_area_flush_fragments(dcontext_t *dcontext, fragment_t *was_I_flushed)
     /* should call vm_area_check_shared_pending for shared flushing */
     ASSERT(data != shared_data);
 
-    LOG(THREAD, LOG_FRAGMENT|LOG_VMAREAS, 2, "vm_area_flush_fragments\n");
+    LOG(THREAD, LOG_FRAGMENT | LOG_VMAREAS, 2, "vm_area_flush_fragments\n");
     /* walk backwards to avoid O(n^2) */
     for (i = v->length - 1; i >= 0; i--) {
-        LOG(THREAD, LOG_FRAGMENT|LOG_VMAREAS, 2,
-            "  Considering %d == "PFX".."PFX"\n", i,
-            v->buf[i].start, v->buf[i].end);
+        LOG(THREAD, LOG_FRAGMENT | LOG_VMAREAS, 2,
+            "  Considering %d == " PFX ".." PFX "\n", i, v->buf[i].start, v->buf[i].end);
         if (TEST(VM_DELETE_ME, v->buf[i].vm_flags)) {
-            LOG(THREAD, LOG_FRAGMENT|LOG_VMAREAS, 2,
-                "\tdeleting all fragments in region "PFX".."PFX"\n",
-                v->buf[i].start, v->buf[i].end);
+            LOG(THREAD, LOG_FRAGMENT | LOG_VMAREAS, 2,
+                "\tdeleting all fragments in region " PFX ".." PFX "\n", v->buf[i].start,
+                v->buf[i].end);
             for (entry = v->buf[i].custom.frags; entry != NULL; entry = next) {
                 next = FRAG_NEXT(entry);
-                LOG(THREAD, LOG_FRAGMENT|LOG_VMAREAS, 5,
-                    "\tremoving "PFX"%s F%d("PFX")\n",
-                    entry, FRAG_MULTI(entry) ? " multi": "", FRAG_ID(entry), FRAG_PC(entry));
+                LOG(THREAD, LOG_FRAGMENT | LOG_VMAREAS, 5,
+                    "\tremoving " PFX "%s F%d(" PFX ")\n", entry,
+                    FRAG_MULTI(entry) ? " multi" : "", FRAG_ID(entry), FRAG_PC(entry));
                 if (FRAG_FRAG(entry) == was_I_flushed) {
                     not_flushed = false;
                     if (was_I_flushed == dcontext->last_fragment)
@@ -9229,12 +9221,12 @@ vm_area_flush_fragments(dcontext_t *dcontext, fragment_t *was_I_flushed)
                                  * at unlink time just like for shared fragments.
                                  */
                                 FRAGDEL_NO_OUTPUT | FRAGDEL_NO_UNLINK |
-                                FRAGDEL_NO_HTABLE | FRAGDEL_NO_VMAREA);
+                                    FRAGDEL_NO_HTABLE | FRAGDEL_NO_VMAREA);
                 STATS_INC(num_fragments_deleted_consistency);
                 num++;
             }
             v->buf[i].custom.frags = NULL;
-            /* could just remove flush region...but we flushed entire vm region 
+            /* could just remove flush region...but we flushed entire vm region
              * ASSUMPTION: remove_vm_area, given exact bounds, simply shifts later
              * areas down in vector!
              */
@@ -9266,8 +9258,8 @@ vm_area_flush_fragments(dcontext_t *dcontext, fragment_t *was_I_flushed)
         if (num == 0)
             STATS_INC(num_flushq_actually_empty);
     });
-    LOG(THREAD, LOG_FRAGMENT|LOG_VMAREAS, 2, "  Flushed %d frags\n", num);
-    DOLOG(7, LOG_VMAREAS, { 
+    LOG(THREAD, LOG_FRAGMENT | LOG_VMAREAS, 2, "  Flushed %d frags\n", num);
+    DOLOG(7, LOG_VMAREAS, {
         SHARED_VECTOR_RWLOCK(&data->areas, read, lock);
         print_fraglists(dcontext);
         SHARED_VECTOR_RWLOCK(&data->areas, read, unlock);
@@ -9281,8 +9273,8 @@ vm_area_flush_fragments(dcontext_t *dcontext, fragment_t *was_I_flushed)
  * executable_areas lock.
  */
 static void
-vm_area_flush_coarse_unit(dcontext_t *dcontext, coarse_info_t *info_in,
-                          vm_area_t *area, bool all_synched, bool entire)
+vm_area_flush_coarse_unit(dcontext_t *dcontext, coarse_info_t *info_in, vm_area_t *area,
+                          bool all_synched, bool entire)
 {
     coarse_info_t *info = info_in, *next_info;
     ASSERT(info != NULL);
@@ -9298,7 +9290,7 @@ vm_area_flush_coarse_unit(dcontext_t *dcontext, coarse_info_t *info_in,
         /* we do not try to freeze if we've failed to suspend the world */
         if (all_synched) {
             /* in-place builds a separate unit anyway so no savings that way */
-            vm_area_coarse_region_freeze(dcontext, info, area, false/*!in place*/);
+            vm_area_coarse_region_freeze(dcontext, info, area, false /*!in place*/);
             STATS_INC(persist_unload_try);
         } else {
             SYSLOG_INTERNAL_WARNING_ONCE("not freezing due to synch failure");
@@ -9324,8 +9316,8 @@ vm_area_flush_coarse_unit(dcontext_t *dcontext, coarse_info_t *info_in,
             }
             STATS_INC(flush_coarse_units);
         });
-        coarse_unit_reset_free(dcontext, info, false/*no locks*/, true/*unlink*/,
-                               true/*give up primary*/);
+        coarse_unit_reset_free(dcontext, info, false /*no locks*/, true /*unlink*/,
+                               true /*give up primary*/);
         /* We only want one non-frozen unit per region; we keep the 1st unit */
         if (info != info_in) {
             coarse_unit_free(GLOBAL_DCONTEXT, info);
@@ -9345,7 +9337,7 @@ vm_area_flush_coarse_unit(dcontext_t *dcontext, coarse_info_t *info_in,
 /* Assumes that all threads are suspended at safe synch points.
  * Flushes fragments in the region [start, end) in the vmarea
  * list for del_dcontext.
- * If dcontext == del_dcontext == GLOBAL_DCONTEXT, 
+ * If dcontext == del_dcontext == GLOBAL_DCONTEXT,
  *   removes shared fine fragments and coarse units in the region.
  * If dcontext == thread and del_dcontext == GLOBAL_DCONTEXT,
  *   removes any ibl table entries for shared fragments in the region.
@@ -9368,9 +9360,8 @@ vm_area_allsynch_flush_fragments(dcontext_t *dcontext, dcontext_t *del_dcontext,
     DEBUG_DECLARE(int num_fine = 0;)
     DEBUG_DECLARE(int num_coarse = 0;)
 
-    LOG(THREAD, LOG_FRAGMENT|LOG_VMAREAS, 2,
-        "vm_area_allsynch_flush_fragments "PFX" "PFX"\n",
-        dcontext, del_dcontext);
+    LOG(THREAD, LOG_FRAGMENT | LOG_VMAREAS, 2,
+        "vm_area_allsynch_flush_fragments " PFX " " PFX "\n", dcontext, del_dcontext);
     ASSERT(OWN_MUTEX(&all_threads_synch_lock) && OWN_MUTEX(&thread_initexit_lock));
     ASSERT(is_self_allsynch_flushing());
 
@@ -9398,15 +9389,15 @@ vm_area_allsynch_flush_fragments(dcontext_t *dcontext, dcontext_t *del_dcontext,
                 start < executable_areas->buf[i].end &&
                 end > executable_areas->buf[i].start) {
                 coarse_info_t *coarse =
-                    (coarse_info_t *) executable_areas->buf[i].custom.client;
+                    (coarse_info_t *)executable_areas->buf[i].custom.client;
                 bool do_flush = (coarse != NULL);
 #ifdef HOT_PATCHING_INTERFACE
                 /* Case 9995: do not flush for 1-byte (mostly hotp) regions that are
                  * still valid execution regions and that are recorded as not being
                  * present in persistent caches.
                  */
-                if (do_flush && !exec_invalid &&
-                    start + 1 == end && coarse->hotp_ppoint_vec != NULL) {
+                if (do_flush && !exec_invalid && start + 1 == end &&
+                    coarse->hotp_ppoint_vec != NULL) {
                     app_pc modbase = get_module_base(coarse->base_pc);
                     ASSERT(modbase <= start);
                     /* Only persisted units store vec, though we could store for
@@ -9423,17 +9414,16 @@ vm_area_allsynch_flush_fragments(dcontext_t *dcontext, dcontext_t *del_dcontext,
                 }
 #endif
                 if (do_flush) {
-                    vm_area_flush_coarse_unit(dcontext, coarse,
-                                              &executable_areas->buf[i], all_synched,
+                    vm_area_flush_coarse_unit(dcontext, coarse, &executable_areas->buf[i],
+                                              all_synched,
                                               start <= executable_areas->buf[i].start &&
-                                              end >= executable_areas->buf[i].end);
+                                                  end >= executable_areas->buf[i].end);
                     DODEBUG({ num_coarse++; });
                     if (TEST(VM_ADD_TO_SHARED_DATA, executable_areas->buf[i].vm_flags)) {
-                        LOG(THREAD, LOG_FRAGMENT|LOG_VMAREAS, 2,
-                            "\tdeleting coarse unit not yet in shared vector "
-                            PFX".."PFX"\n",
-                            executable_areas->buf[i].start,
-                            executable_areas->buf[i].end);
+                        LOG(THREAD, LOG_FRAGMENT | LOG_VMAREAS, 2,
+                            "\tdeleting coarse unit not yet in shared vector " PFX
+                            ".." PFX "\n",
+                            executable_areas->buf[i].start, executable_areas->buf[i].end);
                         /* This flag is only relevant for persisted units, so we clear it
                          * here since this same coarse_info_t may be re-used
                          */
@@ -9455,26 +9445,25 @@ vm_area_allsynch_flush_fragments(dcontext_t *dcontext, dcontext_t *del_dcontext,
      */
     for (i = v->length - 1; i >= 0; i--) {
         if (start < v->buf[i].end && end > v->buf[i].start) {
-            if (v->buf[i].start < start ||
-                v->buf[i].end > end) {
+            if (v->buf[i].start < start || v->buf[i].end > end) {
                 /* see comments in vm_area_unlink_fragments() */
-                LOG(THREAD, LOG_FRAGMENT|LOG_VMAREAS, 2,
-                    "\tWARNING: region "PFX".."PFX" is larger than flush area"
-                    " "PFX".."PFX"\n",
-                    v->buf[i].start, v->buf[i].end, start, end);                    
+                LOG(THREAD, LOG_FRAGMENT | LOG_VMAREAS, 2,
+                    "\tWARNING: region " PFX ".." PFX " is larger than flush area"
+                    " " PFX ".." PFX "\n",
+                    v->buf[i].start, v->buf[i].end, start, end);
             }
-            LOG(THREAD, LOG_FRAGMENT|LOG_VMAREAS, 2,
-                "\tdeleting all fragments in region "PFX".."PFX"\n",
-                v->buf[i].start, v->buf[i].end);
+            LOG(THREAD, LOG_FRAGMENT | LOG_VMAREAS, 2,
+                "\tdeleting all fragments in region " PFX ".." PFX "\n", v->buf[i].start,
+                v->buf[i].end);
             /* We flush coarse units in executable_areas walk down below */
             /* We can have fine fragments here as well */
             if (v->buf[i].custom.frags != NULL) {
                 for (entry = v->buf[i].custom.frags; entry != NULL; entry = next) {
                     next = FRAG_NEXT(entry);
                     if (dcontext == del_dcontext) {
-                        LOG(THREAD, LOG_FRAGMENT|LOG_VMAREAS, 5,
-                            "\tremoving "PFX"%s F%d("PFX")\n",
-                            entry, FRAG_MULTI(entry) ? " multi": "", FRAG_ID(entry),
+                        LOG(THREAD, LOG_FRAGMENT | LOG_VMAREAS, 5,
+                            "\tremoving " PFX "%s F%d(" PFX ")\n", entry,
+                            FRAG_MULTI(entry) ? " multi" : "", FRAG_ID(entry),
                             FRAG_PC(entry));
 #ifdef NATIVE_RETURN
                         fragment_add_deleted(dcontext, FRAG_FRAG(entry));
@@ -9485,7 +9474,7 @@ vm_area_allsynch_flush_fragments(dcontext_t *dcontext, dcontext_t *del_dcontext,
                              * have to explicitly remove
                              */
                             fragment_remove_from_ibt_tables(dcontext, FRAG_FRAG(entry),
-                                                            true/*rm from shared*/);
+                                                            true /*rm from shared*/);
                         }
                         fragment_delete(dcontext, FRAG_FRAG(entry), FRAGDEL_ALL);
                         STATS_INC(num_fragments_deleted_consistency);
@@ -9494,14 +9483,14 @@ vm_area_allsynch_flush_fragments(dcontext_t *dcontext, dcontext_t *del_dcontext,
                         ASSERT(dcontext != GLOBAL_DCONTEXT &&
                                del_dcontext == GLOBAL_DCONTEXT);
                         fragment_remove_from_ibt_tables(dcontext, FRAG_FRAG(entry),
-                                                        false/*shouldn't be in shared*/);
+                                                        false /*shouldn't be in shared*/);
                     }
                 }
                 if (dcontext == del_dcontext)
                     v->buf[i].custom.frags = NULL;
             }
             if (dcontext == del_dcontext && remove_shared_vm_area) {
-                /* could just remove flush region...but we flushed entire vm region 
+                /* could just remove flush region...but we flushed entire vm region
                  * ASSUMPTION: remove_vm_area, given exact bounds, simply shifts later
                  * areas down in vector!
                  */
@@ -9523,9 +9512,9 @@ vm_area_allsynch_flush_fragments(dcontext_t *dcontext, dcontext_t *del_dcontext,
     SHARED_VECTOR_RWLOCK(v, write, unlock);
     release_recursive_lock(&change_linking_lock);
 
-    LOG(THREAD, LOG_FRAGMENT|LOG_VMAREAS, 2,
+    LOG(THREAD, LOG_FRAGMENT | LOG_VMAREAS, 2,
         "  Flushed %d fine frags & %d coarse units\n", num_fine, num_coarse);
-    DOLOG(7, LOG_VMAREAS, { 
+    DOLOG(7, LOG_VMAREAS, {
         SHARED_VECTOR_RWLOCK(v, read, lock);
         print_fraglists(dcontext);
         SHARED_VECTOR_RWLOCK(v, read, unlock);
@@ -9539,7 +9528,7 @@ vm_area_coarse_units_reset_free(void)
     vm_area_vector_t *v = executable_areas;
     int i;
     ASSERT(DYNAMO_OPTION(coarse_units));
-    LOG(GLOBAL, LOG_FRAGMENT|LOG_VMAREAS, 2, "vm_area_coarse_units_reset_free\n");
+    LOG(GLOBAL, LOG_FRAGMENT | LOG_VMAREAS, 2, "vm_area_coarse_units_reset_free\n");
     ASSERT(dynamo_exited || dynamo_resetting);
     DOLOG(1, LOG_VMAREAS, {
         LOG(GLOBAL, LOG_VMAREAS, 1, "\nexecutable_areas before reset:\n");
@@ -9554,17 +9543,17 @@ vm_area_coarse_units_reset_free(void)
      */
     for (i = 0; i < v->length; i++) {
         if (TEST(FRAG_COARSE_GRAIN, v->buf[i].frag_flags)) {
-            coarse_info_t *info_start = (coarse_info_t *) v->buf[i].custom.client;
+            coarse_info_t *info_start = (coarse_info_t *)v->buf[i].custom.client;
             coarse_info_t *info = info_start, *next_info;
             ASSERT(info != NULL);
             while (info != NULL) { /* loop over primary and secondary unit */
                 next_info = info->non_frozen;
                 ASSERT(info->frozen || info->non_frozen == NULL);
-                LOG(GLOBAL, LOG_FRAGMENT|LOG_VMAREAS, 2,
-                    "\tdeleting all fragments in region "PFX".."PFX"\n",
+                LOG(GLOBAL, LOG_FRAGMENT | LOG_VMAREAS, 2,
+                    "\tdeleting all fragments in region " PFX ".." PFX "\n",
                     v->buf[i].start, v->buf[i].end);
-                coarse_unit_reset_free(GLOBAL_DCONTEXT, info, false/*no locks*/,
-                                       true/*unlink*/, true/*give up primary*/);
+                coarse_unit_reset_free(GLOBAL_DCONTEXT, info, false /*no locks*/,
+                                       true /*unlink*/, true /*give up primary*/);
                 /* We only want one non-frozen unit per region; we keep the 1st one */
                 if (info != info_start) {
                     coarse_unit_free(GLOBAL_DCONTEXT, info);
@@ -9579,7 +9568,7 @@ vm_area_coarse_units_reset_free(void)
     }
 }
 
-/* Returns true if info && info->non_frozen meet the size requirements 
+/* Returns true if info && info->non_frozen meet the size requirements
  * for persisting.
  */
 static bool
@@ -9599,16 +9588,16 @@ coarse_region_should_persist(dcontext_t *dcontext, coarse_info_t *info)
         cache_size += coarse_frozen_cache_size(dcontext, info->non_frozen);
         mutex_unlock(&info->non_frozen->lock);
     }
-    LOG(THREAD, LOG_FRAGMENT|LOG_VMAREAS, 2,
-        "\tconsidering persisting coarse unit %s with cache size %d\n",
-        info->module, cache_size);
+    LOG(THREAD, LOG_FRAGMENT | LOG_VMAREAS, 2,
+        "\tconsidering persisting coarse unit %s with cache size %d\n", info->module,
+        cache_size);
     /* case 10107: check for disk space before freezing, if persisting.
      * A crude estimate is all we need up front (we'll do a precise check at file
      * write time): estimate that hashtables, stubs, etc. double cache size.
      */
     if (!coarse_unit_check_persist_space(INVALID_FILE, cache_size * 2)) {
-        LOG(THREAD, LOG_FRAGMENT|LOG_VMAREAS, 2,
-            "\tnot enough disk space for %s\n", info->module);
+        LOG(THREAD, LOG_FRAGMENT | LOG_VMAREAS, 2, "\tnot enough disk space for %s\n",
+            info->module);
         STATS_INC(coarse_units_persist_nospace);
         return false;
     }
@@ -9621,20 +9610,20 @@ coarse_region_should_persist(dcontext_t *dcontext, coarse_info_t *info)
     /* Real cost is in pages touched while walking reloc, which is
      * typically 80% of module.
      */
-    if (rct_module_live_entries(dcontext, info->base_pc, RCT_RCT)
-        > DYNAMO_OPTION(coarse_freeze_rct_min)) {
+    if (rct_module_live_entries(dcontext, info->base_pc, RCT_RCT) >
+        DYNAMO_OPTION(coarse_freeze_rct_min)) {
         DOSTATS({
             if (!cache_large_enough)
                 STATS_INC(persist_code_small);
         });
-        LOG(THREAD, LOG_FRAGMENT|LOG_VMAREAS, 2,
+        LOG(THREAD, LOG_FRAGMENT | LOG_VMAREAS, 2,
             "\tRCT entries are over threshold so persisting %s\n", info->module);
         return true;
     }
 #endif /* defined(RETURN_AFTER_CALL) || defined(RCT_IND_BRANCH) */
     DOSTATS({
         if (!cache_large_enough) {
-            LOG(THREAD, LOG_FRAGMENT|LOG_VMAREAS, 2,
+            LOG(THREAD, LOG_FRAGMENT | LOG_VMAREAS, 2,
                 "\tnot persisting %s since too small\n", info->module);
             STATS_INC(persist_too_small);
         }
@@ -9653,10 +9642,10 @@ coarse_region_should_persist(dcontext_t *dcontext, coarse_info_t *info)
  * either executable_areas lock or dynamo_all_threads_synched.
  */
 static void
-vm_area_coarse_region_freeze(dcontext_t *dcontext, coarse_info_t *info,
-                             vm_area_t *area, bool in_place)
+vm_area_coarse_region_freeze(dcontext_t *dcontext, coarse_info_t *info, vm_area_t *area,
+                             bool in_place)
 {
-    coarse_info_t *frozen_info = NULL; /* the already-frozen info */
+    coarse_info_t *frozen_info = NULL;   /* the already-frozen info */
     coarse_info_t *unfrozen_info = NULL; /* the un-frozen info */
     if (!DYNAMO_OPTION(coarse_enable_freeze) || RUNNING_WITHOUT_CODE_CACHE())
         return;
@@ -9677,18 +9666,17 @@ vm_area_coarse_region_freeze(dcontext_t *dcontext, coarse_info_t *info,
         unfrozen_info = info;
         ASSERT(info->non_frozen == NULL);
     }
-    if (unfrozen_info != NULL &&
-        unfrozen_info->cache != NULL /*skip empty units*/ &&
+    if (unfrozen_info != NULL && unfrozen_info->cache != NULL /*skip empty units*/ &&
         !TEST(PERSCACHE_CODE_INVALID, unfrozen_info->flags) &&
-         /* we only freeze a unit in presence of a frozen unit if we're merging
-          * (we don't support side-by-side frozen units) */
+        /* we only freeze a unit in presence of a frozen unit if we're merging
+         * (we don't support side-by-side frozen units) */
         (DYNAMO_OPTION(coarse_freeze_merge) || frozen_info == NULL)) {
         if (in_place || coarse_region_should_persist(dcontext, info)) {
             coarse_info_t *frozen;
             coarse_info_t *premerge;
-            LOG(THREAD, LOG_FRAGMENT|LOG_VMAREAS, 2,
-                "\tfreezing coarse unit for region "PFX".."PFX" %s\n",
-                info->base_pc, info->end_pc, info->module);
+            LOG(THREAD, LOG_FRAGMENT | LOG_VMAREAS, 2,
+                "\tfreezing coarse unit for region " PFX ".." PFX " %s\n", info->base_pc,
+                info->end_pc, info->module);
             if (frozen_info != NULL && in_place) {
                 /* We're freezing unfrozen_info, merging frozen_info into it, and
                  * then deleting frozen_info, so we need to replace it with just
@@ -9696,8 +9684,8 @@ vm_area_coarse_region_freeze(dcontext_t *dcontext, coarse_info_t *info,
                  * mark_executable_area_coarse_frozen assumes being-frozen info is
                  * the 1st info.
                  */
-                area->custom.client = (void *) unfrozen_info;
-            }                
+                area->custom.client = (void *)unfrozen_info;
+            }
             frozen = coarse_unit_freeze(dcontext, unfrozen_info, in_place);
             ASSERT(frozen != NULL && frozen->frozen);
             /* mark_executable_area_coarse_frozen creates new non_frozen for in_place */
@@ -9722,34 +9710,34 @@ vm_area_coarse_region_freeze(dcontext_t *dcontext, coarse_info_t *info,
                     frozen = premerge;
                 }
                 if (!in_place && premerge != NULL) {
-                    coarse_unit_reset_free(dcontext, premerge, false/*no locks*/,
-                                           false/*already unlinked*/,
-                                           false/*not in use anyway*/);
+                    coarse_unit_reset_free(dcontext, premerge, false /*no locks*/,
+                                           false /*already unlinked*/,
+                                           false /*not in use anyway*/);
                     coarse_unit_free(dcontext, premerge);
                     if (frozen == premerge)
                         frozen = NULL;
                     premerge = NULL;
                 }
                 if (in_place) {
-                    coarse_unit_reset_free(dcontext, frozen_info, false/*no locks*/,
-                                           true/*need to unlink*/,
-                                           false/*keep primary*/);
+                    coarse_unit_reset_free(dcontext, frozen_info, false /*no locks*/,
+                                           true /*need to unlink*/,
+                                           false /*keep primary*/);
                     coarse_unit_free(dcontext, frozen_info);
                     frozen_info = NULL;
                 }
             }
             if (!in_place && frozen != NULL) {
                 coarse_unit_persist(dcontext, frozen);
-                coarse_unit_reset_free(dcontext, frozen, false/*no locks*/,
-                                       false/*already unlinked*/,
-                                       false/*not in use anyway*/);
+                coarse_unit_reset_free(dcontext, frozen, false /*no locks*/,
+                                       false /*already unlinked*/,
+                                       false /*not in use anyway*/);
                 coarse_unit_free(dcontext, frozen);
                 frozen = NULL;
             } else
                 ASSERT(frozen == unfrozen_info);
         }
-    } else if (frozen_info != NULL && frozen_info->cache != NULL &&
-               !in_place && !frozen_info->persisted) {
+    } else if (frozen_info != NULL && frozen_info->cache != NULL && !in_place &&
+               !frozen_info->persisted) {
         ASSERT(!TEST(PERSCACHE_CODE_INVALID, frozen_info->flags));
         if (coarse_region_should_persist(dcontext, frozen_info))
             coarse_unit_persist(dcontext, frozen_info);
@@ -9771,7 +9759,7 @@ vm_area_coarse_units_freeze(bool in_place)
         return;
     ASSERT(!RUNNING_WITHOUT_CODE_CACHE());
     ASSERT(dcontext != NULL);
-    LOG(THREAD, LOG_FRAGMENT|LOG_VMAREAS, 2, "vm_area_coarse_units_freeze\n");
+    LOG(THREAD, LOG_FRAGMENT | LOG_VMAREAS, 2, "vm_area_coarse_units_freeze\n");
     ASSERT(dynamo_all_threads_synched);
     acquire_recursive_lock(&change_linking_lock);
 #ifdef HOT_PATCHING_INTERFACE
@@ -9788,7 +9776,7 @@ vm_area_coarse_units_freeze(bool in_place)
      */
     for (i = 0; i < v->length; i++) {
         if (TEST(FRAG_COARSE_GRAIN, v->buf[i].frag_flags)) {
-            coarse_info_t *info = (coarse_info_t *) v->buf[i].custom.client;
+            coarse_info_t *info = (coarse_info_t *)v->buf[i].custom.client;
             ASSERT(info != NULL);
             if (info != NULL)
                 vm_area_coarse_region_freeze(dcontext, info, &v->buf[i], in_place);
@@ -9842,8 +9830,8 @@ thread_vm_area_overlap(dcontext_t *dcontext, app_pc start, app_pc end)
  * If instr_cache_pc==NULL, assumes the cache is unavailable (due to reset).
  */
 app_pc
-handle_modified_code(dcontext_t *dcontext, cache_pc instr_cache_pc,
-                     app_pc instr_app_pc, app_pc target)
+handle_modified_code(dcontext_t *dcontext, cache_pc instr_cache_pc, app_pc instr_app_pc,
+                     app_pc target)
 {
     /* FIXME: for Linux, this is all happening inside signal handler...
      * flushing could take a while, and signals are blocked the entire time!
@@ -9853,14 +9841,15 @@ handle_modified_code(dcontext_t *dcontext, cache_pc instr_cache_pc,
     size_t size, flush_size = 0, instr_size;
     uint opnd_size = 0;
     uint prot;
-    overlap_info_t info = {0,/* init to 0 so info.overlap is false */};
+    overlap_info_t info = { 0, /* init to 0 so info.overlap is false */ };
     app_pc bb_start = NULL;
     app_pc bb_end = NULL;
     app_pc bb_pstart = NULL, bb_pend = NULL; /* pages occupied by instr's bb */
     vm_area_t *a = NULL;
     fragment_t wrapper;
-    fragment_t *f = (instr_cache_pc == NULL) ? NULL :
-        fragment_pclookup(dcontext, instr_cache_pc, &wrapper);
+    fragment_t *f = (instr_cache_pc == NULL)
+        ? NULL
+        : fragment_pclookup(dcontext, instr_cache_pc, &wrapper);
     /* get the "region" size (don't use exec list, it merges regions),
      * the os merges regions too, and we might have changed the protections
      * on the region and caused it do so, so below we take the intersection
@@ -9880,12 +9869,13 @@ handle_modified_code(dcontext_t *dcontext, cache_pc instr_cache_pc,
     DOLOG(1, LOG_VMAREAS, {
         if (instr_cache_pc == NULL) {
             LOG(THREAD, LOG_VMAREAS, 1,
-                "WARNING: cache unavailable for processing code mod @ app pc "PFX"\n",
+                "WARNING: cache unavailable for processing code mod @ app pc " PFX "\n",
                 instr_app_pc);
         } else if (f == NULL) {
             LOG(THREAD, LOG_VMAREAS, 1,
-                "WARNING: cannot find fragment @ writer pc "PFX" -- was deleted, "
-                "or native\n", instr_cache_pc);
+                "WARNING: cannot find fragment @ writer pc " PFX " -- was deleted, "
+                "or native\n",
+                instr_cache_pc);
         }
     });
     ASSERT(ok);
@@ -9895,11 +9885,11 @@ handle_modified_code(dcontext_t *dcontext, cache_pc instr_cache_pc,
     lookup_addr(executable_areas, (app_pc)target, &a);
     if (a == NULL) {
         LOG(THREAD, LOG_VMAREAS, 1,
-            "\tRegion for "PFX" not exec, probably data on same page\n", target);
+            "\tRegion for " PFX " not exec, probably data on same page\n", target);
         DOLOG(2, LOG_VMAREAS, { print_vm_areas(executable_areas, THREAD); });
     } else {
-        /* The os may have merged regions  because we made a region read 
-         * only! (ref case 2803), thus we should take the intersection of 
+        /* The os may have merged regions  because we made a region read
+         * only! (ref case 2803), thus we should take the intersection of
          * the region on our list and the os region */
         /* make sure to handle sub-page regions, pad to page boundary */
         app_pc a_pstart = (app_pc)ALIGN_BACKWARD(a->start, PAGE_SIZE);
@@ -9912,11 +9902,11 @@ handle_modified_code(dcontext_t *dcontext, cache_pc instr_cache_pc,
             size = a_pend - base_pc;
         }
         LOG(THREAD, LOG_VMAREAS, 1,
-            "WARNING: Exec "PFX"-"PFX" %s%s written @"PFX" by "PFX" == app "PFX"\n",
-            base_pc, base_pc+size,
-            ((a->vm_flags & VM_WRITABLE) != 0) ? "W" : "",
-            ((prot & MEMPROT_EXEC) != 0) ? "E" : "",
-            target, instr_cache_pc, instr_app_pc);
+            "WARNING: Exec " PFX "-" PFX " %s%s written @" PFX " by " PFX " == app " PFX
+            "\n",
+            base_pc, base_pc + size, ((a->vm_flags & VM_WRITABLE) != 0) ? "W" : "",
+            ((prot & MEMPROT_EXEC) != 0) ? "E" : "", target, instr_cache_pc,
+            instr_app_pc);
     }
     read_unlock(&executable_areas->lock);
 #ifdef DGC_DIAGNOSTICS
@@ -9926,7 +9916,7 @@ handle_modified_code(dcontext_t *dcontext, cache_pc instr_cache_pc,
          */
         char buf[MAXIMUM_SYMBOL_LENGTH];
         print_symbolic_address(instr_app_pc, buf, sizeof(buf), false);
-        LOG(THREAD, LOG_VMAREAS, 1, "code written by app pc "PFX" from bb %s:\n",
+        LOG(THREAD, LOG_VMAREAS, 1, "code written by app pc " PFX " from bb %s:\n",
             instr_app_pc, buf);
         disassemble_app_bb(dcontext, instr_app_pc, THREAD);
     });
@@ -9967,23 +9957,23 @@ handle_modified_code(dcontext_t *dcontext, cache_pc instr_cache_pc,
      * will end up in infinite loop if any part of bb overlaps the executable
      * region removed!
      * if f was deleted, we threw away its also info, so we have to do a full
-     * overlaps lookup.  f cannot have been removed completely since we 
+     * overlaps lookup.  f cannot have been removed completely since we
      * count as being in the shared cache and could be inside f.
      */
     if (f != NULL &&
-         /* faster check up front if frag not deleted -- BUT, we are in
-          * a race w/ any flusher marking as deleted!
-          * so, we make vm_list_overlaps not assert on a not-there fragment,
-          * and only if it finds it and it's STILL not marked do we trust the
-          * return value.
-          */
-         (vm_list_overlaps(dcontext, (void *)f, base_pc, base_pc+size) ||
-          TEST(FRAG_WAS_DELETED, f->flags))) {
-        fragment_overlaps(dcontext, f, instr_app_pc, instr_app_pc+1,
+        /* faster check up front if frag not deleted -- BUT, we are in
+         * a race w/ any flusher marking as deleted!
+         * so, we make vm_list_overlaps not assert on a not-there fragment,
+         * and only if it finds it and it's STILL not marked do we trust the
+         * return value.
+         */
+        (vm_list_overlaps(dcontext, (void *)f, base_pc, base_pc + size) ||
+         TEST(FRAG_WAS_DELETED, f->flags))) {
+        fragment_overlaps(dcontext, f, instr_app_pc, instr_app_pc + 1,
                           false /* fine-grain! */, &info, &bb_start);
         /* if did fast check and it said overlap, slow check should too */
         ASSERT(TEST(FRAG_WAS_DELETED, f->flags) || info.overlap);
-    } 
+    }
     if (info.overlap) {
         /* instr_t may be in region, but could also be from a different region
          * included in a trace.  Determine if instr bb overlaps with target
@@ -10007,16 +9997,14 @@ handle_modified_code(dcontext_t *dcontext, cache_pc instr_cache_pc,
             bb_end = info.max_pc;
             ASSERT(bb_start != NULL && bb_end != NULL);
         }
-        bb_pstart = (app_pc) PAGE_START(bb_start);
-        bb_pend = (app_pc) PAGE_START(bb_end);
+        bb_pstart = (app_pc)PAGE_START(bb_start);
+        bb_pend = (app_pc)PAGE_START(bb_end);
         ASSERT(instr_app_pc >= bb_pstart &&
-               instr_app_pc+instr_size <= bb_pend+PAGE_SIZE);
+               instr_app_pc + instr_size <= bb_pend + PAGE_SIZE);
         ASSERT(f != NULL); /* else info.overlap should not be set */
     }
     /* Now we can check if source bb overlaps target region. */
-    if (info.overlap &&
-        base_pc < (bb_pend + PAGE_SIZE) &&
-        (base_pc + size) > bb_pstart) {
+    if (info.overlap && base_pc < (bb_pend + PAGE_SIZE) && (base_pc + size) > bb_pstart) {
         /* bb pages overlap target region -
          * We want to split up region to keep instr exec but target writable.
          * All pages touched by target will become writable.
@@ -10024,30 +10012,29 @@ handle_modified_code(dcontext_t *dcontext, cache_pc instr_cache_pc,
          * write from its bb -- will always enter from top of bb)
          */
         /* pages occupied by target */
-        app_pc tgt_pstart = (app_pc) PAGE_START(target);
-        app_pc tgt_pend = (app_pc) PAGE_START(target+opnd_size);
-        
+        app_pc tgt_pstart = (app_pc)PAGE_START(target);
+        app_pc tgt_pend = (app_pc)PAGE_START(target + opnd_size);
+
         DOSTATS({
             /* race condition case of another thread flushing 1st */
             if (TEST(MEMPROT_WRITE, prot))
                 STATS_INC(num_write_fault_races_selfmod);
         });
-        
-        LOG(THREAD, LOG_VMAREAS, 2,
-            "Write instr is inside F%d "PFX"\n", f->id, f->tag);
-        
+
+        LOG(THREAD, LOG_VMAREAS, 2, "Write instr is inside F%d " PFX "\n", f->id, f->tag);
+
         LOG(THREAD, LOG_VMAREAS, 1,
-            "\tinstr's bb src "PFX"-"PFX" overlaps target "PFX"-"PFX"\n",
-            bb_start, bb_end, target, target+opnd_size);
-        
+            "\tinstr's bb src " PFX "-" PFX " overlaps target " PFX "-" PFX "\n",
+            bb_start, bb_end, target, target + opnd_size);
+
         /* look for selfmod overlap */
         if (bb_pstart <= tgt_pend && bb_pend >= tgt_pstart) {
             vm_area_t *execarea;
             app_pc nxt_on_page;
             LOG(THREAD, LOG_VMAREAS, 1,
-                "WARNING: self-modifying code: instr @"PFX" (in bb "PFX"-"PFX")\n"
-                "\twrote to "PFX"-"PFX"\n",
-                instr_app_pc, bb_start, bb_end, target, target+opnd_size);
+                "WARNING: self-modifying code: instr @" PFX " (in bb " PFX "-" PFX ")\n"
+                "\twrote to " PFX "-" PFX "\n",
+                instr_app_pc, bb_start, bb_end, target, target + opnd_size);
             SYSLOG_INTERNAL_WARNING_ONCE("self-modifying code.");
             /* can leave non-intersection part of instr pages as executable,
              * no need to flush them
@@ -10055,19 +10042,20 @@ handle_modified_code(dcontext_t *dcontext, cache_pc instr_cache_pc,
             /* DGC_DIAGNOSTICS: have flusher pass target to
              * vm_area_unlink_fragments to check if code was actually overwritten
              */
-            flush_fragments_in_region_start(dcontext, (app_pc)tgt_pstart,
-                                            (tgt_pend+PAGE_SIZE-tgt_pstart),
-                                            false /* don't own initexit_lock */,
-                                            false /* keep futures */,
-                                            true /* exec invalid */,
-                                            false /* don't force synchall */
-                                            _IF_DGCDIAG(target));
-            /* flush_* grabbed exec areas lock for us, to make following sequence atomic */
+            flush_fragments_in_region_start(
+                dcontext, (app_pc)tgt_pstart, (tgt_pend + PAGE_SIZE - tgt_pstart),
+                false /* don't own initexit_lock */, false /* keep futures */,
+                true /* exec invalid */,
+                false /* don't force synchall */
+                _IF_DGCDIAG(target));
+            /* flush_* grabbed exec areas lock for us, to make following sequence atomic
+             */
             /* need to change all exec areas on these pages to be selfmod */
-            for (ok = true, nxt_on_page = (app_pc) tgt_pstart;
-                 ok && nxt_on_page < (app_pc)tgt_pend + PAGE_SIZE; ) {
-                ok = binary_search(executable_areas, nxt_on_page, (app_pc)tgt_pend+PAGE_SIZE,
-                                   &execarea, NULL, true /* want 1st match! */);
+            for (ok = true, nxt_on_page = (app_pc)tgt_pstart;
+                 ok && nxt_on_page < (app_pc)tgt_pend + PAGE_SIZE;) {
+                ok = binary_search(executable_areas, nxt_on_page,
+                                   (app_pc)tgt_pend + PAGE_SIZE, &execarea, NULL,
+                                   true /* want 1st match! */);
                 if (ok) {
                     nxt_on_page = execarea->end;
                     if (TESTANY(FRAG_SELFMOD_SANDBOXED, execarea->frag_flags)) {
@@ -10075,7 +10063,8 @@ handle_modified_code(dcontext_t *dcontext, cache_pc instr_cache_pc,
                          * FIXME: why do we have to do anything if already selfmod?
                          */
                         if (TEST(VM_MADE_READONLY, execarea->vm_flags))
-                            vm_make_writable(execarea->start, execarea->end - execarea->start);
+                            vm_make_writable(execarea->start,
+                                             execarea->end - execarea->start);
                         continue;
                     }
                     if (execarea->start < (app_pc)tgt_pstart ||
@@ -10085,17 +10074,19 @@ handle_modified_code(dcontext_t *dcontext, cache_pc instr_cache_pc,
                          */
                         uint old_vmf = execarea->vm_flags;
                         uint old_ff = execarea->frag_flags;
-                        app_pc old_start = (execarea->start < tgt_pstart) ?
-                            tgt_pstart : execarea->start;
-                        app_pc old_end = (execarea->end > tgt_pend + PAGE_SIZE) ?
-                            tgt_pend + PAGE_SIZE : execarea->end;
+                        app_pc old_start =
+                            (execarea->start < tgt_pstart) ? tgt_pstart : execarea->start;
+                        app_pc old_end = (execarea->end > tgt_pend + PAGE_SIZE)
+                            ? tgt_pend + PAGE_SIZE
+                            : execarea->end;
                         LOG(GLOBAL, LOG_VMAREAS, 2,
-                            "removing executable vm area to mark selfmod: "PFX"-"PFX"\n",
+                            "removing executable vm area to mark selfmod: " PFX "-" PFX
+                            "\n",
                             old_start, old_end);
                         remove_vm_area(executable_areas, old_start, old_end, true);
                         /* now re-add */
-                        add_executable_vm_area(old_start, old_end,
-                                               old_vmf, old_ff | FRAG_SELFMOD_SANDBOXED,
+                        add_executable_vm_area(old_start, old_end, old_vmf,
+                                               old_ff | FRAG_SELFMOD_SANDBOXED,
                                                true /*own lock */
                                                _IF_DEBUG("selfmod replacement"));
                         STATS_INC(num_selfmod_vm_areas);
@@ -10103,19 +10094,21 @@ handle_modified_code(dcontext_t *dcontext, cache_pc instr_cache_pc,
                          * nxt_on_page
                          */
                     } else {
-                        LOG(THREAD, LOG_VMAREAS, 2, "\tmarking "PFX"-"PFX" as selfmod\n",
-                            execarea->start, execarea->end);
+                        LOG(THREAD, LOG_VMAREAS, 2,
+                            "\tmarking " PFX "-" PFX " as selfmod\n", execarea->start,
+                            execarea->end);
                         execarea->frag_flags |= SANDBOX_FLAG();
                         STATS_INC(num_selfmod_vm_areas);
                         /* not calling remove_vm_area so we have to vm_make_writable */
                         if (TEST(VM_MADE_READONLY, execarea->vm_flags))
-                            vm_make_writable(execarea->start, execarea->end - execarea->start);
+                            vm_make_writable(execarea->start,
+                                             execarea->end - execarea->start);
                     }
                 }
             }
             LOG(GLOBAL, LOG_VMAREAS, 3,
-                "After marking all areas in "PFX"-"PFX" as selfmod:\n",
-                tgt_pstart, tgt_pend+PAGE_SIZE);
+                "After marking all areas in " PFX "-" PFX " as selfmod:\n", tgt_pstart,
+                tgt_pend + PAGE_SIZE);
             DOLOG(3, LOG_VMAREAS, { print_vm_areas(executable_areas, GLOBAL); });
             flush_fragments_in_region_finish(dcontext,
                                              false /*don't keep initexit_lock*/);
@@ -10136,8 +10129,7 @@ handle_modified_code(dcontext_t *dcontext, cache_pc instr_cache_pc,
                  * region start (like we would if we didn't have an
                  * overlap). */
                 flush_start = tgt_pstart;
-                ASSERT(bb_pstart < (base_pc + size) &&
-                       bb_pstart > tgt_pstart);
+                ASSERT(bb_pstart < (base_pc + size) && bb_pstart > tgt_pstart);
                 flush_size = bb_pstart - tgt_pstart;
             } else if (tgt_pstart > bb_pend) {
                 /* make all pages from tgt_pstart to end of region non-exec */
@@ -10148,16 +10140,17 @@ handle_modified_code(dcontext_t *dcontext, cache_pc instr_cache_pc,
                 ASSERT_NOT_REACHED();
             }
             LOG(THREAD, LOG_VMAREAS, 2,
-                "splitting region up, flushing just "PFX"-"PFX"\n",
-                flush_start, flush_start+flush_size);
+                "splitting region up, flushing just " PFX "-" PFX "\n", flush_start,
+                flush_start + flush_size);
         }
     } else {
         ASSERT(!info.overlap || (f != NULL && TEST(FRAG_IS_TRACE, f->flags)));
         /* instr not in region, so move entire region off the executable list */
         flush_start = base_pc;
         flush_size = size;
-        LOG(THREAD, LOG_VMAREAS, 2, "instr not in region, flushing entire "PFX"-"PFX"\n",
-            flush_start, flush_start+flush_size);
+        LOG(THREAD, LOG_VMAREAS, 2,
+            "instr not in region, flushing entire " PFX "-" PFX "\n", flush_start,
+            flush_start + flush_size);
     }
 
     /* DGC_DIAGNOSTICS: have flusher pass target to
@@ -10165,8 +10158,7 @@ handle_modified_code(dcontext_t *dcontext, cache_pc instr_cache_pc,
      */
     flush_fragments_in_region_start(dcontext, flush_start, flush_size,
                                     false /* don't own initexit_lock */,
-                                    false /* keep futures */,
-                                    true /* exec invalid */,
+                                    false /* keep futures */, true /* exec invalid */,
                                     false /* don't force synchall */
                                     _IF_DGCDIAG(target));
     f = NULL; /* after the flush we don't know if it's safe to deref f */
@@ -10181,13 +10173,12 @@ handle_modified_code(dcontext_t *dcontext, cache_pc instr_cache_pc,
         ro_vs_sandbox_data_t *ro2s;
         write_lock(&written_areas->lock);
         /* use the add routine to lookup if present, add if not */
-        add_written_area(written_areas, target, (app_pc) PAGE_START(target),
-                         (app_pc) PAGE_START(target+opnd_size) + PAGE_SIZE, &a);
+        add_written_area(written_areas, target, (app_pc)PAGE_START(target),
+                         (app_pc)PAGE_START(target + opnd_size) + PAGE_SIZE, &a);
         ASSERT(a != NULL);
-        ro2s = (ro_vs_sandbox_data_t *) a->custom.client;
+        ro2s = (ro_vs_sandbox_data_t *)a->custom.client;
         ro2s->written_count++;
-        LOG(GLOBAL, LOG_VMAREAS, 2,
-            "written area "PFX"-"PFX" now written %d X\n",
+        LOG(GLOBAL, LOG_VMAREAS, 2, "written area " PFX "-" PFX " now written %d X\n",
             a->start, a->end, ro2s->written_count);
         DOLOG(3, LOG_VMAREAS, {
             LOG(GLOBAL, LOG_VMAREAS, 2, "\nwritten areas:\n");
@@ -10200,7 +10191,7 @@ handle_modified_code(dcontext_t *dcontext, cache_pc instr_cache_pc,
 #ifdef PROGRAM_SHEPHERDING
         !DYNAMO_OPTION(selfmod_futureexec) &&
 #endif
-        is_executable_area_on_all_selfmod_pages(target, target+opnd_size)) {
+        is_executable_area_on_all_selfmod_pages(target, target + opnd_size)) {
         /* We can be in various races with another thread in handling write
          * faults to this same region.  We check at the start of this routine,
          * but in practice (case 7911) I've seen the race more often show up
@@ -10218,15 +10209,14 @@ handle_modified_code(dcontext_t *dcontext, cache_pc instr_cache_pc,
          */
         STATS_INC(flush_selfmod_race_no_remove);
         LOG(THREAD, LOG_VMAREAS, 2,
-            "Target "PFX" is already selfmod, race, no reason to remove\n",
-            target);
+            "Target " PFX " is already selfmod, race, no reason to remove\n", target);
     } else {
-        /* flush_* grabbed exec areas lock for us, to make vm_make_writable, 
-         * remove global vm area, and lookup an atomic sequence 
+        /* flush_* grabbed exec areas lock for us, to make vm_make_writable,
+         * remove global vm area, and lookup an atomic sequence
          */
         LOG(GLOBAL, LOG_VMAREAS, 2,
-            "removing executable vm area since written: "PFX"-"PFX"\n",
-            flush_start, flush_start+flush_size);
+            "removing executable vm area since written: " PFX "-" PFX "\n", flush_start,
+            flush_start + flush_size);
         /* FIXME : are we removing regions that might not get re-added here?
          * what about things that came from once only future or mem prot changes,
          * the region removed here can be much larger then just the page written
@@ -10236,11 +10226,11 @@ handle_modified_code(dcontext_t *dcontext, cache_pc instr_cache_pc,
          * but better to just split code origins from consistency and not have
          * sub-page regions on the consistency list (case 3744).
          */
-        remove_vm_area(executable_areas, flush_start, flush_start+flush_size,
-                       true/*restore writability!*/);
+        remove_vm_area(executable_areas, flush_start, flush_start + flush_size,
+                       true /*restore writability!*/);
         LOG(THREAD, LOG_VMAREAS, 2,
-            "Removed "PFX"-"PFX" from exec list, continuing @ write\n",
-            flush_start, flush_start+flush_size);
+            "Removed " PFX "-" PFX " from exec list, continuing @ write\n", flush_start,
+            flush_start + flush_size);
     }
     DOLOG(3, LOG_VMAREAS, {
         thread_data_t *data = GET_DATA(dcontext, 0);
@@ -10255,7 +10245,7 @@ handle_modified_code(dcontext_t *dcontext, cache_pc instr_cache_pc,
      * region even if the src bb didn't and anyways flushing can end up
      * flushing outside the requested region (entire vm_area_t). If we could tell
      * we could return NULL instead (which is a special flag that says redo the
-     * write instead of going to dispatch) if f wasn't flushed. 
+     * write instead of going to dispatch) if f wasn't flushed.
      * FIXME - Redoing the write would be more efficient then going back to
      * dispatch and should be the common case. */
     flush_fragments_in_region_finish(dcontext, false /*don't keep initexit_lock*/);
@@ -10291,7 +10281,7 @@ get_selfmod_exec_counter(app_pc tag)
         STATS_INC(num_sandbox_before_ro);
         add_written_area(written_areas, tag, area->start, area->end, &area);
         ASSERT(area != NULL);
-        ro2s = (ro_vs_sandbox_data_t *) area->custom.client;
+        ro2s = (ro_vs_sandbox_data_t *)area->custom.client;
         counter = &ro2s->selfmod_execs;
         /* Inc of selfmod_execs from cache can have problems if it crosses a
          * cache line, so we assert on the 32-bit alignment we should get from
@@ -10302,7 +10292,7 @@ get_selfmod_exec_counter(app_pc tag)
         read_unlock(&executable_areas->lock);
     } else {
         ASSERT(ok && area != NULL);
-        ro2s = (ro_vs_sandbox_data_t *) area->custom.client;
+        ro2s = (ro_vs_sandbox_data_t *)area->custom.client;
         counter = &ro2s->selfmod_execs;
         read_unlock(&written_areas->lock);
     }
@@ -10334,7 +10324,7 @@ vm_area_selfmod_check_clear_exec_count(dcontext_t *dcontext, fragment_t *f)
 
     ok = lookup_addr(written_areas, f->tag, &written_area);
     if (ok) {
-        ro2s = (ro_vs_sandbox_data_t *) written_area->custom.client;
+        ro2s = (ro_vs_sandbox_data_t *)written_area->custom.client;
     } else {
         /* never had instrumentation */
         write_unlock(&written_areas->lock);
@@ -10344,7 +10334,8 @@ vm_area_selfmod_check_clear_exec_count(dcontext_t *dcontext, fragment_t *f)
         /* must be a real fragment modification, reset the selfmod_execs count
          * xref case 9908 */
         LOG(THREAD, LOG_VMAREAS, 3,
-            "Fragment "PFX" self-write -> "PFX"-"PFX" selfmod exec counter reset, old"
+            "Fragment " PFX " self-write -> " PFX "-" PFX
+            " selfmod exec counter reset, old"
             " count=%d\n",
             f->tag, written_area->start, written_area->end, ro2s->selfmod_execs);
         /* Write must be atomic since we access this field from the cache, an aligned
@@ -10356,9 +10347,10 @@ vm_area_selfmod_check_clear_exec_count(dcontext_t *dcontext, fragment_t *f)
     }
 
     LOG(THREAD, LOG_VMAREAS, 1,
-        "Fragment "PFX" caused "PFX"-"PFX" to cross sandbox2ro threshold %d vs %d\n",
-        f->tag, written_area->start, written_area->end,
-        ro2s->selfmod_execs, DYNAMO_OPTION(sandbox2ro_threshold));
+        "Fragment " PFX " caused " PFX "-" PFX
+        " to cross sandbox2ro threshold %d vs %d\n",
+        f->tag, written_area->start, written_area->end, ro2s->selfmod_execs,
+        DYNAMO_OPTION(sandbox2ro_threshold));
     start = written_area->start;
     end = written_area->end;
     /* reset to avoid immediate re-trigger */
@@ -10370,7 +10362,7 @@ vm_area_selfmod_check_clear_exec_count(dcontext_t *dcontext, fragment_t *f)
          * that when we rebuild f we won't put the instrumentation in. */
         convert_s2ro = false;
         STATS_INC(num_sandbox2ro_onstack);
-        LOG(THREAD, LOG_VMAREAS, 1, "Fragment "PFX" is on stack now!\n", f->tag);
+        LOG(THREAD, LOG_VMAREAS, 1, "Fragment " PFX " is on stack now!\n", f->tag);
         ASSERT_CURIOSITY(false && "on-stack selfmod bb w/ counter inc");
     }
 
@@ -10387,9 +10379,8 @@ vm_area_selfmod_check_clear_exec_count(dcontext_t *dcontext, fragment_t *f)
          * multiple pages doesn't want to clear that count too early.
          */
         LOG(THREAD, LOG_VMAREAS, 2,
-            "re-setting written executable vm area: "PFX"-"PFX" written %d X\n",
-            written_area->start, written_area->end,
-            ro2s->written_count);
+            "re-setting written executable vm area: " PFX "-" PFX " written %d X\n",
+            written_area->start, written_area->end, ro2s->written_count);
         ro2s->written_count = 0;
     }
     DOLOG(3, LOG_VMAREAS, {
@@ -10399,7 +10390,7 @@ vm_area_selfmod_check_clear_exec_count(dcontext_t *dcontext, fragment_t *f)
 
     write_unlock(&written_areas->lock);
 
-    /* Convert the selfmod region to a ro region. 
+    /* Convert the selfmod region to a ro region.
      * FIXME case 8161: should we flush and make ro the executable area,
      * or the written area?  Written area may only be a page if made
      * selfmod due to a code write, but then it should match the executable area
@@ -10409,8 +10400,7 @@ vm_area_selfmod_check_clear_exec_count(dcontext_t *dcontext, fragment_t *f)
      */
     flush_fragments_in_region_start(dcontext, start, end - start,
                                     false /* don't own initexit_lock */,
-                                    false /* keep futures */,
-                                    true /* exec invalid */,
+                                    false /* keep futures */, true /* exec invalid */,
                                     false /* don't force synchall */
                                     _IF_DGCDIAG(NULL));
     if (convert_s2ro) {
@@ -10425,27 +10415,27 @@ vm_area_selfmod_check_clear_exec_count(dcontext_t *dcontext, fragment_t *f)
                  * will flush whole region.
                  */
                 LOG(THREAD, LOG_VMAREAS, 1,
-                    "\tconverting "PFX"-"PFX" from sandbox to ro\n",
-                    exec_area->start, exec_area->end);
+                    "\tconverting " PFX "-" PFX " from sandbox to ro\n", exec_area->start,
+                    exec_area->end);
                 exec_area->frag_flags &= ~FRAG_SELFMOD_SANDBOXED;
                 /* can't ASSERT(!TEST(VM_MADE_READONLY, area->vm_flags)) (case 7877) */
                 vm_make_unwritable(exec_area->start, exec_area->end - exec_area->start);
                 exec_area->vm_flags |= VM_MADE_READONLY;
                 LOG(THREAD, LOG_VMAREAS, 3,
-                    "After marking "PFX"-"PFX" as NOT selfmod:\n",
-                    exec_area->start, exec_area->end);
+                    "After marking " PFX "-" PFX " as NOT selfmod:\n", exec_area->start,
+                    exec_area->end);
                 DOLOG(3, LOG_VMAREAS, { print_vm_areas(executable_areas, THREAD); });
                 STATS_INC(num_sandbox2ro);
             } else {
                 /* must be a race! */
                 LOG(THREAD, LOG_VMAREAS, 3,
-                    "Area "PFX"-"PFX" is ALREADY not selfmod!\n",
-                    exec_area->start, exec_area->end);
+                    "Area " PFX "-" PFX " is ALREADY not selfmod!\n", exec_area->start,
+                    exec_area->end);
                 STATS_INC(num_sandbox2ro_race);
             }
         } else {
             /* must be a flushing race */
-            LOG(THREAD, LOG_VMAREAS, 3, "Area "PFX"-"PFX" is no longer there!\n",
+            LOG(THREAD, LOG_VMAREAS, 3, "Area " PFX "-" PFX " is no longer there!\n",
                 start, end);
             STATS_INC(num_sandbox2ro_flush_race);
         }
@@ -10454,16 +10444,15 @@ vm_area_selfmod_check_clear_exec_count(dcontext_t *dcontext, fragment_t *f)
     ASSERT(exec_area == NULL || /* never looked up */
            (start < exec_area->end && end > exec_area->start));
 
-    flush_fragments_in_region_finish(dcontext,
-                                     false /*don't keep initexit_lock*/);
+    flush_fragments_in_region_finish(dcontext, false /*don't keep initexit_lock*/);
     return true;
 }
 
 void
 mark_unload_start(app_pc module_base, size_t module_size)
 {
-    /* in thin client mode we don't allocate this, 
-     * but we do track unloads in -client mode 
+    /* in thin client mode we don't allocate this,
+     * but we do track unloads in -client mode
      */
     if (last_deallocated == NULL)
         return;
@@ -10540,7 +10529,7 @@ mark_unload_end(app_pc module_base)
      * a module until the policy processing is done, e.g. if one has
      * started querying a security policy while we are unloading, we
      * should preserve the marker until they are done.
-     * for .B we hold a writable executable_areas_lock(), 
+     * for .B we hold a writable executable_areas_lock(),
      * watch out here if for case 9371 we want to also mark_unload_end()
      * on any new allocations
      * FIXME: the RCT policies however we don't hold a lock.
@@ -10567,17 +10556,17 @@ mark_unload_end(app_pc module_base)
     /* note, we mark_unload_start on MEM_IMAGE but mark_unload_end on
      * MEM_MAPPED as well.  Note base doesn't have to match as long as
      * it is within the module */
-    ASSERT_CURIOSITY(!last_deallocated->unload_in_progress || 
-                     ((last_deallocated->last_unload_base <= module_base && 
-                       module_base < 
-                       (last_deallocated->last_unload_base + 
-                        last_deallocated->last_unload_size)) && "race - multiple unmaps"));
+    ASSERT_CURIOSITY(!last_deallocated->unload_in_progress ||
+                     ((last_deallocated->last_unload_base <= module_base &&
+                       module_base < (last_deallocated->last_unload_base +
+                                      last_deallocated->last_unload_size)) &&
+                      "race - multiple unmaps"));
     DOLOG(1, LOG_VMAREAS, {
         /* there are a few cases where DLLs aren't unloaded by real
          * base uxtheme.dll, but I haven't seen them */
-        ASSERT_CURIOSITY(!last_deallocated->unload_in_progress || 
-                         (last_deallocated->last_unload_base == module_base && 
-                         "not base"));
+        ASSERT_CURIOSITY(
+            !last_deallocated->unload_in_progress ||
+            (last_deallocated->last_unload_base == module_base && "not base"));
     });
 
     /* multiple racy unmaps can't be handled simultaneously anyways */
@@ -10596,11 +10585,10 @@ is_in_last_unloaded_region(app_pc pc)
     mutex_lock(&last_deallocated_lock);
     /* if we are in such a tight race that we're no longer
      * last_deallocated->unload_in_progress we can still use the
-     * already unloaded module 
+     * already unloaded module
      */
     if ((pc < last_deallocated->last_unload_base) ||
-        (pc >= (last_deallocated->last_unload_base 
-                + last_deallocated->last_unload_size)))
+        (pc >= (last_deallocated->last_unload_base + last_deallocated->last_unload_size)))
         in_last = false;
     mutex_unlock(&last_deallocated_lock);
     return in_last;
@@ -10628,7 +10616,7 @@ is_unreadable_or_currently_unloaded_region(app_pc pc)
      * should be !is_readable_without_exception
      */
     /* order of execution is important - so that we don't have to grab
-     * a lock to synchronize with mark_unload_end().  
+     * a lock to synchronize with mark_unload_end().
      */
 
     if (is_currently_unloaded_region(pc)) {
@@ -10656,13 +10644,11 @@ print_last_deallocated(file_t outf)
         return;
     }
 
-    print_file(outf, "last unload: "PFX"-"PFX"%s\n", 
+    print_file(outf, "last unload: " PFX "-" PFX "%s\n",
                last_deallocated->last_unload_base,
-               last_deallocated->last_unload_base +
-               last_deallocated->last_unload_size,
-               last_deallocated->unload_in_progress ? " being unloaded": "");
+               last_deallocated->last_unload_base + last_deallocated->last_unload_size,
+               last_deallocated->unload_in_progress ? " being unloaded" : "");
 }
-
 
 #ifdef PROGRAM_SHEPHERDING
 /* Note that rerouting an APC to this target should safely popup the arguments
@@ -10680,8 +10666,7 @@ print_last_deallocated(file_t outf)
  * different file
  */
 /* could do naked to get a single RET 4 emitted with no prologue */
-void
-APC_API
+void APC_API
 safe_apc_or_thread_target(reg_t arg)
 {
     /* NOTHING */
@@ -10692,25 +10677,22 @@ safe_apc_or_thread_target(reg_t arg)
  * FIXME: add safe_native_apc(PVOID context, PAPCFUNC func, reg_t arg)
  */
 
-/* a helper procedure for DYNAMO_OPTION(apc_policy) or DYNAMO_OPTION(thread_policy) 
+/* a helper procedure for DYNAMO_OPTION(apc_policy) or DYNAMO_OPTION(thread_policy)
  *
  * FIXME: currently relevant only on WINDOWS
  */
 void
 apc_thread_policy_helper(app_pc *apc_target_location, /* IN/OUT */
-                         security_option_t target_policy,
-                         apc_thread_type_t target_type)
+                         security_option_t target_policy, apc_thread_type_t target_type)
 {
-    bool is_apc = 
-        (target_type == APC_TARGET_NATIVE) || 
-        (target_type == APC_TARGET_WINDOWS);
+    bool is_apc =
+        (target_type == APC_TARGET_NATIVE) || (target_type == APC_TARGET_WINDOWS);
     /* if is_win32api we're evaluating the Win32 API targets of
      * QueueUserAPC/CreateThreadEx, otherwise it is the native
      * NtQueueApcThread/NtCreateThreadEx targets
      */
-    bool is_win32api = 
-        (target_type == THREAD_TARGET_WINDOWS) || 
-        (target_type == APC_TARGET_WINDOWS);
+    bool is_win32api =
+        (target_type == THREAD_TARGET_WINDOWS) || (target_type == APC_TARGET_WINDOWS);
 
     bool match = false;
     /* FIXME: note taking the risk here of reading from either the
@@ -10725,7 +10707,7 @@ apc_thread_policy_helper(app_pc *apc_target_location, /* IN/OUT */
      * 0013004c 53               push    ebx
      * 0013004d e800000000       call    00130052
      */
-    enum {PIC_SHELLCODE_MATCH = 0x0000e853};
+    enum { PIC_SHELLCODE_MATCH = 0x0000e853 };
 
     /* Now we quickly check a stipped down code origins policy instead
      * of letting the bb builder do this.  ALTERNATIVE design: We could save
@@ -10741,13 +10723,12 @@ apc_thread_policy_helper(app_pc *apc_target_location, /* IN/OUT */
      * running in NX compatibility
      */
     if (is_executable_address(injected_target)) {
-        return;         /* not a match */
+        return; /* not a match */
     }
 
-    if (safe_read(injected_target, 
-                  sizeof(injected_code), &injected_code)) {
+    if (safe_read(injected_target, sizeof(injected_code), &injected_code)) {
         LOG(GLOBAL, LOG_ASYNCH, 2,
-            "ASYNCH intercepted APC: APC pc="PFX", APC code="PFX" %s\n", 
+            "ASYNCH intercepted APC: APC pc=" PFX ", APC code=" PFX " %s\n",
             injected_target, injected_code,
             injected_code == PIC_SHELLCODE_MATCH ? "MATCH" : "");
     } else {
@@ -10756,7 +10737,7 @@ apc_thread_policy_helper(app_pc *apc_target_location, /* IN/OUT */
 
     /* target is a non-executable area, but we may want to be more specific */
     if (TEST(OPTION_CUSTOM, target_policy)) {
-        match = true;   /* no matter what is in the shellcode */
+        match = true; /* no matter what is in the shellcode */
     } else {
         if (injected_code == PIC_SHELLCODE_MATCH)
             match = true;
@@ -10764,8 +10745,7 @@ apc_thread_policy_helper(app_pc *apc_target_location, /* IN/OUT */
 
     if (match) {
         bool squashed = false;
-        char injected_threat_buf[MAXIMUM_VIOLATION_NAME_LENGTH]
-            = "APCS.XXXX.B";
+        char injected_threat_buf[MAXIMUM_VIOLATION_NAME_LENGTH] = "APCS.XXXX.B";
         char *name = injected_threat_buf;
 
         bool block = TEST(OPTION_BLOCK, target_policy);
@@ -10786,7 +10766,7 @@ apc_thread_policy_helper(app_pc *apc_target_location, /* IN/OUT */
                     /* gcc warns if we use the string "INJT" directly */
                     strncpy(name, INJT, 4);
                 }
-                fill_security_violation_target(name, (const byte*)&injected_code);
+                fill_security_violation_target(name, (const byte *)&injected_code);
             }
 
             /* we allow -exempt_threat_list to override our action */
@@ -10815,30 +10795,27 @@ apc_thread_policy_helper(app_pc *apc_target_location, /* IN/OUT */
              * (since we are not under dispatch()).  If we want to see a
              * code origins failure, we can just disable this policy.
              */
-            ASSERT(!TEST(OPTION_HANDLING, target_policy) && "handling cannot be modified");
+            ASSERT(!TEST(OPTION_HANDLING, target_policy) &&
+                   "handling cannot be modified");
 
-            SYSLOG_INTERNAL_WARNING("squashed %s %s at bad target pc="PFX" %s",
-                                    is_apc ? "APC" : "thread", 
-                                    is_win32api ? "win32" : "native",
-                                    injected_target, name);
+            SYSLOG_INTERNAL_WARNING(
+                "squashed %s %s at bad target pc=" PFX " %s", is_apc ? "APC" : "thread",
+                is_win32api ? "win32" : "native", injected_target, name);
 
             /* FIXME: case 9023 : should squash appropriately native
              * vs non-native since the number of arguments may be
-             * different, hence stdcall RET size 
+             * different, hence stdcall RET size
              */
-            *apc_target_location = 
-                is_win32api ? 
-                (app_pc)safe_apc_or_thread_target :
-                (app_pc)safe_apc_or_thread_target;
+            *apc_target_location = is_win32api ? (app_pc)safe_apc_or_thread_target
+                                               : (app_pc)safe_apc_or_thread_target;
 
             squashed = true;
         } else {
             /* allow */
             app_pc base = (app_pc)PAGE_START(injected_target);
-            SYSLOG_INTERNAL_WARNING("allowing %s %s at bad target pc="PFX" %s",
-                                    is_apc ? "APC" : "thread", 
-                                    is_win32api ? "win32" : "native",
-                                    injected_target, name);
+            SYSLOG_INTERNAL_WARNING(
+                "allowing %s %s at bad target pc=" PFX " %s", is_apc ? "APC" : "thread",
+                is_win32api ? "win32" : "native", injected_target, name);
 
             /* FIXME: for HIGH mode, unfortunately the target code
              * may be selfmod, so adding a hook-style policy is hard.
@@ -10850,7 +10827,7 @@ apc_thread_policy_helper(app_pc *apc_target_location, /* IN/OUT */
 
             /* we can't safely determine a subpage region so adding whole page */
             add_futureexec_vm_area(base, base + PAGE_SIZE,
-                                   false/*permanent*/                                    
+                                   false /*permanent*/
                                    _IF_DEBUG(is_apc ? "apc_helper" : "thread_policy"));
         }
 
@@ -10861,10 +10838,9 @@ apc_thread_policy_helper(app_pc *apc_target_location, /* IN/OUT */
              * running in detect mode and -B policies
              */
             /* note that we may not actually report if silent_block_threat_list */
-            security_violation_report(injected_target, APC_THREAD_SHELLCODE_VIOLATION, 
-                                      name,
-                                      squashed ? ACTION_TERMINATE_THREAD :
-                                                 ACTION_CONTINUE);
+            security_violation_report(
+                injected_target, APC_THREAD_SHELLCODE_VIOLATION, name,
+                squashed ? ACTION_TERMINATE_THREAD : ACTION_CONTINUE);
         }
 
         DOSTATS({
@@ -10878,8 +10854,7 @@ apc_thread_policy_helper(app_pc *apc_target_location, /* IN/OUT */
 
 /* a helper procedure for reporting ASLR violations */
 void
-aslr_report_violation(app_pc execution_fault_pc,
-                      security_option_t handling_policy)
+aslr_report_violation(app_pc execution_fault_pc, security_option_t handling_policy)
 {
     STATS_INC(aslr_wouldbe_exec);
 
@@ -10926,7 +10901,7 @@ aslr_report_violation(app_pc execution_fault_pc,
         dcontext_t *dcontext = get_thread_private_dcontext();
 
         /* should be in hotp_only */
-        ASSERT(dcontext != NULL && dcontext->last_fragment != NULL && 
+        ASSERT(dcontext != NULL && dcontext->last_fragment != NULL &&
                dcontext->last_fragment->tag == NULL);
 
         /* note we clobber next_tag here, not bothering to preserve */
@@ -10937,15 +10912,12 @@ aslr_report_violation(app_pc execution_fault_pc,
         /* if likely_target_pc is unreadable (and it should be)
          * get_security_violation_name will use as target the contents
          * of a likely would be target */
-        get_security_violation_name(dcontext, 
-                                    execution_fault_pc, 
-                                    aslr_threat_id, MAXIMUM_VIOLATION_NAME_LENGTH, 
-                                    aslr_violation_type, NULL);
-        security_violation_report(execution_fault_pc, 
-                                  aslr_violation_type,
-                                  aslr_threat_id,
+        get_security_violation_name(dcontext, execution_fault_pc, aslr_threat_id,
+                                    MAXIMUM_VIOLATION_NAME_LENGTH, aslr_violation_type,
+                                    NULL);
+        security_violation_report(execution_fault_pc, aslr_violation_type, aslr_threat_id,
                                   ACTION_THROW_EXCEPTION);
-   }
+    }
 }
 #endif /* PROGRAM_SHEPHERDING */
 
@@ -10958,8 +10930,8 @@ print_vector_msg(vm_area_vector_t *v, file_t f, char *msg)
 }
 
 static void
-check_vec(vm_area_vector_t *v, int i, app_pc start, app_pc end,
-          uint vm_flags, uint frag_flags, void *data)
+check_vec(vm_area_vector_t *v, int i, app_pc start, app_pc end, uint vm_flags,
+          uint frag_flags, void *data)
 {
     ASSERT(i < v->length);
     ASSERT(v->buf[i].start == start);
@@ -10972,8 +10944,8 @@ check_vec(vm_area_vector_t *v, int i, app_pc start, app_pc end,
 void
 vmvector_tests(void)
 {
-    vm_area_vector_t v = {0, 0, 0, VECTOR_SHARED | VECTOR_NEVER_MERGE, 
-                        INIT_READWRITE_LOCK(thread_vm_areas)};
+    vm_area_vector_t v = { 0, 0, 0, VECTOR_SHARED | VECTOR_NEVER_MERGE,
+                           INIT_READWRITE_LOCK(thread_vm_areas) };
     bool res;
     app_pc start, end;
     /* FIXME: not tested */
@@ -11010,8 +10982,9 @@ vmvector_tests(void)
  * test no flags or interactions w/ selfmod flag
  */
 int
-main(void) {
-    vm_area_vector_t v = {0,0,0,false};
+main(void)
+{
+    vm_area_vector_t v = { 0, 0, 0, false };
     /* not needed yet: dcontext_t *dcontext = */
     standalone_init();
     ASSIGN_INIT_READWRITE_LOCK_FREE(v.lock, thread_vm_areas);
@@ -11084,9 +11057,10 @@ main(void) {
     check_vec(&v, 0, (app_pc)1, (app_pc)2, 0, FRAG_SELFMOD_SANDBOXED, NULL);
     check_vec(&v, 1, (app_pc)11, (app_pc)12, 0, 0, NULL);
 
-    /* FIXME: would be nice to be able to test that an assert is generated... 
+    /* FIXME: would be nice to be able to test that an assert is generated...
      * say, for this:
-     * add_vm_area(&v, (app_pc)7, (app_pc)12, 0, FRAG_SELFMOD_SANDBOXED, NULL _IF_DEBUG("E"));
+     * add_vm_area(&v, (app_pc)7, (app_pc)12, 0, FRAG_SELFMOD_SANDBOXED, NULL
+     * _IF_DEBUG("E"));
      */
 
     /* clear for next test */

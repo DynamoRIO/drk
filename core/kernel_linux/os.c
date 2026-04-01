@@ -19,20 +19,20 @@
 #include "monitor.h"
 
 #ifdef CLIENT_INTERFACE
-# include "instrument.h"
+#    include "instrument.h"
 #endif
 
 /* For inline ASM. */
 #ifdef X64
-# define ASM_XAX "rax"
-# define ASM_XDX "rdx"
-# define ASM_XBP "rbp"
-# define ASM_XSP "rsp"
+#    define ASM_XAX "rax"
+#    define ASM_XDX "rdx"
+#    define ASM_XBP "rbp"
+#    define ASM_XSP "rsp"
 #else
-# define ASM_XAX "eax"
-# define ASM_XDX "edx"
-# define ASM_XBP "ebp"
-# define ASM_XSP "esp"
+#    define ASM_XAX "eax"
+#    define ASM_XDX "edx"
+#    define ASM_XBP "ebp"
+#    define ASM_XSP "esp"
 #endif
 
 app_pc vsyscall_syscall_end_pc = NULL;
@@ -68,7 +68,9 @@ static bool in_assert_not_ported = false;
 
 #define ASSERT_NOT_PORTED(x) assert_not_ported(__FILE__, __LINE__, __func__)
 
-static void assert_not_ported(const char* file, int line, const char* func) {
+static void
+assert_not_ported(const char *file, int line, const char *func)
+{
     print_file(STDERR, "%s:%d - %s not ported.\n", file, line, func);
     if (!in_assert_not_ported) {
         in_assert_not_ported = true;
@@ -154,7 +156,6 @@ typedef struct {
     fragment_t *syscall_entry_frag;
 } os_thread_data_t;
 
-
 #define IDT_ALIGNMENT (proc_get_cache_line_size())
 
 #define IDT_SIZE \
@@ -175,7 +176,6 @@ static tls_offset_t tls_local_state_offset;
 static tls_offset_t tls_self_offset;
 static tls_offset_t tls_dcontext_offset;
 
-
 void
 os_modules_init(void)
 {
@@ -187,9 +187,8 @@ os_modules_exit(void)
 }
 
 void
-os_module_area_init(module_area_t *ma, app_pc base, size_t view_size,
-                    bool at_map, const char *filepath, uint64 inode
-                    HEAPACCT(which_heap_t which))
+os_module_area_init(module_area_t *ma, app_pc base, size_t view_size, bool at_map,
+                    const char *filepath, uint64 inode HEAPACCT(which_heap_t which))
 {
     ASSERT_NOT_PORTED(false);
 }
@@ -221,8 +220,8 @@ get_proc_address(module_handle_t lib, const char *name)
 }
 
 bool
-get_named_section_bounds(app_pc module_base, const char *name,
-                         app_pc *start/*OUT*/, app_pc *end/*OUT*/)
+get_named_section_bounds(app_pc module_base, const char *name, app_pc *start /*OUT*/,
+                         app_pc *end /*OUT*/)
 {
     ASSERT_NOT_PORTED(false);
     return true;
@@ -251,18 +250,16 @@ is_range_in_code_section(app_pc module_base, app_pc start_pc, app_pc end_pc,
 }
 
 bool
-os_get_module_info(const app_pc pc, uint *checksum, uint *timestamp,
-                   size_t *size, const char **name, size_t *code_size,
-                   uint64 *file_version)
+os_get_module_info(const app_pc pc, uint *checksum, uint *timestamp, size_t *size,
+                   const char **name, size_t *code_size, uint64 *file_version)
 {
     ASSERT_NOT_PORTED(false);
     return true;
 }
 
 bool
-module_get_nth_segment(app_pc module_base, uint n,
-                       app_pc *start/*OPTIONAL OUT*/, app_pc *end/*OPTIONAL OUT*/,
-                       uint *chars/*OPTIONAL OUT*/)
+module_get_nth_segment(app_pc module_base, uint n, app_pc *start /*OPTIONAL OUT*/,
+                       app_pc *end /*OPTIONAL OUT*/, uint *chars /*OPTIONAL OUT*/)
 {
     ASSERT_NOT_PORTED(false);
     return true;
@@ -298,34 +295,33 @@ set_libc_errno(int val)
 static inline os_local_state_t *
 get_tls_self(void)
 {
-    os_local_state_t *self = (os_local_state_t *) get_tls(tls_self_offset);
+    os_local_state_t *self = (os_local_state_t *)get_tls(tls_self_offset);
     ASSERT(self != NULL);
     return self;
 }
 
 byte *
-os_get_tls_base(dcontext_t *dcontext) {
-   return (byte *) get_msr(MSR_GS_BASE);
+os_get_tls_base(dcontext_t *dcontext)
+{
+    return (byte *)get_msr(MSR_GS_BASE);
 }
 
-
-#define WRITE_TLS_SLOT(idx, var)                            \
-    IF_NOT_HAVE_TLS(ASSERT_NOT_REACHED());                  \
-    ASSERT(sizeof(var) == sizeof(void*));                   \
-    asm("mov %0, %%"ASM_XAX : : "m"((var)) : ASM_XAX);      \
-    asm("mov %0, %%"ASM_XDX"" : : "m"((idx)) : ASM_XDX);  \
-    asm("mov %%"ASM_XAX", %"ASM_SEG":(%%"ASM_XDX")" : : : ASM_XAX, ASM_XDX);
+#define WRITE_TLS_SLOT(idx, var)                           \
+    IF_NOT_HAVE_TLS(ASSERT_NOT_REACHED());                 \
+    ASSERT(sizeof(var) == sizeof(void *));                 \
+    asm("mov %0, %%" ASM_XAX : : "m"((var)) : ASM_XAX);    \
+    asm("mov %0, %%" ASM_XDX "" : : "m"((idx)) : ASM_XDX); \
+    asm("mov %%" ASM_XAX ", %" ASM_SEG ":(%%" ASM_XDX ")" : : : ASM_XAX, ASM_XDX);
 
 /* FIXME: get_thread_private_dcontext() is a bottleneck, so it would be
  * good to figure out how to easily change this to use an immediate since it is
  * known at compile time -- see comments above for the _IMM versions
  */
-#define READ_TLS_SLOT(idx, var)                                    \
-    ASSERT(sizeof(var) == sizeof(void*));                          \
-    asm("mov %0, %%"ASM_XAX : : "m"((idx)) : ASM_XAX);           \
-    asm("mov %"ASM_SEG":(%%"ASM_XAX"), %%"ASM_XAX : : : ASM_XAX);  \
-    asm("mov %%"ASM_XAX", %0" : "=m"((var)) : : ASM_XAX);
-
+#define READ_TLS_SLOT(idx, var)                                        \
+    ASSERT(sizeof(var) == sizeof(void *));                             \
+    asm("mov %0, %%" ASM_XAX : : "m"((idx)) : ASM_XAX);                \
+    asm("mov %" ASM_SEG ":(%%" ASM_XAX "), %%" ASM_XAX : : : ASM_XAX); \
+    asm("mov %%" ASM_XAX ", %0" : "=m"((var)) : : ASM_XAX);
 
 void
 os_init(void)
@@ -345,7 +341,7 @@ os_init(void)
     kernel_init_cpu_private_data(&tls_size, &tls_gs_offset);
     ASSERT(tls_size >= sizeof(os_local_state_t));
     ASSERT_TRUNCATE(tls_first_offset, tls_offset_t, tls_gs_offset);
-    tls_first_offset = (tls_offset_t) tls_gs_offset;
+    tls_first_offset = (tls_offset_t)tls_gs_offset;
     /* Check for wrapping. */
     ASSERT(tls_first_offset + sizeof(os_local_state_t) > tls_first_offset);
     tls_local_state_offset = tls_first_offset + offsetof(os_local_state_t, state);
@@ -354,7 +350,7 @@ os_init(void)
         tls_first_offset + offsetof(os_local_state_t, state) + TLS_DCONTEXT_SLOT;
 
     for (i = 0; i < kernel_get_present_processor_count(); i++) {
-        os_local_state_t* os_tls = kernel_get_cpu_private_data(i);
+        os_local_state_t *os_tls = kernel_get_cpu_private_data(i);
         memset(os_tls, 0, sizeof(os_local_state_t));
         os_tls->self = os_tls;
         ASSERT(i != INVALID_THREAD_ID);
@@ -366,7 +362,7 @@ void *
 get_tls(tls_offset_t tls_offs)
 {
     void *val;
-    reg_t idx = (reg_t) tls_offs;
+    reg_t idx = (reg_t)tls_offs;
     READ_TLS_SLOT(idx, val);
     return val;
 }
@@ -374,7 +370,7 @@ get_tls(tls_offset_t tls_offs)
 void
 set_tls(tls_offset_t tls_offs, void *value)
 {
-    reg_t idx = (reg_t) tls_offs;
+    reg_t idx = (reg_t)tls_offs;
     WRITE_TLS_SLOT(idx, value);
 }
 
@@ -382,10 +378,10 @@ tls_offset_t
 os_tls_offset(tls_offset_t tls_offs)
 {
     ASSERT_TRUNCATE(tls_offs, tls_offset_t, tls_local_state_offset + tls_offs);
-    return (tls_offset_t) (tls_local_state_offset + tls_offs);
+    return (tls_offset_t)(tls_local_state_offset + tls_offs);
 }
 
-char*
+char *
 get_application_pid()
 {
     return "linux_kernel_pid";
@@ -409,13 +405,13 @@ get_timer_frequency()
     /* TODO(peter): Get a real number from the kernel. */
     ulong cpu_mhz = 1000;
     ulong cpu_khz = 0;
-    return cpu_mhz*1000 + cpu_khz;
+    return cpu_mhz * 1000 + cpu_khz;
 }
 
 uint
 query_time_seconds(void)
 {
-    return (uint) (query_time_millis() / 1000);
+    return (uint)(query_time_millis() / 1000);
 }
 
 uint64
@@ -424,7 +420,7 @@ query_time_millis()
     uint64 time;
     RDTSC_LL(time);
     time /= get_timer_frequency();
-    return (uint) time;
+    return (uint)time;
 }
 
 void
@@ -448,11 +444,10 @@ os_terminate(dcontext_t *dcontext, terminate_flags_t flags)
         set_fcache_target(dcontext, dcontext->next_tag);
         (*go_native)(dcontext);
     }
-    *((int*) 0xfffffffffffffbad) = 0;
-
+    *((int *)0xfffffffffffffbad) = 0;
 }
 
-int 
+int
 os_timeout(int time_in_milliseconds)
 {
     ASSERT_NOT_PORTED(false);
@@ -463,27 +458,26 @@ byte *
 get_segment_base(uint seg)
 {
     switch (seg) {
-    case SEG_FS:
-        return (byte*) get_msr(MSR_FS_BASE);
-    case SEG_GS:
-        return (byte*) get_msr(MSR_GS_BASE);
+    case SEG_FS: return (byte *)get_msr(MSR_FS_BASE);
+    case SEG_GS: return (byte *)get_msr(MSR_GS_BASE);
     default:
         /* On X86_64, all other segments have 0 base address (i.e., the
-        * segment selectors are ignored.)
-        */
+         * segment selectors are ignored.)
+         */
         return NULL;
     }
 }
 
 local_state_extended_t *
-get_local_state_extended() {
-    return (local_state_extended_t*) &get_tls_self()->state;
+get_local_state_extended()
+{
+    return (local_state_extended_t *)&get_tls_self()->state;
 }
 
 local_state_t *
 get_local_state()
 {
-    return (local_state_t*) get_local_state_extended();
+    return (local_state_t *)get_local_state_extended();
 }
 
 void
@@ -514,7 +508,7 @@ os_tls_cfree(uint offset, uint num_slots)
 
 /* TODO(peter): Move this to arch. */
 static void
-get_interrupted_context(interrupt_context_t *interrupt, dr_mcontext_t  *out)
+get_interrupted_context(interrupt_context_t *interrupt, dr_mcontext_t *out)
 {
     copy_mcontext(interrupt->mcontext, out);
     out->xip = interrupt->frame.xip;
@@ -542,11 +536,11 @@ emulate_interrupt_arrival(dr_mcontext_t *mcontext, interrupt_vector_t vector,
 {
     interrupt_stack_frame_t *frame;
     reg_t xsp = mcontext->xsp;
-    mcontext->xsp = ALIGN_BACKWARD(mcontext->xsp - sizeof(*frame),
-                                   INTERRUPT_STACK_FRAME_ALIGNMENT);
-    frame = (interrupt_stack_frame_t *) mcontext->xsp;
+    mcontext->xsp =
+        ALIGN_BACKWARD(mcontext->xsp - sizeof(*frame), INTERRUPT_STACK_FRAME_ALIGNMENT);
+    frame = (interrupt_stack_frame_t *)mcontext->xsp;
     ASSERT(mcontext->xsp <= xsp - sizeof(*frame));
-    ASSERT(ALIGNED(mcontext->xsp,  INTERRUPT_STACK_FRAME_ALIGNMENT));
+    ASSERT(ALIGNED(mcontext->xsp, INTERRUPT_STACK_FRAME_ALIGNMENT));
 
     if (!vector_has_error_code(vector)) {
         mcontext->xsp += sizeof(error_code);
@@ -575,16 +569,16 @@ emulate_interrupt_arrival(dr_mcontext_t *mcontext, interrupt_vector_t vector,
      * User interrupts are handled by transferring to dispatch directly (see
      * handle_user_interrupt). */
     ASSERT(is_kernel_code(frame->xip));
-    ASSERT(!is_user_address((byte*) frame->xsp));
+    ASSERT(!is_user_address((byte *)frame->xsp));
     /* Interrupts should always be handled on a kernel stack. */
-    ASSERT(!is_user_address((byte*) mcontext->xsp));
-    ASSERT(!is_dynamo_address((byte*) mcontext->xsp));
+    ASSERT(!is_user_address((byte *)mcontext->xsp));
+    ASSERT(!is_dynamo_address((byte *)mcontext->xsp));
 }
 
 static void
 handle_user_interrupt(dcontext_t *dcontext, interrupt_context_t *interrupt)
 {
-    os_thread_data_t *ostd = (os_thread_data_t *) dcontext->os_field;
+    os_thread_data_t *ostd = (os_thread_data_t *)dcontext->os_field;
     STATS_INC(num_user_interrupts);
     if (!DYNAMO_OPTION(optimize_sys_call_ret)) {
         ASSERT(dcontext->whereami == WHERE_USERMODE);
@@ -595,8 +589,7 @@ handle_user_interrupt(dcontext_t *dcontext, interrupt_context_t *interrupt)
     ASSERT(TEST(EFLAGS_IF, interrupt->frame.xflags));
     /* Guaranteed by 64-bit x86 architecture. */
     ASSERT(get_ss() == 0);
-    interrupt->mcontext->pc =
-        ostd->native_state.vector_target[interrupt->vector];
+    interrupt->mcontext->pc = ostd->native_state.vector_target[interrupt->vector];
     dcontext->next_tag = interrupt->mcontext->pc;
     ASSERT(!is_dynamo_address(dcontext->next_tag));
     ASSERT(is_kernel_code(dcontext->next_tag));
@@ -604,7 +597,7 @@ handle_user_interrupt(dcontext_t *dcontext, interrupt_context_t *interrupt)
      * about to transfer to dispatch using interrupt->mcontext, we have to undo
      * that push. In the kernel interrupt path, we ignore
      * interrupt->mcontext->rsp.
-     * 
+     *
      * This could be avoided by having specialized code for error
      * and non-error vector entires. Indeed, this is how we used to do it (see
      * r334 of the kinst repository). We abandoned the specialization because it
@@ -614,7 +607,7 @@ handle_user_interrupt(dcontext_t *dcontext, interrupt_context_t *interrupt)
     if (!vector_has_error_code(interrupt->vector)) {
         interrupt->mcontext->rsp += sizeof(interrupt->frame.error_code);
     }
-    set_last_exit(dcontext, (linkstub_t*) get_user_interrupt_entry_linkstub());
+    set_last_exit(dcontext, (linkstub_t *)get_user_interrupt_entry_linkstub());
     transfer_to_dispatch(dcontext, 0 /* errno */, interrupt->mcontext);
     ASSERT_NOT_REACHED();
 }
@@ -623,10 +616,10 @@ handle_user_interrupt(dcontext_t *dcontext, interrupt_context_t *interrupt)
  * exceptions in kernel code that DR calls (unless it's an NMI or SMI, in which
  * case we're screwed anyways), so we don't try to identify it.
  */
-static interrupted_location_t 
+static interrupted_location_t
 get_interrupted_location(dcontext_t *dcontext, interrupt_stack_frame_t *frame)
 {
-    cache_pc pc = (cache_pc) frame->xip;
+    cache_pc pc = (cache_pc)frame->xip;
     /* Most interrupts will happen here. */
     if (!was_kernel_interrupted(frame)) {
         if (!DYNAMO_OPTION(optimize_sys_call_ret)) {
@@ -640,7 +633,7 @@ get_interrupted_location(dcontext_t *dcontext, interrupt_stack_frame_t *frame)
     if (dcontext->whereami == WHERE_FCACHE) {
         if (in_generated_routine(dcontext, pc)) {
             return INTERRUPTED_GENCODE;
-        } else if (!is_on_dstack(dcontext, (byte*) frame->xsp)) {
+        } else if (!is_on_dstack(dcontext, (byte *)frame->xsp)) {
             /* We aren't on the dstack, so no locks should be held (if we're in
              * kernel entry gencode, then interrupts are disabled and we
              * shouldn't trigger exceptions). Hence it's safe to call in_fcache.
@@ -648,7 +641,7 @@ get_interrupted_location(dcontext_t *dcontext, interrupt_stack_frame_t *frame)
 #ifdef CLIENT_INTERFACE
             if (in_fcache(pc)) {
 #else
-                ASSERT(in_fcache(pc));
+            ASSERT(in_fcache(pc));
 #endif
                 return INTERRUPTED_FRAGMENT;
 #ifdef CLIENT_INTERFACE
@@ -688,7 +681,7 @@ get_interrupted_location(dcontext_t *dcontext, interrupt_stack_frame_t *frame)
                  * we're in the dispatcher and we can't handle exceptions
                  * generated by kernel code, so this situation should never
                  * arise (unless it's an NMI or SMI, in which case we're screwed
-                 * anyways). 
+                 * anyways).
                  */
                 if (in_fcache(pc)) {
                     return INTERRUPTED_FRAGMENT;
@@ -698,7 +691,7 @@ get_interrupted_location(dcontext_t *dcontext, interrupt_stack_frame_t *frame)
                 }
             }
         }
-    } else { 
+    } else {
         /* Whenever whereami != WHERE_FCACHE, we should be on the dstack. */
         ASSERT(is_on_dstack(dcontext, (byte *)frame->xsp));
         if (in_generated_routine(dcontext, pc)) {
@@ -707,8 +700,8 @@ get_interrupted_location(dcontext_t *dcontext, interrupt_stack_frame_t *frame)
              * routines should not generate exceptions and they run with
              * interrupts disabled.
              */
-             ASSERT_NOT_REACHED();
-             return INTERRUPTED_GENCODE;
+            ASSERT_NOT_REACHED();
+            return INTERRUPTED_GENCODE;
 #ifdef CLIENT_INTERFACE
         } else if (is_in_client_lib(pc)) {
             return INTERRUPTED_CLIENT_LIB;
@@ -719,7 +712,7 @@ get_interrupted_location(dcontext_t *dcontext, interrupt_stack_frame_t *frame)
              * handle the kernel's exceptions.
              */
             ASSERT(is_in_dynamo_dll(pc));
-            return INTERRUPTED_DYNAMORIO; 
+            return INTERRUPTED_DYNAMORIO;
         }
     }
 }
@@ -727,14 +720,14 @@ get_interrupted_location(dcontext_t *dcontext, interrupt_stack_frame_t *frame)
 bool
 has_pending_interrupt(dcontext_t *dcontext)
 {
-    os_thread_data_t *ostd = (os_thread_data_t *) dcontext->os_field;
+    os_thread_data_t *ostd = (os_thread_data_t *)dcontext->os_field;
     return ostd->pending_interrupt;
 }
 
 /* Returns false iff the fragment isn't unlinked. This happens if the fragment
  * is already unlinked (e.g., for trace creation).
  */
-static bool 
+static bool
 unlink_interrupted_fragment(dcontext_t *dcontext, fragment_t *f)
 {
     /* N.B., According to unlink_fragment_for_signal in linux/signal.c, there
@@ -770,7 +763,10 @@ unpatch_fragments(dcontext_t *dcontext, os_thread_data_t *ostd)
     ostd->pending_interrupt = false;
 }
 
-static void second_patch(void) {}
+static void
+second_patch(void)
+{
+}
 
 static bool
 is_patch_interrupt(os_thread_data_t *ostd, interrupt_context_t *interrupt)
@@ -799,17 +795,16 @@ patch_fragment(dcontext_t *dcontext, os_thread_data_t *ostd, byte *patch_pc,
     STATS_INC(num_fragment_interrupt_patches);
     ASSERT(ostd->num_patches <= MAX_NUM_PATCHES);
     ostd->patch_pc[patch_index] = patch_pc;
-    patch_interrupt(dcontext, patch_pc, vector,
-                    ostd->patch_buffer[patch_index]);
+    patch_interrupt(dcontext, patch_pc, vector, ostd->patch_buffer[patch_index]);
 }
 
 void
 receive_pending_interrupt(dcontext_t *dcontext)
 {
-    os_thread_data_t *ostd = (os_thread_data_t *) dcontext->os_field;
+    os_thread_data_t *ostd = (os_thread_data_t *)dcontext->os_field;
     ASSERT(ostd->pending_interrupt);
     ostd->pending_interrupt = false;
-    
+
     /* We used to check for this in handle_kernel_interrupt. This was
      * problematic because some fcache exit processing needed to know if a trace
      * was being built (e.g., in fragment_add_ibl_target when the IBL target is
@@ -834,29 +829,26 @@ receive_pending_interrupt(dcontext_t *dcontext)
     } else {
         get_mcontext(dcontext)->xip = dcontext->next_tag;
     }
-    dcontext->next_tag =
-        ostd->native_state.vector_target[ostd->interrupt_vector];
+    dcontext->next_tag = ostd->native_state.vector_target[ostd->interrupt_vector];
     /* receive_pending_interrupt should only be called from the dispatcher, so
      * it's okay to call is_dynamo_address. If we were called from elsewehere,
      * then is_dynamo_address could deadlock. */
     ASSERT(!is_dynamo_address(get_mcontext(dcontext)->xip));
     ASSERT(is_kernel_code(get_mcontext(dcontext)->xip));
-    ASSERT(!is_dynamo_address((byte *) get_mcontext(dcontext)->xsp));
+    ASSERT(!is_dynamo_address((byte *)get_mcontext(dcontext)->xsp));
 
     unpatch_fragments(dcontext, ostd);
 
     emulate_interrupt_arrival(get_mcontext(dcontext), ostd->interrupt_vector,
-                              dcontext->next_tag,
-                              ostd->interrupt_error_code,
-                              ostd->interrupt_system_xflags,
-                              ostd->interrupt_frame_if);
+                              dcontext->next_tag, ostd->interrupt_error_code,
+                              ostd->interrupt_system_xflags, ostd->interrupt_frame_if);
 }
 
-static void 
+static void
 record_pending_interrupt(dcontext_t *dcontext, interrupt_context_t *interrupt,
                          dr_mcontext_t *interrupted_mcontext, bool modify_if)
 {
-    os_thread_data_t *ostd = (os_thread_data_t *) dcontext->os_field;
+    os_thread_data_t *ostd = (os_thread_data_t *)dcontext->os_field;
     ostd->pending_interrupt = true;
     if (interrupted_mcontext) {
         ostd->use_interrupted_mcontext = true;
@@ -892,17 +884,16 @@ handle_fragment_interrupt(dcontext_t *dcontext, interrupt_context_t *interrupt)
     fragment_t wrapper;
     recreate_success_t res;
     bool waslinking = is_couldbelinking(dcontext);
-    os_thread_data_t *ostd = (os_thread_data_t *) dcontext->os_field;
+    os_thread_data_t *ostd = (os_thread_data_t *)dcontext->os_field;
     /* Patches are all undone in handle_interrupt. */
     ASSERT(ostd->num_patches == 0);
 
     get_interrupted_context(interrupt, &mcontext);
 
 #ifdef DEBUG
-    ostd->interrupted_fragment = fragment_pclookup(dcontext, mcontext.pc,
-                                                   &wrapper);
+    ostd->interrupted_fragment = fragment_pclookup(dcontext, mcontext.pc, &wrapper);
 #endif
-    
+
     KSTART(recreate_app_state_frag_intr);
     if (!waslinking)
         enter_couldbelinking(dcontext, NULL, false);
@@ -920,12 +911,11 @@ handle_fragment_interrupt(dcontext_t *dcontext, interrupt_context_t *interrupt)
         }
         ASSERT(!is_dynamo_address(mcontext.pc));
         ASSERT(is_kernel_code(mcontext.pc));
-        ASSERT(!is_user_address((byte*) mcontext.xsp));
+        ASSERT(!is_user_address((byte *)mcontext.xsp));
 
         record_pending_interrupt(dcontext, interrupt, NULL, false);
         dcontext->next_tag = mcontext.xip;
-        set_last_exit(dcontext,
-                      (linkstub_t *) get_kernel_interrupt_entry_linkstub());
+        set_last_exit(dcontext, (linkstub_t *)get_kernel_interrupt_entry_linkstub());
         STATS_INC(num_ndelayed_frag_intr);
         transfer_to_dispatch(dcontext, 0, &mcontext);
     } else if (res == RECREATE_DELAY_UNTIL_DISPATCH) {
@@ -936,8 +926,7 @@ handle_fragment_interrupt(dcontext_t *dcontext, interrupt_context_t *interrupt)
          * should be modified to not delay exceptions at those points.
          */
         ASSERT(!vector_is_synchronous(interrupt->vector));
-        ostd->interrupted_fragment = fragment_pclookup(dcontext, mcontext.pc,
-                                                       &wrapper);
+        ostd->interrupted_fragment = fragment_pclookup(dcontext, mcontext.pc, &wrapper);
         ASSERT(ostd->interrupted_fragment != NULL);
         ostd->need_to_link_interrupted_fragment =
             unlink_interrupted_fragment(dcontext, ostd->interrupted_fragment);
@@ -959,9 +948,8 @@ handle_fragment_interrupt(dcontext_t *dcontext, interrupt_context_t *interrupt)
          * saved eflags.IF so interrupts aren't enabled before we run the
          * patched intN instruction. If eflags hasn't been pushed on the dstack
          * yet, then we're just overwriting dead data. */
-        if (is_on_dstack(dcontext, (byte*) interrupt->frame.xsp)) {
-            clean_call_clear_saved_interrupt_flag(dcontext,
-                                                  (byte*) interrupt->frame.xsp);
+        if (is_on_dstack(dcontext, (byte *)interrupt->frame.xsp)) {
+            clean_call_clear_saved_interrupt_flag(dcontext, (byte *)interrupt->frame.xsp);
         }
         /* If a clean callee calls dr_redirect_execution, then we won't execute
          * the patched intN instruction. So we record the interrupt.
@@ -972,7 +960,7 @@ handle_fragment_interrupt(dcontext_t *dcontext, interrupt_context_t *interrupt)
         /* TODO(peter): Handle the failures:
          *  in some meta instructions - patching the next non-meta
          *  in a prefix - patching the next non-meta (for now, we disable
-                          prefixes) 
+                          prefixes)
          *  in an inlined IBL lookup - ?? I believe that this is handled by
          *                             unlinking the fragment ??
          *                             -> not a problem because inlined IBL
@@ -985,7 +973,7 @@ handle_fragment_interrupt(dcontext_t *dcontext, interrupt_context_t *interrupt)
 static void
 handle_ibl_interrupt(dcontext_t *dcontext, interrupt_context_t *interrupt)
 {
-    os_thread_data_t *ostd = (os_thread_data_t *) dcontext->os_field;
+    os_thread_data_t *ostd = (os_thread_data_t *)dcontext->os_field;
     KSWITCH(kernel_interrupt_ibl);
     /* Note that fragment unlinking handles inlined IBL heads. See comment above
      * unlink_indirect_exit. */
@@ -996,15 +984,12 @@ handle_ibl_interrupt(dcontext_t *dcontext, interrupt_context_t *interrupt)
     STATS_INC(num_ibl_interrupts);
 }
 
-
 static void
-handle_fcache_enter_interrupt(dcontext_t *dcontext,
-                              interrupt_context_t *interrupt)
+handle_fcache_enter_interrupt(dcontext_t *dcontext, interrupt_context_t *interrupt)
 {
     record_pending_interrupt(dcontext, interrupt, NULL, true);
     KSWITCH(kernel_interrupt_fcache_enter);
-    set_last_exit(dcontext,
-                  (linkstub_t*) get_kernel_interrupt_entry_linkstub());
+    set_last_exit(dcontext, (linkstub_t *)get_kernel_interrupt_entry_linkstub());
     /* Even if we're on the dstack, switching stacks shouldn't be problematic
      * because we don't use any data on the present stack after we switch
      * stacks. If we're on the dstack, we don't want to call dispatch directly
@@ -1019,8 +1004,7 @@ handle_fcache_enter_interrupt(dcontext_t *dcontext,
 }
 
 static void
-handle_fcache_return_interrupt(dcontext_t *dcontext,
-                               interrupt_context_t *interrupt)
+handle_fcache_return_interrupt(dcontext_t *dcontext, interrupt_context_t *interrupt)
 {
     STATS_INC(num_fcache_return_interrupts);
     KSWITCH(kernel_interrupt_fcache_return);
@@ -1028,7 +1012,7 @@ handle_fcache_return_interrupt(dcontext_t *dcontext,
     /* Before fcache_return disables interrupts, xax always holds the linkstub
      * ptr. Only after fcache_return disables interrupts, xax is written to
      * dcontext->last_exit. So we could set a linkstub here:
-     * 
+     *
      * interrupt->mcontext->xax = (reg_t) get_kernel_interrupt_entry_linkstub();
      *
      * Doing this would give us better statistics (i.e., the time spent handling
@@ -1038,7 +1022,6 @@ handle_fcache_return_interrupt(dcontext_t *dcontext,
      */
 }
 
-
 static void
 handle_kernel_interrupt(dcontext_t *dcontext, interrupt_context_t *interrupt)
 {
@@ -1046,7 +1029,7 @@ handle_kernel_interrupt(dcontext_t *dcontext, interrupt_context_t *interrupt)
 #ifdef STACK_GUARD_PAGE
     if (interrupt->vector == VECTOR_PAGE_FAULT &&
         is_stack_overflow(dcontext, (byte *)get_cr2())) {
-        SYSLOG_INTERNAL_CRITICAL(PRODUCT_NAME" stack overflow at pc "PFX,
+        SYSLOG_INTERNAL_CRITICAL(PRODUCT_NAME " stack overflow at pc " PFX,
                                  interrupt->frame.xip);
         /* options are already synchronized by the SYSLOG */
         if (TEST(DUMPCORE_INTERNAL_EXCEPTION, dynamo_options.dumpcore_mask))
@@ -1058,9 +1041,7 @@ handle_kernel_interrupt(dcontext_t *dcontext, interrupt_context_t *interrupt)
     ASSERT(interrupt->frame.cs == get_cs());
 
     switch (interrupt->location) {
-    case INTERRUPTED_FRAGMENT:
-        handle_fragment_interrupt(dcontext, interrupt);
-        break;
+    case INTERRUPTED_FRAGMENT: handle_fragment_interrupt(dcontext, interrupt); break;
     case INTERRUPTED_GENCODE:
         ASSERT(!vector_is_synchronous(interrupt->vector));
         if (in_indirect_branch_lookup_code(dcontext, interrupt->frame.xip)) {
@@ -1082,7 +1063,7 @@ handle_kernel_interrupt(dcontext_t *dcontext, interrupt_context_t *interrupt)
         }
         break;
     case INTERRUPTED_DYNAMORIO:
-        /* We don't expect interrupts in DR because we run with IF = 0. 
+        /* We don't expect interrupts in DR because we run with IF = 0.
          * TODO(peter): implement TRY/EXCEPT. */
         ASSERT_NOT_REACHED();
         os_terminate(dcontext, TERMINATE_PROCESS);
@@ -1097,13 +1078,13 @@ handle_kernel_interrupt(dcontext_t *dcontext, interrupt_context_t *interrupt)
         os_terminate(dcontext, TERMINATE_PROCESS);
         break;
 #endif
-    default:
-        os_terminate(dcontext, TERMINATE_PROCESS);
+    default: os_terminate(dcontext, TERMINATE_PROCESS);
     }
 }
 
 static void
-nmi_handler(void) {
+nmi_handler(void)
+{
 }
 
 #ifdef CLIENT_INTERFACE
@@ -1122,7 +1103,7 @@ send_interrupt_to_client(dcontext_t *dcontext, interrupt_context_t *interrupt)
 #endif
 
 static void
-handle_interrupt(interrupt_stack_frame_t* frame, dr_mcontext_t* mcontext,
+handle_interrupt(interrupt_stack_frame_t *frame, dr_mcontext_t *mcontext,
                  interrupt_vector_t vector)
 {
     dcontext_t *dcontext;
@@ -1144,22 +1125,20 @@ handle_interrupt(interrupt_stack_frame_t* frame, dr_mcontext_t* mcontext,
     } else {
         ASSERT(frame->error_code == MAGIC_FAKE_ERROR);
     }
-    ASSERT(mcontext->rsp == (reg_t) &frame->error_code);
-    ASSERT(mcontext->rsp - 2 * sizeof(reg_t) == (reg_t) &mcontext->pc);
-    ASSERT(ALIGNED(mcontext->rsp,  INTERRUPT_STACK_FRAME_ALIGNMENT));
+    ASSERT(mcontext->rsp == (reg_t)&frame->error_code);
+    ASSERT(mcontext->rsp - 2 * sizeof(reg_t) == (reg_t)&mcontext->pc);
+    ASSERT(ALIGNED(mcontext->rsp, INTERRUPT_STACK_FRAME_ALIGNMENT));
 #endif
 
     dcontext = get_thread_private_dcontext();
     ASSERT(dcontext != NULL);
-    ostd = (os_thread_data_t *) dcontext->os_field;
+    ostd = (os_thread_data_t *)dcontext->os_field;
     ASSERT(ostd != NULL);
-
 
     ENTERING_DR();
     local = local_heap_protected(dcontext);
     if (local)
         SELF_PROTECT_LOCAL(dcontext, WRITABLE);
-
 
 #ifdef DEBUG
     /* Make copies of interrupt state for debugging. */
@@ -1168,8 +1147,8 @@ handle_interrupt(interrupt_stack_frame_t* frame, dr_mcontext_t* mcontext,
 #endif
 
     LOG(THREAD, LOG_ASYNCH, 2,
-        "Interrupt: vector = %d, xip = %p, xsp = %p, location = %d\n",
-        vector, frame->xip, frame->xsp, interrupt.location);
+        "Interrupt: vector = %d, xip = %p, xsp = %p, location = %d\n", vector, frame->xip,
+        frame->xsp, interrupt.location);
 
     interrupt.mcontext = mcontext;
     interrupt.frame = *frame;
@@ -1185,11 +1164,11 @@ handle_interrupt(interrupt_stack_frame_t* frame, dr_mcontext_t* mcontext,
     }
 
 #ifdef CLIENT_INTERFACE
-    if (send_interrupt_to_client(dcontext, &interrupt))  {
+    if (send_interrupt_to_client(dcontext, &interrupt)) {
 #endif
 #ifdef DEBUG
         DOKSTATS({
-            kstat_stack_t *ks = &dcontext->thread_kstats->stack_kstats; 
+            kstat_stack_t *ks = &dcontext->thread_kstats->stack_kstats;
             kstat_variable_t *var = ks->node[ks->depth - 1].var;
             kstat_variables_t *vars = &dcontext->thread_kstats->vars_kstats;
             /* Have to be in fcache (fcache_default or fcache_trace_trace) or in
@@ -1202,8 +1181,7 @@ handle_interrupt(interrupt_stack_frame_t* frame, dr_mcontext_t* mcontext,
              * exceptions that DR causes can still fire.
              */
             ASSERT(var == &vars->delaying_patched_interrupt ||
-                   var == &vars->fcache_default ||
-                   var == &vars->fcache_trace_trace ||
+                   var == &vars->fcache_default || var == &vars->fcache_trace_trace ||
                    var == &vars->usermode);
         });
 #endif
@@ -1214,14 +1192,13 @@ handle_interrupt(interrupt_stack_frame_t* frame, dr_mcontext_t* mcontext,
         KSTART(kernel_interrupt_handling);
 
         ASSERT(!has_pending_interrupt(dcontext));
-        interrupt.location = get_interrupted_location(dcontext,
-                                                      &interrupt.frame);
-    
+        interrupt.location = get_interrupted_location(dcontext, &interrupt.frame);
+
 #if 0
         ASSERT(ostd->num_patches == 0 ||
                interrupt.location == INTERRUPTED_FRAGMENT);
 #endif
-    
+
         if (interrupt.location == INTERRUPTED_USER) {
             KSWITCH(user_interrupt_handling);
             handle_user_interrupt(dcontext, &interrupt);
@@ -1252,20 +1229,19 @@ os_get_interrupt_handler(interrupt_vector_t vector)
 static void
 optimize_syscall_entry(dcontext_t *dcontext)
 {
-    os_thread_data_t *ostd = (os_thread_data_t *) dcontext->os_field;
+    os_thread_data_t *ostd = (os_thread_data_t *)dcontext->os_field;
     fragment_t *f;
-    f = build_basic_block_fragment(dcontext,
-                                   (byte*) ostd->native_state.msr_lstar,
-                                   FRAG_CANNOT_DELETE, true, true
-                                   _IF_CLIENT(false) _IF_CLIENT(NULL));
+    f = build_basic_block_fragment(dcontext, (byte *)ostd->native_state.msr_lstar,
+                                   FRAG_CANNOT_DELETE, true,
+                                   true _IF_CLIENT(false) _IF_CLIENT(NULL));
     ostd->syscall_entry_frag = f;
     optimize_syscall_code(dcontext, f);
 }
 
-
 void
-os_fragment_thread_reset_free(dcontext_t *dcontext) {
-    os_thread_data_t *ostd = (os_thread_data_t *) dcontext->os_field;
+os_fragment_thread_reset_free(dcontext_t *dcontext)
+{
+    os_thread_data_t *ostd = (os_thread_data_t *)dcontext->os_field;
     /* TODO(peter): What happens when there's a reset init? We had better change
      * os_warm_fcache to be called fragment_thread_reset_init or some such.
      */
@@ -1279,7 +1255,8 @@ os_fragment_thread_reset_free(dcontext_t *dcontext) {
 }
 
 void
-os_warm_fcache(dcontext_t *dcontext) {
+os_warm_fcache(dcontext_t *dcontext)
+{
     /* TODO(peter): We want to warm this with the syscall and vector entry
      * points and patch those routines to jump directly into the cache where
      * possible.
@@ -1288,7 +1265,6 @@ os_warm_fcache(dcontext_t *dcontext) {
         optimize_syscall_entry(dcontext);
         return;
     }
-    
 }
 
 static bool
@@ -1306,17 +1282,15 @@ is_within_segment(byte *base, uint64 limit, byte *addr, uint64 size)
     ASSERT(addr >= base);
 
     /* Last valid byte in segment is (base + limit + 1). */
-    return addr + size <= base + limit + 1; 
+    return addr + size <= base + limit + 1;
 }
-
 
 static void
 assert_no_gates(dcontext_t *dcontext, descriptor_t *table, uint64 limit)
 {
     descriptor_t *curr = table;
     for (;;) {
-        if (!is_within_segment((byte *)table, limit, (byte *)curr,
-                               sizeof(*curr))) {
+        if (!is_within_segment((byte *)table, limit, (byte *)curr, sizeof(*curr))) {
             break;
         }
         ASSERT(get_descriptor_kind(curr) != GATE_DESCRIPTOR);
@@ -1346,20 +1320,19 @@ handle_lldt(dcontext_t *dcontext, segment_selector_t *ldt_selector)
      * - LLDT]. Namely, #PF, #SS, #UD, and #GP for canonical addressing. */
     ASSERT(ldt_selector->table_indicator == TABLE_INDICATOR_GDT);
     get_gdtr(&gdtr);
-    ASSERT(is_within_segment((byte*) gdtr.base, gdtr.limit,
-                             (byte*) &gdtr.base[ldt_selector->index],
-                             sizeof(*ldt_desc)));
+    ASSERT(is_within_segment((byte *)gdtr.base, gdtr.limit,
+                             (byte *)&gdtr.base[ldt_selector->index], sizeof(*ldt_desc)));
     ldt_desc = &gdtr.base[ldt_selector->index];
     ASSERT(ldt_desc->generic.present);
     ASSERT(get_descriptor_kind(ldt_desc) == SYSTEM_SEGMENT_DESCRIPTOR);
     ASSERT(ldt_desc->segment.system_type == SYSTEM_TYPE_LDT);
 
-    get_segment((descriptor_t*) ldt_desc, &ldt_seg);
+    get_segment((descriptor_t *)ldt_desc, &ldt_seg);
 
     /* TODO(peter): We should intercept call gates. For now we just assert that
      * they don't exist.
      */
-    assert_no_gates(dcontext, (descriptor_t*) ldt_seg.base, ldt_seg.limit);
+    assert_no_gates(dcontext, (descriptor_t *)ldt_seg.base, ldt_seg.limit);
 }
 
 static void
@@ -1371,9 +1344,9 @@ handle_lgdt(dcontext_t *dcontext, system_table_register_t *gdtr)
     assert_no_gates(dcontext, gdtr->base, gdtr->limit);
 }
 
-
 static void
-hijack_call_gates(dcontext_t *dcontext) {
+hijack_call_gates(dcontext_t *dcontext)
+{
     system_table_register_t gdtr;
     segment_selector_t ldt_selector;
     get_gdtr(&gdtr);
@@ -1391,7 +1364,7 @@ static void
 handle_lidt(dcontext_t *dcontext, system_table_register_t *idtr)
 {
     interrupt_vector_t vector;
-    os_thread_data_t *ostd = (os_thread_data_t *) dcontext->os_field;
+    os_thread_data_t *ostd = (os_thread_data_t *)dcontext->os_field;
     system_table_register_t new_idtr;
 
     /* TODO(peter): Support an IDT with fewer than VECTOR_END entires. x86
@@ -1410,13 +1383,13 @@ handle_lidt(dcontext_t *dcontext, system_table_register_t *idtr)
         heap_free(dcontext, ostd->idt, UNALIGNED_IDT_SIZE HEAPACCT(ACCT_OTHER));
     }
     ostd->idt = heap_alloc(dcontext, UNALIGNED_IDT_SIZE HEAPACCT(ACCT_OTHER));
-    new_idtr.base = (descriptor_t *) ALIGN_FORWARD(ostd->idt, IDT_ALIGNMENT);
-    new_idtr.limit = (ushort) (IDT_SIZE - 1);
+    new_idtr.base = (descriptor_t *)ALIGN_FORWARD(ostd->idt, IDT_ALIGNMENT);
+    new_idtr.limit = (ushort)(IDT_SIZE - 1);
 
     for (vector = VECTOR_START; vector < VECTOR_END; vector++) {
         descriptor_t *native = &idtr->base[vector * 2];
         descriptor_t *new = &new_idtr.base[vector * 2];
-        ASSERT(is_system_desciptor(native)); 
+        ASSERT(is_system_desciptor(native));
         ASSERT(get_descriptor_kind(native) == GATE_DESCRIPTOR);
         /* TODO(peter): support trap gates. The only difference is that trap
          * gates do not set IF=0. We need interrupts disabled, so we could
@@ -1425,13 +1398,10 @@ handle_lidt(dcontext_t *dcontext, system_table_register_t *idtr)
          */
         ASSERT(native->gate.system_type == SYSTEM_TYPE_INTERRUPT_GATE);
         ASSERT(native->gate.target_selector.selector == get_cs());
-        ostd->native_state.vector_target[vector] =
-                get_gate_target_offset(&native->gate);
+        ostd->native_state.vector_target[vector] = get_gate_target_offset(&native->gate);
         *new = *native;
-        set_gate_target_offset(&new->gate,
-                               get_vector_entry(dcontext, vector));
-        ASSERT(get_gate_target_offset(&new->gate) ==
-               get_vector_entry(dcontext, vector));
+        set_gate_target_offset(&new->gate, get_vector_entry(dcontext, vector));
+        ASSERT(get_gate_target_offset(&new->gate) == get_vector_entry(dcontext, vector));
     }
 
     ostd->native_state.idtr = *idtr;
@@ -1466,23 +1436,24 @@ static void
 hijack_entry_points(dcontext_t *dcontext)
 {
     /* TODO(peter): We need to hijack sysenter. */
-    set_msr(MSR_LSTAR, (uint64) get_syscall_entry(dcontext));
+    set_msr(MSR_LSTAR, (uint64)get_syscall_entry(dcontext));
     hijack_call_gates(dcontext);
     hijack_vectors(dcontext);
 }
 
 app_pc
-os_get_native_syscall_entry(dcontext_t *dcontext) {
-    os_thread_data_t *ostd = (os_thread_data_t *) dcontext->os_field;
+os_get_native_syscall_entry(dcontext_t *dcontext)
+{
+    os_thread_data_t *ostd = (os_thread_data_t *)dcontext->os_field;
     ASSERT(ostd != NULL);
-    return (app_pc) ostd->native_state.msr_lstar;
+    return (app_pc)ostd->native_state.msr_lstar;
 }
 
 void
 os_thread_init(dcontext_t *dcontext)
 {
-    os_thread_data_t *ostd = (os_thread_data_t *)
-        heap_alloc(dcontext, sizeof(os_thread_data_t) HEAPACCT(ACCT_OTHER));
+    os_thread_data_t *ostd = (os_thread_data_t *)heap_alloc(
+        dcontext, sizeof(os_thread_data_t) HEAPACCT(ACCT_OTHER));
     dcontext->os_field = ostd;
     memset(ostd, 0, sizeof(*ostd));
 
@@ -1498,7 +1469,7 @@ os_thread_after_arch_init(dcontext_t *dcontext)
 void
 os_thread_exit(dcontext_t *dcontext)
 {
-    os_thread_data_t *ostd = (os_thread_data_t *) dcontext->os_field;
+    os_thread_data_t *ostd = (os_thread_data_t *)dcontext->os_field;
 
     /* Restore interrupt handlers. */
     heap_free(dcontext, ostd->idt, UNALIGNED_IDT_SIZE HEAPACCT(ACCT_OTHER));
@@ -1524,7 +1495,8 @@ os_thread_not_under_dynamo(dcontext_t *dcontext)
 }
 
 void
-os_run_on_all_threads(void (*func) (void *info), void *info) {
+os_run_on_all_threads(void (*func)(void *info), void *info)
+{
     kernel_run_on_all_cpus(func, info);
 }
 
@@ -1541,13 +1513,13 @@ get_parent_id(void)
     return 0;
 }
 
-thread_id_t 
+thread_id_t
 get_sys_thread_id(void)
 {
     return kernel_get_cpu_id();
 }
 
-thread_id_t 
+thread_id_t
 get_thread_id(void)
 {
     /* kernel_get_cpu_id is reentrant and fast
@@ -1562,10 +1534,10 @@ get_tls_thread_id(void)
     return get_thread_id();
 }
 
-dcontext_t*
+dcontext_t *
 get_thread_private_dcontext(void)
 {
-    /* 
+    /*
      * Note 1: we rely on kernel_module_init to zero out the CPU-private
      * data. If this didn't happen, then we could return non-null here before
      * os_init() is called. This originally happened when loading, initializing,
@@ -1579,9 +1551,9 @@ get_thread_private_dcontext(void)
      * parts of DR might depend on.
      */
     if (!os_initilized) {
-       return NULL;
+        return NULL;
     } else {
-       return (dcontext_t *) get_tls(tls_dcontext_offset);
+        return (dcontext_t *)get_tls(tls_dcontext_offset);
     }
 }
 
@@ -1619,7 +1591,7 @@ void *
 os_heap_reserve_in_region(void *start, void *end, size_t size,
                           heap_error_code_t *error_code, bool executable)
 {
-    void* heap;
+    void *heap;
     if (heap_already_reserved) {
         ASSERT(false);
         return NULL;
@@ -1633,8 +1605,7 @@ os_heap_reserve_in_region(void *start, void *end, size_t size,
 
     heap = kernel_allocate_heap(size);
     if (heap != NULL) {
-        if (heap > start &&
-            heap + size > heap && /* overflow */
+        if (heap > start && heap + size > heap && /* overflow */
             heap + size <= end) {
             *error_code = HEAP_ERROR_SUCCESS;
         } else {
@@ -1752,8 +1723,8 @@ get_num_processors()
     return num_online_processors;
 }
 
-shlib_handle_t 
-load_shared_library(char* name)
+shlib_handle_t
+load_shared_library(char *name)
 {
     return kernel_load_shared_library(name);
 }
@@ -1774,15 +1745,14 @@ unload_shared_library(shlib_handle_t lib)
 void
 shared_library_error(char *buf, int maxlen)
 {
-    strncpy(buf,
-            "Error locating kernel module. The module must already be loaded.",
+    strncpy(buf, "Error locating kernel module. The module must already be loaded.",
             maxlen);
-    buf[maxlen-1] = '\0'; /* strncpy won't put on trailing null if maxes out */
+    buf[maxlen - 1] = '\0'; /* strncpy won't put on trailing null if maxes out */
 }
 
 bool
-shared_library_bounds(IN shlib_handle_t lib, IN byte *addr,
-                      OUT byte **start, OUT byte **end)
+shared_library_bounds(IN shlib_handle_t lib, IN byte *addr, OUT byte **start,
+                      OUT byte **end)
 {
     return kernel_shared_library_bounds(lib, addr, start, end);
 }
@@ -1893,7 +1863,7 @@ os_write(file_t f, const void *buf, size_t count)
 {
 #ifdef HYPERCALL_DEBUGGING
     char buffer[HYPERCALL_MAX_SIZE];
-    hypercall_write_t *hypercall = (hypercall_write_t*) &buffer[0];
+    hypercall_write_t *hypercall = (hypercall_write_t *)&buffer[0];
     size_t size;
     ssize_t actual_count;
 
@@ -1921,7 +1891,7 @@ os_write(file_t f, const void *buf, size_t count)
 #endif
 }
 
-ssize_t 
+ssize_t
 os_read(file_t f, void *buf, size_t count)
 {
     ASSERT_NOT_PORTED(false);
@@ -2026,7 +1996,7 @@ safe_read_ex(const void *base, size_t size, void *out_buf, size_t *bytes_read)
 bool
 safe_read(const void *base, size_t size, void *out_buf)
 {
-    return safe_read_ex(base, size, out_buf, NULL); 
+    return safe_read_ex(base, size, out_buf, NULL);
 }
 
 bool
@@ -2034,8 +2004,7 @@ safe_write_ex(void *base, size_t size, const void *in_buf, size_t *bytes_written
 {
     /* TODO(peter): Reimplement this like DynamoRIO Linux: do the write and
      * respond to a page fault. */
-    if (!page_table_writable_without_exception(
-            get_l4_page_table(), base, size)) {
+    if (!page_table_writable_without_exception(get_l4_page_table(), base, size)) {
         *bytes_written = 0;
         return false;
     }
@@ -2048,57 +2017,56 @@ safe_write_ex(void *base, size_t size, const void *in_buf, size_t *bytes_written
 bool
 is_readable_without_exception(const byte *pc, size_t size)
 {
-    return is_readable_without_exception_query_os((void*) pc, size);
+    return is_readable_without_exception_query_os((void *)pc, size);
 }
 
 bool
 is_readable_without_exception_query_os(byte *pc, size_t size)
 {
-    return page_table_readable_without_exception(
-            get_l4_page_table(), (void*) pc, size);
+    return page_table_readable_without_exception(get_l4_page_table(), (void *)pc, size);
 }
 
 bool
 is_user_address(byte *pc)
 {
-    ptr_uint_t a = (ptr_uint_t) pc;
+    ptr_uint_t a = (ptr_uint_t)pc;
     return (a <= 0x00007fffffffffff) ||
-           /* [vsyscall] in /proc/self/maps */
-           (a >= 0xffffffffff600000 && a < 0xffffffffff601000);
+        /* [vsyscall] in /proc/self/maps */
+        (a >= 0xffffffffff600000 && a < 0xffffffffff601000);
 }
 
-bool 
-os_set_protection(byte *pc, size_t length, uint prot/*MEMPROT_*/)
+bool
+os_set_protection(byte *pc, size_t length, uint prot /*MEMPROT_*/)
 {
-    /* TODO(peter): Implement this. */    
+    /* TODO(peter): Implement this. */
     return true;
 }
 
 bool
-set_protection(byte *pc, size_t length, uint prot/*MEMPROT_*/)
+set_protection(byte *pc, size_t length, uint prot /*MEMPROT_*/)
 {
-    /* TODO(peter): Implement this. */    
+    /* TODO(peter): Implement this. */
     return true;
 }
 
 bool
 change_protection(byte *pc, size_t length, bool writable)
 {
-    /* TODO(peter): Implement this. */    
+    /* TODO(peter): Implement this. */
     return true;
 }
 
 bool
 make_writable(byte *pc, size_t size)
 {
-    /* TODO(peter): Implement this. */    
+    /* TODO(peter): Implement this. */
     return true;
 }
 
 void
 make_unwritable(byte *pc, size_t size)
 {
-    /* TODO(peter): Implement this. */    
+    /* TODO(peter): Implement this. */
 }
 
 bool
@@ -2140,8 +2108,8 @@ query_memory_ex_from_os(const byte *pc, OUT dr_mem_info_t *info)
     unsigned long pfn;
     generic_page_table_entry_t *parent;
     int parent_level;
-    page_table_get_page(get_l4_page_table(), (void*) pc, &region, &pfn,
-                        &parent, &parent_level);
+    page_table_get_page(get_l4_page_table(), (void *)pc, &region, &pfn, &parent,
+                        &parent_level);
 #endif
     info->base_pc = region.start;
     info->size = region.end - region.start + 1;
@@ -2185,7 +2153,6 @@ all_memory_areas_unlock()
     /* Intentionally made a no-op. */
 }
 
-
 void
 update_all_memory_areas(app_pc start, app_pc end_in, uint prot, int type)
 {
@@ -2202,11 +2169,9 @@ remove_from_all_memory_areas(app_pc start, app_pc end)
 static void
 find_executable_vm_areas_callback(const vm_region_t *region, void *arg)
 {
-    int *count = (int *) arg;
+    int *count = (int *)arg;
     if (region->present && !region->access.user) {
-        if (app_memory_allocation(NULL,
-                                  region->start,
-                                  region->end - region->start + 1,
+        if (app_memory_allocation(NULL, region->start, region->end - region->start + 1,
                                   vm_region_prot(region),
                                   false /* !image */
                                   _IF_DEBUG("find_executable_vm_areas"))) {
@@ -2224,8 +2189,7 @@ find_executable_vm_areas(void)
      * for different VM mappings for different threads.
      */
     int count = 0;
-    traverse_page_table_contiguous(get_l4_page_table(),
-                                   find_executable_vm_areas_callback,
+    traverse_page_table_contiguous(get_l4_page_table(), find_executable_vm_areas_callback,
                                    &count);
     return count;
 }
@@ -2234,7 +2198,7 @@ int
 find_dynamo_library_vm_areas(void)
 {
     add_dynamo_vm_area(get_dynamorio_dll_start(), get_dynamorio_dll_end(),
-                       MEMPROT_READ|MEMPROT_WRITE|MEMPROT_EXEC,
+                       MEMPROT_READ | MEMPROT_WRITE | MEMPROT_EXEC,
                        true /* from image */ _IF_DEBUG("dynamorio.ko"));
     return 1;
 }
@@ -2243,16 +2207,13 @@ bool
 get_stack_bounds(dcontext_t *dcontext, byte **base, byte **top)
 {
     vm_region_t stack;
-    page_table_get_region(get_l4_page_table(),
-                          (app_pc) get_mcontext(dcontext)->xsp,
+    page_table_get_region(get_l4_page_table(), (app_pc)get_mcontext(dcontext)->xsp,
                           &stack);
     ASSERT(stack.present);
     *base = stack.start;
     *top = stack.end;
     return true;
 }
-
-
 
 bool
 ignorable_system_call(int num)
@@ -2302,11 +2263,11 @@ is_in_dynamo_dll(app_pc pc)
     return (pc >= dynamorio_module_start && pc < dynamorio_module_end);
 }
 
-static void 
+static void
 find_dynamorio_module_bounds(void)
 {
-    DEBUG_DECLARE(bool ret =) kernel_find_dynamorio_module_bounds(
-        &dynamorio_module_start, &dynamorio_module_end);
+    DEBUG_DECLARE(bool ret =)
+    kernel_find_dynamorio_module_bounds(&dynamorio_module_start, &dynamorio_module_end);
     ASSERT(ret);
 }
 
@@ -2331,14 +2292,15 @@ get_dynamorio_dll_end(void)
 /* Start of code copied from the original linux port. */
 
 /* in utils.c, exported only for our hack! */
-extern void deadlock_avoidance_unlock(mutex_t *lock, bool ownable);
+extern void
+deadlock_avoidance_unlock(mutex_t *lock, bool ownable);
 
 void
 mutex_wait_contended_lock(mutex_t *lock)
 {
     IF_CLIENT_INTERFACE(dcontext_t *dcontext = get_thread_private_dcontext();)
     /* FIXME: we don't actually use system calls to synchronize on Linux,
-     * one day we would use futex(2) on this path (PR 295561). 
+     * one day we would use futex(2) on this path (PR 295561).
      * For now we use a busy-wait lock.
      * If we do use a true wait need to set client_thread_safe_for_synch around it */
 
@@ -2368,7 +2330,6 @@ mutex_wait_contended_lock(mutex_t *lock)
 #endif
 
     return;
-    
 }
 
 void
@@ -2413,16 +2374,16 @@ typedef struct linux_event_t {
     mutex_t lock;
 } linux_event_t;
 
-
-/* FIXME: this routine will need to have a macro wrapper to let us assign different ranks to 
- * all events for DEADLOCK_AVOIDANCE.  Currently a single rank seems to work.
+/* FIXME: this routine will need to have a macro wrapper to let us assign different ranks
+ * to all events for DEADLOCK_AVOIDANCE.  Currently a single rank seems to work.
  */
 event_t
 create_event()
 {
-    event_t e = (event_t) global_heap_alloc(sizeof(linux_event_t) HEAPACCT(ACCT_OTHER));
+    event_t e = (event_t)global_heap_alloc(sizeof(linux_event_t) HEAPACCT(ACCT_OTHER));
     e->signaled = false;
-    ASSIGN_INIT_LOCK_FREE(e->lock, event_lock); /* FIXME: we'll need to pass the event name here */
+    ASSIGN_INIT_LOCK_FREE(e->lock,
+                          event_lock); /* FIXME: we'll need to pass the event name here */
     return e;
 }
 
@@ -2439,7 +2400,8 @@ signal_event(event_t e)
 {
     mutex_lock(&e->lock);
     e->signaled = true;
-    LOG(THREAD_GET, LOG_THREADS, 3,"thread %d signalling event "PFX"\n",get_thread_id(),e);
+    LOG(THREAD_GET, LOG_THREADS, 3, "thread %d signalling event " PFX "\n",
+        get_thread_id(), e);
     mutex_unlock(&e->lock);
 }
 
@@ -2448,7 +2410,8 @@ reset_event(event_t e)
 {
     mutex_lock(&e->lock);
     e->signaled = false;
-    LOG(THREAD_GET, LOG_THREADS, 3,"thread %d resetting event "PFX"\n",get_thread_id(),e);
+    LOG(THREAD_GET, LOG_THREADS, 3, "thread %d resetting event " PFX "\n",
+        get_thread_id(), e);
     mutex_unlock(&e->lock);
 }
 
@@ -2461,21 +2424,22 @@ wait_for_event(event_t e)
     dcontext_t *dcontext = get_thread_private_dcontext();
 #endif
     /* Use a user-space event on Linux, a kernel event on Windows. */
-    LOG(THREAD, LOG_THREADS, 3, "thread %d waiting for event "PFX"\n",get_thread_id(),e);
+    LOG(THREAD, LOG_THREADS, 3, "thread %d waiting for event " PFX "\n", get_thread_id(),
+        e);
     while (true) {
         if (e->signaled) {
             mutex_lock(&e->lock);
             if (!e->signaled) {
                 /* some other thread beat us to it */
-                LOG(THREAD, LOG_THREADS, 3, "thread %d was beaten to event "PFX"\n",
-                    get_thread_id(),e);
+                LOG(THREAD, LOG_THREADS, 3, "thread %d was beaten to event " PFX "\n",
+                    get_thread_id(), e);
                 mutex_unlock(&e->lock);
             } else {
                 /* reset the event */
                 e->signaled = false;
                 mutex_unlock(&e->lock);
                 LOG(THREAD, LOG_THREADS, 3,
-                    "thread %d finished waiting for event "PFX"\n", get_thread_id(),e);
+                    "thread %d finished waiting for event " PFX "\n", get_thread_id(), e);
                 return;
             }
         }
@@ -2489,7 +2453,7 @@ uint
 os_random_seed()
 {
     /* Return the low 32 bits of the cycle count. */
-    return (uint) get_cycle_count();
+    return (uint)get_cycle_count();
 }
 
 void
@@ -2499,8 +2463,7 @@ take_over_primary_thread()
 }
 
 bool
-os_current_user_directory(char *directory_prefix /* INOUT */,
-                          uint directory_len,
+os_current_user_directory(char *directory_prefix /* INOUT */, uint directory_len,
                           bool create)
 {
     ASSERT_NOT_PORTED(false);
@@ -2517,19 +2480,21 @@ os_validate_user_owned(file_t file_or_directory_handle)
 bool
 os_check_option_compatibility(void)
 {
-    #define MAKE_OPTION_FALSE(opt) do {\
-        if (DYNAMO_OPTION(opt)) {\
-            dynamo_options.opt = false;\
-            changed_options = true;\
-        }\
-    } while(0)
+#define MAKE_OPTION_FALSE(opt)          \
+    do {                                \
+        if (DYNAMO_OPTION(opt)) {       \
+            dynamo_options.opt = false; \
+            changed_options = true;     \
+        }                               \
+    } while (0)
 
-    #define MAKE_OPTION_TRUE(opt) do {\
-        if (!DYNAMO_OPTION(opt)) {\
-            dynamo_options.opt = true;\
-            changed_options = true;\
-        }\
-    } while(0)
+#define MAKE_OPTION_TRUE(opt)          \
+    do {                               \
+        if (!DYNAMO_OPTION(opt)) {     \
+            dynamo_options.opt = true; \
+            changed_options = true;    \
+        }                              \
+    } while (0)
     bool changed_options = false;
 
     /* Linux reserves the bottom of the address space for applications, so
@@ -2575,7 +2540,6 @@ os_check_option_compatibility(void)
     MAKE_OPTION_FALSE(free_private_stubs);
     MAKE_OPTION_FALSE(unsafe_free_shared_stubs);
 
-
     /* Any of these unsafe options will make us fail miserably. If the eflags
      * aren't restored properly across IBL, then the kernel crashes. I know this
      * because I wasn't properly restoring eflags in interrupted IBL routines.*/
@@ -2584,15 +2548,14 @@ os_check_option_compatibility(void)
     MAKE_OPTION_FALSE(unsafe_ignore_eflags_trace);
     MAKE_OPTION_FALSE(unsafe_ignore_eflags_prefix);
     MAKE_OPTION_FALSE(unsafe_ignore_eflags_ibl);
-    
-    #undef MAKE_OPTION_FALSE
+
+#undef MAKE_OPTION_FALSE
 
     return changed_options;
 }
 
-void 
-report_diagnostics(IN const char *message,
-                   IN const char *name,
+void
+report_diagnostics(IN const char *message, IN const char *name,
                    security_violation_t violation_type)
 {
     /* Not implemented in the original Linux version. */
@@ -2617,7 +2580,8 @@ pcprofile_fragment_deleted(dcontext_t *dcontext, fragment_t *f)
 }
 
 void
-pcprofile_thread_exit(dcontext_t *dcontext) {
+pcprofile_thread_exit(dcontext_t *dcontext)
+{
     ASSERT_NOT_PORTED(false);
 }
 
@@ -2708,13 +2672,16 @@ dr_setjmp_sigmask(dr_jmp_buf_t *buf)
     ASSERT_NOT_PORTED(false);
 }
 
-bool make_copy_on_writable(byte *pc, size_t size)
+bool
+make_copy_on_writable(byte *pc, size_t size)
 {
     ASSERT_NOT_PORTED(false);
     return false;
 }
 
-void mem_stats_snapshot(void) {
+void
+mem_stats_snapshot(void)
+{
     /* Not implemented in the original linux version. */
 }
 

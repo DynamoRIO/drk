@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -30,7 +30,7 @@
  * DAMAGE.
  */
 
-/* not really a header file, but we don't want to run this standalone 
+/* not really a header file, but we don't want to run this standalone
  * to use, defines these, then include this file:
 #define USE_LONGJMP 0
 #define BLOCK_IN_HANDLER 0
@@ -48,41 +48,41 @@
 #include <signal.h>
 #include <ucontext.h>
 #include <sys/time.h> /* itimer */
-#include <string.h> /*  memset */
+#include <string.h>   /*  memset */
 
 /* handler with SA_SIGINFO flag set gets three arguments: */
 typedef void (*handler_t)(int, struct siginfo *, void *);
 
 #ifdef USE_DYNAMO
-#include "dynamorio.h"
+#    include "dynamorio.h"
 #endif
 
 #ifdef X64
-# define SC_XIP rip
+#    define SC_XIP rip
 #else
-# define SC_XIP eip
+#    define SC_XIP eip
 #endif
 
 #if USE_LONGJMP
-#include <setjmp.h>
+#    include <setjmp.h>
 static jmp_buf env;
 #endif
 
 #if USE_SIGSTACK
-# include <stdlib.h> /* malloc */
+#    include <stdlib.h> /* malloc */
 /* need more space if might get nested signals */
-# if USE_TIMER
-#  define ALT_STACK_SIZE  (SIGSTKSZ*4)
-# else
-#  define ALT_STACK_SIZE  (SIGSTKSZ*2)
-# endif
+#    if USE_TIMER
+#        define ALT_STACK_SIZE (SIGSTKSZ * 4)
+#    else
+#        define ALT_STACK_SIZE (SIGSTKSZ * 2)
+#    endif
 #endif
 
 #if USE_TIMER
 /* need to run long enough to get itimer hit */
-# define ITERS 3500000
+#    define ITERS 3500000
 #else
-# define ITERS 500000
+#    define ITERS 500000
 #endif
 
 static int a[ITERS];
@@ -97,33 +97,33 @@ static int timer_hits = 0;
 
 #include <errno.h>
 
-#define ASSERT_NOERR(rc) do {                                   \
-  if (rc) {                                                     \
-     print("%s:%d rc=%d errno=%d %s\n",                         \
-           __FILE__, __LINE__,                                  \
-           rc, errno, strerror(errno));                         \
-     _exit(1);                                                  \
-  }                                                             \
-} while (0);
+#define ASSERT_NOERR(rc)                                                      \
+    do {                                                                      \
+        if (rc) {                                                             \
+            print("%s:%d rc=%d errno=%d %s\n", __FILE__, __LINE__, rc, errno, \
+                  strerror(errno));                                           \
+            _exit(1);                                                         \
+        }                                                                     \
+    } while (0);
 
 static void
 signal_handler(int sig, siginfo_t *siginfo, ucontext_t *ucxt)
 {
 #if VERBOSE
-    print("signal_handler: sig=%d, retaddr=0x%08x, fpregs=0x%08x\n",
-          sig, *(&sig - 1), ucxt->uc_mcontext.fpregs);
+    print("signal_handler: sig=%d, retaddr=0x%08x, fpregs=0x%08x\n", sig, *(&sig - 1),
+          ucxt->uc_mcontext.fpregs);
 #else
-# if USE_TIMER
+#    if USE_TIMER
     if (sig != SIGVTALRM)
-# endif
+#    endif
         print("signal_handler: sig=%d\n", sig);
 #endif
 
     switch (sig) {
 
     case SIGSEGV: {
-        struct sigcontext *sc = (struct sigcontext *) &(ucxt->uc_mcontext);
-        void *pc = (void *) sc->SC_XIP;
+        struct sigcontext *sc = (struct sigcontext *)&(ucxt->uc_mcontext);
+        void *pc = (void *)sc->SC_XIP;
 #if USE_LONGJMP && BLOCK_IN_HANDLER
         sigset_t set;
         int rc;
@@ -134,22 +134,22 @@ signal_handler(int sig, siginfo_t *siginfo, ucontext_t *ucxt)
         print("Got SIGSEGV\n");
 #endif
 #if USE_LONGJMP
-# if BLOCK_IN_HANDLER
+#    if BLOCK_IN_HANDLER
         /* longjmp will bypass sigreturn, and sigreturn is what resets
          * the set of blocked signals, so we have to unblock them here
          */
         rc = sigemptyset(&set); /* reset blocked signals */
         ASSERT_NOERR(rc);
         sigprocmask(SIG_SETMASK, &set, NULL);
-# endif
+#    endif
         longjmp(env, 1);
 #endif
         break;
     }
 
     case SIGUSR1: {
-        struct sigcontext *sc = (struct sigcontext *) &(ucxt->uc_mcontext);
-        void *pc = (void *) sc->SC_XIP;
+        struct sigcontext *sc = (struct sigcontext *)&(ucxt->uc_mcontext);
+        void *pc = (void *)sc->SC_XIP;
 #if VERBOSE
         print("Got SIGUSR1 @ 0x%08x\n", pc);
 #else
@@ -160,18 +160,17 @@ signal_handler(int sig, siginfo_t *siginfo, ucontext_t *ucxt)
 
 #if USE_TIMER
     case SIGVTALRM: {
-        struct sigcontext *sc = (struct sigcontext *) &(ucxt->uc_mcontext);
-        void *pc = (void *) sc->SC_XIP;
-#if VERBOSE
+        struct sigcontext *sc = (struct sigcontext *)&(ucxt->uc_mcontext);
+        void *pc = (void *)sc->SC_XIP;
+#    if VERBOSE
         print("Got SIGVTALRM @ 0x%08x\n", pc);
-#endif
+#    endif
         timer_hits++;
         break;
     }
 #endif
 
-    default:
-        assert(0);
+    default: assert(0);
     }
 }
 
@@ -190,14 +189,14 @@ intercept_signal(int sig, handler_t handler)
 #endif
     ASSERT_NOERR(rc);
     act.sa_flags = SA_SIGINFO | SA_ONSTACK; /* send 3 args to handler */
-    
+
     /* arm the signal */
     rc = sigaction(sig, &act, NULL);
     ASSERT_NOERR(rc);
 }
 
-
-int main(int argc, char *argv[])
+int
+main(int argc, char *argv[])
 {
     double res = 0.;
     int i, j, rc;
@@ -207,7 +206,7 @@ int main(int argc, char *argv[])
 #if USE_TIMER
     struct itimerval t;
 #endif
-  
+
 #ifdef USE_DYNAMO
     rc = dynamorio_app_init();
     ASSERT_NOERR(rc);
@@ -215,7 +214,7 @@ int main(int argc, char *argv[])
 #endif
 
 #if USE_TIMER
-    intercept_signal(SIGVTALRM, (handler_t) signal_handler);
+    intercept_signal(SIGVTALRM, (handler_t)signal_handler);
     t.it_interval.tv_sec = 0;
     t.it_interval.tv_usec = 10000;
     t.it_value.tv_sec = 0;
@@ -225,20 +224,20 @@ int main(int argc, char *argv[])
 #endif
 
 #if USE_SIGSTACK
-    sigstack.ss_sp = (char *) malloc(ALT_STACK_SIZE);
+    sigstack.ss_sp = (char *)malloc(ALT_STACK_SIZE);
     sigstack.ss_size = ALT_STACK_SIZE;
     sigstack.ss_flags = SS_ONSTACK;
     rc = sigaltstack(&sigstack, NULL);
     ASSERT_NOERR(rc);
-# if VERBOSE
-    print("Set up sigstack: 0x%08x - 0x%08x\n",
-          sigstack.ss_sp, sigstack.ss_sp + sigstack.ss_size);
-# endif
+#    if VERBOSE
+    print("Set up sigstack: 0x%08x - 0x%08x\n", sigstack.ss_sp,
+          sigstack.ss_sp + sigstack.ss_size);
+#    endif
 #endif
 
-    intercept_signal(SIGSEGV, (handler_t) signal_handler);
-    intercept_signal(SIGUSR1, (handler_t) signal_handler);
-    intercept_signal(SIGUSR2, (handler_t) SIG_IGN);
+    intercept_signal(SIGSEGV, (handler_t)signal_handler);
+    intercept_signal(SIGUSR1, (handler_t)signal_handler);
+    intercept_signal(SIGUSR2, (handler_t)SIG_IGN);
 
     res = cos(0.56);
 
@@ -258,11 +257,11 @@ int main(int argc, char *argv[])
     kill(getpid(), SIGSEGV);
 #endif
 
-    for (i=0; i<ITERS; i++) {
+    for (i = 0; i < ITERS; i++) {
         if (i % 2 == 0) {
-            res += cos(1./(double)(i+1));
+            res += cos(1. / (double)(i + 1));
         } else {
-            res += sin(1./(double)(i+1));
+            res += sin(1. / (double)(i + 1));
         }
         j = (i << 4) / (i | 0x38);
         a[i] += j;

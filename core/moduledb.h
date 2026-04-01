@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -35,34 +35,34 @@
 #ifndef _MODULEDB_H_
 #define _MODULEDB_H_
 
-/* Module database section flags - 
+/* Module database section flags -
  * These control the module section specific relaxations and are used in 2-bit
  * fields in the module policy flags. */
 enum {
     SECTION_NO_CHG = 0,
-    SECTION_IF_RX  = 1,
-    SECTION_IF_X   = 2,
-    SECTION_ALLOW  = 3,
+    SECTION_IF_RX = 1,
+    SECTION_IF_X = 2,
+    SECTION_ALLOW = 3,
 };
 
 /* Module database policy flags -
  * these specify the module specific actions to take when a module is loaded */
 enum {
-    MODULEDB_ALL_SECTIONS_BITS   = 0x00000003, /* value from SECTION enum above */
-    MODULEDB_ALL_SECTIONS_SHIFT  = 0, /* >> necessary to read ALL_SECTIONS_BITS */
-    MODULEDB_RCT_EXEMPT_TO       = 0x00000004,
-    MODULEDB_REPORT_ON_LOAD      = 0x00000008,
-    MODULEDB_DLL2HEAP            = 0x00000010,
-    MODULEDB_DLL2STACK           = 0x00000020,
+    MODULEDB_ALL_SECTIONS_BITS = 0x00000003, /* value from SECTION enum above */
+    MODULEDB_ALL_SECTIONS_SHIFT = 0,         /* >> necessary to read ALL_SECTIONS_BITS */
+    MODULEDB_RCT_EXEMPT_TO = 0x00000004,
+    MODULEDB_REPORT_ON_LOAD = 0x00000008,
+    MODULEDB_DLL2HEAP = 0x00000010,
+    MODULEDB_DLL2STACK = 0x00000020,
 };
 
 /* Used to specify an exemption list for moduledb_check_exempt_list */
 typedef enum {
-    MODULEDB_EXEMPT_RCT          = 0,
-    MODULEDB_EXEMPT_IMAGE        = 1,
-    MODULEDB_EXEMPT_DLL2HEAP     = 2,
-    MODULEDB_EXEMPT_DLL2STACK    = 3,
-    MODULEDB_EXEMPT_NUM_LISTS    = 4,
+    MODULEDB_EXEMPT_RCT = 0,
+    MODULEDB_EXEMPT_IMAGE = 1,
+    MODULEDB_EXEMPT_DLL2HEAP = 2,
+    MODULEDB_EXEMPT_DLL2STACK = 3,
+    MODULEDB_EXEMPT_NUM_LISTS = 4,
 } moduledb_exempt_list_t;
 
 void
@@ -90,28 +90,29 @@ void
 print_moduledb_exempt_lists(file_t file);
 
 #ifdef PROCESS_CONTROL
-# define PROCESS_CONTROL_MODE_OFF                   0x0
-# define PROCESS_CONTROL_MODE_WHITELIST             0x1
-# define PROCESS_CONTROL_MODE_BLACKLIST             0x2
+#    define PROCESS_CONTROL_MODE_OFF 0x0
+#    define PROCESS_CONTROL_MODE_WHITELIST 0x1
+#    define PROCESS_CONTROL_MODE_BLACKLIST 0x2
 
 /* This mode is identical to whitelist mode, but requires that the user specify
  * an exe by name and its hashes; no anonymous hashes or exe names with no
  * hashes.  Case 10969. */
-# define PROCESS_CONTROL_MODE_WHITELIST_INTEGRITY   0x4
+#    define PROCESS_CONTROL_MODE_WHITELIST_INTEGRITY 0x4
 
-# define IS_PROCESS_CONTROL_MODE_WHITELIST() \
-     (TEST(PROCESS_CONTROL_MODE_WHITELIST, DYNAMO_OPTION(process_control)))
-# define IS_PROCESS_CONTROL_MODE_BLACKLIST() \
-     (TEST(PROCESS_CONTROL_MODE_BLACKLIST, DYNAMO_OPTION(process_control)))
-# define IS_PROCESS_CONTROL_MODE_WHITELIST_INTEGRITY() \
-     (TEST(PROCESS_CONTROL_MODE_WHITELIST_INTEGRITY, DYNAMO_OPTION(process_control)))
-# define IS_PROCESS_CONTROL_ON()                \
-     (IS_PROCESS_CONTROL_MODE_WHITELIST() ||    \
-      IS_PROCESS_CONTROL_MODE_BLACKLIST() ||    \
-      IS_PROCESS_CONTROL_MODE_WHITELIST_INTEGRITY())
+#    define IS_PROCESS_CONTROL_MODE_WHITELIST() \
+        (TEST(PROCESS_CONTROL_MODE_WHITELIST, DYNAMO_OPTION(process_control)))
+#    define IS_PROCESS_CONTROL_MODE_BLACKLIST() \
+        (TEST(PROCESS_CONTROL_MODE_BLACKLIST, DYNAMO_OPTION(process_control)))
+#    define IS_PROCESS_CONTROL_MODE_WHITELIST_INTEGRITY() \
+        (TEST(PROCESS_CONTROL_MODE_WHITELIST_INTEGRITY, DYNAMO_OPTION(process_control)))
+#    define IS_PROCESS_CONTROL_ON()                                                    \
+        (IS_PROCESS_CONTROL_MODE_WHITELIST() || IS_PROCESS_CONTROL_MODE_BLACKLIST() || \
+         IS_PROCESS_CONTROL_MODE_WHITELIST_INTEGRITY())
 
-void process_control(void);
-void process_control_init(void);
+void
+process_control(void);
+void
+process_control_init(void);
 #endif
 
 #endif /* _MODULEDB_H_ */

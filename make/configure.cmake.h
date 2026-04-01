@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -66,11 +66,11 @@
 #cmakedefine PARAMS_IN_REGISTRY
 
 /* when packaging */
-#cmakedefine VERSION_NUMBER ${VERSION_NUMBER}
-#cmakedefine VERSION_COMMA_DELIMITED ${VERSION_COMMA_DELIMITED}
-#cmakedefine VERSION_NUMBER_INTEGER ${VERSION_NUMBER_INTEGER}
-#cmakedefine BUILD_NUMBER ${BUILD_NUMBER}
-#cmakedefine UNIQUE_BUILD_NUMBER ${UNIQUE_BUILD_NUMBER}
+#cmakedefine VERSION_NUMBER ${ VERSION_NUMBER }
+#cmakedefine VERSION_COMMA_DELIMITED ${ VERSION_COMMA_DELIMITED }
+#cmakedefine VERSION_NUMBER_INTEGER ${ VERSION_NUMBER_INTEGER }
+#cmakedefine BUILD_NUMBER ${ BUILD_NUMBER }
+#cmakedefine UNIQUE_BUILD_NUMBER ${ UNIQUE_BUILD_NUMBER }
 #cmakedefine CUSTOM_PRODUCT_NAME "${CUSTOM_PRODUCT_NAME}"
 
 /* features */
@@ -88,8 +88,16 @@
 #cmakedefine DR_DO_NOT_DEFINE_ushort
 
 /* Issue 20: we need to know lib dirs for cross-arch execve */
-#define LIBDIR_X64 ${INSTALL_LIB_X64}
-#define LIBDIR_X86 ${INSTALL_LIB_X86}
+#define LIBDIR_X64      \
+    $                   \
+    {                   \
+        INSTALL_LIB_X64 \
+    }
+#define LIBDIR_X86      \
+    $                   \
+    {                   \
+        INSTALL_LIB_X86 \
+    }
 
 /* dependent defines */
 /*
@@ -113,21 +121,21 @@
 #    $(D)FRAGMENT_SIZES_STUDY
 #    $(D)FOOL_CPUID
 #    $(D)NATIVE_RETURN - should clean this up, as well
-#	NATIVE_RETURN_CALLDEPTH, NATIVE_RETURN_RET_IN_TRACES, 
+#	NATIVE_RETURN_CALLDEPTH, NATIVE_RETURN_RET_IN_TRACES,
 #	NATIVE_RETURN_TRY_TO_PUT_APP_RETURN_PC_ON_STACK
 #    $(D)LOAD_DYNAMO_DEBUGBREAK
 # profiling
-#    $(D)PROFILE_LINKCOUNT $(D)LINKCOUNT_64_BITS 
-#    $(D)PROFILE_RDTSC 
+#    $(D)PROFILE_LINKCOUNT $(D)LINKCOUNT_64_BITS
+#    $(D)PROFILE_RDTSC
 #    $(D)PAPI - now deprecated
 #    $(D)WINDOWS_PC_SAMPLE - on for all Windows builds
 #    $(D)KSTATS - on for INTERNAL, DEBUG, and PROFILE builds, use KSTATS=1 for
 # release builds
 #    $(D)PROGRAM_SHEPHERDING -  (always ON)
-#         currently turns on code origins checks and diagnostics, eventually will also turn
-#         on return-after-call and other restricted control transfer features
-#    $(D)RETURN_AFTER_CALL  - (always ON) return only to instructions after seen calls
-#    $(D)RCT_IND_BRANCH     - (experimental) indirect branch only to address taken entry points
+#         currently turns on code origins checks and diagnostics, eventually will also
+turn #         on return-after-call and other restricted control transfer features #
+$(D)RETURN_AFTER_CALL  - (always ON) return only to instructions after seen calls #
+$(D)RCT_IND_BRANCH     - (experimental) indirect branch only to address taken entry points
 #    $(D)DGC_DIAGNOSTICS
 #    $(D)CHECK_RETURNS_SSE2 (experimental security feature)
 #    $(D)CHECK_RETURNS_SSE2_EMIT (experimental unfinished)
@@ -137,25 +145,20 @@
 # optimization of application
 #    $(D)SIDELINE
 #    $(D)SIDELINE_COUNT_STUDY
-#    $(D)LOAD_TO_CONST - around loadtoconst.c, $(D)LTC_STATS 
+#    $(D)LOAD_TO_CONST - around loadtoconst.c, $(D)LTC_STATS
 
 # optimization of dynamo
-#    $(D)AVOID_EFLAGS  (uses instructions that don't modify flags) (defines ASSUME_NORMAL_EFLAGS)
-#    $(D)RETURN_STACK
-#    $(D)TRACE_HEAD_CACHE_INCR   (incompatible with security FIXME:?)
-#    $(D)DISALLOW_CACHE_RESIZING (use as temporary hack when developing)
-# transparency
-#    $(D)NOLIBC = doesn't link libc on windows, currently uses ntdll.dll libc
-#      functions, NOLIBC=0 causes the core to be linked against libc and kernel32.dll
-# external interface
-#    $(D)CLIENT_INTERFACE
-#    $(D)DR_APP_EXPORTS
-#    $(D)CUSTOM_EXIT_STUBS -- optional part of CLIENT_INTERFACE
-#      we may want it for our own internal use too, though
-#    $(D)CUSTOM_TRACES -- optional part of CLIENT_INTERFACE
+#    $(D)AVOID_EFLAGS  (uses instructions that don't modify flags) (defines
+ASSUME_NORMAL_EFLAGS) #    $(D)RETURN_STACK #    $(D)TRACE_HEAD_CACHE_INCR   (incompatible
+with security FIXME:?) #    $(D)DISALLOW_CACHE_RESIZING (use as temporary hack when
+developing) # transparency #    $(D)NOLIBC = doesn't link libc on windows, currently uses
+ntdll.dll libc #      functions, NOLIBC=0 causes the core to be linked against libc and
+kernel32.dll # external interface #    $(D)CLIENT_INTERFACE #    $(D)DR_APP_EXPORTS #
+$(D)CUSTOM_EXIT_STUBS -- optional part of CLIENT_INTERFACE #      we may want it for our
+own internal use too, though #    $(D)CUSTOM_TRACES -- optional part of CLIENT_INTERFACE
 #      has some sub-features that are aggressive and not supported by default:
 #      $(D)CUSTOM_TRACES_RET_REMOVAL = support for removing inlined rets
-#      $(D)CLIENT_SIDELINE = allows adaptive interface methods to be called 
+#      $(D)CLIENT_SIDELINE = allows adaptive interface methods to be called
 #                            from other threads safetly, performance hit
 #                            requires CLIENT_INTERFACE
 #    $(D)UNSUPPORTED_API -- part of 0.9.4 MIT API but not supported in current API
@@ -172,14 +175,14 @@
 #    $(D)HEAP_ACCOUNTING (on for DEBUG)
 
 #    $(D)INTERNAL for features that are not intended to reach customer hands
-#    $(D)VERBOSE=1 for verbose debugging or in situations where normal DEBUG 
+#    $(D)VERBOSE=1 for verbose debugging or in situations where normal DEBUG
 
 # statistics
 #    $(D)HASHTABLE_STATISTICS - IBL table statistics
 
 # target platforms
 #    $(D)WINDOWS (avoid using _WIN32 used by cl)
-#    $(D)LINUX 
+#    $(D)LINUX
 #    note that in many cases we use the else of WINDOWS to mean LINUX and vice versa
 #    we're just starting to add VMKERNEL and MACOS support
 #    $(D)X86
@@ -201,101 +204,101 @@
 #define X86
 
 #ifdef WINDOWS
-   /* we do not support linking to libc.  we should probably remove
-    * this define from the code and eliminate it altogether.
-    */
-#  define NOLIBC
+/* we do not support linking to libc.  we should probably remove
+ * this define from the code and eliminate it altogether.
+ */
+#    define NOLIBC
 #endif
 
 #ifdef LINUX
-#  define ASSEMBLE_WITH_GAS
+#    define ASSEMBLE_WITH_GAS
 #else
-#  define ASSEMBLE_WITH_MASM
+#    define ASSEMBLE_WITH_MASM
 #endif
 
 /* operating system */
 #ifdef LINUX
 
-#  ifdef VMKERNEL
-#    define VMX86_SERVER
-#    define USERLEVEL
-     /* PR 361894/388563: only on ESX4.1+ */
-#    define HAVE_TLS
-#  else
-#    ifdef MACOS
-       /* FIXME NYI */
-#      define MACOS
+#    ifdef VMKERNEL
+#        define VMX86_SERVER
+#        define USERLEVEL
+/* PR 361894/388563: only on ESX4.1+ */
+#        define HAVE_TLS
 #    else
-       /* Linux */
-       /* FIXME: use cmake to discover whether these are available */
-#      define HAVE_PROC_MAPS
-#      define HAVE_TLS
-#      define HAVE_SIGALTSTACK
+#        ifdef MACOS
+/* FIXME NYI */
+#            define MACOS
+#        else
+/* Linux */
+/* FIXME: use cmake to discover whether these are available */
+#            define HAVE_PROC_MAPS
+#            define HAVE_TLS
+#            define HAVE_SIGALTSTACK
+#        endif
 #    endif
-#  endif
 
-#  ifdef HAVE_FVISIBILITY
-#    define USE_VISIBILITY_ATTRIBUTES
-#  endif
+#    ifdef HAVE_FVISIBILITY
+#        define USE_VISIBILITY_ATTRIBUTES
+#    endif
 #endif
 
 #ifdef WINDOWS
-#  define WINDOWS_PC_SAMPLE
+#    define WINDOWS_PC_SAMPLE
 #endif
 
 #ifdef PROGRAM_SHEPHERDING
-#  define RETURN_AFTER_CALL
-#  define RCT_IND_BRANCH
+#    define RETURN_AFTER_CALL
+#    define RCT_IND_BRANCH
 #endif
 
 #ifdef CLIENT_INTERFACE
-   /* standard client interface features */
-#  define DYNAMORIO_IR_EXPORTS
-#  define CUSTOM_TRACES
-#  define CLIENT_SIDELINE
-   /* PR 200409: not part of our current API, xref PR 215179 on -pad_jmps
-    * issues with CUSTOM_EXIT_STUBS
+/* standard client interface features */
+#    define DYNAMORIO_IR_EXPORTS
+#    define CUSTOM_TRACES
+#    define CLIENT_SIDELINE
+/* PR 200409: not part of our current API, xref PR 215179 on -pad_jmps
+ * issues with CUSTOM_EXIT_STUBS
 #  define CUSTOM_EXIT_STUBS
 #  define UNSUPPORTED_API
-    */
+ */
 #endif
 
 #if defined(HOT_PATCHING_INTERFACE) && defined(CLIENT_INTERFACE)
-#  define PROBE_API
+#    define PROBE_API
 #endif
 
 #if defined(PROGRAM_SHEPHERDING) && defined(CLIENT_INTERFACE)
 /* used by libutil and tools */
-#  define MF_API
-#  define PROBE_API
+#    define MF_API
+#    define PROBE_API
 #endif
 
 #ifdef APP_EXPORTS
-#  define DR_APP_EXPORTS
+#    define DR_APP_EXPORTS
 #endif
 
 /* FIXME: some GBOP hooks depend on hotp_only HOT_PATCHING_INTERFACE */
 
 #ifdef DEBUG
-   /* for bug fixing this is useful so we turn on for all debug builds */
-#  define DEBUG_MEMORY
-#  define STACK_GUARD_PAGE
-#  define HEAP_ACCOUNTING
-#  define DEADLOCK_AVOIDANCE
-#  define MUTEX_CALLSTACK /* requires DEADLOCK_AVOIDANCE */
-   /* even though only usable in all-private config useful in default builds */
-#  define SHARING_STUDY
-#  define HASHTABLE_STATISTICS
+/* for bug fixing this is useful so we turn on for all debug builds */
+#    define DEBUG_MEMORY
+#    define STACK_GUARD_PAGE
+#    define HEAP_ACCOUNTING
+#    define DEADLOCK_AVOIDANCE
+#    define MUTEX_CALLSTACK /* requires DEADLOCK_AVOIDANCE */
+/* even though only usable in all-private config useful in default builds */
+#    define SHARING_STUDY
+#    define HASHTABLE_STATISTICS
 #endif
 
 #ifndef INTERNAL
-#  define EXTERNAL_DRVIEW
+#    define EXTERNAL_DRVIEW
 #endif
 
 #ifdef LINKCOUNT
-#  define PROFILE_LINKCOUNT
+#    define PROFILE_LINKCOUNT
 /* not bothering to support 32-bit: only if we start using it again */
-#  define LINKCOUNT_64_BITS
+#    define LINKCOUNT_64_BITS
 #endif
 
 #endif /* _CONFIGURE_H_ */

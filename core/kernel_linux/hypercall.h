@@ -71,5 +71,4 @@ typedef struct {
     int fd;
 } __attribute__((__packed__)) hypercall_flush_t;
 
-
 #endif

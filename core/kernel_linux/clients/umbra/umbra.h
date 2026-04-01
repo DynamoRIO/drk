@@ -30,19 +30,18 @@
  * Description:
  *     header file of Umbra module
  *
- * Author: 
+ * Author:
  *     Qin Zhao
- * 
+ *
  */
 
-
 #ifndef _UMBRA_H_
-#define _UMBRA_H_ 1
+#    define _UMBRA_H_ 1
 
-#ifdef LINUX_KERNEL
-# include <linux/module.h>
-#endif
-#include "dr_api.h"
+#    ifdef LINUX_KERNEL
+#        include <linux/module.h>
+#    endif
+#    include "dr_api.h"
 
 void
 umbra_init(client_id_t id);
@@ -50,7 +49,7 @@ umbra_init(client_id_t id);
 void
 umbra_exit(void);
 
-void 
+void
 umbra_thread_init(void *drcontext);
 
 void
@@ -60,51 +59,38 @@ void
 umbra_fork_init(void *drcontext);
 
 dr_emit_flags_t
-umbra_basic_block(void *drcontext,
-                  void *tag,
-                  instrlist_t *bb,
-                  bool  for_trace,
-                  bool  translating);
+umbra_basic_block(void *drcontext, void *tag, instrlist_t *bb, bool for_trace,
+                  bool translating);
 
 dr_emit_flags_t
-umbra_trace(void *drcontext,
-            void *tag,
-            instrlist_t *bb,
-            bool  translating);
+umbra_trace(void *drcontext, void *tag, instrlist_t *bb, bool translating);
 
 dr_custom_trace_action_t
-umbra_end_trace(void *drcontext, 
-                void *trace_tag, 
-                void *next_tag);
+umbra_end_trace(void *drcontext, void *trace_tag, void *next_tag);
 
 void
 umbra_delete(void *drcontext, void *tag);
 
 void
-umbra_restore_state(void *drcontext, 
-                    void *tag,
-                    dr_mcontext_t *mcontext,
-                    bool restore_memory, 
-                    bool app_code_consistent);
+umbra_restore_state(void *drcontext, void *tag, dr_mcontext_t *mcontext,
+                    bool restore_memory, bool app_code_consistent);
 
 bool
 umbra_filter_syscall(void *drcontext, int sysnum);
 
-bool 
+bool
 umbra_pre_syscall(void *drcontext, int sysnum);
 
-void 
+void
 umbra_post_syscall(void *drcontext, int sysnum);
 
 void
-umbra_module_load(void *drcontext, 
-                  const module_data_t *info, 
-                  bool loaded);
+umbra_module_load(void *drcontext, const module_data_t *info, bool loaded);
 
 void
 umbra_module_unload(void *drcontext, const module_data_t *info);
 
-#ifdef LINUX_KERNEL
+#    ifdef LINUX_KERNEL
 
 bool
 umbra_interrupt(void *drcontext, dr_interrupt_t *info);
@@ -115,18 +101,17 @@ umbra_kernel_init(void);
 void
 umbra_kernel_exit(void);
 
-#elif defined(LINUX)
+#    elif defined(LINUX)
 
 dr_signal_action_t
 umbra_signal(void *drcontext, dr_siginfo_t *siginfo);
 
-#else
+#    else
 
 bool
 umbra_exception(void *drcontext, dr_exception_t *excpt);
 
-
-#endif /* LINUX */
+#    endif /* LINUX */
 
 #endif /* _UMBRA_H_ */
 

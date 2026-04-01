@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -37,7 +37,7 @@
 
 #include "dr_api.h"
 #ifdef LINUX
-# include <signal.h>
+#    include <signal.h>
 #endif
 
 void *mutex;
@@ -83,7 +83,7 @@ char *name[EVENT_last] = {
     "module load event 2",
     "thread init event 1",
     "thread init event 2",
-    "bb event 1", 
+    "bb event 1",
     "bb event 2",
     "end trace event 1",
     "end trace event 2",
@@ -125,7 +125,6 @@ inc_count_first(int first, int second)
     dr_mutex_unlock(mutex);
 }
 
-
 static void
 inc_count_second(int second)
 {
@@ -134,21 +133,20 @@ inc_count_second(int second)
     dr_mutex_unlock(mutex);
 }
 
-
-static 
-void check_result(void)
+static void
+check_result(void)
 {
     int i;
     for (i = 0; i < EVENT_last; i++) {
-        if (counts[i] == 0) 
+        if (counts[i] == 0)
             continue;
         dr_fprintf(STDERR, "%s is called %d time(s)\n", name[i], counts[i]);
         dr_flush_file(STDOUT);
     }
 }
 
-static
-void exit_event1(void)
+static void
+exit_event1(void)
 {
     dr_fprintf(STDERR, "exit event 1\n");
     dr_flush_file(STDOUT);
@@ -159,8 +157,8 @@ void exit_event1(void)
     dr_mutex_destroy(mutex);
 }
 
-static
-void exit_event2(void)
+static void
+exit_event2(void)
 {
     dr_fprintf(STDERR, "exit event 2\n");
     dr_flush_file(STDOUT);
@@ -169,31 +167,31 @@ void exit_event2(void)
         dr_fprintf(STDERR, "unregister failed!\n");
 }
 
-static
-void thread_init_event1(void *drcontext)
+static void
+thread_init_event1(void *drcontext)
 {
     inc_count_first(EVENT_THREAD_INIT_1, EVENT_THREAD_INIT_2);
     if (!dr_unregister_thread_init_event(thread_init_event1))
         dr_fprintf(STDERR, "unregister failed!\n");
 }
-static
-void thread_init_event2(void *drcontext)
+static void
+thread_init_event2(void *drcontext)
 {
     inc_count_second(EVENT_THREAD_INIT_2);
     if (!dr_unregister_thread_init_event(thread_init_event2))
         dr_fprintf(STDERR, "unregister failed!\n");
 }
 
-static
-void thread_exit_event1(void *drcontext)
+static void
+thread_exit_event1(void *drcontext)
 {
     inc_count_first(EVENT_THREAD_EXIT_1, EVENT_THREAD_EXIT_2);
     if (!dr_unregister_thread_exit_event(thread_exit_event1))
         dr_fprintf(STDERR, "unregister failed!\n");
 }
 
-static
-void thread_exit_event2(void *drcontext)
+static void
+thread_exit_event2(void *drcontext)
 {
     inc_count_second(EVENT_THREAD_EXIT_2);
     if (!dr_unregister_thread_exit_event(thread_exit_event2))
@@ -201,15 +199,15 @@ void thread_exit_event2(void *drcontext)
 }
 
 #ifdef LINUX
-static
-void fork_init_event1(void *drcontext)
+static void
+fork_init_event1(void *drcontext)
 {
     inc_count_first(EVENT_FORK_INIT_1, EVENT_FORK_INIT_2);
     if (!dr_unregister_fork_init_event(fork_init_event1))
         dr_fprintf(STDERR, "unregister failed!\n");
 }
-static
-void fork_init_event2(void *drcontext)
+static void
+fork_init_event2(void *drcontext)
 {
     int i;
     dr_mutex_lock(mutex);
@@ -222,9 +220,8 @@ void fork_init_event2(void *drcontext)
 }
 
 #endif
-static
-dr_emit_flags_t bb_event1(void *dcontext, void *tag, instrlist_t *bb,
-                           bool for_trace, bool translating)
+static dr_emit_flags_t
+bb_event1(void *dcontext, void *tag, instrlist_t *bb, bool for_trace, bool translating)
 {
     inc_count_first(EVENT_BB_1, EVENT_BB_2);
     if (!dr_unregister_bb_event(bb_event1))
@@ -232,9 +229,8 @@ dr_emit_flags_t bb_event1(void *dcontext, void *tag, instrlist_t *bb,
     return DR_EMIT_DEFAULT;
 }
 
-static
-dr_emit_flags_t bb_event2(void *dcontext, void *tag, instrlist_t *bb,
-                          bool for_trace, bool translating)
+static dr_emit_flags_t
+bb_event2(void *dcontext, void *tag, instrlist_t *bb, bool for_trace, bool translating)
 {
     inc_count_second(EVENT_BB_2);
     if (!dr_unregister_bb_event(bb_event2))
@@ -242,9 +238,8 @@ dr_emit_flags_t bb_event2(void *dcontext, void *tag, instrlist_t *bb,
     return DR_EMIT_DEFAULT;
 }
 
-static
-dr_emit_flags_t trace_event1(void *dcontext, void *tag, instrlist_t *trace,
-                             bool translating)
+static dr_emit_flags_t
+trace_event1(void *dcontext, void *tag, instrlist_t *trace, bool translating)
 {
     inc_count_first(EVENT_TRACE_1, EVENT_TRACE_2);
     if (!dr_unregister_trace_event(trace_event1))
@@ -252,9 +247,8 @@ dr_emit_flags_t trace_event1(void *dcontext, void *tag, instrlist_t *trace,
     return DR_EMIT_DEFAULT;
 }
 
-static
-dr_emit_flags_t trace_event2(void *dcontext, void *tag, instrlist_t *trace,
-                             bool translating)
+static dr_emit_flags_t
+trace_event2(void *dcontext, void *tag, instrlist_t *trace, bool translating)
 {
     inc_count_second(EVENT_TRACE_2);
     if (!dr_unregister_trace_event(trace_event2))
@@ -262,8 +256,8 @@ dr_emit_flags_t trace_event2(void *dcontext, void *tag, instrlist_t *trace,
     return DR_EMIT_DEFAULT;
 }
 
-static
-dr_custom_trace_action_t end_trace_event1(void *dcontext, void *trace_tag, void *next_tag)
+static dr_custom_trace_action_t
+end_trace_event1(void *dcontext, void *trace_tag, void *next_tag)
 {
     inc_count_first(EVENT_END_TRACE_1, EVENT_END_TRACE_2);
     if (!dr_unregister_end_trace_event(end_trace_event1))
@@ -271,8 +265,8 @@ dr_custom_trace_action_t end_trace_event1(void *dcontext, void *trace_tag, void 
     return 0;
 }
 
-static
-dr_custom_trace_action_t end_trace_event2(void *dcontext, void *trace_tag, void *next_tag)
+static dr_custom_trace_action_t
+end_trace_event2(void *dcontext, void *trace_tag, void *next_tag)
 {
     inc_count_second(EVENT_END_TRACE_2);
     if (!dr_unregister_end_trace_event(end_trace_event2))
@@ -280,72 +274,74 @@ dr_custom_trace_action_t end_trace_event2(void *dcontext, void *trace_tag, void 
     return 0;
 }
 
-static
-void delete_event1(void *dcontext, void *tag)
+static void
+delete_event1(void *dcontext, void *tag)
 {
     inc_count_first(EVENT_DELETE_1, EVENT_DELETE_2);
     if (!dr_unregister_delete_event(delete_event1))
         dr_fprintf(STDERR, "unregister failed!\n");
 }
 
-static
-void delete_event2(void *dcontext, void *tag)
+static void
+delete_event2(void *dcontext, void *tag)
 {
     inc_count_second(EVENT_DELETE_2);
     if (!dr_unregister_delete_event(delete_event2))
         dr_fprintf(STDERR, "unregister failed!\n");
 }
 
-static
-void module_load_event_perm(void *drcontext, const module_data_t *info, bool loaded)
+static void
+module_load_event_perm(void *drcontext, const module_data_t *info, bool loaded)
 {
     /* Test i#138 */
     if (info->full_path == NULL || info->full_path[0] == '\0')
-        dr_fprintf(STDERR, "ERROR: full_path empty for %s\n", dr_module_preferred_name(info));
+        dr_fprintf(STDERR, "ERROR: full_path empty for %s\n",
+                   dr_module_preferred_name(info));
 #ifdef WINDOWS
     /* We do not expect \\server-style paths for this test */
     else if (info->full_path[0] == '\\' || info->full_path[1] != ':')
-        dr_fprintf(STDERR, "ERROR: full_path is not in DOS format: %s\n", info->full_path);
+        dr_fprintf(STDERR, "ERROR: full_path is not in DOS format: %s\n",
+                   info->full_path);
 #else
     else if (info->full_path[0] != '/')
         dr_fprintf(STDERR, "ERROR: full_path is not absolute: %s\n", info->full_path);
 #endif
 }
 
-static
-void module_load_event1(void *drcontext, const module_data_t *info, bool loaded)
+static void
+module_load_event1(void *drcontext, const module_data_t *info, bool loaded)
 {
     inc_count_first(EVENT_MODULE_LOAD_1, EVENT_MODULE_LOAD_2);
     if (!dr_unregister_module_load_event(module_load_event1))
         dr_fprintf(STDERR, "unregister failed!\n");
 }
 
-static
-void module_load_event2(void *drcontext, const module_data_t *info, bool loaded)
+static void
+module_load_event2(void *drcontext, const module_data_t *info, bool loaded)
 {
     inc_count_second(EVENT_MODULE_LOAD_2);
     if (!dr_unregister_module_load_event(module_load_event2))
         dr_fprintf(STDERR, "unregister failed!\n");
 }
 
-static
-void module_unload_event1(void *drcontext, const module_data_t *info)
+static void
+module_unload_event1(void *drcontext, const module_data_t *info)
 {
     inc_count_first(EVENT_MODULE_UNLOAD_1, EVENT_MODULE_UNLOAD_2);
     if (!dr_unregister_module_unload_event(module_unload_event1))
         dr_fprintf(STDERR, "unregister failed!\n");
 }
 
-static
-void module_unload_event2(void *drcontext, const module_data_t *info)
+static void
+module_unload_event2(void *drcontext, const module_data_t *info)
 {
     inc_count_second(EVENT_MODULE_UNLOAD_2);
     if (!dr_unregister_module_unload_event(module_unload_event2))
         dr_fprintf(STDERR, "unregister failed!\n");
 }
 
-static
-bool pre_syscall_event1(void *drcontext, int sysnum)
+static bool
+pre_syscall_event1(void *drcontext, int sysnum)
 {
     inc_count_first(EVENT_PRE_SYSCALL_1, EVENT_PRE_SYSCALL_2);
     if (!dr_unregister_pre_syscall_event(pre_syscall_event1))
@@ -353,8 +349,8 @@ bool pre_syscall_event1(void *drcontext, int sysnum)
     return true;
 }
 
-static
-bool pre_syscall_event2(void *drcontext, int sysnum)
+static bool
+pre_syscall_event2(void *drcontext, int sysnum)
 {
     inc_count_second(EVENT_PRE_SYSCALL_2);
     if (!dr_unregister_pre_syscall_event(pre_syscall_event2))
@@ -362,24 +358,24 @@ bool pre_syscall_event2(void *drcontext, int sysnum)
     return true;
 }
 
-static
-void post_syscall_event1(void *drcontext, int sysnum)
+static void
+post_syscall_event1(void *drcontext, int sysnum)
 {
     inc_count_first(EVENT_POST_SYSCALL_1, EVENT_POST_SYSCALL_2);
     if (!dr_unregister_post_syscall_event(post_syscall_event1))
         dr_fprintf(STDERR, "unregister failed!\n");
 }
 
-static
-void post_syscall_event2(void *drcontext, int sysnum)
+static void
+post_syscall_event2(void *drcontext, int sysnum)
 {
     inc_count_second(EVENT_POST_SYSCALL_2);
     if (!dr_unregister_post_syscall_event(post_syscall_event2))
         dr_fprintf(STDERR, "unregister failed!\n");
 }
 
-static
-bool filter_syscall_event1(void *drcontext, int sysnum)
+static bool
+filter_syscall_event1(void *drcontext, int sysnum)
 {
     inc_count_first(EVENT_FILTER_SYSCALL_1, EVENT_FILTER_SYSCALL_2);
     if (!dr_unregister_filter_syscall_event(filter_syscall_event1))
@@ -387,8 +383,8 @@ bool filter_syscall_event1(void *drcontext, int sysnum)
     return true;
 }
 
-static
-bool filter_syscall_event2(void *drcontext, int sysnum)
+static bool
+filter_syscall_event2(void *drcontext, int sysnum)
 {
     inc_count_second(EVENT_FILTER_SYSCALL_2);
     if (!dr_unregister_filter_syscall_event(filter_syscall_event2))
@@ -396,10 +392,9 @@ bool filter_syscall_event2(void *drcontext, int sysnum)
     return true;
 }
 
-
 #ifdef WINDOWS
-static
-bool exception_event_redirect(void *dcontext, dr_exception_t *excpt)
+static bool
+exception_event_redirect(void *dcontext, dr_exception_t *excpt)
 {
     app_pc addr;
     dr_mcontext_t mcontext;
@@ -418,12 +413,13 @@ bool exception_event_redirect(void *dcontext, dr_exception_t *excpt)
         return true;
     }
     dr_redirect_execution(&mcontext, 0);
-    dr_fprintf(STDERR, "should not be reached, dr_redirect_execution() should not return\n");
+    dr_fprintf(STDERR,
+               "should not be reached, dr_redirect_execution() should not return\n");
     return true;
 }
 
-static
-bool exception_event1(void *dcontext, dr_exception_t *excpt)
+static bool
+exception_event1(void *dcontext, dr_exception_t *excpt)
 {
     if (excpt->record->ExceptionCode == STATUS_ACCESS_VIOLATION)
         inc_count_first(EVENT_EXCEPTION_1, EVENT_EXCEPTION_2);
@@ -436,9 +432,9 @@ bool exception_event1(void *dcontext, dr_exception_t *excpt)
     return true;
 }
 
-static
-bool exception_event2(void *dcontext, dr_exception_t *excpt)
-{    
+static bool
+exception_event2(void *dcontext, dr_exception_t *excpt)
+{
     if (excpt->record->ExceptionCode == STATUS_ACCESS_VIOLATION)
         inc_count_second(EVENT_EXCEPTION_2);
 
@@ -449,8 +445,8 @@ bool exception_event2(void *dcontext, dr_exception_t *excpt)
     return true;
 }
 #else
-static
-dr_signal_action_t signal_event_redirect(void *dcontext, dr_siginfo_t *info)
+static dr_signal_action_t
+signal_event_redirect(void *dcontext, dr_siginfo_t *info)
 {
     if (info->sig == SIGSEGV) {
         app_pc addr;
@@ -472,11 +468,11 @@ dr_signal_action_t signal_event_redirect(void *dcontext, dr_siginfo_t *info)
     return DR_SIGNAL_DELIVER;
 }
 
-static
-dr_signal_action_t signal_event1(void *dcontext, dr_siginfo_t *info)
+static dr_signal_action_t
+signal_event1(void *dcontext, dr_siginfo_t *info)
 {
     inc_count_first(EVENT_SIGNAL_1, EVENT_SIGNAL_2);
-    if (info->sig == SIGUSR2) 
+    if (info->sig == SIGUSR2)
         return DR_SIGNAL_SUPPRESS;
     else if (info->sig == SIGURG) {
         if (!dr_unregister_signal_event(signal_event1))
@@ -486,13 +482,13 @@ dr_signal_action_t signal_event1(void *dcontext, dr_siginfo_t *info)
     return DR_SIGNAL_DELIVER;
 }
 
-static
-dr_signal_action_t signal_event2(void *dcontext, dr_siginfo_t *info)
-{    
+static dr_signal_action_t
+signal_event2(void *dcontext, dr_siginfo_t *info)
+{
     inc_count_second(EVENT_SIGNAL_2);
 
     dr_register_signal_event(signal_event_redirect);
-    
+
     if (!dr_unregister_signal_event(signal_event2))
         dr_fprintf(STDERR, "unregister failed!\n");
 
@@ -543,7 +539,8 @@ restore_state_ex_event2(void *drcontext, bool restore_memory,
 }
 
 DR_EXPORT
-void dr_init(client_id_t id)
+void
+dr_init(client_id_t id)
 {
     /* FIXME: we should test the nudge events as well, but that
      * would require some extra stuff our testing infrastructure

@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -40,10 +40,10 @@
 #include <setjmp.h>
 
 #ifdef LINUX
-# include <unistd.h>
-# include <signal.h>
-# include <ucontext.h>
-# include <errno.h>
+#    include <unistd.h>
+#    include <signal.h>
+#    include <ucontext.h>
+#    include <errno.h>
 #endif
 
 jmp_buf mark;
@@ -51,18 +51,18 @@ int where; /* 0 = normal, 1 = segfault longjmp */
 
 ptr_int_t
 #ifdef X64
-# ifdef WINDOWS  /* 5th param is on the stack */
+#    ifdef WINDOWS /* 5th param is on the stack */
 ring(int x1, int x2, int x3, int x4, ptr_int_t x)
-# else  /* 7th param is on the stack */
+#    else /* 7th param is on the stack */
 ring(int x1, int x2, int x3, int x4, int x5, int x6, ptr_int_t x)
-# endif
+#    endif
 #else
 ring(ptr_int_t x)
 #endif
 {
-    print("looking at ring "PFX"\n", x);
-    *(ptr_int_t*) (((ptr_int_t*)&x) - IF_X64_ELSE(IF_WINDOWS_ELSE(5, 1), 1)) = x;
-    return (ptr_int_t) x;
+    print("looking at ring " PFX "\n", x);
+    *(ptr_int_t *)(((ptr_int_t *)&x) - IF_X64_ELSE(IF_WINDOWS_ELSE(5, 1), 1)) = x;
+    return (ptr_int_t)x;
 }
 
 ptr_int_t
@@ -83,13 +83,12 @@ ptr_int_t
 twofoo()
 {
     ptr_int_t a = foo();
-    print("first foo a="SZFMT"\n", a);
+    print("first foo a=" SZFMT "\n", a);
 
     a += foo();
-    print("second foo a="SZFMT"\n", a);
+    print("second foo a=" SZFMT "\n", a);
     return a;
 }
-
 
 #ifdef LINUX
 /* just use single-arg handlers */
@@ -100,21 +99,21 @@ static void
 signal_handler(int sig)
 {
     if (sig == SIGSEGV) {
-#if VERY_VERBOSE
+#    if VERY_VERBOSE
         print("Got seg fault\n");
-#endif
+#    endif
         longjmp(mark, 1);
     }
     exit(-1);
 }
 
-#define ASSERT_NOERR(rc) do {                                   \
-  if (rc) {                                                     \
-     fprintf(stderr, "%s:%d rc=%d errno=%d %s\n",               \
-             __FILE__, __LINE__,                                \
-             rc, errno, strerror(errno));                       \
-  }                                                             \
-} while (0);
+#    define ASSERT_NOERR(rc)                                                         \
+        do {                                                                         \
+            if (rc) {                                                                \
+                fprintf(stderr, "%s:%d rc=%d errno=%d %s\n", __FILE__, __LINE__, rc, \
+                        errno, strerror(errno));                                     \
+            }                                                                        \
+        } while (0);
 
 /* set up signal_handler as the handler for signal "sig" */
 static void
@@ -123,7 +122,7 @@ intercept_signal(int sig, handler_t handler)
     int rc;
     struct sigaction act;
 
-    act.sa_sigaction = (handler_3_t) handler;
+    act.sa_sigaction = (handler_3_t)handler;
     /* FIXME: due to DR bug 840 we cannot block ourself in the handler
      * since the handler does not end in a sigreturn, so we have an empty mask
      * and we use SA_NOMASK
@@ -132,7 +131,7 @@ intercept_signal(int sig, handler_t handler)
     ASSERT_NOERR(rc);
     /* FIXME: due to DR bug #654 we use SA_SIGINFO -- change it once DR works */
     act.sa_flags = SA_NOMASK | SA_SIGINFO | SA_ONSTACK;
-    
+
     /* arm the signal */
     rc = sigaction(sig, &act, NULL);
     ASSERT_NOERR(rc);
@@ -142,41 +141,41 @@ intercept_signal(int sig, handler_t handler)
 /* sort of a hack to avoid the MessageBox of the unhandled exception spoiling
  * our batch runs
  */
-# include <windows.h>
+#    include <windows.h>
 /* top-level exception handler */
 static LONG
-our_top_handler(struct _EXCEPTION_POINTERS * pExceptionInfo)
+our_top_handler(struct _EXCEPTION_POINTERS *pExceptionInfo)
 {
     if (pExceptionInfo->ExceptionRecord->ExceptionCode == EXCEPTION_ACCESS_VIOLATION) {
-#if VERY_VERBOSE
+#    if VERY_VERBOSE
         print("Got segfault\n");
-#endif
+#    endif
         longjmp(mark, 1);
     }
-# if VERBOSE
+#    if VERBOSE
     print("Exception occurred, process about to die silently\n");
-# endif
+#    endif
     return EXCEPTION_EXECUTE_HANDLER; /* => global unwind and silent death */
 }
 #endif
 
 int
-invalid_ret(int num) 
+invalid_ret(int num)
 {
     where = setjmp(mark);
     if (where == 0) {
 #ifdef X64
-# ifdef WINDOWS
+#    ifdef WINDOWS
         ring(1, 2, 3, 4, num);
-# else
+#    else
         ring(1, 2, 3, 4, 5, 6, num);
-# endif
+#    endif
 #else
         ring(num);
 #endif
         print("unexpectedly we came back!");
     } else {
-        print("fault caught on "PFX"\n", num);
+        print("fault caught on " PFX "\n", num);
     }
     return 0;
 }
@@ -189,22 +188,22 @@ main()
 #ifdef LINUX
     intercept_signal(SIGSEGV, signal_handler);
 #else
-    SetUnhandledExceptionFilter((LPTOP_LEVEL_EXCEPTION_FILTER) our_top_handler);
+    SetUnhandledExceptionFilter((LPTOP_LEVEL_EXCEPTION_FILTER)our_top_handler);
 #endif
 
     print("starting good function\n");
     twofoo();
     print("starting bad function\n");
 
-    invalid_ret(1);                    /* zero page */
+    invalid_ret(1); /* zero page */
     /* FIXME: should wrap all of these in setjmp() blocks */
-    invalid_ret(0);                    /* NULL */
-    invalid_ret(0x00badbad);           /* user mode */
-    invalid_ret(0x7fffffff);           /* user mode */
-    invalid_ret(0x80000000);           /* kernel addr */
-    invalid_ret(0xbadbad00);           /* kernel addr */
-    invalid_ret(0xfffffffe);           /* just bad */
-    invalid_ret(0xffffffff);           /* just bad */
+    invalid_ret(0);          /* NULL */
+    invalid_ret(0x00badbad); /* user mode */
+    invalid_ret(0x7fffffff); /* user mode */
+    invalid_ret(0x80000000); /* kernel addr */
+    invalid_ret(0xbadbad00); /* kernel addr */
+    invalid_ret(0xfffffffe); /* just bad */
+    invalid_ret(0xffffffff); /* just bad */
 
     print("all done [not seen]\n");
 }

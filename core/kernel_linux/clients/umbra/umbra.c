@@ -30,9 +30,9 @@
  * Description:
  *     driver of the whole Umbra system
  *
- * Author: 
+ * Author:
  *     Qin Zhao
- * 
+ *
  */
 
 #include "umbra.h"
@@ -46,12 +46,11 @@
 #include "optimize.h"
 
 #ifdef LINUX_KERNEL
-#include "dr_kernel_utils.h"
-DEFINE_PER_CPU(umbra_info_t*, cpu_umbra_info);
-#define KERNEL_TEXT_BASE ((void*) 0xffffffff80000000)
-#define KERNEL_TEXT_SIZE (512 * 1024 * 1024)
+#    include "dr_kernel_utils.h"
+DEFINE_PER_CPU(umbra_info_t *, cpu_umbra_info);
+#    define KERNEL_TEXT_BASE ((void *)0xffffffff80000000)
+#    define KERNEL_TEXT_SIZE (512 * 1024 * 1024)
 #endif
-
 
 /* data structure for global process information */
 proc_info_t proc_info;
@@ -60,19 +59,19 @@ static void
 umbra_wrap_func_on_module_load(void *drcontext, const module_data_t *info);
 
 /* set default options for umbra */
-static void 
+static void
 proc_info_options_init(void)
 {
-    proc_info.options.opt_ems64           = false;
-    proc_info.options.opt_inline_check    = true;
-    proc_info.options.opt_map_check       = true;
+    proc_info.options.opt_ems64 = false;
+    proc_info.options.opt_inline_check = true;
+    proc_info.options.opt_map_check = true;
     proc_info.options.opt_aflags_stealing = true;
-    proc_info.options.opt_regs_stealing   = true;
-    proc_info.options.opt_trace           = false;
-    proc_info.options.opt_group           = true;
+    proc_info.options.opt_regs_stealing = true;
+    proc_info.options.opt_trace = false;
+    proc_info.options.opt_group = true;
 #ifdef DOUBLE_SHADOW
-    proc_info.options.opt_group           = false;
-    proc_info.options.opt_regs_stealing   = false;
+    proc_info.options.opt_group = false;
+    proc_info.options.opt_regs_stealing = false;
     proc_info.options.opt_aflags_stealing = false;
 #endif
 #ifdef LINUX_KERNEL
@@ -80,15 +79,14 @@ proc_info_options_init(void)
      * memory.
      * TODO(peter): Figure out how to enable opt_group.
      */
-    proc_info.options.opt_group           = false;
-    proc_info.options.opt_unsafe_regs_stealing   = false;
-    proc_info.options.opt_unsafe_aflags_stealing   = false;
+    proc_info.options.opt_group = false;
+    proc_info.options.opt_unsafe_regs_stealing = false;
+    proc_info.options.opt_unsafe_aflags_stealing = false;
 #endif
-    proc_info.options.stat                = false;
-    proc_info.options.adapt_alloc         = false;
-    proc_info.options.swap_stack          = false;
+    proc_info.options.stat = false;
+    proc_info.options.adapt_alloc = false;
+    proc_info.options.swap_stack = false;
 }
-
 
 /* initialize the proc_info */
 static void
@@ -97,14 +95,13 @@ proc_info_init(void)
     memset(&proc_info, 0, sizeof(proc_info_t));
     proc_info.mutex = dr_mutex_create();
     proc_info.num_offs = 0;
-    proc_info.pid   = dr_get_process_id();
-    proc_info.log   = umbra_open_proc_log(proc_info.pid);
+    proc_info.pid = dr_get_process_id();
+    proc_info.log = umbra_open_proc_log(proc_info.pid);
     proc_info.unit_bits = ADDRESS_SPACE_UNIT_ALIGN_BITS;
     proc_info.unit_mask = ADDRESS_SPACE_UNIT_ALIGN_MASK;
     proc_info.unit_size = ADDRESS_SPACE_UNIT_ALIGN_SIZE;
     proc_info_options_init();
 }
-
 
 /* finalize the proc_info */
 static void
@@ -114,7 +111,6 @@ proc_info_exit(void)
     dr_mutex_destroy(proc_info.mutex);
     dr_close_file(proc_info.log);
 }
-
 
 /* initialize thread private umbra info */
 static void
@@ -129,7 +125,6 @@ umbra_info_init(void *drcontext, umbra_info_t *info)
     dr_mutex_unlock(proc_info.mutex);
 }
 
-
 /* finalize thread private umbra info */
 static void
 umbra_info_exit(void *drcontext, umbra_info_t *info)
@@ -137,7 +132,6 @@ umbra_info_exit(void *drcontext, umbra_info_t *info)
     /* close log file */
     dr_close_file(info->log);
 }
-
 
 /* print execution statistics */
 static void
@@ -149,69 +143,43 @@ print_stat_count(void *drcontext, umbra_info_t *info)
     proc_info.num_instrs += info->num_dyn_instrs;
     dr_mutex_unlock(proc_info.mutex);
 
-    dr_fprintf(info->log,
-               "Num of dynamic app instrs: %llu\n",
-               info->num_dyn_instrs);
+    dr_fprintf(info->log, "Num of dynamic app instrs: %llu\n", info->num_dyn_instrs);
 
+    dr_fprintf(info->log, "Num of dynamic app references: %llu\n", info->num_dyn_refs);
     dr_fprintf(info->log,
-               "Num of dynamic app references: %llu\n",
-               info->num_dyn_refs);
-    dr_fprintf(info->log,
-               "Num of bb inline check: %llu," 
+               "Num of bb inline check: %llu,"
                "trace inline check: %llu\n",
-               info->num_bb_inline_checks, 
-               info->num_trace_inline_checks);
-    dr_fprintf(info->log,
-               "\ttotal inline check: %llu, "
-               "miss: %llu, hit ratio: %f\n",
-               info->num_bb_inline_checks +
-               info->num_trace_inline_checks,
-               info->num_map_checks,
-               (info->num_bb_inline_checks == 0) ? 0 :
-               ((double)(info->num_bb_inline_checks +
-                         info->num_trace_inline_checks - 
-                         info->num_map_checks) /
-                (double)(info->num_bb_inline_checks +
-                         info->num_trace_inline_checks)));
-    dr_fprintf(info->log,
-               "Num of map checks: %llu, miss: %llu, hit ratio: %f\n",
-               info->num_map_checks,
-               info->num_map_searchs,
-               (info->num_map_checks == 0) ? 0 :
-               ((double)(info->num_map_checks - 
-                         info->num_map_searchs) /
-                (double)(info->num_map_checks)));    
-    dr_fprintf(info->log,
-               "Num of map searchs: %llu, miss: %llu, hit ratio: %f\n",
-               info->num_map_searchs,
-               info->num_clean_calls,
-               (info->num_map_searchs == 0) ? 0 :
-               ((double)(info->num_map_searchs - 
-                         info->num_clean_calls) /
-                (double)(info->num_map_searchs)));
-    dr_fprintf(info->log,
-               "Num of clean calls: %llu\n", 
-               info->num_clean_calls);
-    dr_fprintf(info->log,
-               "Num of aflags restore: %llu\n",
-               info->num_aflags_restores);
-    dr_fprintf(info->log,
-               "Num of reg restore: %llu\n",
-               info->num_reg_restores);
-    dr_fprintf(info->log,
-               "Num of static app instrs %llu\n",
-               info->num_app_instrs);
-    dr_fprintf(info->log,
-               "Num of static refs: %llu\n",
-               info->num_app_refs);
-    dr_fprintf(info->log,
-               "Num of ref_cache: %llu\n",
-               info->num_ref_caches);
-    dr_fprintf(info->log,
-               "Num of SIGSEGV/SIGBUS: %llu\n",
-               info->num_sigs);
+               info->num_bb_inline_checks, info->num_trace_inline_checks);
+    dr_fprintf(
+        info->log,
+        "\ttotal inline check: %llu, "
+        "miss: %llu, hit ratio: %f\n",
+        info->num_bb_inline_checks + info->num_trace_inline_checks, info->num_map_checks,
+        (info->num_bb_inline_checks == 0)
+            ? 0
+            : ((double)(info->num_bb_inline_checks + info->num_trace_inline_checks -
+                        info->num_map_checks) /
+               (double)(info->num_bb_inline_checks + info->num_trace_inline_checks)));
+    dr_fprintf(info->log, "Num of map checks: %llu, miss: %llu, hit ratio: %f\n",
+               info->num_map_checks, info->num_map_searchs,
+               (info->num_map_checks == 0)
+                   ? 0
+                   : ((double)(info->num_map_checks - info->num_map_searchs) /
+                      (double)(info->num_map_checks)));
+    dr_fprintf(info->log, "Num of map searchs: %llu, miss: %llu, hit ratio: %f\n",
+               info->num_map_searchs, info->num_clean_calls,
+               (info->num_map_searchs == 0)
+                   ? 0
+                   : ((double)(info->num_map_searchs - info->num_clean_calls) /
+                      (double)(info->num_map_searchs)));
+    dr_fprintf(info->log, "Num of clean calls: %llu\n", info->num_clean_calls);
+    dr_fprintf(info->log, "Num of aflags restore: %llu\n", info->num_aflags_restores);
+    dr_fprintf(info->log, "Num of reg restore: %llu\n", info->num_reg_restores);
+    dr_fprintf(info->log, "Num of static app instrs %llu\n", info->num_app_instrs);
+    dr_fprintf(info->log, "Num of static refs: %llu\n", info->num_app_refs);
+    dr_fprintf(info->log, "Num of ref_cache: %llu\n", info->num_ref_caches);
+    dr_fprintf(info->log, "Num of SIGSEGV/SIGBUS: %llu\n", info->num_sigs);
 }
-
 
 /*---------------------------------------------------------------------*
  *                 Exported Function Implementation                    *
@@ -221,9 +189,11 @@ static void
 check_option_compatibility(option_t *options)
 {
 #ifdef LINUX_KERNEL
-#define ASSERT_OPTION(option, value) do {\
-    DR_ASSERT(options->option == (value));\
-    options->option = (value); } while (0)
+#    define ASSERT_OPTION(option, value)           \
+        do {                                       \
+            DR_ASSERT(options->option == (value)); \
+            options->option = (value);             \
+        } while (0)
     ASSERT_OPTION(swap_stack, false);
     ASSERT_OPTION(opt_ems64, false);
     /* TODO(peter): Add support for these. They don't work because we dispatch
@@ -234,7 +204,7 @@ check_option_compatibility(option_t *options)
     ASSERT_OPTION(opt_unsafe_regs_stealing, false);
     ASSERT_OPTION(double_shadow, false);
     ASSERT_OPTION(opt_group, false);
-#undef ASSERT_OPTION
+#    undef ASSERT_OPTION
 #endif
 }
 
@@ -254,7 +224,6 @@ umbra_init(client_id_t id)
     shadow_init();
 }
 
-
 /* finalize umbra system */
 void
 umbra_exit(void)
@@ -268,49 +237,45 @@ umbra_exit(void)
     proc_info_exit();
 }
 
-
 /* initialize thread private data structure for umbra */
 void
 umbra_thread_init(void *drcontext)
 {
     umbra_info_t *info;
-    
+
     /* initialize thread private umbra_info */
-    info = (umbra_info_t *)
-        dr_thread_alloc(drcontext, sizeof(umbra_info_t));
+    info = (umbra_info_t *)dr_thread_alloc(drcontext, sizeof(umbra_info_t));
 
 #ifdef LINUX_KERNEL
     __get_cpu_var(cpu_umbra_info) = info;
 #endif
 
-    dr_set_tls_field      (drcontext, info);
-    umbra_info_init       (drcontext, info);
-    table_thread_init     (drcontext, info);
-    cfg_thread_init       (drcontext, info);
-    shadow_thread_init    (drcontext, info);
-    analyzer_thread_init  (drcontext, info);
+    dr_set_tls_field(drcontext, info);
+    umbra_info_init(drcontext, info);
+    table_thread_init(drcontext, info);
+    cfg_thread_init(drcontext, info);
+    shadow_thread_init(drcontext, info);
+    analyzer_thread_init(drcontext, info);
     instrument_thread_init(drcontext, info);
     if (proc_info.client.thread_init != NULL)
         proc_info.client.thread_init(drcontext, info);
 }
 
-
 /* finalize thread private data structure for umbra */
 void
 umbra_thread_exit(void *drcontext)
 {
-    umbra_info_t *info = 
-        (umbra_info_t *)dr_get_tls_field(drcontext);
+    umbra_info_t *info = (umbra_info_t *)dr_get_tls_field(drcontext);
     print_stat_count(drcontext, info);
     instrument_thread_exit(drcontext, info);
-    analyzer_thread_exit  (drcontext, info);
-    shadow_thread_exit    (drcontext, info);
-    cfg_thread_exit       (drcontext, info);
+    analyzer_thread_exit(drcontext, info);
+    shadow_thread_exit(drcontext, info);
+    cfg_thread_exit(drcontext, info);
     if (proc_info.client.thread_exit != NULL)
         proc_info.client.thread_exit(drcontext, info);
-    table_thread_exit     (drcontext, info);
-    umbra_info_exit       (drcontext, info);
-    dr_set_tls_field      (drcontext, NULL);
+    table_thread_exit(drcontext, info);
+    umbra_info_exit(drcontext, info);
+    dr_set_tls_field(drcontext, NULL);
     dr_thread_free(drcontext, info, sizeof(umbra_info_t));
 #ifdef LINUX_KERNEL
     __get_cpu_var(cpu_umbra_info) = NULL;
@@ -330,10 +295,10 @@ static void
 add_stack_module(void *drcontext, umbra_info_t *info)
 {
     dr_mcontext_t mcontext;
-    int           app_errno;
-    memory_map_t  *map;
+    int app_errno;
+    memory_map_t *map;
 #ifndef LINUX_KERNEL
-    memory_mod_t  *mod;
+    memory_mod_t *mod;
 #endif
     int i;
 
@@ -353,8 +318,8 @@ add_stack_module(void *drcontext, umbra_info_t *info)
     DR_ASSERT(map != NULL);
 
     info->stack_ref_cache = table_alloc_ref_cache(drcontext, info);
-    info->stack_ref_cache->tag    = (reg_t)map->app_base;
-    info->stack_map_tag    = (reg_t)map->app_base;
+    info->stack_ref_cache->tag = (reg_t)map->app_base;
+    info->stack_map_tag = (reg_t)map->app_base;
     for (i = 0; i < MAX_NUM_SHADOWS; i++) {
         info->stack_ref_cache->offset[i] = map->offset[i];
         info->stack_map_offset[i] = map->offset[i];
@@ -363,11 +328,8 @@ add_stack_module(void *drcontext, umbra_info_t *info)
 
 /* invocated on basic block building event */
 dr_emit_flags_t
-umbra_basic_block(void *drcontext, 
-                  void *tag, 
-                  instrlist_t *ilist,
-                  bool  for_trace,
-                  bool  translating)
+umbra_basic_block(void *drcontext, void *tag, instrlist_t *ilist, bool for_trace,
+                  bool translating)
 {
     umbra_info_t *info = (umbra_info_t *)dr_get_tls_field(drcontext);
     basic_block_t *bb;
@@ -377,24 +339,19 @@ umbra_basic_block(void *drcontext,
                                                    for_trace);
     }
 
-    if (info->stack_ref_cache == NULL) 
+    if (info->stack_ref_cache == NULL)
         add_stack_module(drcontext, info);
     /* retrive the basic block data structure */
     bb = cfg_basic_block(drcontext, info, tag, ilist);
     /* instrument the basic block code */
-    instrument_basic_block(drcontext, info, bb, ilist,
-                           for_trace);
+    instrument_basic_block(drcontext, info, bb, ilist, for_trace);
     /* let DR store the translation information */
     return DR_EMIT_STORE_TRANSLATIONS;
 }
 
-
 /* invocated on trace building event */
 dr_emit_flags_t
-umbra_trace(void *drcontext, 
-            void *tag, 
-            instrlist_t *ilist,
-            bool  translating)
+umbra_trace(void *drcontext, void *tag, instrlist_t *ilist, bool translating)
 {
     umbra_info_t *info = (umbra_info_t *)dr_get_tls_field(drcontext);
     /* the functionality instrumentation is done on each bb event
@@ -404,17 +361,13 @@ umbra_trace(void *drcontext,
     return DR_EMIT_STORE_TRANSLATIONS;
 }
 
-
 /* if a trace should be stoped at next_tag bb */
 dr_custom_trace_action_t
-umbra_end_trace(void *drcontext, 
-                void *trace_tag, 
-                void *next_tag)
+umbra_end_trace(void *drcontext, void *trace_tag, void *next_tag)
 {
     /* let DR decides */
     return CUSTOM_TRACE_DR_DECIDES;
 }
-
 
 /* event on code fragment deletion */
 void
@@ -424,19 +377,14 @@ umbra_delete(void *drcontext, void *tag)
     return;
 }
 
-
 /* event on restore state */
-void 
-umbra_restore_state(void *drcontext, 
-                    void *tag,
-                    dr_mcontext_t *mcontext,
-                    bool restore_memory, 
-                    bool app_code_consistent)
+void
+umbra_restore_state(void *drcontext, void *tag, dr_mcontext_t *mcontext,
+                    bool restore_memory, bool app_code_consistent)
 {
     /* Do nothing */
     return;
 }
-
 
 /* event on which syscall is interested */
 bool
@@ -445,7 +393,6 @@ umbra_filter_syscall(void *drcontext, int sysnum)
     /* intercept every syscall */
     return true;
 }
-
 
 /* invocated before the system call */
 bool
@@ -457,7 +404,6 @@ umbra_pre_syscall(void *drcontext, int sysnum)
     return true;
 }
 
-
 /* invocated after the system call */
 void
 umbra_post_syscall(void *drcontext, int sysnum)
@@ -467,12 +413,9 @@ umbra_post_syscall(void *drcontext, int sysnum)
     shadow_post_syscall(drcontext, info, sysnum);
 }
 
-
 /* invocated on each module load event */
 void
-umbra_module_load(void *drcontext, 
-                  const module_data_t *info, 
-                  bool loaded)
+umbra_module_load(void *drcontext, const module_data_t *info, bool loaded)
 {
     umbra_info_t *umbra_info = (umbra_info_t *)dr_get_tls_field(drcontext);
     DR_ASSERT(info != NULL);
@@ -481,18 +424,16 @@ umbra_module_load(void *drcontext,
     shadow_module_load(drcontext, umbra_info, info, loaded);
 }
 
-
 /* invocated on each module unload event */
 void
-umbra_module_unload(void *drcontext, 
-                    const module_data_t *info)
+umbra_module_unload(void *drcontext, const module_data_t *info)
 {
     umbra_info_t *umbra_info = (umbra_info_t *)dr_get_tls_field(drcontext);
     shadow_module_unload(drcontext, umbra_info, info);
 }
 
 #ifdef LINUX_KERNEL
-    /* TODO(peter): Add some interrupt handling code here. */
+/* TODO(peter): Add some interrupt handling code here. */
 bool
 umbra_interrupt(void *drcontext, dr_interrupt_t *interrupt)
 {
@@ -517,8 +458,7 @@ show_umbra_stats(int cpu, char *buf)
     if (!umbra_info) {
         return sprintf(buf, "cpu %d not yet initilized!\n", cpu);
     }
-    #define PRINT_UMBRA_STAT(name)\
-        buf += sprintf(buf, #name ": %lu\n", umbra_info->name);
+#    define PRINT_UMBRA_STAT(name) buf += sprintf(buf, #    name ": %lu\n", umbra_info->name);
     PRINT_UMBRA_STAT(num_app_instrs);
     PRINT_UMBRA_STAT(num_app_refs);
     PRINT_UMBRA_STAT(num_ref_caches);
@@ -553,7 +493,7 @@ show_umbra_stats(int cpu, char *buf)
     PRINT_UMBRA_STAT(num_table_edge);
     PRINT_UMBRA_STAT(num_table_func);
     PRINT_UMBRA_STAT(num_table_code_hash);
-    #undef PRINT_UMBRA_STAT
+#    undef PRINT_UMBRA_STAT
     return buf - orig_buf;
 }
 
@@ -583,7 +523,8 @@ shadow_free:
     shadow_kernel_exit();
 stats_free:
     dr_stats_free(&umbra_stats);
-    return -ENOMEM;;
+    return -ENOMEM;
+    ;
 }
 
 void
@@ -615,9 +556,7 @@ umbra_exception(void *drcontext, dr_exception_t *excpt)
 #endif /* LINUX */
 
 static wrap_func_t *
-umbra_create_wf(const char *modname,
-                const char *name, 
-                pre_func_wrapper_t pre_func, 
+umbra_create_wf(const char *modname, const char *name, pre_func_wrapper_t pre_func,
                 post_func_wrapper_t post_func)
 {
     wrap_func_t *wf;
@@ -636,7 +575,6 @@ umbra_create_wf(const char *modname,
 
     return wf;
 }
-
 
 /* */
 static bool
@@ -661,17 +599,14 @@ umbra_wrap_func_on_module_load(void *drcontext, const module_data_t *info)
         if (module_name_match(info, wf->modname)) {
             wf->func = (app_pc)dr_get_proc_address(info->handle, wf->name);
             if (wf->func != NULL)
-                umbra_create_wf(wf->modname, wf->name, wf->pre_func,
-                                wf->post_func);
+                umbra_create_wf(wf->modname, wf->name, wf->pre_func, wf->post_func);
         }
     }
     dr_mutex_unlock(proc_info.mutex);
 }
 
 void
-umbra_wrap_func(const char *modname,
-                const char *name, 
-                pre_func_wrapper_t pre_func, 
+umbra_wrap_func(const char *modname, const char *name, pre_func_wrapper_t pre_func,
                 post_func_wrapper_t post_func)
 {
     wrap_func_t *wf;
@@ -679,7 +614,7 @@ umbra_wrap_func(const char *modname,
     module_data_t *data;
 
     wf = umbra_create_wf(modname, name, pre_func, post_func);
-    
+
     /* find the mod by the name */
     if (modname != NULL) {
         data = dr_lookup_module_by_name(modname);
@@ -688,7 +623,7 @@ umbra_wrap_func(const char *modname,
             return;
         }
     }
-    /* the module name is NULL or cannot find the module 
+    /* the module name is NULL or cannot find the module
      * iterate over the module.
      */
     mi = dr_module_iterator_start();
@@ -715,15 +650,14 @@ umbra_wrap_func(const char *modname,
 
 void
 umbra_wrap_func_address(app_pc func, size_t func_size, const char *name,
-                        pre_func_wrapper_t pre_func,
-                        post_func_wrapper_t post_func)
+                        pre_func_wrapper_t pre_func, post_func_wrapper_t post_func)
 {
     wrap_func_t *wf = umbra_create_wf("no module!", name, pre_func, post_func);
     wf->func = func;
     wf->size = func_size;
 }
 
-reg_t 
+reg_t
 umbra_get_arg(int index)
 {
     void *drcontext;
@@ -733,31 +667,18 @@ umbra_get_arg(int index)
     drcontext = dr_get_current_drcontext();
     dr_get_mcontext(drcontext, &mc, &error_no);
     switch (index) {
-    case 0:
-        arg = mc.rdi;
-        break;
-    case 1:
-        arg = mc.rsi;
-        break;
-    case 2:
-        arg = mc.rdx;
-        break;
-    case 3:
-        arg = mc.rcx;
-        break;
-    case 4:
-        arg = mc.r8;
-        break;
-    case 5:
-        arg = mc.r9;
-        break;
-    default:
-        DR_ASSERT(false);
+    case 0: arg = mc.rdi; break;
+    case 1: arg = mc.rsi; break;
+    case 2: arg = mc.rdx; break;
+    case 3: arg = mc.rcx; break;
+    case 4: arg = mc.r8; break;
+    case 5: arg = mc.r9; break;
+    default: DR_ASSERT(false);
     }
     return arg;
 }
 
-reg_t 
+reg_t
 umbra_get_ret_value(void)
 {
     void *drcontext = dr_get_current_drcontext();
@@ -770,10 +691,9 @@ umbra_get_ret_value(void)
 umbra_info_t *
 umbra_get_info(void)
 {
-  void *drcontext = dr_get_current_drcontext();
-  return dr_get_tls_field(drcontext);
+    void *drcontext = dr_get_current_drcontext();
+    return dr_get_tls_field(drcontext);
 }
-
 
 /*---------------------------------------------------------------------*
  *                              End of umbra.c                         *

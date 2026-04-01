@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -47,8 +47,7 @@ dr_probe_desc_t probes[NUM_PROBES];
 #include "dr_defines.h"
 
 /* This probe increments the argument to insert_liboffs.c:doubler() */
-__declspec(dllexport)
-void doubler_probe(dr_mcontext_t *cxt)
+__declspec(dllexport) void doubler_probe(dr_mcontext_t *cxt)
 {
     volatile reg_t *arg_p = (reg_t *)(cxt->xsp + sizeof(reg_t));
     *arg_p = (*arg_p) + 1;
@@ -58,12 +57,14 @@ void doubler_probe(dr_mcontext_t *cxt)
  * put it inside tools.c as it links against external libraries.  Ok for now as
  * this is the only one test.
  */
-extern unsigned long strtoul(const char *nptr, char **endptr, int base);
+extern unsigned long
+strtoul(const char *nptr, char **endptr, int base);
 /* Library offset has to be computed before the probe library is loaded
  * into memory.  Reading it from the map file is one of the easiest ways to
  * do it.
  */
-unsigned int get_symbol_offset_from_map(const char *map_file, const char *symbol)
+unsigned int
+get_symbol_offset_from_map(const char *map_file, const char *symbol)
 {
     const char *pref_addr_str = "Preferred load address is ";
     unsigned int pref_base, sym_addr, offset = 0xdeadc0de;
@@ -73,28 +74,27 @@ unsigned int get_symbol_offset_from_map(const char *map_file, const char *symbol
 
     fd = dr_open_file(map_file, DR_FILE_READ);
     if (fd == INVALID_FILE)
-        goto _get_module_offset_exit; 
+        goto _get_module_offset_exit;
 
     /* This seems to be the easiest way to get the size of the file. */
     if (!dr_file_seek(fd, 0, DR_SEEK_END))
-        goto _get_module_offset_exit; 
-    file_sz = (ssize_t) dr_file_tell(fd);
+        goto _get_module_offset_exit;
+    file_sz = (ssize_t)dr_file_tell(fd);
     if (file_sz <= 0)
-        goto _get_module_offset_exit; 
+        goto _get_module_offset_exit;
     if (!dr_file_seek(fd, 0, DR_SEEK_SET))
-        goto _get_module_offset_exit; 
+        goto _get_module_offset_exit;
 
     /* Read the whole file. */
     buf = dr_global_alloc(file_sz + 1);
     if (buf == NULL)
-        goto _get_module_offset_exit; 
+        goto _get_module_offset_exit;
     dr_read_file(fd, buf, file_sz);
     buf[file_sz] = '\0';
 
     /* Locate preferred base & symbol address. */
     temp = strstr(buf, pref_addr_str);
-    if (temp != NULL)
-    {
+    if (temp != NULL) {
         pref_base = strtoul(temp + strlen(pref_addr_str), NULL, 16);
         temp = strstr(buf, symbol);
         if (temp != NULL)
@@ -104,7 +104,7 @@ unsigned int get_symbol_offset_from_map(const char *map_file, const char *symbol
 
     dr_global_free(buf, file_sz + 1);
 
- _get_module_offset_exit:
+_get_module_offset_exit:
     if (fd != INVALID_FILE)
         dr_close_file(fd);
     return offset;
@@ -114,18 +114,20 @@ unsigned int get_symbol_offset_from_map(const char *map_file, const char *symbol
  * Assumes that map files for the test_{dll,exe}, probe and client dlls are all
  * in the same directory as the client, which is true for tests.
  */
-unsigned int get_symbol_offset(const char *map_file, const char *symbol)
+unsigned int
+get_symbol_offset(const char *map_file, const char *symbol)
 {
     unsigned long offset = 0xdeadc0de, client_path_len;
     char *client_path = NULL, *map_path, *ptr;
 
-    client_path = (char *) dr_get_client_path();
+    client_path = (char *)dr_get_client_path();
     if (client_path != NULL) {
         client_path_len = strlen(client_path);
-        map_path = dr_global_alloc(client_path_len * 2);        /* be safe */
+        map_path = dr_global_alloc(client_path_len * 2); /* be safe */
         strcpy(map_path, client_path);
         ptr = map_path + client_path_len;
-        while (*--ptr != '\\');             /* get the dirname */
+        while (*--ptr != '\\')
+            ; /* get the dirname */
         strcpy(++ptr, map_file);
     }
 
@@ -137,7 +139,8 @@ unsigned int get_symbol_offset(const char *map_file, const char *symbol)
     return offset;
 }
 /*----------------------------------------------------------------------------*/
-static void probe_def_init(void)
+static void
+probe_def_init(void)
 {
     probes[0].name = "insert_liboffs.exe probe";
 
@@ -155,7 +158,8 @@ static void probe_def_init(void)
 }
 
 DR_EXPORT
-void dr_init()
+void
+dr_init()
 {
     dr_probe_status_t stat;
 

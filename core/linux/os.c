@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -38,7 +38,7 @@
  * os.c - Linux specific routines
  */
 
-/* Easiest to match kernel stat struct by using 64-bit. 
+/* Easiest to match kernel stat struct by using 64-bit.
  * This limits us to 2.4+ kernel but that's ok.
  * I don't really want to get into requiring kernel headers to build
  * general release packages, though that would be fine for targeted builds.
@@ -52,21 +52,21 @@
 /* for open */
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <sched.h>              /* for CLONE_* */
+#include <sched.h> /* for CLONE_* */
 #include "../globals.h"
 #include "string_wrapper.h"
 #include <unistd.h> /* for write and usleep and _exit */
 #include "limits_wrapper.h"
-#include <sys/sysinfo.h>        /* for get_nprocs_conf */
-#include <sys/vfs.h> /* for statfs */
+#include <sys/sysinfo.h> /* for get_nprocs_conf */
+#include <sys/vfs.h>     /* for statfs */
 
 /* must be after X64 is defined */
 #ifdef X64
-# define SYSNUM_STAT SYS_stat
-# define SYSNUM_FSTAT SYS_fstat
+#    define SYSNUM_STAT SYS_stat
+#    define SYSNUM_FSTAT SYS_fstat
 #else
-# define SYSNUM_STAT SYS_stat64
-# define SYSNUM_FSTAT SYS_fstat64
+#    define SYSNUM_STAT SYS_stat64
+#    define SYSNUM_FSTAT SYS_fstat64
 #endif
 
 extern char **__environ;
@@ -77,72 +77,72 @@ extern char **__environ;
 
 #ifdef X86
 /* must be prior to <link.h> => <elf.h> => INT*_{MIN,MAX} */
-# include "instr.h" /* for get_segment_base() */
+#    include "instr.h" /* for get_segment_base() */
 #endif
 
 #ifndef HAVE_PROC_MAPS
 /* must be prior to including dlfcn.h */
-# define _GNU_SOURCE 1
+#    define _GNU_SOURCE 1
 /* despite man page I had to define this in addition to prev line */
-# define __USE_GNU 1
+#    define __USE_GNU 1
 /* this relies on not having -Icore/ to avoid including core/link.h
  * (pre-cmake we used -iquote instead of -I when we did have -Icore/)
  */
-# include <link.h> /* struct dl_phdr_info */
+#    include <link.h> /* struct dl_phdr_info */
 #endif
 
 #include <dlfcn.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <signal.h>
-#include <syslog.h>             /* vsyslog */
+#include <syslog.h> /* vsyslog */
 #include "../vmareas.h"
 #ifdef RCT_IND_BRANCH
-#  include "../rct.h"
+#    include "../rct.h"
 #endif
-#include "syscall.h"            /* our own local copy */
+#include "syscall.h" /* our own local copy */
 #include "../module_shared.h"
 #include "os_private.h"
 #include "../synch.h"
 
 #ifdef CLIENT_INTERFACE
-# include "instrument.h"
+#    include "instrument.h"
 #endif
 
 #ifdef NOT_DYNAMORIO_CORE_PROPER
-# undef ASSERT
-# undef ASSERT_NOT_IMPLEMENTED
-# undef ASSERT_NOT_TESTED
-# define ASSERT(x) /* nothing */
-# define ASSERT_NOT_IMPLEMENTED(x) /* nothing */
-# define ASSERT_NOT_TESTED(x) /* nothing */
-# undef LOG
-# define LOG(...) /* nothing */
+#    undef ASSERT
+#    undef ASSERT_NOT_IMPLEMENTED
+#    undef ASSERT_NOT_TESTED
+#    define ASSERT(x)                 /* nothing */
+#    define ASSERT_NOT_IMPLEMENTED(x) /* nothing */
+#    define ASSERT_NOT_TESTED(x)      /* nothing */
+#    undef LOG
+#    define LOG(...) /* nothing */
 #else /* !NOT_DYNAMORIO_CORE_PROPER: around most of file, to exclude preload */
 
-#include <asm/ldt.h>
+#    include <asm/ldt.h>
 /* The ldt struct in ldt.h used to be just "struct modify_ldt_ldt_s"; then that
  * was also typdef-ed as modify_ldt_t; then it was just user_desc.
  * To compile on old and new we inline our own copy of the struct:
  */
 typedef struct _our_modify_ldt_t {
-    unsigned int  entry_number;
-    unsigned int  base_addr;
-    unsigned int  limit;
-    unsigned int  seg_32bit:1;
-    unsigned int  contents:2;
-    unsigned int  read_exec_only:1;
-    unsigned int  limit_in_pages:1;
-    unsigned int  seg_not_present:1;
-    unsigned int  useable:1;
+    unsigned int entry_number;
+    unsigned int base_addr;
+    unsigned int limit;
+    unsigned int seg_32bit : 1;
+    unsigned int contents : 2;
+    unsigned int read_exec_only : 1;
+    unsigned int limit_in_pages : 1;
+    unsigned int seg_not_present : 1;
+    unsigned int useable : 1;
 } our_modify_ldt_t;
 
-#ifndef HAVE_TLS
+#    ifndef HAVE_TLS
 /* We use a table lookup to find a thread's dcontext */
 /* Our only current no-TLS target, VMKernel (VMX86_SERVER), doesn't have apps with
  * tons of threads anyway
  */
-#define MAX_THREADS 512
+#        define MAX_THREADS 512
 typedef struct _tls_slot_t {
     thread_id_t tid;
     dcontext_t *dcontext;
@@ -151,31 +151,32 @@ typedef struct _tls_slot_t {
 static tls_slot_t *tls_table;
 /* not static so deadlock_avoidance_unlock() can look for it */
 DECLARE_CXTSWPROT_VAR(mutex_t tls_lock, INIT_LOCK_FREE(tls_lock));
-#endif
+#    endif
 
-#ifdef CLIENT_INTERFACE
+#    ifdef CLIENT_INTERFACE
 /* Should we place this in a client header?  Currently mentioned in
  * dr_raw_tls_calloc() docs.
  */
-# define MAX_NUM_CLIENT_TLS 64
+#        define MAX_NUM_CLIENT_TLS 64
 static bool client_tls_allocated[MAX_NUM_CLIENT_TLS];
 DECLARE_CXTSWPROT_VAR(static mutex_t client_tls_lock, INIT_LOCK_FREE(client_tls_lock));
-#endif
+#    endif
 
-#include <stddef.h> /* for offsetof */
+#    include <stddef.h> /* for offsetof */
 
-#include <sys/utsname.h> /* for struct utsname */
+#    include <sys/utsname.h> /* for struct utsname */
 
 /* forward decl */
-static void handle_execve_post(dcontext_t *dcontext);
+static void
+handle_execve_post(dcontext_t *dcontext);
 
 /* full path to our own library, used for execve */
 static char dynamorio_library_path[MAXIMUM_PATH];
 /* Issue 20: path to other architecture */
 static char dynamorio_alt_arch_path[MAXIMUM_PATH];
 /* Makefile passes us LIBDIR_X{86,64} defines */
-#define DR_LIBDIR_X86 STRINGIFY(LIBDIR_X86)
-#define DR_LIBDIR_X64 STRINGIFY(LIBDIR_X64)
+#    define DR_LIBDIR_X86 STRINGIFY(LIBDIR_X86)
+#    define DR_LIBDIR_X64 STRINGIFY(LIBDIR_X64)
 
 /* pc values delimiting dynamo dll image */
 static app_pc dynamo_dll_start = NULL;
@@ -188,9 +189,9 @@ static bool kernel_64bit;
 
 pid_t pid_cached;
 
-#ifdef PROFILE_RDTSC
+#    ifdef PROFILE_RDTSC
 uint kilo_hertz; /* cpu clock speed */
-#endif
+#    endif
 
 /* lock to guard reads from /proc/self/maps in get_memory_info_from_os(). */
 static mutex_t memory_info_buf_lock = INIT_LOCK_FREE(memory_info_buf_lock);
@@ -209,19 +210,23 @@ DR_API file_t our_stdin = INVALID_FILE;
  * dependencies.
  */
 /* exported for debug to avoid rank order in print_vm_area() */
-IF_DEBUG_ELSE(,static) vm_area_vector_t *all_memory_areas;
+IF_DEBUG_ELSE(, static) vm_area_vector_t *all_memory_areas;
 
 typedef struct _allmem_info_t {
     uint prot;
     dr_mem_type_t type;
 } allmem_info_t;
 
-static void allmem_info_free(void *data);
-static void *allmem_info_dup(void *data);
-static bool allmem_should_merge(bool adjacent, void *data1, void *data2);
-static void *allmem_info_merge(void *dst_data, void *src_data);
+static void
+allmem_info_free(void *data);
+static void *
+allmem_info_dup(void *data);
+static bool
+allmem_should_merge(bool adjacent, void *data1, void *data2);
+static void *
+allmem_info_merge(void *dst_data, void *src_data);
 
-/* HACK to make all_memory_areas->lock recursive 
+/* HACK to make all_memory_areas->lock recursive
  * protected for both read and write by all_memory_areas->lock
  * FIXME: provide general rwlock w/ write portion recursive
  * FIXME: eliminate duplicate code (see dynamo_areas_recursion)
@@ -242,11 +247,11 @@ typedef struct _maps_iter_t {
     app_pc vm_end;
     uint prot;
     size_t offset; /* offset into the file being mapped */
-    uint64 inode; /* FIXME - use ino_t?  We need to know what size code to use for the
-                   * scanf and I don't trust that we, the maps file, and any clients
-                   * will all agree on its size since it seems to be defined differently
-                   * depending on whether large file support is compiled in etc.  Just
-                   * using uint64 might be safer (see also inode in module_names_t). */
+    uint64 inode;  /* FIXME - use ino_t?  We need to know what size code to use for the
+                    * scanf and I don't trust that we, the maps file, and any clients
+                    * will all agree on its size since it seems to be defined differently
+                    * depending on whether large file support is compiled in etc.  Just
+                    * using uint64 might be safer (see also inode in module_names_t). */
     const char *comment; /* usually file name with path, but can also be [vsdo] for the
                           * vsyscall page */
     /* for internal use by the iterator.  we could make these static,
@@ -262,13 +267,16 @@ typedef struct _maps_iter_t {
     char *comment_buffer;
 } maps_iter_t;
 
-static bool maps_iterator_start(maps_iter_t *iter, bool may_alloc);
-static void maps_iterator_stop(maps_iter_t *iter);
-static bool maps_iterator_next(maps_iter_t *iter);
+static bool
+maps_iterator_start(maps_iter_t *iter, bool may_alloc);
+static void
+maps_iterator_stop(maps_iter_t *iter);
+static bool
+maps_iterator_next(maps_iter_t *iter);
 
 static int
-get_library_bounds(const char *name, app_pc *start/*IN/OUT*/, app_pc *end/*OUT*/,
-                   char *fullpath/*OPTIONAL OUT*/, size_t path_size);
+get_library_bounds(const char *name, app_pc *start /*IN/OUT*/, app_pc *end /*OUT*/,
+                   char *fullpath /*OPTIONAL OUT*/, size_t path_size);
 
 /* vsyscall page.  hardcoded at 0xffffe000 in earlier kernels, but
  * randomly placed since fedora2.
@@ -281,7 +289,7 @@ app_pc vsyscall_page_start = NULL;
 app_pc vsyscall_syscall_end_pc = NULL;
 /* pc where kernel returns control after sysenter vsyscall */
 app_pc vsyscall_sysenter_return_pc = NULL;
-#define VSYSCALL_PAGE_START_HARDCODED ((app_pc)(ptr_uint_t) 0xffffe000)
+#    define VSYSCALL_PAGE_START_HARDCODED ((app_pc)(ptr_uint_t)0xffffe000)
 
 /* The pthreads library keeps errno in its pthread_descr data structure,
  * which it looks up by dispatching on the stack pointer.  This doesn't work
@@ -290,12 +298,12 @@ app_pc vsyscall_sysenter_return_pc = NULL;
  * out of the code cache.
  */
 
- /* FIXME: maybe we should create 1st dcontext earlier so we don't need init_errno?
-  * any problems with init_errno being set and then dcontext->errno being read?
-  * FIXME: if a thread issues a dr_app_stop, then we don't want to use
-  * this errno slot?  But it may later do a start...probably ok to keep using
-  * the slot.  But, when threads die, they'll all use the same init_errno!
-  */
+/* FIXME: maybe we should create 1st dcontext earlier so we don't need init_errno?
+ * any problems with init_errno being set and then dcontext->errno being read?
+ * FIXME: if a thread issues a dr_app_stop, then we don't want to use
+ * this errno slot?  But it may later do a start...probably ok to keep using
+ * the slot.  But, when threads die, they'll all use the same init_errno!
+ */
 static int init_errno; /* errno until 1st dcontext created */
 
 /* With KEEP_SYMBOLS_FOR_LIBC_BACKTRACE our __errno_location gets interpreted
@@ -310,9 +318,9 @@ static int init_errno; /* errno until 1st dcontext created */
  * when we call libc routines.  Also, even when not "hidden", we control
  * the app's errno but not libc's: b/c __errno_location is no longer weak?
  */
-__attribute__ ((visibility ("hidden")))
-int *
-__errno_location(void) {
+__attribute__((visibility("hidden"))) int *
+__errno_location(void)
+{
     /* Each dynamo thread should have a separate errno */
     dcontext_t *dcontext = get_thread_private_dcontext();
     if (dcontext == NULL)
@@ -329,7 +337,7 @@ __errno_location(void) {
  * function globally and call it each time.  Note that pthreads seems
  * to be the one who provides per-thread errno: using raw syscalls to
  * create threads, we end up with a global errno:
- * 
+ *
  *   > for i in linux.thread.*0/log.*; do grep 'libc errno' $i | head -1; done
  *   libc errno loc: 0x00007f153de26698
  *   libc errno loc: 0x00007f153de26698
@@ -354,10 +362,10 @@ get_libc_errno_location(bool do_init)
              */
             if (modname != NULL && strstr(modname, "libc.so") == modname) {
                 /* called during init when .data is writable */
-                libc_errno_loc = (errno_loc_t)
-                    get_proc_address(area->start, "__errno_location");
+                libc_errno_loc =
+                    (errno_loc_t)get_proc_address(area->start, "__errno_location");
                 ASSERT(libc_errno_loc != NULL);
-                LOG(GLOBAL, LOG_THREADS, 2, "libc errno loc func: "PFX"\n",
+                LOG(GLOBAL, LOG_THREADS, 2, "libc errno loc func: " PFX "\n",
                     libc_errno_loc);
                 break;
             }
@@ -379,7 +387,7 @@ get_libc_errno(void)
     if (func != NULL) {
         int *loc = (*func)();
         ASSERT(loc != NULL);
-        LOG(THREAD_GET, LOG_THREADS, 5, "libc errno loc: "PFX"\n", loc);
+        LOG(THREAD_GET, LOG_THREADS, 5, "libc errno loc: " PFX "\n", loc);
         if (loc != NULL)
             return *loc;
     }
@@ -403,13 +411,11 @@ set_libc_errno(int val)
     }
 }
 
-
 /* N.B.: pthreads has two other locations it keeps on a per-thread basis:
  * h_errno and res_state.  See glibc-2.2.4/linuxthreads/errno.c.
  * If dynamo ever modifies those we'll need to do to them what we now do to
  * errno.
  */
-
 
 /* The environment vars exhibit totally messed up behavior when someone
  * does an execve of /bin/sh -- not sure what's going on, but using our
@@ -418,31 +424,31 @@ set_libc_errno(int val)
  * NULL for other vars that are obviously set (by iterating through environ).
  * FIXME: find out the real story here.
  */
-#define __set_errno(val) (*__errno_location ()) = (val)
-#define __get_errno() (*__errno_location())
+#    define __set_errno(val) (*__errno_location()) = (val)
+#    define __get_errno() (*__errno_location())
 int
 our_unsetenv(const char *name)
 {
     size_t len;
     char **ep;
-    
-    if (name == NULL || *name == '\0' || strchr (name, '=') != NULL) {
-        __set_errno (EINVAL);
+
+    if (name == NULL || *name == '\0' || strchr(name, '=') != NULL) {
+        __set_errno(EINVAL);
         return -1;
     }
-    
-    len = strlen (name);
-    
+
+    len = strlen(name);
+
     /* FIXME: glibc code grabs a lock here, we don't have access to that lock
      * LOCK;
      */
-    
+
     ep = __environ;
     while (*ep != NULL)
-        if (!strncmp (*ep, name, len) && (*ep)[len] == '=') {
+        if (!strncmp(*ep, name, len) && (*ep)[len] == '=') {
             /* Found it.  Remove this pointer by moving later ones back.  */
             char **dp = ep;
-            
+
             do {
                 dp[0] = dp[1];
             } while (*dp++);
@@ -453,12 +459,11 @@ our_unsetenv(const char *name)
     /* FIXME: glibc code unlocks here, we don't have access to that lock
      * UNLOCK;
      */
-    
+
     return 0;
 }
 
-
-#if !defined(STATIC_LIBRARY) && !defined(STANDALONE_UNIT_TEST)
+#    if !defined(STATIC_LIBRARY) && !defined(STANDALONE_UNIT_TEST)
 /* shared library init and exit */
 int
 _init()
@@ -466,13 +471,13 @@ _init()
     /* if do not want to use drpreload.so, we can take over here */
     extern void dynamorio_app_take_over(void);
     bool takeover = false;
-# ifdef INIT_TAKE_OVER
+#        ifdef INIT_TAKE_OVER
     takeover = true;
-# endif
-# ifdef VMX86_SERVER
+#        endif
+#        ifdef VMX86_SERVER
     /* PR 391765: take over here instead of using preload */
     takeover = os_in_vmkernel_classic();
-# endif
+#        endif
     if (takeover) {
         if (dynamorio_app_init() == 0 /* success */) {
             dynamorio_app_take_over();
@@ -486,7 +491,7 @@ _fini()
 {
     return 0;
 }
-#endif
+#    endif
 
 bool
 kernel_is_64bit(void)
@@ -502,7 +507,7 @@ get_uname(void)
      */
     static struct utsname uinfo; /* can be large, avoid stack overflow */
     DEBUG_DECLARE(int res =)
-        dynamorio_syscall(SYS_uname, 1, (ptr_uint_t)&uinfo);
+    dynamorio_syscall(SYS_uname, 1, (ptr_uint_t)&uinfo);
     ASSERT(res >= 0);
     LOG(GLOBAL, LOG_TOP, 1, "uname:\n\tsysname: %s\n", uinfo.sysname);
     LOG(GLOBAL, LOG_TOP, 1, "\tnodename: %s\n", uinfo.nodename);
@@ -524,28 +529,28 @@ os_init(void)
      * (maps to getpid), don't have an old enough target to test this.
      */
     kernel_thread_groups = (dynamorio_syscall(SYS_gettid, 0) >= 0);
-    LOG(GLOBAL, LOG_TOP|LOG_STATS, 1, "thread id is from %s\n",
+    LOG(GLOBAL, LOG_TOP | LOG_STATS, 1, "thread id is from %s\n",
         kernel_thread_groups ? "gettid" : "getpid");
     ASSERT_CURIOSITY(kernel_thread_groups);
 
     pid_cached = get_process_id();
 
-#ifdef VMX86_SERVER
+#    ifdef VMX86_SERVER
     vmk_init();
-#endif
-    
+#    endif
+
     signal_init();
 
-#ifdef PROFILE_RDTSC
+#    ifdef PROFILE_RDTSC
     if (dynamo_options.profile_times) {
         ASSERT_NOT_TESTED();
         kilo_hertz = get_timer_frequency();
-        LOG(GLOBAL, LOG_TOP|LOG_STATS, 1, "CPU MHz is %d\n", kilo_hertz/1000);
+        LOG(GLOBAL, LOG_TOP | LOG_STATS, 1, "CPU MHz is %d\n", kilo_hertz / 1000);
     }
-#endif /* PROFILE_RDTSC */
+#    endif /* PROFILE_RDTSC */
     /* Need to be after heap_init */
-    VMVECTOR_ALLOC_VECTOR(all_memory_areas, GLOBAL_DCONTEXT,
-                          VECTOR_SHARED, all_memory_areas);
+    VMVECTOR_ALLOC_VECTOR(all_memory_areas, GLOBAL_DCONTEXT, VECTOR_SHARED,
+                          all_memory_areas);
     vmvector_set_callbacks(all_memory_areas, allmem_info_free, allmem_info_dup,
                            allmem_should_merge, allmem_info_merge);
 }
@@ -558,13 +563,13 @@ get_application_pid_helper(bool ignore_cache)
 
     if (!pidstr[0] || ignore_cache) {
         int pid = get_process_id();
-        snprintf(pidstr, sizeof(pidstr)-1, "%d", pid);
+        snprintf(pidstr, sizeof(pidstr) - 1, "%d", pid);
     }
     return pidstr;
 }
 
 /* get application pid, (cached), used for event logging */
-char*
+char *
 get_application_pid()
 {
     return get_application_pid_helper(false);
@@ -575,7 +580,7 @@ static char *
 get_application_name_helper(bool ignore_cache)
 {
     static char name_buf[MAXIMUM_PATH];
-    
+
     if (!name_buf[0] || ignore_cache) {
         /* FIXME PR 363063: move getnamefrompid() here and replace /proc reliance
          * ideally w/ os-independent method, but could use VSI for ESX
@@ -608,9 +613,9 @@ get_application_short_name()
 }
 
 /* Processor information provided by kernel */
-#define PROC_CPUINFO "/proc/cpuinfo"
-#define CPUMHZ_LINE_LENGTH  64
-#define CPUMHZ_LINE_FORMAT "cpu MHz\t\t: %lu.%03lu\n"
+#    define PROC_CPUINFO "/proc/cpuinfo"
+#    define CPUMHZ_LINE_LENGTH 64
+#    define CPUMHZ_LINE_FORMAT "cpu MHz\t\t: %lu.%03lu\n"
 /* printed in /usr/src/linux-2.4/arch/i386/kernel/setup.c calibrated in time.c */
 /* seq_printf(m, "cpu MHz\t\t: %lu.%03lu\n", cpu_khz / 1000, (cpu_khz % 1000)) */
 /* e.g. cpu MHz           : 1594.851 */
@@ -619,40 +624,41 @@ get_timer_frequency_cpuinfo(void)
 {
     FILE *cpuinfo;
     char line[CPUMHZ_LINE_LENGTH];
-    ulong cpu_mhz = 1, cpu_khz = 0; 
-    
+    ulong cpu_mhz = 1, cpu_khz = 0;
+
     /* FIXME: use os_open; for now only called for init, so ok to use fopen */
-    cpuinfo=fopen(PROC_CPUINFO,"r");
+    cpuinfo = fopen(PROC_CPUINFO, "r");
     ASSERT(cpuinfo != NULL);
 
     while (!feof(cpuinfo)) {
         if (fgets(line, sizeof(line), cpuinfo) == NULL)
             break;
         if (sscanf(line, CPUMHZ_LINE_FORMAT, &cpu_mhz, &cpu_khz) == 2) {
-            LOG(GLOBAL, LOG_ALL, 2, "Processor speed exactly %lu.%03luMHz\n", cpu_mhz, cpu_khz);
+            LOG(GLOBAL, LOG_ALL, 2, "Processor speed exactly %lu.%03luMHz\n", cpu_mhz,
+                cpu_khz);
             break;
         }
     }
     fclose(cpuinfo);
-    return cpu_mhz*1000 + cpu_khz;
+    return cpu_mhz * 1000 + cpu_khz;
 }
 
 timestamp_t
 get_timer_frequency()
 {
-#ifdef VMX86_SERVER
+#    ifdef VMX86_SERVER
     if (os_in_vmkernel_userworld()) {
         return vmk_get_timer_frequency();
     }
-#endif
-   return get_timer_frequency_cpuinfo();
+#    endif
+    return get_timer_frequency_cpuinfo();
 }
 
 /* seconds since 1970 */
 uint
 query_time_seconds(void)
 {
-    return (uint) dynamorio_syscall(SYS_time, 1, NULL);
+    return (uint)dynamorio_syscall(SYS_time, 1, NULL);
 }
 
 /* milliseconds since 1970 */
@@ -661,8 +667,8 @@ query_time_millis()
 {
     struct timeval current_time;
     if (dynamorio_syscall(SYS_gettimeofday, 2, &current_time, NULL) == 0) {
-        uint64 res = (((uint64)current_time.tv_sec) * 1000) +
-            (current_time.tv_usec / 1000);
+        uint64 res =
+            (((uint64)current_time.tv_sec) * 1000) + (current_time.tv_usec / 1000);
         return res;
     } else {
         ASSERT_NOT_REACHED();
@@ -670,10 +676,11 @@ query_time_millis()
     }
 }
 
-#ifdef RETURN_AFTER_CALL
+#    ifdef RETURN_AFTER_CALL
 /* Finds the bottom of the call stack, presumably at program startup. */
-/* This routine is a copycat of internal_dump_callstack and makes assumptions about program state, 
-   i.e. that frame pointers are valid and should be used only in well known points for release build.
+/* This routine is a copycat of internal_dump_callstack and makes assumptions about
+   program state, i.e. that frame pointers are valid and should be used only in well known
+   points for release build.
 */
 static app_pc
 find_stack_bottom()
@@ -682,22 +689,22 @@ find_stack_bottom()
     int depth = 0;
     reg_t *fp;
     /* from dump_dr_callstack() */
-    asm("mov  %%"ASM_XBP", %0" : "=m"(fp));
+    asm("mov  %%" ASM_XBP ", %0" : "=m"(fp));
 
     LOG(THREAD_GET, LOG_ALL, 3, "Find stack bottom:\n");
-    while (fp != NULL && is_readable_without_exception((byte *)fp, sizeof(reg_t)*2)) {
-        retaddr = (app_pc)*(fp+1);      /* presumably also readable */
+    while (fp != NULL && is_readable_without_exception((byte *)fp, sizeof(reg_t) * 2)) {
+        retaddr = (app_pc) * (fp + 1); /* presumably also readable */
         LOG(THREAD_GET, LOG_ALL, 3,
-            "\tframe ptr "PFX" => parent "PFX", ret = "PFX"\n", fp, *fp, retaddr);
+            "\tframe ptr " PFX " => parent " PFX ", ret = " PFX "\n", fp, *fp, retaddr);
         depth++;
         /* yes I've seen weird recursive cases before */
-        if (fp == (reg_t *) *fp || depth > 100)
+        if (fp == (reg_t *)*fp || depth > 100)
             break;
-        fp = (reg_t *) *fp;
+        fp = (reg_t *)*fp;
     }
     return retaddr;
 }
-#endif /* RETURN_AFTER_CALL */
+#    endif /* RETURN_AFTER_CALL */
 
 /* os-specific atexit cleanup */
 void
@@ -706,9 +713,9 @@ os_slow_exit(void)
     signal_exit();
     DELETE_LOCK(memory_info_buf_lock);
     DELETE_LOCK(maps_iter_buf_lock);
-#ifdef CLIENT_INTERFACE
+#    ifdef CLIENT_INTERFACE
     DELETE_LOCK(client_tls_lock);
-#endif
+#    endif
     vmvector_delete_vector(GLOBAL_DCONTEXT, all_memory_areas);
     all_memory_areas = NULL;
 }
@@ -730,7 +737,7 @@ os_terminate(dcontext_t *dcontext, terminate_flags_t flags)
     exit_process_syscall(1);
 }
 
-int 
+int
 os_timeout(int time_in_milliseconds)
 {
     ASSERT_NOT_IMPLEMENTED(false);
@@ -746,33 +753,33 @@ os_timeout(int time_in_milliseconds)
  * transparency becomes more of a problem.
  */
 
-#if defined(X64) && !defined(ARCH_SET_GS)
-# define ARCH_SET_GS 0x1001
-# define ARCH_SET_FS 0x1002
-# define ARCH_GET_FS 0x1003
-# define ARCH_GET_GS 0x1004
-#endif
+#    if defined(X64) && !defined(ARCH_SET_GS)
+#        define ARCH_SET_GS 0x1001
+#        define ARCH_SET_FS 0x1002
+#        define ARCH_GET_FS 0x1003
+#        define ARCH_GET_GS 0x1004
+#    endif
 
 /* We support 3 different methods of creating a segment (see os_tls_init()) */
 typedef enum {
     TLS_TYPE_NONE,
     TLS_TYPE_LDT,
     TLS_TYPE_GDT,
-#ifdef X64
+#    ifdef X64
     TLS_TYPE_ARCH_PRCTL,
-#endif
+#    endif
 } tls_type_t;
 
-#ifdef HAVE_TLS
+#    ifdef HAVE_TLS
 /* GDT slot we use for set_thread_area.
  * This depends on the kernel, not on the app!
  */
 static int tls_gdt_index = -1;
-# define GDT_NUM_TLS_SLOTS 3
-# ifdef DEBUG
-#  define GDT_32BIT  8 /*  6=NPTL, 7=wine */
-#  define GDT_64BIT 14 /* 12=NPTL, 13=wine */
-# endif
+#        define GDT_NUM_TLS_SLOTS 3
+#        ifdef DEBUG
+#            define GDT_32BIT 8  /*  6=NPTL, 7=wine */
+#            define GDT_64BIT 14 /* 12=NPTL, 13=wine */
+#        endif
 
 static int
 modify_ldt_syscall(int func, void *ptr, unsigned long bytecount)
@@ -782,38 +789,39 @@ modify_ldt_syscall(int func, void *ptr, unsigned long bytecount)
 
 /* reading ldt entries gives us the raw format, not struct modify_ldt_ldt_s */
 typedef struct {
-    unsigned int limit1500:16;
-    unsigned int base1500:16;
-    unsigned int base2316:8;
-    unsigned int type:4;
-    unsigned int not_system:1;
-    unsigned int privilege_level:2;
-    unsigned int seg_present:1;
-    unsigned int limit1916:4;
-    unsigned int custom:1;
-    unsigned int zero:1;
-    unsigned int seg_32bit:1;
-    unsigned int limit_in_pages:1;
-    unsigned int base3124:8;
+    unsigned int limit1500 : 16;
+    unsigned int base1500 : 16;
+    unsigned int base2316 : 8;
+    unsigned int type : 4;
+    unsigned int not_system : 1;
+    unsigned int privilege_level : 2;
+    unsigned int seg_present : 1;
+    unsigned int limit1916 : 4;
+    unsigned int custom : 1;
+    unsigned int zero : 1;
+    unsigned int seg_32bit : 1;
+    unsigned int limit_in_pages : 1;
+    unsigned int base3124 : 8;
 } raw_ldt_entry_t;
 
 enum {
-    LDT_TYPE_CODE      = 0x8,
-    LDT_TYPE_DOWN      = 0x4,
-    LDT_TYPE_WRITE     = 0x2,
-    LDT_TYPE_ACCESSED  = 0x1,
+    LDT_TYPE_CODE = 0x8,
+    LDT_TYPE_DOWN = 0x4,
+    LDT_TYPE_WRITE = 0x2,
+    LDT_TYPE_ACCESSED = 0x1,
 };
 
-#define LDT_BASE(ldt) (((ldt)->base3124<<24) | ((ldt)->base2316<<16) | (ldt)->base1500)
+#        define LDT_BASE(ldt) \
+            (((ldt)->base3124 << 24) | ((ldt)->base2316 << 16) | (ldt)->base1500)
 
-#ifdef DEBUG
-# if 0 /* not used */
-#  ifdef X64
+#        ifdef DEBUG
+#            if 0 /* not used */
+#                ifdef X64
     /* Intel docs confusingly say that app descriptors are 8 bytes while
      * system descriptors are 16; more likely all are 16, as linux kernel
      * docs seem to assume. */
-#   error NYI
-#  endif
+#                    error NYI
+#                endif
 static void
 print_raw_ldt(raw_ldt_entry_t *ldt)
 {
@@ -866,10 +874,10 @@ print_all_ldt(void)
     }
     global_heap_free(ldt, sizeof(raw_ldt_entry_t) * LDT_ENTRIES HEAPACCT(ACCT_OTHER));
 }
-# endif /* #if 0 */
-#endif /* DEBUG */
+#            endif /* #if 0 */
+#        endif     /* DEBUG */
 
-#define LDT_ENTRIES_TO_CHECK 128
+#        define LDT_ENTRIES_TO_CHECK 128
 
 /* returns -1 if all indices are in use */
 static int
@@ -892,8 +900,8 @@ find_unused_ldt_index()
         return 0;
     }
     ASSERT(bytes == sizeof(ldt));
-    for (i = 0; i < bytes/sizeof(raw_ldt_entry_t); i++) {
-        if (((ldt[i].base3124<<24) | (ldt[i].base2316<<16) | ldt[i].base1500) == 0) {
+    for (i = 0; i < bytes / sizeof(raw_ldt_entry_t); i++) {
+        if (((ldt[i].base3124 << 24) | (ldt[i].base2316 << 16) | ldt[i].base1500) == 0) {
             return i;
         }
     }
@@ -906,7 +914,7 @@ initialize_ldt_struct(our_modify_ldt_t *ldt, void *base, size_t size, uint index
     ASSERT(ldt != NULL);
     ldt->entry_number = index;
     IF_X64(ASSERT(CHECK_TRUNCATE_TYPE_uint((ptr_uint_t)base)));
-    ldt->base_addr = (int)(ptr_int_t) base;
+    ldt->base_addr = (int)(ptr_int_t)base;
     IF_X64(ASSERT(CHECK_TRUNCATE_TYPE_uint(size)));
     ldt->limit = size;
     ldt->seg_32bit = IF_X64_ELSE(0, 1);
@@ -947,24 +955,26 @@ clear_ldt_entry(uint index)
     ret = modify_ldt_syscall(1, (void *)&array, sizeof(array));
     ASSERT(ret >= 0);
 }
-#endif /* HAVE_TLS */
+#    endif /* HAVE_TLS */
 
 /* segment selector format:
  * 15..............3      2          1..0
  *        index      0=GDT,1=LDT  Requested Privilege Level
  */
-#define USER_PRIVILEGE  3
-#define LDT_NOT_GDT     1
-#define GDT_NOT_LDT     0
-#define SELECTOR_IS_LDT  0x4
-#define LDT_SELECTOR(idx) ((idx) << 3 | ((LDT_NOT_GDT) << 2) | (USER_PRIVILEGE))
-#define GDT_SELECTOR(idx) ((idx) << 3 | ((GDT_NOT_LDT) << 2) | (USER_PRIVILEGE))
-#define SELECTOR_INDEX(sel) ((sel) >> 3)
+#    define USER_PRIVILEGE 3
+#    define LDT_NOT_GDT 1
+#    define GDT_NOT_LDT 0
+#    define SELECTOR_IS_LDT 0x4
+#    define LDT_SELECTOR(idx) ((idx) << 3 | ((LDT_NOT_GDT) << 2) | (USER_PRIVILEGE))
+#    define GDT_SELECTOR(idx) ((idx) << 3 | ((GDT_NOT_LDT) << 2) | (USER_PRIVILEGE))
+#    define SELECTOR_INDEX(sel) ((sel) >> 3)
 
-#define WRITE_FS(val) \
-    ASSERT(sizeof(val) == sizeof(reg_t));                           \
-    asm volatile("mov %0,%%"ASM_XAX"; mov %%"ASM_XAX", %"ASM_SEG";" \
-                 : : "m" ((val)) : ASM_XAX);
+#    define WRITE_FS(val)                                                     \
+        ASSERT(sizeof(val) == sizeof(reg_t));                                 \
+        asm volatile("mov %0,%%" ASM_XAX "; mov %%" ASM_XAX ", %" ASM_SEG ";" \
+                     :                                                        \
+                     : "m"((val))                                             \
+                     : ASM_XAX);
 
 static uint
 read_selector(reg_id_t seg)
@@ -975,10 +985,16 @@ read_selector(reg_id_t seg)
      */
     if (seg == SEG_FS) {
         asm volatile("movl %%fs, %%eax; andl $0x0000ffff, %%eax; "
-                     "movl %%eax, %0" : "=m"(sel) : : "eax");
+                     "movl %%eax, %0"
+                     : "=m"(sel)
+                     :
+                     : "eax");
     } else if (seg == SEG_GS) {
         asm volatile("movl %%gs, %%eax; andl $0x0000ffff, %%eax; "
-                     "movl %%eax, %0" : "=m"(sel) : : "eax");
+                     "movl %%eax, %0"
+                     : "=m"(sel)
+                     :
+                     : "eax");
     } else {
         ASSERT_NOT_REACHED();
         return 0;
@@ -1007,19 +1023,19 @@ typedef struct _os_local_state_t {
     int ldt_index;
     /* tid needed to ensure children are set up properly */
     thread_id_t tid;
-#ifdef CLIENT_INTERFACE
+#    ifdef CLIENT_INTERFACE
     void *client_tls[MAX_NUM_CLIENT_TLS];
-#endif
+#    endif
 } os_local_state_t;
 
-#define TLS_LOCAL_STATE_OFFSET (offsetof(os_local_state_t, state))
+#    define TLS_LOCAL_STATE_OFFSET (offsetof(os_local_state_t, state))
 
 /* offset from top of page */
-#define TLS_OS_LOCAL_STATE     0x00
+#    define TLS_OS_LOCAL_STATE 0x00
 
-#define TLS_SELF_OFFSET        (TLS_OS_LOCAL_STATE + offsetof(os_local_state_t, self))
-#define TLS_THREAD_ID_OFFSET   (TLS_OS_LOCAL_STATE + offsetof(os_local_state_t, tid))
-#define TLS_DCONTEXT_OFFSET    (TLS_OS_LOCAL_STATE + TLS_DCONTEXT_SLOT)
+#    define TLS_SELF_OFFSET (TLS_OS_LOCAL_STATE + offsetof(os_local_state_t, self))
+#    define TLS_THREAD_ID_OFFSET (TLS_OS_LOCAL_STATE + offsetof(os_local_state_t, tid))
+#    define TLS_DCONTEXT_OFFSET (TLS_OS_LOCAL_STATE + TLS_DCONTEXT_SLOT)
 
 /* N.B.: imm and idx are ushorts!
  * imm must be a preprocessor constant
@@ -1027,34 +1043,34 @@ typedef struct _os_local_state_t {
  * we use the preprocessor to paste the constant in.
  * Also, var needs to match the pointer size, or else we'll get stack corruption.
  */
-#define WRITE_TLS_SLOT_IMM(imm, var)                                  \
-    IF_NOT_HAVE_TLS(ASSERT_NOT_REACHED());                            \
-    ASSERT(sizeof(var) == sizeof(void*));                             \
-    asm("mov %0, %%"ASM_XAX : : "m"((var)) : ASM_XAX);                \
-    asm("mov %"ASM_XAX", "ASM_SEG":"STRINGIFY(imm) : : "m"((var)) : ASM_XAX);
+#    define WRITE_TLS_SLOT_IMM(imm, var)                    \
+        IF_NOT_HAVE_TLS(ASSERT_NOT_REACHED());              \
+        ASSERT(sizeof(var) == sizeof(void *));              \
+        asm("mov %0, %%" ASM_XAX : : "m"((var)) : ASM_XAX); \
+        asm("mov %" ASM_XAX ", " ASM_SEG ":" STRINGIFY(imm) : : "m"((var)) : ASM_XAX);
 
-#define READ_TLS_SLOT_IMM(imm, var)                  \
-    IF_NOT_HAVE_TLS(ASSERT_NOT_REACHED());           \
-    ASSERT(sizeof(var) == sizeof(void*));            \
-    asm("mov "ASM_SEG":"STRINGIFY(imm)", %"ASM_XAX); \
-    asm("mov %%"ASM_XAX", %0" : "=m"((var)) : : ASM_XAX);
+#    define READ_TLS_SLOT_IMM(imm, var)                       \
+        IF_NOT_HAVE_TLS(ASSERT_NOT_REACHED());                \
+        ASSERT(sizeof(var) == sizeof(void *));                \
+        asm("mov " ASM_SEG ":" STRINGIFY(imm) ", %" ASM_XAX); \
+        asm("mov %%" ASM_XAX ", %0" : "=m"((var)) : : ASM_XAX);
 
-#define WRITE_TLS_SLOT(idx, var)                            \
-    IF_NOT_HAVE_TLS(ASSERT_NOT_REACHED());                  \
-    ASSERT(sizeof(var) == sizeof(void*));                   \
-    asm("mov %0, %%"ASM_XAX : : "m"((var)) : ASM_XAX);      \
-    asm("movzx %0, %%"ASM_XDX"" : : "m"((idx)) : ASM_XDX);  \
-    asm("mov %%"ASM_XAX", %"ASM_SEG":(%%"ASM_XDX")" : : : ASM_XAX, ASM_XDX);
+#    define WRITE_TLS_SLOT(idx, var)                             \
+        IF_NOT_HAVE_TLS(ASSERT_NOT_REACHED());                   \
+        ASSERT(sizeof(var) == sizeof(void *));                   \
+        asm("mov %0, %%" ASM_XAX : : "m"((var)) : ASM_XAX);      \
+        asm("movzx %0, %%" ASM_XDX "" : : "m"((idx)) : ASM_XDX); \
+        asm("mov %%" ASM_XAX ", %" ASM_SEG ":(%%" ASM_XDX ")" : : : ASM_XAX, ASM_XDX);
 
 /* FIXME: get_thread_private_dcontext() is a bottleneck, so it would be
  * good to figure out how to easily change this to use an immediate since it is
  * known at compile time -- see comments above for the _IMM versions
  */
-#define READ_TLS_SLOT(idx, var)                                    \
-    ASSERT(sizeof(var) == sizeof(void*));                          \
-    asm("movzx %0, %%"ASM_XAX : : "m"((idx)) : ASM_XAX);           \
-    asm("mov %"ASM_SEG":(%%"ASM_XAX"), %%"ASM_XAX : : : ASM_XAX);  \
-    asm("mov %%"ASM_XAX", %0" : "=m"((var)) : : ASM_XAX);
+#    define READ_TLS_SLOT(idx, var)                                        \
+        ASSERT(sizeof(var) == sizeof(void *));                             \
+        asm("movzx %0, %%" ASM_XAX : : "m"((idx)) : ASM_XAX);              \
+        asm("mov %" ASM_SEG ":(%%" ASM_XAX "), %%" ASM_XAX : : : ASM_XAX); \
+        asm("mov %%" ASM_XAX ", %0" : "=m"((var)) : : ASM_XAX);
 
 /* converts a local_state_t offset to a segment offset */
 ushort
@@ -1080,8 +1096,7 @@ set_tls(ushort tls_offs, void *value)
     WRITE_TLS_SLOT(tls_offs, value);
 }
 
-
-#ifdef X86
+#    ifdef X86
 /* Returns POINTER_MAX on failure.
  * Assumes that cs, ss, ds, and es are flat.
  * Should we export this to clients?  For now they can get
@@ -1093,11 +1108,11 @@ get_segment_base(uint seg)
     if (seg == SEG_CS || seg == SEG_SS || seg == SEG_DS || seg == SEG_ES)
         return NULL;
     else {
-# ifdef HAVE_TLS
+#        ifdef HAVE_TLS
         uint selector = read_selector(seg);
         uint index = SELECTOR_INDEX(selector);
-        LOG(THREAD_GET, LOG_THREADS, 4, "%s selector %x index %d ldt %d\n",
-            __func__, selector, index, TEST(SELECTOR_IS_LDT, selector));
+        LOG(THREAD_GET, LOG_THREADS, 4, "%s selector %x index %d ldt %d\n", __func__,
+            selector, index, TEST(SELECTOR_IS_LDT, selector));
 
         if (TEST(SELECTOR_IS_LDT, selector)) {
             LOG(THREAD_GET, LOG_THREADS, 4, "selector is LDT\n");
@@ -1108,46 +1123,44 @@ get_segment_base(uint seg)
             byte *base;
             memset(ldt, 0, sizeof(ldt));
             bytes = modify_ldt_syscall(0, (void *)ldt, sz);
-            base = (byte *)(ptr_uint_t) LDT_BASE(&ldt[index]);
+            base = (byte *)(ptr_uint_t)LDT_BASE(&ldt[index]);
             global_heap_free(ldt, sz HEAPACCT(ACCT_OTHER));
             if (bytes == sz) {
-                LOG(THREAD_GET, LOG_THREADS, 4,
-                    "modify_ldt %d => %x\n", index, base);
+                LOG(THREAD_GET, LOG_THREADS, 4, "modify_ldt %d => %x\n", index, base);
                 return base;
             }
         } else {
             our_modify_ldt_t desc;
             int res;
-#  ifdef X64
+#            ifdef X64
             byte *base;
             res = dynamorio_syscall(SYS_arch_prctl, 2,
                                     (seg == SEG_FS ? ARCH_GET_FS : ARCH_GET_GS), &base);
             if (res >= 0) {
-                LOG(THREAD_GET, LOG_THREADS, 4,
-                    "arch_prctl %s => "PFX"\n", reg_names[seg], base);
+                LOG(THREAD_GET, LOG_THREADS, 4, "arch_prctl %s => " PFX "\n",
+                    reg_names[seg], base);
                 return base;
             }
             /* else fall back on get_thread_area */
-#  endif /* X64 */
+#            endif /* X64 */
             DODEBUGINT({
-                uint max_idx =
-                    IF_VMX86_ELSE(tls_gdt_index,
-                                  (kernel_is_64bit() ? GDT_64BIT : GDT_32BIT));
+                uint max_idx = IF_VMX86_ELSE(tls_gdt_index,
+                                             (kernel_is_64bit() ? GDT_64BIT : GDT_32BIT));
                 ASSERT_CURIOSITY(index <= max_idx && index >= (max_idx - 2));
             });
             initialize_ldt_struct(&desc, NULL, 0, index);
             res = dynamorio_syscall(SYS_get_thread_area, 1, &desc);
             if (res >= 0) {
-                LOG(THREAD_GET, LOG_THREADS, 4,
-                    "get_thread_area %d => %x\n", index, desc.base_addr);
-                return (byte *)(ptr_uint_t) desc.base_addr;
+                LOG(THREAD_GET, LOG_THREADS, 4, "get_thread_area %d => %x\n", index,
+                    desc.base_addr);
+                return (byte *)(ptr_uint_t)desc.base_addr;
             }
         }
-# endif /* HAVE_TLS */
+#        endif     /* HAVE_TLS */
     }
-    return (byte *) POINTER_MAX;
+    return (byte *)POINTER_MAX;
 }
-#endif
+#    endif
 
 local_state_extended_t *
 get_local_state_extended()
@@ -1162,17 +1175,17 @@ get_local_state_extended()
 local_state_t *
 get_local_state()
 {
-#ifdef HAVE_TLS
-    return (local_state_t *) get_local_state_extended();
-#else
+#    ifdef HAVE_TLS
+    return (local_state_t *)get_local_state_extended();
+#    else
     return NULL;
-#endif
+#    endif
 }
 
 void
 os_tls_init()
 {
-#ifdef HAVE_TLS
+#    ifdef HAVE_TLS
     /* We create a 1-page segment with an LDT entry for each thread and load its
      * selector into fs/gs.
      * FIXME PR 205276: this whole scheme currently does not check if app is using
@@ -1180,15 +1193,15 @@ os_tls_init()
      */
     /* FIXME: heap_mmap marks as exec, we just want RW */
     byte *segment = heap_mmap(PAGE_SIZE);
-    os_local_state_t *os_tls = (os_local_state_t *) segment;
+    os_local_state_t *os_tls = (os_local_state_t *)segment;
     int index = -1;
     uint selector;
     int res;
-# ifdef X64
+#        ifdef X64
     byte *cur_gs;
-# endif
+#        endif
 
-    LOG(GLOBAL, LOG_THREADS, 1, "os_tls_init for thread "IDFMT"\n", get_thread_id());
+    LOG(GLOBAL, LOG_THREADS, 1, "os_tls_init for thread " IDFMT "\n", get_thread_id());
 
     /* MUST zero out dcontext slot so uninit access gets NULL */
     memset(segment, 0, PAGE_SIZE);
@@ -1213,7 +1226,7 @@ os_tls_init()
      *    we're limited here to a 32-bit base.  (Strangely, the kernel's
      *    include/asm-x86_64/ldt.h implies that the base is ignored: but it doesn't
      *    seem to be.)
-     * 
+     *
      * 3) Steal a gdt entry via SYS_set_thread_area.  There is a 3rd unused entry
      *    (after pthreads and wine) we could use.  The kernel swaps for us, and with
      *    CLONE_TLS the kernel will set up the entry for a new thread for us.  Xref
@@ -1227,26 +1240,26 @@ os_tls_init()
      *    use wrmsr.  The man pages say "ARCH_SET_GS is disabled in some kernels".
      */
 
-# ifdef X64
+#        ifdef X64
     /* First choice is gdt, which means arch_prctl.  Since this may fail
      * on some kernels, we require -heap_in_lower_4GB so we can fall back
      * on modify_ldt.
      */
     res = dynamorio_syscall(SYS_arch_prctl, 2, ARCH_GET_GS, &cur_gs);
     if (res >= 0) {
-        LOG(GLOBAL, LOG_THREADS, 1, "os_tls_init: cur gs base is "PFX"\n", cur_gs);
+        LOG(GLOBAL, LOG_THREADS, 1, "os_tls_init: cur gs base is " PFX "\n", cur_gs);
         /* If we're a non-initial thread, gs will be set to the parent thread's value */
         if (cur_gs == NULL || is_dynamo_address(cur_gs)) {
             res = dynamorio_syscall(SYS_arch_prctl, 2, ARCH_SET_GS, segment);
             if (res >= 0) {
                 os_tls->tls_type = TLS_TYPE_ARCH_PRCTL;
                 LOG(GLOBAL, LOG_THREADS, 1,
-                    "os_tls_init: arch_prctl successful for base "PFX"\n", segment);
+                    "os_tls_init: arch_prctl successful for base " PFX "\n", segment);
             } else {
                 /* we've found a kernel where ARCH_SET_GS is disabled */
                 ASSERT_CURIOSITY(false && "arch_prctl failed on set but not get");
-                LOG(GLOBAL, LOG_THREADS, 1,
-                    "os_tls_init: arch_prctl failed: error %d\n", res);
+                LOG(GLOBAL, LOG_THREADS, 1, "os_tls_init: arch_prctl failed: error %d\n",
+                    res);
             }
         } else {
             /* FIXME PR 205276: we don't currently handle it: fall back on ldt, but
@@ -1255,7 +1268,7 @@ os_tls_init()
             ASSERT_BUG_NUM(205276, cur_gs == NULL);
         }
     }
-# endif
+#        endif
     if (os_tls->tls_type == TLS_TYPE_NONE) {
         /* Second choice is set_thread_area */
         /* PR 285898: if we added CLONE_SETTLS to all clone calls (and emulated vfork
@@ -1269,7 +1282,7 @@ os_tls_init()
         static bool tls_global_init = false;
         our_modify_ldt_t desc;
         /* Base here must be 32-bit */
-        IF_X64(ASSERT(DYNAMO_OPTION(heap_in_lower_4GB) && segment <= (byte*)UINT_MAX));
+        IF_X64(ASSERT(DYNAMO_OPTION(heap_in_lower_4GB) && segment <= (byte *)UINT_MAX));
         if (!tls_global_init) {
             /* We don't want to break the assumptions of pthreads or wine,
              * so we try to take the last slot.  We don't want to hardcode
@@ -1288,8 +1301,8 @@ os_tls_init()
                 initialize_ldt_struct(&desc, segment, PAGE_SIZE, -1);
                 res = dynamorio_syscall(SYS_set_thread_area, 1, &desc);
                 LOG(GLOBAL, LOG_THREADS, 4,
-                    "%s: set_thread_area -1 => %d res, %d index\n",
-                    __func__, res, desc.entry_number);
+                    "%s: set_thread_area -1 => %d res, %d index\n", __func__, res,
+                    desc.entry_number);
                 if (res >= 0) {
                     /* We assume monotonic increases */
                     avail_index[i] = desc.entry_number;
@@ -1300,19 +1313,18 @@ os_tls_init()
             }
             /* Now give up the earlier slots */
             for (i = 0; i < GDT_NUM_TLS_SLOTS; i++) {
-                if (avail_index[i] > -1 &&
-                    avail_index[i] != tls_gdt_index) {
-                    LOG(GLOBAL, LOG_THREADS, 4,
-                        "clearing set_thread_area index %d\n", avail_index[i]);
+                if (avail_index[i] > -1 && avail_index[i] != tls_gdt_index) {
+                    LOG(GLOBAL, LOG_THREADS, 4, "clearing set_thread_area index %d\n",
+                        avail_index[i]);
                     clear_ldt_struct(&clear_desc, avail_index[i]);
                     res = dynamorio_syscall(SYS_set_thread_area, 1, &clear_desc);
                     ASSERT(res >= 0);
                 }
             }
-# ifndef VMX86_SERVER
+#        ifndef VMX86_SERVER
             ASSERT_CURIOSITY(tls_gdt_index ==
                              (kernel_is_64bit() ? GDT_64BIT : GDT_32BIT));
-# endif
+#        endif
             if (tls_gdt_index > -1)
                 res = 0;
         } else {
@@ -1322,14 +1334,13 @@ os_tls_init()
             ASSERT(tls_gdt_index > -1);
             initialize_ldt_struct(&desc, segment, PAGE_SIZE, tls_gdt_index);
             res = dynamorio_syscall(SYS_set_thread_area, 1, &desc);
-            LOG(GLOBAL, LOG_THREADS, 4,
-                "%s: set_thread_area -1 => %d res, %d index\n",
+            LOG(GLOBAL, LOG_THREADS, 4, "%s: set_thread_area -1 => %d res, %d index\n",
                 __func__, res, desc.entry_number);
             ASSERT(res < 0 || desc.entry_number == tls_gdt_index);
         }
         if (res >= 0) {
             LOG(GLOBAL, LOG_THREADS, 1,
-                "os_tls_init: set_thread_area successful for base "PFX" @index %d\n",
+                "os_tls_init: set_thread_area successful for base " PFX " @index %d\n",
                 segment, tls_gdt_index);
             os_tls->tls_type = TLS_TYPE_GDT;
             index = tls_gdt_index;
@@ -1337,14 +1348,14 @@ os_tls_init()
             WRITE_FS(selector); /* macro needs lvalue! */
         } else {
             IF_VMX86(ASSERT_NOT_REACHED()); /* since no modify_ldt */
-            LOG(GLOBAL, LOG_THREADS, 1,
-                "os_tls_init: set_thread_area failed: error %d\n", res);
+            LOG(GLOBAL, LOG_THREADS, 1, "os_tls_init: set_thread_area failed: error %d\n",
+                res);
         }
     }
     if (os_tls->tls_type == TLS_TYPE_NONE) {
         /* Third choice: modify_ldt, which should be available on kernel 2.3.99+ */
         /* Base here must be 32-bit */
-        IF_X64(ASSERT(DYNAMO_OPTION(heap_in_lower_4GB) && segment <= (byte*)UINT_MAX));
+        IF_X64(ASSERT(DYNAMO_OPTION(heap_in_lower_4GB) && segment <= (byte *)UINT_MAX));
         /* we have the thread_initexit_lock so no race here */
         index = find_unused_ldt_index();
         selector = LDT_SELECTOR(index);
@@ -1353,19 +1364,19 @@ os_tls_init()
         os_tls->tls_type = TLS_TYPE_LDT;
         WRITE_FS(selector); /* macro needs lvalue! */
         LOG(GLOBAL, LOG_THREADS, 1,
-            "os_tls_init: modify_ldt successful for base "PFX" w/ index %d\n",
-            segment, index);
+            "os_tls_init: modify_ldt successful for base " PFX " w/ index %d\n", segment,
+            index);
     }
     os_tls->ldt_index = index;
     ASSERT(os_tls->tls_type != TLS_TYPE_NONE);
     /* FIXME: this should be a SYSLOG fatal error?  Should fall back on !HAVE_TLS?
      * Should have create_ldt_entry() return failure instead of asserting, then.
      */
-#else
-    tls_table = (tls_slot_t *)
-        global_heap_alloc(MAX_THREADS*sizeof(tls_slot_t) HEAPACCT(ACCT_OTHER));
-    memset(tls_table, 0, MAX_THREADS*sizeof(tls_slot_t));
-#endif
+#    else
+    tls_table = (tls_slot_t *)global_heap_alloc(MAX_THREADS *
+                                                sizeof(tls_slot_t) HEAPACCT(ACCT_OTHER));
+    memset(tls_table, 0, MAX_THREADS * sizeof(tls_slot_t));
+#    endif
 }
 
 /* Frees local_state.  If the calling thread is exiting (i.e.,
@@ -1375,13 +1386,13 @@ os_tls_init()
 void
 os_tls_exit(local_state_t *local_state, bool other_thread)
 {
-#ifdef HAVE_TLS
+#    ifdef HAVE_TLS
     int res;
     static const ptr_uint_t zero = 0;
     /* We can't read from fs: as we can be called from other threads */
     /* ASSUMPTION: local_state_t is laid out at same start as local_state_extended_t */
-    os_local_state_t *os_tls = (os_local_state_t *)
-        ((byte*)local_state) - offsetof(os_local_state_t, state);
+    os_local_state_t *os_tls =
+        (os_local_state_t *)((byte *)local_state) - offsetof(os_local_state_t, state);
     tls_type_t tls_type = os_tls->tls_type;
     int index = os_tls->ldt_index;
 
@@ -1402,28 +1413,28 @@ os_tls_exit(local_state_t *local_state, bool other_thread)
             our_modify_ldt_t desc;
             clear_ldt_struct(&desc, index);
             res = dynamorio_syscall(SYS_set_thread_area, 1, &desc);
-            ASSERT(res >= 0);        
+            ASSERT(res >= 0);
         }
-# ifdef X64
+#        ifdef X64
         else if (tls_type == TLS_TYPE_ARCH_PRCTL) {
             res = dynamorio_syscall(SYS_arch_prctl, 2, ARCH_SET_GS, NULL);
             ASSERT(res >= 0);
             /* syscall re-sets gs register so re-clear it */
             WRITE_FS(zero); /* macro needs lvalue! */
         }
-# endif
+#        endif
     }
-#else
-    global_heap_free(tls_table, MAX_THREADS*sizeof(tls_slot_t) HEAPACCT(ACCT_OTHER));
+#    else
+    global_heap_free(tls_table, MAX_THREADS * sizeof(tls_slot_t) HEAPACCT(ACCT_OTHER));
     DELETE_LOCK(tls_lock);
-#endif
+#    endif
 }
 
 static int
 os_tls_get_gdt_index(dcontext_t *dcontext)
 {
-    os_local_state_t *os_tls = (os_local_state_t *)
-        ((byte*)dcontext->local_state) - offsetof(os_local_state_t, state);
+    os_local_state_t *os_tls = (os_local_state_t *)((byte *)dcontext->local_state) -
+        offsetof(os_local_state_t, state);
     if (os_tls->tls_type == TLS_TYPE_GDT)
         return os_tls->ldt_index;
     else
@@ -1435,7 +1446,7 @@ os_tls_pre_init(int gdt_index)
 {
     /* Only set to above 0 for tls_type == TLS_TYPE_GDT */
     if (gdt_index > 0) {
-        /* PR 458917: clear gdt slot to avoid leak across exec */ 
+        /* PR 458917: clear gdt slot to avoid leak across exec */
         our_modify_ldt_t desc;
         int res;
         static const ptr_uint_t zero = 0;
@@ -1445,11 +1456,11 @@ os_tls_pre_init(int gdt_index)
         WRITE_FS(zero); /* macro needs lvalue! */
         clear_ldt_struct(&desc, gdt_index);
         res = dynamorio_syscall(SYS_set_thread_area, 1, &desc);
-        ASSERT(res >= 0);        
+        ASSERT(res >= 0);
     }
 }
 
-#ifdef CLIENT_INTERFACE
+#    ifdef CLIENT_INTERFACE
 /* Allocates num_slots tls slots aligned with alignment align */
 bool
 os_tls_calloc(OUT uint *offset, uint num_slots, uint alignment)
@@ -1464,7 +1475,7 @@ os_tls_calloc(OUT uint *offset, uint num_slots, uint alignment)
     for (i = 0; i < MAX_NUM_CLIENT_TLS; i++) {
         if (!client_tls_allocated[i] &&
             /* ALIGNED doesn't work for 0 */
-            (alignment == 0 || ALIGNED(offs + i*sizeof(void*), alignment))) {
+            (alignment == 0 || ALIGNED(offs + i * sizeof(void *), alignment))) {
             if (start == -1)
                 start = i;
             count++;
@@ -1478,7 +1489,7 @@ os_tls_calloc(OUT uint *offset, uint num_slots, uint alignment)
     if (count >= num_slots) {
         for (i = 0; i < num_slots; i++)
             client_tls_allocated[i + start] = true;
-        *offset = offs + start*sizeof(void*);
+        *offset = offs + start * sizeof(void *);
         res = true;
     }
     mutex_unlock(&client_tls_lock);
@@ -1489,7 +1500,7 @@ bool
 os_tls_cfree(uint offset, uint num_slots)
 {
     uint i;
-    uint offs = (offset - offsetof(os_local_state_t, client_tls))/sizeof(void*);
+    uint offs = (offset - offsetof(os_local_state_t, client_tls)) / sizeof(void *);
     bool ok = true;
     mutex_lock(&client_tls_lock);
     for (i = 0; i < num_slots; i++) {
@@ -1500,42 +1511,42 @@ os_tls_cfree(uint offset, uint num_slots)
     mutex_unlock(&client_tls_lock);
     return ok;
 }
-#endif
+#    endif
 
 void
 os_thread_init(dcontext_t *dcontext)
 {
-    os_thread_data_t *ostd = (os_thread_data_t *)
-        heap_alloc(dcontext, sizeof(os_thread_data_t) HEAPACCT(ACCT_OTHER));
-    dcontext->os_field = (void *) ostd;
+    os_thread_data_t *ostd = (os_thread_data_t *)heap_alloc(
+        dcontext, sizeof(os_thread_data_t) HEAPACCT(ACCT_OTHER));
+    dcontext->os_field = (void *)ostd;
     /* make sure stack fields, etc. are 0 now so they can be initialized on demand
      * (don't have app esp register handy here to init now)
      */
     memset(ostd, 0, sizeof(*ostd));
 
-#ifdef RETURN_AFTER_CALL
+#    ifdef RETURN_AFTER_CALL
     if (!dynamo_initialized) {
         /* Find the bottom of the stack of the initial (native) entry */
         ostd->stack_bottom_pc = find_stack_bottom();
-        LOG(THREAD, LOG_ALL, 1, "Stack bottom pc = "PFX"\n", ostd->stack_bottom_pc);
+        LOG(THREAD, LOG_ALL, 1, "Stack bottom pc = " PFX "\n", ostd->stack_bottom_pc);
     } else {
         /* We only need the stack bottom for the initial thread */
         ostd->stack_bottom_pc = NULL;
     }
-#endif
+#    endif
 
     ASSIGN_INIT_LOCK_FREE(ostd->suspend_lock, suspend_lock);
 
     signal_thread_init(dcontext);
 
-    LOG(THREAD, LOG_THREADS, 1, "cur gs base is "PFX"\n", get_segment_base(SEG_GS));
-    LOG(THREAD, LOG_THREADS, 1, "cur fs base is "PFX"\n", get_segment_base(SEG_FS));
+    LOG(THREAD, LOG_THREADS, 1, "cur gs base is " PFX "\n", get_segment_base(SEG_GS));
+    LOG(THREAD, LOG_THREADS, 1, "cur fs base is " PFX "\n", get_segment_base(SEG_FS));
 }
 
 void
 os_thread_exit(dcontext_t *dcontext)
 {
-    os_thread_data_t *ostd = (os_thread_data_t *) dcontext->os_field;
+    os_thread_data_t *ostd = (os_thread_data_t *)dcontext->os_field;
 
     /* i#237/PR 498284: if we had a vfork child call execve we need to clean up
      * the env vars.
@@ -1548,9 +1559,8 @@ os_thread_exit(dcontext_t *dcontext)
     signal_thread_exit(dcontext);
 
     /* for non-debug we do fast exit path and don't free local heap */
-    DODEBUG({
-        heap_free(dcontext, ostd, sizeof(os_thread_data_t) HEAPACCT(ACCT_OTHER));
-    });
+    DODEBUG(
+        { heap_free(dcontext, ostd, sizeof(os_thread_data_t) HEAPACCT(ACCT_OTHER)); });
 }
 
 /* this one is called before child's new logfiles are set up */
@@ -1595,7 +1605,7 @@ get_parent_id(void)
     return dynamorio_syscall(SYS_getppid, 0);
 }
 
-thread_id_t 
+thread_id_t
 get_sys_thread_id(void)
 {
     if (kernel_thread_groups) {
@@ -1605,7 +1615,7 @@ get_sys_thread_id(void)
     }
 }
 
-thread_id_t 
+thread_id_t
 get_thread_id(void)
 {
     /* i#228/PR 494330: making a syscall here is a perf bottleneck since we call
@@ -1629,14 +1639,14 @@ get_tls_thread_id(void)
     offs = TLS_THREAD_ID_OFFSET;
     READ_TLS_SLOT(offs, tid);
     IF_X64(ASSERT(CHECK_TRUNCATE_TYPE_uint(tid)));
-    return (thread_id_t) tid;
+    return (thread_id_t)tid;
 }
 
 /* returns the thread-private dcontext pointer for the calling thread */
-dcontext_t*
+dcontext_t *
 get_thread_private_dcontext(void)
 {
-#ifdef HAVE_TLS
+#    ifdef HAVE_TLS
     dcontext_t *dcontext;
     /* FIXME: need dedicated-storage var for _TLS_SLOT macros, can't use expr */
     ushort offs;
@@ -1651,8 +1661,8 @@ get_thread_private_dcontext(void)
      * for now so debug build will still incur it).  So we fixed the cases that
      * needed that:
      *
-     * - dynamo_thread_init() calling is_thread_initialized() for a new thread 
-     *   created via clone or the start/stop interface: so we have 
+     * - dynamo_thread_init() calling is_thread_initialized() for a new thread
+     *   created via clone or the start/stop interface: so we have
      *   is_thread_initialized() pay the get_thread_id() cost.
      * - new_thread_setup()'s ENTER_DR_HOOK kstats, or a crash and the signal
      *   handler asking about dcontext: we have new_thread_dynamo_start()
@@ -1672,7 +1682,7 @@ get_thread_private_dcontext(void)
      * hotp_only gateways assume tls is set up.
      * Xref PR 192231.
      */
-    /* PR 307698: this assert causes large slowdowns (also xref PR 207366) */ 
+    /* PR 307698: this assert causes large slowdowns (also xref PR 207366) */
     DOCHECK(1, {
         ASSERT(get_tls_thread_id() == get_sys_thread_id() ||
                /* ok for fork as mentioned above */
@@ -1681,7 +1691,7 @@ get_thread_private_dcontext(void)
     offs = TLS_DCONTEXT_OFFSET;
     READ_TLS_SLOT(offs, dcontext);
     return dcontext;
-#else
+#    else
     /* Assumption: no lock needed on a read => no race conditions between
      * reading and writing same tid!  Since both get and set are only for
      * the current thread, they cannot both execute simultaneously for the
@@ -1690,32 +1700,32 @@ get_thread_private_dcontext(void)
     thread_id_t tid = get_thread_id();
     int i;
     if (tls_table != NULL) {
-        for (i=0; i<MAX_THREADS; i++) {
+        for (i = 0; i < MAX_THREADS; i++) {
             if (tls_table[i].tid == tid) {
                 return tls_table[i].dcontext;
             }
         }
     }
     return NULL;
-#endif
+#    endif
 }
 
 /* sets the thread-private dcontext pointer for the calling thread */
 void
 set_thread_private_dcontext(dcontext_t *dcontext)
 {
-#ifdef HAVE_TLS
+#    ifdef HAVE_TLS
     /* FIXME: need dedicated-storage var for _TLS_SLOT macros, can't use expr */
     ushort offs = TLS_DCONTEXT_OFFSET;
     ASSERT(is_segment_register_initialized());
     WRITE_TLS_SLOT(offs, dcontext);
-#else
+#    else
     thread_id_t tid = get_thread_id();
     int i;
     bool found = false;
     ASSERT(tls_table != NULL);
     mutex_lock(&tls_lock);
-    for (i=0; i<MAX_THREADS; i++) {
+    for (i = 0; i < MAX_THREADS; i++) {
         if (tls_table[i].tid == tid) {
             if (dcontext == NULL) {
                 /* if setting to NULL, clear the entire slot for reuse */
@@ -1731,7 +1741,7 @@ set_thread_private_dcontext(dcontext_t *dcontext)
             /* don't do anything...but why would this happen? */
         } else {
             /* look for an empty slot */
-            for (i=0; i<MAX_THREADS; i++) {
+            for (i = 0; i < MAX_THREADS; i++) {
                 if (tls_table[i].tid == 0) {
                     tls_table[i].tid = tid;
                     tls_table[i].dcontext = dcontext;
@@ -1743,7 +1753,7 @@ set_thread_private_dcontext(dcontext_t *dcontext)
     }
     mutex_unlock(&tls_lock);
     ASSERT(found);
-#endif
+#    endif
 }
 
 /* replaces old with new
@@ -1752,7 +1762,7 @@ set_thread_private_dcontext(dcontext_t *dcontext)
 static void
 replace_thread_id(thread_id_t old, thread_id_t new)
 {
-#ifdef HAVE_TLS
+#    ifdef HAVE_TLS
     /* FIXME: need dedicated-storage var for _TLS_SLOT macros, can't use expr */
     ushort offs = TLS_THREAD_ID_OFFSET;
     ptr_int_t new_tid = new; /* can't use thread_id_t since it's 32-bits */
@@ -1764,31 +1774,31 @@ replace_thread_id(thread_id_t old, thread_id_t new)
         ASSERT(old_tid == old);
     });
     WRITE_TLS_SLOT(offs, new_tid);
-#else
+#    else
     int i;
     mutex_lock(&tls_lock);
-    for (i=0; i<MAX_THREADS; i++) {
+    for (i = 0; i < MAX_THREADS; i++) {
         if (tls_table[i].tid == old) {
             tls_table[i].tid = new;
             break;
         }
     }
     mutex_unlock(&tls_lock);
-#endif
+#    endif
 }
 
 /* translate permission string to platform independent protection bits */
 static inline uint
-permstr_to_memprot(const char * const perm)
+permstr_to_memprot(const char *const perm)
 {
     uint mem_prot = 0;
     if (perm == NULL || *perm == '\0')
         return mem_prot;
-    if (perm[2]=='x')
+    if (perm[2] == 'x')
         mem_prot |= MEMPROT_EXEC;
-    if (perm[1]=='w')
+    if (perm[1] == 'w')
         mem_prot |= MEMPROT_WRITE;
-    if (perm[0]=='r')
+    if (perm[0] == 'r')
         mem_prot |= MEMPROT_READ;
     return mem_prot;
 }
@@ -1826,7 +1836,7 @@ osprot_to_memprot(uint prot)
 uint
 osprot_replace_memprot(uint old_osprot, uint memprot)
 {
-    /* Note only protection flags PROT_ are relevant to mprotect() 
+    /* Note only protection flags PROT_ are relevant to mprotect()
      * and they are separate from any other MAP_ flags passed to mmap()
      */
     uint new_osprot = memprot_to_osprot(memprot);
@@ -1843,30 +1853,24 @@ mprotect_syscall(byte *p, size_t size, uint prot)
 static bool
 mmap_syscall_succeeded(byte *retval)
 {
-    ptr_int_t result = (ptr_int_t) retval;
+    ptr_int_t result = (ptr_int_t)retval;
     /* libc interprets up to -PAGE_SIZE as an error, and you never know if
-     * some weird errno will be used by say vmkernel (xref PR 365331) 
+     * some weird errno will be used by say vmkernel (xref PR 365331)
      */
     bool fail = (result < 0 && result >= -PAGE_SIZE);
-    ASSERT_CURIOSITY(!fail ||
-                     IF_VMX86(result == -ENOENT ||)
-                     IF_VMX86(result == -ENOSPC ||)
-                     result == -EBADF   ||
-                     result == -EACCES  ||
-                     result == -EINVAL  ||
-                     result == -ETXTBSY ||
-                     result == -EAGAIN  ||
-                     result == -ENOMEM  ||
-                     result == -ENODEV  ||
-                     result == -EFAULT);
+    ASSERT_CURIOSITY(
+        !fail ||
+        IF_VMX86(result == -ENOENT ||) IF_VMX86(result == -ENOSPC ||) result == -EBADF ||
+        result == -EACCES || result == -EINVAL || result == -ETXTBSY ||
+        result == -EAGAIN || result == -ENOMEM || result == -ENODEV || result == -EFAULT);
     return !fail;
 }
 
 static inline byte *
 mmap_syscall(byte *addr, size_t len, ulong prot, ulong flags, ulong fd, ulong pgoff)
 {
-    return (byte *) dynamorio_syscall(IF_X64_ELSE(SYS_mmap, SYS_mmap2), 6,
-                                      addr, len, prot, flags, fd, pgoff);
+    return (byte *)dynamorio_syscall(IF_X64_ELSE(SYS_mmap, SYS_mmap2), 6, addr, len, prot,
+                                     flags, fd, pgoff);
 }
 
 static inline long
@@ -1882,17 +1886,17 @@ os_heap_free(void *p, size_t size, heap_error_code_t *error_code)
     long rc;
     ASSERT(error_code != NULL);
     if (!dynamo_exited)
-        LOG(GLOBAL, LOG_HEAP, 4, "os_heap_free: %d bytes @ "PFX"\n", size, p);
+        LOG(GLOBAL, LOG_HEAP, 4, "os_heap_free: %d bytes @ " PFX "\n", size, p);
     rc = munmap_syscall(p, size);
     if (rc != 0) {
         *error_code = -rc;
     } else {
         *error_code = HEAP_ERROR_SUCCESS;
     }
-    ASSERT(rc == 0);    
+    ASSERT(rc == 0);
 }
 
-/* reserve virtual address space without committing swap space for it, 
+/* reserve virtual address space without committing swap space for it,
    and of course no physical pages since it will never be touched */
 /* to be transparent, we do not use sbrk, and are
  * instead using mmap, and asserting that all os_heap requests are for
@@ -1903,14 +1907,13 @@ os_heap_reserve(void *preferred, size_t size, heap_error_code_t *error_code,
 {
     void *p;
     uint prot = PROT_NONE;
-#ifdef VMX86_SERVER
+#    ifdef VMX86_SERVER
     /* PR 365331: we need to be in the mmap_text region for code cache and
      * gencode (PROT_EXEC).
      */
-    ASSERT(!os_in_vmkernel_userworld() ||
-           !executable || preferred == NULL ||
+    ASSERT(!os_in_vmkernel_userworld() || !executable || preferred == NULL ||
            ((byte *)preferred >= os_vmk_mmap_text_start() &&
-            ((byte *)preferred)+size <= os_vmk_mmap_text_end()));
+            ((byte *)preferred) + size <= os_vmk_mmap_text_end()));
     /* Note that a preferred address overrides PROT_EXEC and a mmap_data
      * address will be honored, even though any execution there will fault.
      */
@@ -1923,7 +1926,7 @@ os_heap_reserve(void *preferred, size_t size, heap_error_code_t *error_code,
      */
     if (executable)
         prot = PROT_EXEC;
-#endif
+#    endif
     /* should only be used on aligned pieces */
     ASSERT(size > 0 && ALIGNED(size, PAGE_SIZE));
     ASSERT(error_code != NULL);
@@ -1931,13 +1934,14 @@ os_heap_reserve(void *preferred, size_t size, heap_error_code_t *error_code,
     /* FIXME: note that this memory is in fact still committed - see man mmap */
     /* FIXME: case 2347 on Linux or -vm_reserve should be set to false */
     /* FIXME: Need to actually get a mmap-ing with |MAP_NORESERVE */
-    p = mmap_syscall(preferred, size, prot, MAP_PRIVATE|MAP_ANONYMOUS
-                     IF_X64(| (DYNAMO_OPTION(heap_in_lower_4GB) ? MAP_32BIT : 0)),
-                     -1, 0);
+    p = mmap_syscall(
+        preferred, size, prot,
+        MAP_PRIVATE |
+            MAP_ANONYMOUS IF_X64(| (DYNAMO_OPTION(heap_in_lower_4GB) ? MAP_32BIT : 0)),
+        -1, 0);
     if (!mmap_syscall_succeeded(p)) {
         *error_code = -(heap_error_code_t)(ptr_int_t)p;
-        LOG(GLOBAL, LOG_HEAP, 4,
-            "os_heap_reserve %d bytes failed "PFX"\n", size, p);
+        LOG(GLOBAL, LOG_HEAP, 4, "os_heap_reserve %d bytes failed " PFX "\n", size, p);
         return NULL;
     } else if (preferred != NULL && p != preferred) {
         /* We didn't get the preferred address.  To harmonize with windows behavior and
@@ -1947,19 +1951,19 @@ os_heap_reserve(void *preferred, size_t size, heap_error_code_t *error_code,
         os_heap_free(p, size, &dummy);
         ASSERT(dummy == HEAP_ERROR_SUCCESS);
         LOG(GLOBAL, LOG_HEAP, 4,
-            "os_heap_reserve %d bytes at "PFX" not preferred "PFX"\n",
-            size, preferred, p);
+            "os_heap_reserve %d bytes at " PFX " not preferred " PFX "\n", size,
+            preferred, p);
         return NULL;
     } else {
         *error_code = HEAP_ERROR_SUCCESS;
     }
-    LOG(GLOBAL, LOG_HEAP, 2, "os_heap_reserve: %d bytes @ "PFX"\n", size, p);
-#ifdef VMX86_SERVER
+    LOG(GLOBAL, LOG_HEAP, 2, "os_heap_reserve: %d bytes @ " PFX "\n", size, p);
+#    ifdef VMX86_SERVER
     /* PR 365331: ensure our memory is all in the mmap_text region */
     ASSERT(!os_in_vmkernel_userworld() || !executable ||
            ((byte *)p >= os_vmk_mmap_text_start() &&
             ((byte *)p) + size <= os_vmk_mmap_text_end()));
-#endif
+#    endif
     return p;
 }
 
@@ -1971,21 +1975,22 @@ os_heap_reserve_in_region(void *start, void *end, size_t size,
     byte *try_start;
 
     LOG(GLOBAL, LOG_HEAP, 3,
-        "os_heap_reserve_in_region: "SZFMT" bytes in "PFX"-"PFX"\n", size, start, end);
+        "os_heap_reserve_in_region: " SZFMT " bytes in " PFX "-" PFX "\n", size, start,
+        end);
 
     /* if no restriction on location use regular os_heap_reserve() */
     if (start == (void *)PTR_UINT_0 && end == (void *)POINTER_MAX)
         return os_heap_reserve(NULL, size, error_code, executable);
 
-    /* FIXME: be smarter and use a memory query instead of trying every single page 
+    /* FIXME: be smarter and use a memory query instead of trying every single page
      * FIXME: if result is not at preferred it may still be in range: so
      * make syscall ourselves and avoid this loop.
      */
-    for (try_start = (byte *) start; try_start < (byte *)end - size;
+    for (try_start = (byte *)start; try_start < (byte *)end - size;
          try_start += PAGE_SIZE) {
         p = os_heap_reserve(try_start, size, error_code, executable);
-        if (*error_code == HEAP_ERROR_SUCCESS && p != NULL &&
-            p >= (byte *)start && p + size <= (byte *)end)
+        if (*error_code == HEAP_ERROR_SUCCESS && p != NULL && p >= (byte *)start &&
+            p + size <= (byte *)end)
             break;
     }
     if (p == NULL)
@@ -1994,14 +1999,15 @@ os_heap_reserve_in_region(void *start, void *end, size_t size,
         *error_code = HEAP_ERROR_SUCCESS;
 
     LOG(GLOBAL, LOG_HEAP, 2,
-        "os_heap_reserve_in_region: reserved "SZFMT" bytes @ "PFX" in "PFX"-"PFX"\n",
+        "os_heap_reserve_in_region: reserved " SZFMT " bytes @ " PFX " in " PFX "-" PFX
+        "\n",
         size, p, start, end);
     return p;
 }
 
 /* commit previously reserved with os_heap_reserve pages */
 /* returns false when out of memory */
-/* A replacement of os_heap_alloc can be constructed by using os_heap_reserve 
+/* A replacement of os_heap_alloc can be constructed by using os_heap_reserve
    and os_heap_commit on a subset of the reserved pages. */
 /* caller is required to handle thread synchronization */
 bool
@@ -2024,7 +2030,7 @@ os_heap_commit(void *p, size_t size, uint prot, heap_error_code_t *error_code)
         *error_code = HEAP_ERROR_SUCCESS;
     }
 
-    LOG(GLOBAL, LOG_HEAP, 2, "os_heap_commit: %d bytes @ "PFX"\n", size, p);
+    LOG(GLOBAL, LOG_HEAP, 2, "os_heap_commit: %d bytes @ " PFX "\n", size, p);
     return true;
 }
 
@@ -2036,18 +2042,18 @@ os_heap_decommit(void *p, size_t size, heap_error_code_t *error_code)
     ASSERT(error_code != NULL);
 
     if (!dynamo_exited)
-        LOG(GLOBAL, LOG_HEAP, 4, "os_heap_decommit: %d bytes @ "PFX"\n", size, p);
+        LOG(GLOBAL, LOG_HEAP, 4, "os_heap_decommit: %d bytes @ " PFX "\n", size, p);
 
     *error_code = HEAP_ERROR_SUCCESS;
     /* FIXME: for now do nothing since os_heap_reserve has in fact committed the memory */
     rc = 0;
-    /* TODO: 
+    /* TODO:
            p = mmap_syscall(p, size, PROT_NONE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
-       we should either do a mremap() 
-       or we can do a munmap() followed 'quickly' by a mmap() - 
+       we should either do a mremap()
+       or we can do a munmap() followed 'quickly' by a mmap() -
        also see above the comment that os_heap_reserve() in fact is not so lightweight
     */
-    ASSERT(rc == 0);    
+    ASSERT(rc == 0);
 }
 
 bool
@@ -2080,8 +2086,8 @@ thread_signal(thread_record_t *tr, int signum)
      * (if created via CLONE_VM but not CLONE_THREAD), so make sure to
      * use the pid of the target thread, not our pid.
      */
-    return (dynamorio_syscall(SYS_tgkill, 3, tr->dcontext->owning_process,
-                              tr->id, signum) == 0);
+    return (dynamorio_syscall(SYS_tgkill, 3, tr->dcontext->owning_process, tr->id,
+                              signum) == 0);
 }
 
 void
@@ -2119,7 +2125,7 @@ thread_sleep(uint64 milliseconds)
 bool
 thread_suspend(thread_record_t *tr)
 {
-    os_thread_data_t *ostd = (os_thread_data_t *) tr->dcontext->os_field;
+    os_thread_data_t *ostd = (os_thread_data_t *)tr->dcontext->os_field;
     ASSERT(ostd != NULL);
     /* See synch comments in thread_resume: the mutex held there
      * prevents prematurely sending a re-suspend signal.
@@ -2160,7 +2166,7 @@ thread_suspend(thread_record_t *tr)
 bool
 thread_resume(thread_record_t *tr)
 {
-    os_thread_data_t *ostd = (os_thread_data_t *) tr->dcontext->os_field;
+    os_thread_data_t *ostd = (os_thread_data_t *)tr->dcontext->os_field;
     ASSERT(ostd != NULL);
     /* This mutex prevents sending a re-suspend signal before the target
      * reaches a safe post-resume point from a first suspend signal.
@@ -2198,7 +2204,7 @@ thread_terminate(thread_record_t *tr)
      * so instead we send SIGUSR2 and have a flag set telling
      * target thread to execute SYS_exit
      */
-    os_thread_data_t *ostd = (os_thread_data_t *) tr->dcontext->os_field;
+    os_thread_data_t *ostd = (os_thread_data_t *)tr->dcontext->os_field;
     ASSERT(ostd != NULL);
     ostd->terminate = true;
     return thread_signal(tr, SUSPEND_SIGNAL);
@@ -2207,7 +2213,7 @@ thread_terminate(thread_record_t *tr)
 bool
 is_thread_terminated(dcontext_t *dcontext)
 {
-    os_thread_data_t *ostd = (os_thread_data_t *) dcontext->os_field;
+    os_thread_data_t *ostd = (os_thread_data_t *)dcontext->os_field;
     ASSERT(ostd != NULL);
     return ostd->terminated;
 }
@@ -2218,7 +2224,7 @@ thread_get_mcontext(thread_record_t *tr, dr_mcontext_t *mc)
     /* PR 212090: only works when target is suspended by us, and
      * we then take the signal context
      */
-    os_thread_data_t *ostd = (os_thread_data_t *) tr->dcontext->os_field;
+    os_thread_data_t *ostd = (os_thread_data_t *)tr->dcontext->os_field;
     ASSERT(ostd != NULL);
     ASSERT(ostd->suspend_count > 0);
     if (ostd->suspend_count == 0)
@@ -2234,7 +2240,7 @@ thread_set_mcontext(thread_record_t *tr, dr_mcontext_t *mc)
     /* PR 212090: only works when target is suspended by us, and
      * we then replace the signal context
      */
-    os_thread_data_t *ostd = (os_thread_data_t *) tr->dcontext->os_field;
+    os_thread_data_t *ostd = (os_thread_data_t *)tr->dcontext->os_field;
     ASSERT(ostd != NULL);
     ASSERT(ostd->suspend_count > 0);
     if (ostd->suspend_count == 0)
@@ -2250,7 +2256,7 @@ is_thread_currently_native(thread_record_t *tr)
     return (!tr->under_dynamo_control);
 }
 
-#ifdef CLIENT_SIDELINE /* PR 222812: tied to sideline usage */
+#    ifdef CLIENT_SIDELINE /* PR 222812: tied to sideline usage */
 static void
 client_thread_run(void)
 {
@@ -2259,23 +2265,22 @@ client_thread_run(void)
     byte *xsp;
     GET_STACK_PTR(xsp);
     void *crec = get_clone_record((reg_t)xsp);
-    IF_DEBUG(int rc = )
-        dynamo_thread_init(get_clone_record_dstack(crec), NULL, true);
+    IF_DEBUG(int rc =)
+    dynamo_thread_init(get_clone_record_dstack(crec), NULL, true);
     ASSERT(rc != -1); /* this better be a new thread */
     dcontext = get_thread_private_dcontext();
     ASSERT(dcontext != NULL);
-    LOG(THREAD, LOG_ALL, 1, "\n***** CLIENT THREAD %d *****\n\n",
-        get_thread_id());
+    LOG(THREAD, LOG_ALL, 1, "\n***** CLIENT THREAD %d *****\n\n", get_thread_id());
     /* We stored the func and args in particular clone record fields */
-    func = (void (*)(void *param)) signal_thread_inherit(dcontext, crec);
-    void *arg = (void *) get_clone_record_app_xsp(crec);
-    LOG(THREAD, LOG_ALL, 1, "func="PFX", arg="PFX"\n", func, arg);
+    func = (void (*)(void *param))signal_thread_inherit(dcontext, crec);
+    void *arg = (void *)get_clone_record_app_xsp(crec);
+    LOG(THREAD, LOG_ALL, 1, "func=" PFX ", arg=" PFX "\n", func, arg);
 
     (*func)(arg);
 
     LOG(THREAD, LOG_ALL, 1, "\n***** CLIENT THREAD %d EXITING *****\n\n",
         get_thread_id());
-    cleanup_and_terminate(dcontext, SYS_exit, 0, 0, false/*just thread*/);
+    cleanup_and_terminate(dcontext, SYS_exit, 0, 0, false /*just thread*/);
 }
 
 /* i#41/PR 222812: client threads
@@ -2301,18 +2306,18 @@ dr_create_client_thread(void (*func)(void *param), void *arg)
      * sent to the app's thread groups.  It also makes the thread not show up in
      * the thread list for the app, making it more invisible.
      */
-    uint flags = CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND
-        IF_NOT_X64(| CLONE_SETTLS)
+    uint flags = CLONE_VM | CLONE_FS | CLONE_FILES |
+        CLONE_SIGHAND IF_NOT_X64(| CLONE_SETTLS)
         /* CLONE_THREAD required.  Signals and itimers are private anyway. */
         IF_VMX86(| (os_in_vmkernel_userworld() ? CLONE_THREAD : 0));
     /* need to share signal handler table, prior to creating clone record */
     handle_clone(dcontext, flags);
-    void *crec = create_clone_record(dcontext, (reg_t*)&xsp);
+    void *crec = create_clone_record(dcontext, (reg_t *)&xsp);
     /* make sure client_thread_run can get the func and arg, and that
      * signal_thread_inherit gets the right syscall info
      */
-    set_clone_record_fields(crec, (reg_t) arg, (app_pc) func, SYS_clone, flags);
-#ifndef X64
+    set_clone_record_fields(crec, (reg_t)arg, (app_pc)func, SYS_clone, flags);
+#        ifndef X64
     /* For the TCB we simply share the parent's.  On Linux we could just inherit
      * the same selector but not for VMX86_SERVER so we specify for both for
      * 32-bit.  Most of the fields are pthreads-specific and we assume the ones
@@ -2320,18 +2325,18 @@ dr_create_client_thread(void (*func)(void *param), void *arg)
      */
     our_modify_ldt_t desc;
     /* if get_segment_base() returned size too we could use it */
-    uint index = SELECTOR_INDEX(read_selector(IF_X64_ELSE(SEG_FS,SEG_GS)));
+    uint index = SELECTOR_INDEX(read_selector(IF_X64_ELSE(SEG_FS, SEG_GS)));
     initialize_ldt_struct(&desc, NULL, 0, index);
     int res = dynamorio_syscall(SYS_get_thread_area, 1, &desc);
     if (res != 0) {
         LOG(THREAD, LOG_ALL, 1, "client thread tls get failed: %d\n", res);
         return false;
     }
-#endif
-    LOG(THREAD, LOG_ALL, 1, "dr_create_client_thread xsp="PFX" dstack="PFX"\n",
-        xsp, get_clone_record_dstack(crec));
-    thread_id_t newpid = dynamorio_clone(flags, xsp, NULL, IF_X64_ELSE(NULL, &desc),
-                                         NULL, client_thread_run);
+#        endif
+    LOG(THREAD, LOG_ALL, 1, "dr_create_client_thread xsp=" PFX " dstack=" PFX "\n", xsp,
+        get_clone_record_dstack(crec));
+    thread_id_t newpid = dynamorio_clone(flags, xsp, NULL, IF_X64_ELSE(NULL, &desc), NULL,
+                                         client_thread_run);
     if (newpid < 0) {
         LOG(THREAD, LOG_ALL, 1, "client thread creation failed: %d\n", newpid);
         return false;
@@ -2342,12 +2347,12 @@ dr_create_client_thread(void (*func)(void *param), void *arg)
     }
     return true;
 }
-#endif /* CLIENT_SIDELINE PR 222812: tied to sideline usage */
+#    endif /* CLIENT_SIDELINE PR 222812: tied to sideline usage */
 
 int
 get_num_processors()
 {
-    static uint num_cpu = 0;         /* cached value */
+    static uint num_cpu = 0; /* cached value */
     if (!num_cpu) {
         num_cpu = get_nprocs_conf();
         ASSERT(num_cpu);
@@ -2355,16 +2360,15 @@ get_num_processors()
     return num_cpu;
 }
 
-
-#if defined(CLIENT_INTERFACE) || defined(HOT_PATCHING_INTERFACE)
-shlib_handle_t 
+#    if defined(CLIENT_INTERFACE) || defined(HOT_PATCHING_INTERFACE)
+shlib_handle_t
 load_shared_library(char *name)
 {
     return dlopen(name, RTLD_LAZY);
 }
-#endif
+#    endif
 
-#if defined(CLIENT_INTERFACE)
+#    if defined(CLIENT_INTERFACE)
 shlib_routine_ptr_t
 lookup_library_routine(shlib_handle_t lib, char *name)
 {
@@ -2382,21 +2386,21 @@ void
 shared_library_error(char *buf, int maxlen)
 {
     char *err = dlerror();
-    strncpy(buf, err, maxlen-1);
-    buf[maxlen-1] = '\0'; /* strncpy won't put on trailing null if maxes out */
+    strncpy(buf, err, maxlen - 1);
+    buf[maxlen - 1] = '\0'; /* strncpy won't put on trailing null if maxes out */
 }
 
 /* addr is any pointer known to lie within the library */
 bool
-shared_library_bounds(IN shlib_handle_t lib, IN byte *addr,
-                      OUT byte **start, OUT byte **end)
+shared_library_bounds(IN shlib_handle_t lib, IN byte *addr, OUT byte **start,
+                      OUT byte **end)
 {
     /* PR 366195: dlopen() handle truly is opaque, so we have to use addr */
     ASSERT(start != NULL && end != NULL);
     *start = addr;
     return (get_library_bounds(NULL, start, end, NULL, 0) > 0);
 }
-#endif /* defined(CLIENT_INTERFACE) */
+#    endif /* defined(CLIENT_INTERFACE) */
 
 #endif /* !NOT_DYNAMORIO_CORE_PROPER: around most of file, to exclude preload */
 
@@ -2410,7 +2414,7 @@ llseek_syscall(int fd, int64 offset, int origin, int64 *result)
     return ((*result > 0) ? 0 : (int)*result);
 #else
     return dynamorio_syscall(SYS__llseek, 5, fd, (uint)((offset >> 32) & 0xFFFFFFFF),
-                             (uint)(offset & 0xFFFFFFFF), result, origin); 
+                             (uint)(offset & 0xFFFFFFFF), result, origin);
 #endif
 }
 
@@ -2421,7 +2425,7 @@ os_file_exists(const char *fname, bool is_dir)
     struct stat64 st;
     ptr_int_t res = dynamorio_syscall(SYSNUM_STAT, 2, fname, &st);
     if (res != 0) {
-        LOG(THREAD_GET, LOG_SYSCALLS, 2, "%s failed: "PIFX"\n", __func__, res);
+        LOG(THREAD_GET, LOG_SYSCALLS, 2, "%s failed: " PIFX "\n", __func__, res);
         return false;
     }
     return (!is_dir || S_ISDIR(st.st_mode));
@@ -2434,7 +2438,7 @@ os_get_file_size(const char *file, uint64 *size)
     struct stat64 st;
     ptr_int_t res = dynamorio_syscall(SYSNUM_STAT, 2, file, &st);
     if (res != 0) {
-        LOG(THREAD_GET, LOG_SYSCALLS, 2, "%s failed: "PIFX"\n", __func__, res);
+        LOG(THREAD_GET, LOG_SYSCALLS, 2, "%s failed: " PIFX "\n", __func__, res);
         return false;
     }
     ASSERT(size != NULL);
@@ -2449,7 +2453,7 @@ os_get_file_size_by_handle(file_t fd, uint64 *size)
     struct stat64 st;
     ptr_int_t res = dynamorio_syscall(SYSNUM_FSTAT, 2, fd, &st);
     if (res != 0) {
-        LOG(THREAD_GET, LOG_SYSCALLS, 2, "%s failed: "PIFX"\n", __func__, res);
+        LOG(THREAD_GET, LOG_SYSCALLS, 2, "%s failed: " PIFX "\n", __func__, res);
         return false;
     }
     ASSERT(size != NULL);
@@ -2464,8 +2468,8 @@ bool
 os_create_dir(const char *fname, create_directory_flags_t create_dir_flags)
 {
     bool require_new = TEST(CREATE_DIR_REQUIRE_NEW, create_dir_flags);
-    int rc = dynamorio_syscall(SYS_mkdir, 2, fname, S_IRWXU|S_IRWXG);
-    ASSERT(create_dir_flags == CREATE_DIR_REQUIRE_NEW || 
+    int rc = dynamorio_syscall(SYS_mkdir, 2, fname, S_IRWXU | S_IRWXG);
+    ASSERT(create_dir_flags == CREATE_DIR_REQUIRE_NEW ||
            create_dir_flags == CREATE_DIR_ALLOW_EXISTING);
     return (rc == 0 || (!require_new && rc == -EEXIST));
 }
@@ -2504,9 +2508,9 @@ write_syscall(int fd, const void *buf, size_t nbytes)
 /* not easily accessible in header files */
 #ifdef X64
 /* not needed */
-# define O_LARGEFILE    0
+#    define O_LARGEFILE 0
 #else
-# define O_LARGEFILE    0100000
+#    define O_LARGEFILE 0100000
 #endif
 
 /* we assume that opening for writing wants to create file */
@@ -2517,15 +2521,14 @@ os_open(const char *fname, int os_open_flags)
     int flags = 0;
     if (TEST(OS_OPEN_ALLOW_LARGE, os_open_flags))
         flags |= O_LARGEFILE;
-    if (!TEST(OS_OPEN_WRITE, os_open_flags)) 
-        res = open_syscall(fname, flags|O_RDONLY, 0);
-    else {    
-        res = open_syscall(fname, flags|O_RDWR|O_CREAT|
-                           (TEST(OS_OPEN_APPEND, os_open_flags) ? 
-                            O_APPEND : 0)|
-                           (TEST(OS_OPEN_REQUIRE_NEW, os_open_flags) ? 
-                            O_EXCL : 0), 
-                           S_IRUSR|S_IWUSR|S_IRGRP|S_IWGRP);
+    if (!TEST(OS_OPEN_WRITE, os_open_flags))
+        res = open_syscall(fname, flags | O_RDONLY, 0);
+    else {
+        res = open_syscall(fname,
+                           flags | O_RDWR | O_CREAT |
+                               (TEST(OS_OPEN_APPEND, os_open_flags) ? O_APPEND : 0) |
+                               (TEST(OS_OPEN_REQUIRE_NEW, os_open_flags) ? O_EXCL : 0),
+                           S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
     }
     if (res < 0)
         return INVALID_FILE;
@@ -2551,7 +2554,7 @@ os_write(file_t f, const void *buf, size_t count)
     return write_syscall(f, buf, count);
 }
 
-ssize_t 
+ssize_t
 os_read(file_t f, void *buf, size_t count)
 {
     return read_syscall(f, buf, count);
@@ -2563,7 +2566,8 @@ os_flush(file_t f)
     /* we're not using FILE*, so there is no buffering */
 }
 
-/* seek the current file position to offset bytes from origin, return true if successful */
+/* seek the current file position to offset bytes from origin, return true if successful
+ */
 bool
 os_seek(file_t f, int64 offset, int origin)
 {
@@ -2608,13 +2612,13 @@ os_rename_file(const char *orig_name, const char *new_name, bool replace)
         if (res == 0)
             return false;
         else if (res != -ENOENT) {
-            LOG(THREAD_GET, LOG_SYSCALLS, 2, "%s stat failed: "PIFX"\n", __func__, res);
+            LOG(THREAD_GET, LOG_SYSCALLS, 2, "%s stat failed: " PIFX "\n", __func__, res);
             return false;
         }
     }
     res = dynamorio_syscall(SYS_rename, 2, orig_name, new_name);
     if (res != 0)
-        LOG(THREAD_GET, LOG_SYSCALLS, 2, "%s \"%s\" to \"%s\" failed: "PIFX"\n",
+        LOG(THREAD_GET, LOG_SYSCALLS, 2, "%s \"%s\" to \"%s\" failed: " PIFX "\n",
             __func__, orig_name, new_name, res);
     return (res == 0);
 }
@@ -2634,16 +2638,15 @@ os_map_file(file_t f, size_t *size INOUT, uint64 offs, app_pc addr, uint prot,
     int flags;
     uint pg_offs;
     ASSERT_TRUNCATE(pg_offs, uint, offs / PAGE_SIZE);
-    pg_offs = (uint) (offs / PAGE_SIZE);
+    pg_offs = (uint)(offs / PAGE_SIZE);
     flags = copy_on_write ? MAP_PRIVATE : MAP_SHARED;
-    /* Allows memory request instead of mapping a file, 
+    /* Allows memory request instead of mapping a file,
      * so we can request memory from a particular address with fixed argument */
     if (f == -1)
         flags |= MAP_ANONYMOUS;
     if (fixed)
         flags |= MAP_FIXED;
-    byte *map = mmap_syscall(addr, *size, memprot_to_osprot(prot),
-                             flags, f, pg_offs);
+    byte *map = mmap_syscall(addr, *size, memprot_to_osprot(prot), flags, f, pg_offs);
     if (!mmap_syscall_succeeded(map))
         map = NULL;
     return map;
@@ -2666,11 +2669,11 @@ os_get_disk_free_space(/*IN*/ file_t file_handle,
     struct statfs stat;
     ptr_int_t res = dynamorio_syscall(SYS_fstatfs, 2, file_handle, &stat);
     if (res != 0) {
-        LOG(THREAD_GET, LOG_SYSCALLS, 2, "%s failed: "PIFX"\n", __func__, res);
+        LOG(THREAD_GET, LOG_SYSCALLS, 2, "%s failed: " PIFX "\n", __func__, res);
         return false;
     }
     LOG(GLOBAL, LOG_STATS, 3,
-        "os_get_disk_free_space: avail="SZFMT", free="SZFMT", bsize="SZFMT"\n",
+        "os_get_disk_free_space: avail=" SZFMT ", free=" SZFMT ", bsize=" SZFMT "\n",
         stat.f_bavail, stat.f_bfree, stat.f_bsize);
     if (AvailableQuotaBytes != NULL)
         *AvailableQuotaBytes = ((uint64)stat.f_bavail * stat.f_bsize);
@@ -2704,21 +2707,21 @@ exit_thread_syscall(long status)
     dynamorio_syscall(SYS_exit, 1, status);
 }
 
-/* FIXME: this one will not be easily internationalizable 
+/* FIXME: this one will not be easily internationalizable
    yet it is easier to have a syslog based Unix implementation with real strings.
  */
 
-void 
-os_syslog(syslog_event_type_t priority, uint message_id, 
-          uint substitutions_num, va_list args) {
+void
+os_syslog(syslog_event_type_t priority, uint message_id, uint substitutions_num,
+          va_list args)
+{
     int native_priority;
     switch (priority) {
     case SYSLOG_INFORMATION: native_priority = LOG_INFO; break;
-    case SYSLOG_WARNING:     native_priority = LOG_WARNING; break;
-    case SYSLOG_CRITICAL:    native_priority = LOG_CRIT; break;
-    case SYSLOG_ERROR:       native_priority = LOG_ERR; break;
-    default:
-        ASSERT_NOT_REACHED();
+    case SYSLOG_WARNING: native_priority = LOG_WARNING; break;
+    case SYSLOG_CRITICAL: native_priority = LOG_CRIT; break;
+    case SYSLOG_ERROR: native_priority = LOG_ERR; break;
+    default: ASSERT_NOT_REACHED();
     }
     /* can amount to passing a format string (careful here) to vsyslog */
 
@@ -2734,7 +2737,7 @@ all_memory_areas_initialized(void)
             dynamo_initialized);
 }
 
-#if defined(DEBUG) && defined(INTERNAL)
+#    if defined(DEBUG) && defined(INTERNAL)
 static void
 print_all_memory_areas(file_t outf)
 {
@@ -2746,15 +2749,16 @@ print_all_memory_areas(file_t outf)
     while (vmvector_iterator_hasnext(&vmvi)) {
         app_pc start, end;
         void *nxt = vmvector_iterator_next(&vmvi, &start, &end);
-        allmem_info_t *info = (allmem_info_t *) nxt;
-        print_file(outf, PFX"-"PFX" prot=%s type=%s\n", start, end,
+        allmem_info_t *info = (allmem_info_t *)nxt;
+        print_file(outf, PFX "-" PFX " prot=%s type=%s\n", start, end,
                    memprot_string(info->prot),
-                   (info->type == DR_MEMTYPE_FREE ? "free" :
-                    (info->type == DR_MEMTYPE_IMAGE ? "image" : "data")));
+                   (info->type == DR_MEMTYPE_FREE
+                        ? "free"
+                        : (info->type == DR_MEMTYPE_IMAGE ? "image" : "data")));
     }
     vmvector_iterator_stop(&vmvi);
 }
-#endif
+#    endif
 
 bool
 safe_read_ex(const void *base, size_t size, void *out_buf, size_t *bytes_read)
@@ -2763,12 +2767,15 @@ safe_read_ex(const void *base, size_t size, void *out_buf, size_t *bytes_read)
     bool res = false;
     STATS_INC(num_safe_reads);
     if (dcontext != NULL) {
-        TRY_EXCEPT(dcontext, {
-            memcpy(out_buf, base, size);
-            res = true;
-         } , { /* EXCEPT */
-            /* nothing: res is already false */
-         });
+        TRY_EXCEPT(dcontext,
+                   {
+                       memcpy(out_buf, base, size);
+                       res = true;
+                   },
+                   {
+                       /* EXCEPT */
+                       /* nothing: res is already false */
+                   });
     } else {
         /* this is subject to races, but should only happen at init/attach when
          * there should only be one live thread.
@@ -2808,13 +2815,16 @@ safe_write_ex(void *base, size_t size, const void *in_buf, size_t *bytes_written
         *bytes_written = 0;
 
     if (dcontext != NULL) {
-        TRY_EXCEPT(dcontext, {
-            /* We abort on the 1st fault, just like safe_read */
-            memcpy(base, in_buf, size);
-            res = true;
-         } , { /* EXCEPT */
-            /* nothing: res is already false */
-         });
+        TRY_EXCEPT(dcontext,
+                   {
+                       /* We abort on the 1st fault, just like safe_read */
+                       memcpy(base, in_buf, size);
+                       res = true;
+                   },
+                   {
+                       /* EXCEPT */
+                       /* nothing: res is already false */
+                   });
     } else {
         /* this is subject to races, but should only happen at init/attach when
          * there should only be one live thread.
@@ -2855,17 +2865,16 @@ static bool
 is_readable_without_exception_internal(const byte *pc, size_t size, bool query_os)
 {
     uint prot;
-    byte *check_pc = (byte *) ALIGN_BACKWARD(pc, PAGE_SIZE);
+    byte *check_pc = (byte *)ALIGN_BACKWARD(pc, PAGE_SIZE);
     if (size > ((byte *)POINTER_MAX - pc))
         size = (byte *)POINTER_MAX - pc;
     do {
-        bool rc = query_os ?
-            get_memory_info_from_os(check_pc, NULL, NULL, &prot) :
-            get_memory_info(check_pc, NULL, NULL, &prot);
-        if (!rc || !TESTANY(MEMPROT_READ|MEMPROT_EXEC, prot))
+        bool rc = query_os ? get_memory_info_from_os(check_pc, NULL, NULL, &prot)
+                           : get_memory_info(check_pc, NULL, NULL, &prot);
+        if (!rc || !TESTANY(MEMPROT_READ | MEMPROT_EXEC, prot))
             return false;
         check_pc += PAGE_SIZE;
-    } while (check_pc != 0/*overflow*/ && check_pc < pc+size);
+    } while (check_pc != 0 /*overflow*/ && check_pc < pc + size);
     return true;
 }
 
@@ -2876,13 +2885,13 @@ is_readable_without_exception(const byte *pc, size_t size)
      * of asserts; re-enable once we're sure it truly matches the real
      * world
      */
-    return is_readable_without_exception_internal(pc, size, 
-#ifdef HAVE_PROC_MAPS
+    return is_readable_without_exception_internal(pc, size,
+#    ifdef HAVE_PROC_MAPS
                                                   true /* do query os */
-#else
+#    else
                                                   false
-#endif
-                                                  );
+#    endif
+    );
 }
 
 /* Identical to is_readable_without_exception except that the os is queried
@@ -2901,23 +2910,23 @@ is_user_address(byte *pc)
     return true;
 }
 
-/* change protections on memory region starting at pc of length length 
- * this does not update the all memory area info 
+/* change protections on memory region starting at pc of length length
+ * this does not update the all memory area info
  */
-bool 
-os_set_protection(byte *pc, size_t length, uint prot/*MEMPROT_*/)
+bool
+os_set_protection(byte *pc, size_t length, uint prot /*MEMPROT_*/)
 {
-    app_pc start_page = (app_pc) PAGE_START(pc);
+    app_pc start_page = (app_pc)PAGE_START(pc);
     uint num_bytes = ALIGN_FORWARD(length + (pc - start_page), PAGE_SIZE);
     long res = 0;
     uint flags = memprot_to_osprot(prot);
-#ifdef IA32_ON_IA64
-    LOG(THREAD_GET, LOG_VMAREAS, 1, "protection change not supported on IA64\n"); 
-    LOG(THREAD_GET, LOG_VMAREAS, 1, " attempted change_prot("PFX", "PIFX", %s) => "
-        "mprotect("PFX", "PIFX")==%d pages\n",
-        pc, length, memprot_string(prot), start_page, num_bytes,
-        num_bytes / PAGE_SIZE);
-#else
+#    ifdef IA32_ON_IA64
+    LOG(THREAD_GET, LOG_VMAREAS, 1, "protection change not supported on IA64\n");
+    LOG(THREAD_GET, LOG_VMAREAS, 1,
+        " attempted change_prot(" PFX ", " PIFX ", %s) => "
+        "mprotect(" PFX ", " PIFX ")==%d pages\n",
+        pc, length, memprot_string(prot), start_page, num_bytes, num_bytes / PAGE_SIZE);
+#    else
     DOSTATS({
         /* once on each side of prot, to get on right side of writability */
         if (!TEST(PROT_WRITE, flags)) {
@@ -2925,14 +2934,15 @@ os_set_protection(byte *pc, size_t length, uint prot/*MEMPROT_*/)
             STATS_ADD(protection_change_pages, num_bytes / PAGE_SIZE);
         }
     });
-    res = mprotect_syscall((void *) start_page, num_bytes, flags);
-    if (res != 0) 
+    res = mprotect_syscall((void *)start_page, num_bytes, flags);
+    if (res != 0)
         return false;
-    LOG(THREAD_GET, LOG_VMAREAS, 3, "change_prot("PFX", "PIFX", %s) => "
-        "mprotect("PFX", "PIFX", %d)==%d pages\n",
+    LOG(THREAD_GET, LOG_VMAREAS, 3,
+        "change_prot(" PFX ", " PIFX ", %s) => "
+        "mprotect(" PFX ", " PIFX ", %d)==%d pages\n",
         pc, length, memprot_string(prot), start_page, num_bytes, flags,
         num_bytes / PAGE_SIZE);
-#endif
+#    endif
     DOSTATS({
         /* once on each side of prot, to get on right side of writability */
         if (TEST(PROT_WRITE, flags)) {
@@ -2945,9 +2955,9 @@ os_set_protection(byte *pc, size_t length, uint prot/*MEMPROT_*/)
 
 /* change protections on memory region starting at pc of length length */
 bool
-set_protection(byte *pc, size_t length, uint prot/*MEMPROT_*/)
+set_protection(byte *pc, size_t length, uint prot /*MEMPROT_*/)
 {
-    app_pc start_page = (app_pc) PAGE_START(pc);
+    app_pc start_page = (app_pc)PAGE_START(pc);
     uint num_bytes = ALIGN_FORWARD(length + (pc - start_page), PAGE_SIZE);
 
     if (os_set_protection(pc, length, prot) == false)
@@ -2956,10 +2966,10 @@ set_protection(byte *pc, size_t length, uint prot/*MEMPROT_*/)
     ASSERT(vmvector_overlap(all_memory_areas, start_page, start_page + num_bytes) ||
            /* we could synch up: instead we relax the assert if DR areas not in allmem */
            are_dynamo_vm_areas_stale());
-    LOG(GLOBAL, LOG_VMAREAS, 3, "\tupdating all_memory_areas "PFX"-"PFX" prot->%d\n",
+    LOG(GLOBAL, LOG_VMAREAS, 3, "\tupdating all_memory_areas " PFX "-" PFX " prot->%d\n",
         start_page, start_page + num_bytes, prot);
-    update_all_memory_areas(start_page, start_page + num_bytes,
-                            prot, -1/*type unchanged*/);
+    update_all_memory_areas(start_page, start_page + num_bytes, prot,
+                            -1 /*type unchanged*/);
     all_memory_areas_unlock();
     return true;
 }
@@ -2968,7 +2978,7 @@ set_protection(byte *pc, size_t length, uint prot/*MEMPROT_*/)
 bool
 change_protection(byte *pc, size_t length, bool writable)
 {
-    uint flags = (writable) ? (MEMPROT_READ|MEMPROT_WRITE) : (MEMPROT_READ);
+    uint flags = (writable) ? (MEMPROT_READ | MEMPROT_WRITE) : (MEMPROT_READ);
     return set_protection(pc, length, flags);
 }
 
@@ -2979,24 +2989,24 @@ bool
 make_writable(byte *pc, size_t size)
 {
     long res;
-    app_pc start_page = (app_pc) PAGE_START(pc);
+    app_pc start_page = (app_pc)PAGE_START(pc);
     size_t prot_size = (size == 0) ? PAGE_SIZE : size;
-    uint prot = PROT_EXEC|PROT_READ|PROT_WRITE;
+    uint prot = PROT_EXEC | PROT_READ | PROT_WRITE;
 
     ASSERT(start_page == pc && ALIGN_FORWARD(size, PAGE_SIZE) == size);
-#ifdef IA32_ON_IA64
-    LOG(THREAD_GET, LOG_VMAREAS, 1, "protection change not supported on IA64\n"); 
+#    ifdef IA32_ON_IA64
+    LOG(THREAD_GET, LOG_VMAREAS, 1, "protection change not supported on IA64\n");
     LOG(THREAD_GET, LOG_VMAREAS, 3,
-        "attempted make_writable: pc "PFX" -> "PFX"-"PFX"\n",
-        pc, start_page, start_page + prot_size);
-#else
-    res = mprotect_syscall((void *) start_page, prot_size, prot);
-    LOG(THREAD_GET, LOG_VMAREAS, 3, "make_writable: pc "PFX" -> "PFX"-"PFX" %d\n",
+        "attempted make_writable: pc " PFX " -> " PFX "-" PFX "\n", pc, start_page,
+        start_page + prot_size);
+#    else
+    res = mprotect_syscall((void *)start_page, prot_size, prot);
+    LOG(THREAD_GET, LOG_VMAREAS, 3, "make_writable: pc " PFX " -> " PFX "-" PFX " %d\n",
         pc, start_page, start_page + prot_size, res);
     ASSERT(res == 0);
-    if (res != 0) 
+    if (res != 0)
         return false;
-#endif
+#    endif
     STATS_INC(protection_change_calls);
     STATS_ADD(protection_change_pages, size / PAGE_SIZE);
 
@@ -3006,45 +3016,47 @@ make_writable(byte *pc, size_t size)
         ASSERT(vmvector_overlap(all_memory_areas, start_page, start_page + prot_size) ||
                /* we could synch up: instead, relax assert if DR areas not in allmem */
                are_dynamo_vm_areas_stale());
-        LOG(GLOBAL, LOG_VMAREAS, 3, "\tupdating all_memory_areas "PFX"-"PFX" prot->%d\n",
-            start_page, start_page + prot_size, osprot_to_memprot(prot));
+        LOG(GLOBAL, LOG_VMAREAS, 3,
+            "\tupdating all_memory_areas " PFX "-" PFX " prot->%d\n", start_page,
+            start_page + prot_size, osprot_to_memprot(prot));
         update_all_memory_areas(start_page, start_page + prot_size,
-                                osprot_to_memprot(prot), -1/*type unchanged*/);
+                                osprot_to_memprot(prot), -1 /*type unchanged*/);
         all_memory_areas_unlock();
     }
     return true;
 }
 
 /* like make_writable but adds COW */
-bool make_copy_on_writable(byte *pc, size_t size)
+bool
+make_copy_on_writable(byte *pc, size_t size)
 {
     /* FIXME: for current usage this should be fine */
     return make_writable(pc, size);
 }
 
-/* make pc's page unwritable 
+/* make pc's page unwritable
  * FIXME: how get current protection?  would like to keep old read/exec flags
  */
 void
 make_unwritable(byte *pc, size_t size)
 {
     long res;
-    app_pc start_page = (app_pc) PAGE_START(pc);
+    app_pc start_page = (app_pc)PAGE_START(pc);
     size_t prot_size = (size == 0) ? PAGE_SIZE : size;
-    uint prot = PROT_EXEC|PROT_READ;
+    uint prot = PROT_EXEC | PROT_READ;
 
     ASSERT(start_page == pc && ALIGN_FORWARD(size, PAGE_SIZE) == size);
     /* inc stats before making unwritable, in case messing w/ data segment */
     STATS_INC(protection_change_calls);
     STATS_ADD(protection_change_pages, size / PAGE_SIZE);
-#ifdef IA32_ON_IA64
-    LOG(THREAD_GET, LOG_VMAREAS, 1, "protection change not supported on IA64\n"); 
+#    ifdef IA32_ON_IA64
+    LOG(THREAD_GET, LOG_VMAREAS, 1, "protection change not supported on IA64\n");
     LOG(THREAD_GET, LOG_VMAREAS, 3,
-        "attempted make_writable: pc "PFX" -> "PFX"-"PFX"\n",
-        pc, start_page, start_page + prot_size);
-#else
-    res = mprotect_syscall((void *) start_page, prot_size, prot);
-    LOG(THREAD_GET, LOG_VMAREAS, 3, "make_unwritable: pc "PFX" -> "PFX"-"PFX"\n",
+        "attempted make_writable: pc " PFX " -> " PFX "-" PFX "\n", pc, start_page,
+        start_page + prot_size);
+#    else
+    res = mprotect_syscall((void *)start_page, prot_size, prot);
+    LOG(THREAD_GET, LOG_VMAREAS, 3, "make_unwritable: pc " PFX " -> " PFX "-" PFX "\n",
         pc, start_page, start_page + prot_size);
     ASSERT(res == 0);
 
@@ -3054,13 +3066,14 @@ make_unwritable(byte *pc, size_t size)
         ASSERT(vmvector_overlap(all_memory_areas, start_page, start_page + prot_size) ||
                /* we could synch up: instead, relax assert if DR areas not in allmem */
                are_dynamo_vm_areas_stale());
-        LOG(GLOBAL, LOG_VMAREAS, 3, "\tupdating all_memory_areas "PFX"-"PFX" prot->%d\n",
-            start_page, start_page + prot_size, osprot_to_memprot(prot));
+        LOG(GLOBAL, LOG_VMAREAS, 3,
+            "\tupdating all_memory_areas " PFX "-" PFX " prot->%d\n", start_page,
+            start_page + prot_size, osprot_to_memprot(prot));
         update_all_memory_areas(start_page, start_page + prot_size,
-                                osprot_to_memprot(prot), -1/*type unchanged*/);
+                                osprot_to_memprot(prot), -1 /*type unchanged*/);
         all_memory_areas_unlock();
     }
-#endif
+#    endif
 }
 
 /****************************************************************************/
@@ -3079,14 +3092,14 @@ bool
 ignorable_system_call(int num)
 {
     switch (num) {
-#if defined(SYS_exit_group)
+#    if defined(SYS_exit_group)
     case SYS_exit_group:
-#endif
+#    endif
     case SYS_exit:
     case SYS_mmap:
-#ifndef X64
+#    ifndef X64
     case SYS_mmap2:
-#endif
+#    endif
     case SYS_munmap:
     case SYS_mremap:
     case SYS_mprotect:
@@ -3095,20 +3108,20 @@ ignorable_system_call(int num)
     case SYS_fork:
     case SYS_vfork:
     case SYS_kill:
-#if defined(SYS_tkill)
+#    if defined(SYS_tkill)
     case SYS_tkill:
-#endif
-#if defined(SYS_tgkill)
+#    endif
+#    if defined(SYS_tgkill)
     case SYS_tgkill:
-#endif
-#ifndef X64
+#    endif
+#    ifndef X64
     case SYS_signal:
     case SYS_sigaction:
     case SYS_sigsuspend:
     case SYS_sigpending:
     case SYS_sigreturn:
     case SYS_sigprocmask:
-#endif
+#    endif
     case SYS_rt_sigreturn:
     case SYS_rt_sigaction:
     case SYS_rt_sigprocmask:
@@ -3117,30 +3130,29 @@ ignorable_system_call(int num)
     case SYS_rt_sigqueueinfo:
     case SYS_rt_sigsuspend:
     case SYS_sigaltstack:
-#ifndef X64
+#    ifndef X64
     case SYS_sgetmask:
     case SYS_ssetmask:
-#endif
+#    endif
     case SYS_setitimer:
     case SYS_getitimer:
-    case SYS_close:
-        return false;
+    case SYS_close: return false;
     default:
-#ifdef VMX86_SERVER
+#    ifdef VMX86_SERVER
         if (is_vmkuw_sysnum(num))
             return vmkuw_ignorable_system_call(num);
-#endif
+#    endif
         return true;
     }
 }
 
 typedef struct {
-        unsigned long addr;
-        unsigned long len;
-        unsigned long prot;
-        unsigned long flags;
-        unsigned long fd;
-        unsigned long offset;
+    unsigned long addr;
+    unsigned long len;
+    unsigned long prot;
+    unsigned long flags;
+    unsigned long fd;
+    unsigned long offset;
 } mmap_arg_struct_t;
 
 static inline reg_t *
@@ -3148,7 +3160,7 @@ sys_param_addr(dcontext_t *dcontext, int num)
 {
     /* we force-inline get_mcontext() and so don't take it as a param */
     dr_mcontext_t *mc = get_mcontext(dcontext);
-#ifdef X64
+#    ifdef X64
     switch (num) {
     case 0: return &mc->xdi;
     case 1: return &mc->xsi;
@@ -3158,19 +3170,19 @@ sys_param_addr(dcontext_t *dcontext, int num)
     case 5: return &mc->r9;
     default: CLIENT_ASSERT(false, "invalid system call parameter number");
     }
-#else
+#    else
     /* even for vsyscall where ecx (syscall) or esp (sysenter) are saved into
      * ebp, the original parameter registers are not yet changed pre-syscall,
      * except for ebp, which is pushed on the stack:
      *     0xffffe400  55                   push   %ebp %esp -> %esp (%esp)
      *     0xffffe401  89 cd                mov    %ecx -> %ebp
      *     0xffffe403  0f 05                syscall -> %ecx
-     *   
-     *     0xffffe400  51                   push   %ecx %esp -> %esp (%esp) 
-     *     0xffffe401  52                   push   %edx %esp -> %esp (%esp) 
-     *     0xffffe402  55                   push   %ebp %esp -> %esp (%esp) 
-     *     0xffffe403  89 e5                mov    %esp -> %ebp 
-     *     0xffffe405  0f 34                sysenter -> %esp 
+     *
+     *     0xffffe400  51                   push   %ecx %esp -> %esp (%esp)
+     *     0xffffe401  52                   push   %edx %esp -> %esp (%esp)
+     *     0xffffe402  55                   push   %ebp %esp -> %esp (%esp)
+     *     0xffffe403  89 e5                mov    %esp -> %ebp
+     *     0xffffe405  0f 34                sysenter -> %esp
      */
     switch (num) {
     case 0: return &mc->xbx;
@@ -3180,10 +3192,10 @@ sys_param_addr(dcontext_t *dcontext, int num)
     case 4: return &mc->xdi;
     /* FIXME: do a safe_read: but what about performance?
      * See the #if 0 below, as well. */
-    case 5: return (dcontext->sys_was_int ? &mc->xbp : ((reg_t*)mc->xsp));
+    case 5: return (dcontext->sys_was_int ? &mc->xbp : ((reg_t *)mc->xsp));
     default: CLIENT_ASSERT(false, "invalid system call parameter number");
     }
-#endif
+#    endif
     return 0;
 }
 
@@ -3194,14 +3206,14 @@ sys_param(dcontext_t *dcontext, int num)
 }
 
 /* since always coming from dispatch now, only need to set mcontext */
-#define SET_RETURN_VAL(dc, val)  get_mcontext(dc)->xax = (val);
+#    define SET_RETURN_VAL(dc, val) get_mcontext(dc)->xax = (val);
 
-#ifdef CLIENT_INTERFACE
+#    ifdef CLIENT_INTERFACE
 DR_API
 reg_t
 dr_syscall_get_param(void *drcontext, int param_num)
 {
-    dcontext_t *dcontext = (dcontext_t *) drcontext;
+    dcontext_t *dcontext = (dcontext_t *)drcontext;
     CLIENT_ASSERT(dcontext->client_data->in_pre_syscall,
                   "dr_syscall_get_param() can only be called from pre-syscall event");
     return sys_param(dcontext, param_num);
@@ -3211,9 +3223,9 @@ DR_API
 void
 dr_syscall_set_param(void *drcontext, int param_num, reg_t new_value)
 {
-    dcontext_t *dcontext = (dcontext_t *) drcontext;
+    dcontext_t *dcontext = (dcontext_t *)drcontext;
     CLIENT_ASSERT(dcontext->client_data->in_pre_syscall ||
-                  dcontext->client_data->in_post_syscall,
+                      dcontext->client_data->in_post_syscall,
                   "dr_syscall_set_param() can only be called from a syscall event");
     *sys_param_addr(dcontext, param_num) = new_value;
 }
@@ -3222,7 +3234,7 @@ DR_API
 reg_t
 dr_syscall_get_result(void *drcontext)
 {
-    dcontext_t *dcontext = (dcontext_t *) drcontext;
+    dcontext_t *dcontext = (dcontext_t *)drcontext;
     CLIENT_ASSERT(dcontext->client_data->in_post_syscall,
                   "dr_syscall_get_param() can only be called from post-syscall event");
     return get_mcontext(dcontext)->xax;
@@ -3232,9 +3244,9 @@ DR_API
 void
 dr_syscall_set_result(void *drcontext, reg_t value)
 {
-    dcontext_t *dcontext = (dcontext_t *) drcontext;
+    dcontext_t *dcontext = (dcontext_t *)drcontext;
     CLIENT_ASSERT(dcontext->client_data->in_pre_syscall ||
-                  dcontext->client_data->in_post_syscall,
+                      dcontext->client_data->in_post_syscall,
                   "dr_syscall_set_result() can only be called from a syscall event");
     SET_RETURN_VAL(dcontext, value);
 }
@@ -3243,10 +3255,10 @@ DR_API
 void
 dr_syscall_set_sysnum(void *drcontext, int new_num)
 {
-    dcontext_t *dcontext = (dcontext_t *) drcontext;
+    dcontext_t *dcontext = (dcontext_t *)drcontext;
     dr_mcontext_t *mc = get_mcontext(dcontext);
     CLIENT_ASSERT(dcontext->client_data->in_pre_syscall ||
-                  dcontext->client_data->in_post_syscall,
+                      dcontext->client_data->in_post_syscall,
                   "dr_syscall_set_sysnum() can only be called from a syscall event");
     mc->xax = new_num;
 }
@@ -3255,9 +3267,10 @@ DR_API
 void
 dr_syscall_invoke_another(void *drcontext)
 {
-    dcontext_t *dcontext = (dcontext_t *) drcontext;
-    CLIENT_ASSERT(dcontext->client_data->in_post_syscall,
-                  "dr_syscall_invoke_another() can only be called from post-syscall event");
+    dcontext_t *dcontext = (dcontext_t *)drcontext;
+    CLIENT_ASSERT(
+        dcontext->client_data->in_post_syscall,
+        "dr_syscall_invoke_another() can only be called from post-syscall event");
     LOG(THREAD, LOG_SYSCALLS, 2, "invoking additional syscall on client request\n");
     dcontext->client_data->invoke_another_syscall = true;
     if (get_syscall_method() == SYSCALL_METHOD_SYSENTER) {
@@ -3267,15 +3280,13 @@ dr_syscall_invoke_another(void *drcontext)
     }
     /* for x64 we don't need to copy xcx into r10 b/c we use r10 as our param */
 }
-#endif /* CLIENT_INTERFACE */
+#    endif /* CLIENT_INTERFACE */
 
 static inline bool
 is_clone_thread_syscall_helper(ptr_uint_t sysnum, ptr_uint_t flags)
 {
-    return (sysnum == SYS_vfork ||
-            (sysnum == SYS_clone && TEST(CLONE_VM, flags)));
+    return (sysnum == SYS_vfork || (sysnum == SYS_clone && TEST(CLONE_VM, flags)));
 }
-
 
 bool
 is_clone_thread_syscall(dcontext_t *dcontext)
@@ -3327,8 +3338,8 @@ handle_self_signal(dcontext_t *dcontext, uint sig)
      * various STOP variations and CONT).
      */
     if (sig == SIGABRT && !DYNAMO_OPTION(intercept_all_signals)) {
-        LOG(GLOBAL, LOG_TOP|LOG_SYSCALLS, 1,
-            "thread %d sending itself a SIGABRT\n", get_thread_id());
+        LOG(GLOBAL, LOG_TOP | LOG_SYSCALLS, 1, "thread %d sending itself a SIGABRT\n",
+            get_thread_id());
         KSTOP(num_exits_dir_syscall);
         /* FIXME: need to check whether app has a handler for SIGABRT! */
         /* FIXME PR 211180/6723: this will do SYS_exit rather than the SIGABRT.
@@ -3367,30 +3378,33 @@ handle_execve(dcontext_t *dcontext)
     /* FIXME i#191: supposed to preserve things like pending signal
      * set across execve: going to ignore for now
      */
-    char *fname = (char *)  sys_param(dcontext, 0);
-    char **envp = (char **) sys_param(dcontext, 2);
+    char *fname = (char *)sys_param(dcontext, 0);
+    char **envp = (char **)sys_param(dcontext, 2);
     int i, preload = -1, ldpath = -1, ops = -1, rununder = -1;
     bool preload_us = false, ldpath_us = false;
     bool x64 = IF_X64_ELSE(true, false);
     file_t file;
     char *inject_library_path;
-    DEBUG_DECLARE(char **argv = (char **) sys_param(dcontext, 1);)
+    DEBUG_DECLARE(char **argv = (char **)sys_param(dcontext, 1);)
 
-    LOG(GLOBAL, LOG_ALL, 1, "\n---------------------------------------------------------------------------\n");
-    LOG(THREAD, LOG_ALL, 1, "\n---------------------------------------------------------------------------\n");
+    LOG(GLOBAL, LOG_ALL, 1,
+        "\n---------------------------------------------------------------------------"
+        "\n");
+    LOG(THREAD, LOG_ALL, 1,
+        "\n---------------------------------------------------------------------------"
+        "\n");
     DODEBUG({
         SYSLOG_INTERNAL_INFO("-- execve %s --", fname);
         LOG(THREAD, LOG_SYSCALLS, 1, "syscall: execve %s\n", fname);
-        LOG(GLOBAL, LOG_TOP|LOG_SYSCALLS, 1, "execve %s\n", fname);
+        LOG(GLOBAL, LOG_TOP | LOG_SYSCALLS, 1, "execve %s\n", fname);
         if (stats->loglevel >= 3) {
             if (argv == NULL) {
                 LOG(THREAD, LOG_SYSCALLS, 3, "\targs are NULL\n");
             } else {
                 for (i = 0; argv[i] != NULL; i++) {
-                    LOG(THREAD, LOG_SYSCALLS, 2, "\targ %d: len=%d\n",
-                        i, strlen(argv[i]));
-                    LOG(THREAD, LOG_SYSCALLS, 3, "\targ %d: %s\n",
-                        i, argv[i]);
+                    LOG(THREAD, LOG_SYSCALLS, 2, "\targ %d: len=%d\n", i,
+                        strlen(argv[i]));
+                    LOG(THREAD, LOG_SYSCALLS, 3, "\targ %d: %s\n", i, argv[i]);
                 }
             }
         }
@@ -3405,8 +3419,8 @@ handle_execve(dcontext_t *dcontext)
         x64 = file_is_elf64(file);
         os_close(file);
     }
-    inject_library_path = IF_X64_ELSE(x64, !x64) ? dynamorio_library_path :
-        dynamorio_alt_arch_path;
+    inject_library_path =
+        IF_X64_ELSE(x64, !x64) ? dynamorio_library_path : dynamorio_alt_arch_path;
 
     if (envp == NULL) {
         LOG(THREAD, LOG_SYSCALLS, 3, "\tenv is NULL\n");
@@ -3437,16 +3451,17 @@ handle_execve(dcontext_t *dcontext)
         }
     }
 
-#ifdef STATIC_LIBRARY
+#    ifdef STATIC_LIBRARY
     /* no way we can inject, we just lose control */
-    SYSLOG_INTERNAL_WARNING("WARNING: static DynamoRIO library, losing control on execve");
+    SYSLOG_INTERNAL_WARNING(
+        "WARNING: static DynamoRIO library, losing control on execve");
     return;
-#endif
+#    endif
 
     /* We want to add new env vars, so we create a new envp
      * array.  We have to deallocate them and restore the old
      * envp if execve fails; if execve succeeds, the address
-     * space is reset so we don't need to do anything.  
+     * space is reset so we don't need to do anything.
      */
     int num_old = i;
     uint sz;
@@ -3476,26 +3491,22 @@ handle_execve(dcontext_t *dcontext)
      */
     mark_thread_execve(dcontext->thread_record, true);
 
-    num_new = 
-        2 + /* execve indicator var plus final NULL */
-        ((preload<0) ? 1 : 0) +
-        ((ldpath<0) ? 1 : 0);
+    num_new = 2 + /* execve indicator var plus final NULL */
+        ((preload < 0) ? 1 : 0) + ((ldpath < 0) ? 1 : 0);
     if (DYNAMO_OPTION(follow_children)) {
-        num_new +=
-            ((rununder < 0) ? 1 : 0) +
-            ((ops < 0 && options != NULL) ? 1 : 0) +
+        num_new += ((rununder < 0) ? 1 : 0) + ((ops < 0 && options != NULL) ? 1 : 0) +
             (get_log_dir(PROCESS_DIR, NULL, NULL) ? 1 : 0) /* logdir */;
     }
-    new_envp = heap_alloc(dcontext, sizeof(char*)*(num_old+num_new)
-                          HEAPACCT(ACCT_OTHER));
-    memcpy(new_envp, envp, sizeof(char*)*num_old);
+    new_envp =
+        heap_alloc(dcontext, sizeof(char *) * (num_old + num_new) HEAPACCT(ACCT_OTHER));
+    memcpy(new_envp, envp, sizeof(char *) * num_old);
 
-    *sys_param_addr(dcontext, 2) = (reg_t) new_envp;  /* OUT */
+    *sys_param_addr(dcontext, 2) = (reg_t)new_envp; /* OUT */
     /* store for reset in case execve fails, and for cleanup if
      * this is a vfork thread
      */
-    dcontext->sys_param0 = (reg_t) envp;
-    dcontext->sys_param1 = (reg_t) new_envp;
+    dcontext->sys_param0 = (reg_t)envp;
+    dcontext->sys_param1 = (reg_t)new_envp;
     /* if no var to overwrite, need new var at end */
     if (preload < 0)
         idx_preload = i++;
@@ -3512,71 +3523,71 @@ handle_execve(dcontext_t *dcontext)
         LOG(THREAD, LOG_SYSCALLS, 1,
             "WARNING: execve env does NOT preload DynamoRIO, forcing it!\n");
         if (preload >= 0) {
-            sz = strlen(envp[preload]) + strlen(DYNAMORIO_PRELOAD_NAME)+
+            sz = strlen(envp[preload]) + strlen(DYNAMORIO_PRELOAD_NAME) +
                 strlen(DYNAMORIO_LIBRARY_NAME) + 3;
-            var = heap_alloc(dcontext, sizeof(char)*sz HEAPACCT(ACCT_OTHER));
+            var = heap_alloc(dcontext, sizeof(char) * sz HEAPACCT(ACCT_OTHER));
             old = envp[preload] + strlen("LD_PRELOAD=");
-            snprintf(var, sz, "LD_PRELOAD=%s %s %s",
-                     DYNAMORIO_PRELOAD_NAME, DYNAMORIO_LIBRARY_NAME, old);
+            snprintf(var, sz, "LD_PRELOAD=%s %s %s", DYNAMORIO_PRELOAD_NAME,
+                     DYNAMORIO_LIBRARY_NAME, old);
         } else {
-            sz = strlen("LD_PRELOAD=") + strlen(DYNAMORIO_PRELOAD_NAME) + 
+            sz = strlen("LD_PRELOAD=") + strlen(DYNAMORIO_PRELOAD_NAME) +
                 strlen(DYNAMORIO_LIBRARY_NAME) + 2;
-            var = heap_alloc(dcontext, sizeof(char)*sz HEAPACCT(ACCT_OTHER));
-            snprintf(var, sz, "LD_PRELOAD=%s %s",
-                     DYNAMORIO_PRELOAD_NAME, DYNAMORIO_LIBRARY_NAME);
+            var = heap_alloc(dcontext, sizeof(char) * sz HEAPACCT(ACCT_OTHER));
+            snprintf(var, sz, "LD_PRELOAD=%s %s", DYNAMORIO_PRELOAD_NAME,
+                     DYNAMORIO_LIBRARY_NAME);
         }
-        *(var+sz-1) = '\0'; /* null terminate */
+        *(var + sz - 1) = '\0'; /* null terminate */
         new_envp[idx_preload] = var;
-        LOG(THREAD, LOG_SYSCALLS, 2, "\tnew env %d: %s\n",
-            idx_preload, new_envp[idx_preload]);
+        LOG(THREAD, LOG_SYSCALLS, 2, "\tnew env %d: %s\n", idx_preload,
+            new_envp[idx_preload]);
     }
 
     if (!ldpath_us) {
         if (ldpath >= 0) {
             sz = strlen(envp[ldpath]) + strlen(inject_library_path) + 2;
-            var = heap_alloc(dcontext, sizeof(char)*sz HEAPACCT(ACCT_OTHER));
+            var = heap_alloc(dcontext, sizeof(char) * sz HEAPACCT(ACCT_OTHER));
             old = envp[ldpath] + strlen("LD_LIBRARY_PATH=");
             snprintf(var, sz, "LD_LIBRARY_PATH=%s:%s", inject_library_path, old);
         } else {
             sz = strlen("LD_LIBRARY_PATH=") + strlen(inject_library_path) + 1;
-            var = heap_alloc(dcontext, sizeof(char)*sz HEAPACCT(ACCT_OTHER));
+            var = heap_alloc(dcontext, sizeof(char) * sz HEAPACCT(ACCT_OTHER));
             snprintf(var, sz, "LD_LIBRARY_PATH=%s", inject_library_path);
         }
-        *(var+sz-1) = '\0'; /* null terminate */
+        *(var + sz - 1) = '\0'; /* null terminate */
         new_envp[idx_ldpath] = var;
-        LOG(THREAD, LOG_SYSCALLS, 2, "\tnew env %d: %s\n",
-            idx_ldpath, new_envp[idx_ldpath]);
+        LOG(THREAD, LOG_SYSCALLS, 2, "\tnew env %d: %s\n", idx_ldpath,
+            new_envp[idx_ldpath]);
     }
 
     if (DYNAMO_OPTION(follow_children)) {
         if (rununder < 0) {
             sz = strlen(DYNAMORIO_VAR_RUNUNDER) + 3 /* =, 1, null */;
-            var = heap_alloc(dcontext, sizeof(char)*sz HEAPACCT(ACCT_OTHER));
+            var = heap_alloc(dcontext, sizeof(char) * sz HEAPACCT(ACCT_OTHER));
             /* Must pass RUNUNDER_ALL to get child injected if has no app config */
             snprintf(var, sz, "%s=%.1d", DYNAMORIO_VAR_RUNUNDER,
                      RUNUNDER_ON | RUNUNDER_ALL);
-            *(var+sz-1) = '\0'; /* null terminate */
+            *(var + sz - 1) = '\0'; /* null terminate */
             new_envp[idx_rununder] = var;
-            LOG(THREAD, LOG_SYSCALLS, 2, "\tnew env %d: %s\n",
-                idx_rununder, new_envp[idx_rununder]);
+            LOG(THREAD, LOG_SYSCALLS, 2, "\tnew env %d: %s\n", idx_rununder,
+                new_envp[idx_rununder]);
         } /* If rununder var is already set we assume it's set to 1. */
         if (ops < 0 && options != NULL) {
             sz = strlen(DYNAMORIO_VAR_OPTIONS) + strlen(options) + 2;
-            var = heap_alloc(dcontext, sizeof(char)*sz HEAPACCT(ACCT_OTHER));
+            var = heap_alloc(dcontext, sizeof(char) * sz HEAPACCT(ACCT_OTHER));
             snprintf(var, sz, "%s=%s", DYNAMORIO_VAR_OPTIONS, options);
-            *(var+sz-1) = '\0'; /* null terminate */
+            *(var + sz - 1) = '\0'; /* null terminate */
             new_envp[idx_ops] = var;
-            LOG(THREAD, LOG_SYSCALLS, 2, "\tnew env %d: %s\n",
-                idx_ops, new_envp[idx_ops]);
+            LOG(THREAD, LOG_SYSCALLS, 2, "\tnew env %d: %s\n", idx_ops,
+                new_envp[idx_ops]);
         }
         if (get_log_dir(PROCESS_DIR, NULL, &logdir_length)) {
             sz = strlen(DYNAMORIO_VAR_EXECVE_LOGDIR) + 1 + logdir_length;
-            var = heap_alloc(dcontext, sizeof(char)*sz HEAPACCT(ACCT_OTHER));
+            var = heap_alloc(dcontext, sizeof(char) * sz HEAPACCT(ACCT_OTHER));
             snprintf(var, sz, "%s=", DYNAMORIO_VAR_EXECVE_LOGDIR);
-            get_log_dir(PROCESS_DIR, var+strlen(var), &logdir_length);
-            *(var+sz-1) = '\0'; /* null terminate */
+            get_log_dir(PROCESS_DIR, var + strlen(var), &logdir_length);
+            *(var + sz - 1) = '\0'; /* null terminate */
             new_envp[i++] = var;
-            LOG(THREAD, LOG_SYSCALLS, 2, "\tnew env %d: %s\n", i-1, new_envp[i-1]);
+            LOG(THREAD, LOG_SYSCALLS, 2, "\tnew env %d: %s\n", i - 1, new_envp[i - 1]);
         }
     } else if (idx_rununder >= 0) {
         /* disable auto-following of this execve, yet still allow preload
@@ -3589,14 +3600,14 @@ handle_execve(dcontext_t *dcontext)
 
     sz = strlen(DYNAMORIO_VAR_EXECVE) + 4;
     /* we always pass this var to indicate "post-execve" */
-    var = heap_alloc(dcontext, sizeof(char)*sz HEAPACCT(ACCT_OTHER));
+    var = heap_alloc(dcontext, sizeof(char) * sz HEAPACCT(ACCT_OTHER));
     /* PR 458917: we overload this to also pass our gdt index */
     ASSERT(os_tls_get_gdt_index(dcontext) < 100 &&
            os_tls_get_gdt_index(dcontext) >= -1); /* only 2 chars allocated */
     snprintf(var, sz, "%s=%02d", DYNAMORIO_VAR_EXECVE, os_tls_get_gdt_index(dcontext));
-    *(var+sz-1) = '\0'; /* null terminate */
+    *(var + sz - 1) = '\0'; /* null terminate */
     new_envp[i++] = var;
-    LOG(THREAD, LOG_SYSCALLS, 2, "\tnew env %d: %s\n", i-1, new_envp[i-1]);
+    LOG(THREAD, LOG_SYSCALLS, 2, "\tnew env %d: %s\n", i - 1, new_envp[i - 1]);
     /* must end with NULL */
     new_envp[i] = NULL;
 
@@ -3614,30 +3625,29 @@ handle_execve_post(dcontext_t *dcontext)
      * in the parent process.
      * we have to restore env to how it was and free the allocated heap.
      */
-    char **old_envp = (char **) dcontext->sys_param0;
-    char **new_envp = (char **) dcontext->sys_param1;
-#ifdef STATIC_LIBRARY
+    char **old_envp = (char **)dcontext->sys_param0;
+    char **new_envp = (char **)dcontext->sys_param1;
+#    ifdef STATIC_LIBRARY
     /* nothing to clean up */
     return;
-#endif
+#    endif
     if (new_envp != NULL) {
         int i;
         LOG(THREAD, LOG_SYSCALLS, 2, "\tcleaning up our env vars\n");
         /* we replaced existing ones and/or added new ones.
          * we can't compare to old_envp b/c it may have changed by now.
          */
-        for (i=0; new_envp[i] != NULL; i++) {
+        for (i = 0; new_envp[i] != NULL; i++) {
             if (is_dynamo_address((byte *)new_envp[i])) {
                 heap_free(dcontext, new_envp[i],
-                          sizeof(char)*(strlen(new_envp[i])+1)
-                          HEAPACCT(ACCT_OTHER));
+                          sizeof(char) * (strlen(new_envp[i]) + 1) HEAPACCT(ACCT_OTHER));
             }
         }
         i++; /* need to de-allocate final null slot too */
-        heap_free(dcontext, new_envp, sizeof(char*)*i HEAPACCT(ACCT_OTHER));
+        heap_free(dcontext, new_envp, sizeof(char *) * i HEAPACCT(ACCT_OTHER));
         /* restore prev envp if we're post-syscall */
         if (!dcontext->thread_record->execve)
-            *sys_param_addr(dcontext, 2) = (reg_t) old_envp;
+            *sys_param_addr(dcontext, 2) = (reg_t)old_envp;
     }
 }
 
@@ -3645,12 +3655,11 @@ handle_execve_post(dcontext_t *dcontext)
  * is currently in a syscall handler.
  * Alternatively for sysenter we could set app_sysenter_instr_addr for Linux.
  */
-#define SYSCALL_PC(dc) \
- ((get_syscall_method() == SYSCALL_METHOD_INT ||     \
-   get_syscall_method() == SYSCALL_METHOD_SYSCALL) ? \
-  (ASSERT(SYSCALL_LENGTH == INT_LENGTH),             \
-   POST_SYSCALL_PC(dc) - INT_LENGTH) :               \
-  (vsyscall_syscall_end_pc - SYSENTER_LENGTH))
+#    define SYSCALL_PC(dc)                                                              \
+        ((get_syscall_method() == SYSCALL_METHOD_INT ||                                 \
+          get_syscall_method() == SYSCALL_METHOD_SYSCALL)                               \
+             ? (ASSERT(SYSCALL_LENGTH == INT_LENGTH), POST_SYSCALL_PC(dc) - INT_LENGTH) \
+             : (vsyscall_syscall_end_pc - SYSENTER_LENGTH))
 
 static void
 handle_exit(dcontext_t *dcontext)
@@ -3674,7 +3683,7 @@ handle_exit(dcontext_t *dcontext)
         exit_process = true;
         mutex_lock(&thread_initexit_lock);
         get_list_of_threads(&threads, &num_threads);
-        for (i=0; i<num_threads; i++) {
+        for (i = 0; i < num_threads; i++) {
             if (threads[i]->pid != mypid && !IS_CLIENT_THREAD(threads[i]->dcontext)) {
                 exit_process = false;
                 break;
@@ -3685,24 +3694,24 @@ handle_exit(dcontext_t *dcontext)
             thread_id_t myid = get_thread_id();
             dr_mcontext_t mcontext;
             DEBUG_DECLARE(thread_synch_result_t synch_res;)
-            LOG(THREAD, LOG_TOP|LOG_SYSCALLS, 1,
+            LOG(THREAD, LOG_TOP | LOG_SYSCALLS, 1,
                 "SYS_exit_group %d not final group: %d cleaning up just "
-                "threads in group\n", get_process_id(), get_thread_id());
+                "threads in group\n",
+                get_process_id(), get_thread_id());
             /* Set where we are to handle reciprocal syncs */
             copy_mcontext(mc, &mcontext);
             mc->pc = SYSCALL_PC(dcontext);
-            for (i=0; i<num_threads; i++) {
+            for (i = 0; i < num_threads; i++) {
                 if (threads[i]->id != myid && threads[i]->pid == mypid) {
                     /* See comments in dynamo_process_exit_cleanup(): we terminate
                      * to make cleanup easier, but may want to switch to shifting
                      * the target thread to a stack-free loop.
                      */
                     DEBUG_DECLARE(synch_res =)
-                        synch_with_thread(threads[i]->id, true/*block*/,
-                                          true/*have initexit lock*/,
-                                          THREAD_SYNCH_VALID_MCONTEXT, 
-                                          THREAD_SYNCH_TERMINATED_AND_CLEANED,
-                                          THREAD_SYNCH_SUSPEND_FAILURE_IGNORE);
+                    synch_with_thread(
+                        threads[i]->id, true /*block*/, true /*have initexit lock*/,
+                        THREAD_SYNCH_VALID_MCONTEXT, THREAD_SYNCH_TERMINATED_AND_CLEANED,
+                        THREAD_SYNCH_SUSPEND_FAILURE_IGNORE);
                     /* initexit lock may be released and re-acquired in course of
                      * doing the synch so we may have races where the thread
                      * exits on its own (or new threads appear): we'll live
@@ -3714,24 +3723,23 @@ handle_exit(dcontext_t *dcontext)
             copy_mcontext(&mcontext, mc);
         }
         mutex_unlock(&thread_initexit_lock);
-        global_heap_free(threads, num_threads*sizeof(thread_record_t*)
-                         HEAPACCT(ACCT_THREAD_MGT));
+        global_heap_free(
+            threads, num_threads * sizeof(thread_record_t *) HEAPACCT(ACCT_THREAD_MGT));
     }
 
     if (is_last_app_thread() && !dynamo_exited) {
-        LOG(THREAD, LOG_TOP|LOG_SYSCALLS, 1,
+        LOG(THREAD, LOG_TOP | LOG_SYSCALLS, 1,
             "SYS_exit%s(%d) in final thread %d of %d => exiting DynamoRIO\n",
-            (mc->xax == SYS_exit_group) ? "_group" : "", mc->xax,
-            get_thread_id(), get_process_id());
+            (mc->xax == SYS_exit_group) ? "_group" : "", mc->xax, get_thread_id(),
+            get_process_id());
         /* we want to clean up even if not automatic startup! */
         automatic_startup = true;
         exit_process = true;
     } else {
-        LOG(THREAD, LOG_TOP|LOG_THREADS|LOG_SYSCALLS, 1,
+        LOG(THREAD, LOG_TOP | LOG_THREADS | LOG_SYSCALLS, 1,
             "SYS_exit%s(%d) in thread %d of %d => cleaning up %s\n",
-            (mc->xax == SYS_exit_group) ? "_group" : "",
-            mc->xax, get_thread_id(), get_process_id(),
-            exit_process ? "process" : "thread");
+            (mc->xax == SYS_exit_group) ? "_group" : "", mc->xax, get_thread_id(),
+            get_process_id(), exit_process ? "process" : "thread");
     }
     KSTOP(num_exits_dir_syscall);
 
@@ -3792,25 +3800,25 @@ pre_system_call(dcontext_t *dcontext)
         /* not using SAFE_READ due to performance concerns (we do this for
          * every single system call on systems where we can't hook vsyscall!)
          */
-        TRY_EXCEPT(dcontext, /* try */ {
-            mc->xbp = *(reg_t*)mc->xsp;
-        }, /* except */ {
-            ASSERT_NOT_REACHED();
-            mc->xbp = 0;
-        });
+        TRY_EXCEPT(
+            dcontext, /* try */ { mc->xbp = *(reg_t *)mc->xsp; }, /* except */
+            {
+                ASSERT_NOT_REACHED();
+                mc->xbp = 0;
+            });
     }
 
     switch (mc->xax) {
 
     case SYS_exit_group:
-# ifdef VMX86_SERVER
+#    ifdef VMX86_SERVER
         if (os_in_vmkernel_32bit()) {
             /* on esx 3.5 => ENOSYS, so wait for SYS_exit */
             LOG(THREAD, LOG_SYSCALLS, 2, "on esx35 => ignoring exitgroup\n");
             DODEBUG({ dcontext->expect_last_syscall_to_fail = true; });
             break;
         }
-# endif
+#    endif
         /* fall-through */
     case SYS_exit: {
         handle_exit(dcontext);
@@ -3820,46 +3828,45 @@ pre_system_call(dcontext_t *dcontext)
     /****************************************************************************/
     /* MEMORY REGIONS */
 
-#ifndef X64
+#    ifndef X64
     case SYS_mmap: {
         /* in /usr/src/linux/arch/i386/kernel/sys_i386.c:
            asmlinkage int old_mmap(struct mmap_arg_struct_t *arg)
          */
-        mmap_arg_struct_t *arg = (mmap_arg_struct_t *) sys_param(dcontext, 0);
+        mmap_arg_struct_t *arg = (mmap_arg_struct_t *)sys_param(dcontext, 0);
         DOLOG(2, LOG_SYSCALLS, {
             mmap_arg_struct_t arg_buf;
             if (safe_read(arg, sizeof(mmap_arg_struct_t), &arg_buf)) {
-                void *addr = (void *) arg->addr;
-                size_t len = (size_t) arg->len;
-                uint prot = (uint) arg->prot;
+                void *addr = (void *)arg->addr;
+                size_t len = (size_t)arg->len;
+                uint prot = (uint)arg->prot;
                 LOG(THREAD, LOG_SYSCALLS, 2,
-                    "syscall: mmap addr="PFX" size="PIFX" prot=0x%x"
-                    " flags="PIFX" offset="PIFX" fd=%d\n",
+                    "syscall: mmap addr=" PFX " size=" PIFX " prot=0x%x"
+                    " flags=" PIFX " offset=" PIFX " fd=%d\n",
                     addr, len, prot, arg->flags, arg->offset, arg->fd);
             }
         });
         /* post_system_call does the work */
-        dcontext->sys_param0 = (reg_t) arg;
+        dcontext->sys_param0 = (reg_t)arg;
         break;
     }
-#endif
-    case IF_X64_ELSE(SYS_mmap,SYS_mmap2): {
+#    endif
+    case IF_X64_ELSE(SYS_mmap, SYS_mmap2): {
         /* in /usr/src/linux/arch/i386/kernel/sys_i386.c:
            asmlinkage long sys_mmap2(unsigned long addr, unsigned long len,
              unsigned long prot, unsigned long flags,
              unsigned long fd, unsigned long pgoff)
          */
-        void *addr = (void *) sys_param(dcontext, 0);
-        size_t len = (size_t) sys_param(dcontext, 1);
-        uint prot = (uint) sys_param(dcontext, 2);
-        uint flags = (uint) sys_param(dcontext, 3);
+        void *addr = (void *)sys_param(dcontext, 0);
+        size_t len = (size_t)sys_param(dcontext, 1);
+        uint prot = (uint)sys_param(dcontext, 2);
+        uint flags = (uint)sys_param(dcontext, 3);
         LOG(THREAD, LOG_SYSCALLS, 2,
-            "syscall: mmap2 addr="PFX" size="PIFX" prot=0x%x"
-            " flags="PIFX" offset="PIFX" fd=%d\n",
-            addr, len, prot, flags,
-            sys_param(dcontext, 5), sys_param(dcontext, 4));
+            "syscall: mmap2 addr=" PFX " size=" PIFX " prot=0x%x"
+            " flags=" PIFX " offset=" PIFX " fd=%d\n",
+            addr, len, prot, flags, sys_param(dcontext, 5), sys_param(dcontext, 4));
         /* post_system_call does the work */
-        dcontext->sys_param0 = (reg_t) addr;
+        dcontext->sys_param0 = (reg_t)addr;
         dcontext->sys_param1 = len;
         dcontext->sys_param2 = prot;
         dcontext->sys_param3 = flags;
@@ -3870,17 +3877,17 @@ pre_system_call(dcontext_t *dcontext)
         /* in /usr/src/linux/mm/mmap.c:
            asmlinkage long sys_munmap(unsigned long addr, uint len)
          */
-        app_pc addr = (void *) sys_param(dcontext, 0);
-        size_t len = (size_t) sys_param(dcontext, 1);
-        LOG(THREAD, LOG_SYSCALLS, 2, "syscall: munmap addr="PFX" size="PFX"\n",
-            addr, len);
+        app_pc addr = (void *)sys_param(dcontext, 0);
+        size_t len = (size_t)sys_param(dcontext, 1);
+        LOG(THREAD, LOG_SYSCALLS, 2, "syscall: munmap addr=" PFX " size=" PFX "\n", addr,
+            len);
         RSTATS_INC(num_app_munmaps);
         /* FIXME addr is supposed to be on a page boundary so we
          * could detect that condition here and set
          * expect_last_syscall_to_fail.
          */
         /* save params in case an undo is needed in post_system_call */
-        dcontext->sys_param0 = (reg_t) addr;
+        dcontext->sys_param0 = (reg_t)addr;
         dcontext->sys_param1 = len;
         /* We assume that the unmap will succeed and so are conservative
          * and remove the region from exec areas and flush all fragments
@@ -3899,7 +3906,7 @@ pre_system_call(dcontext_t *dcontext)
             ASSERT_CURIOSITY(ma != NULL);
             ASSERT_CURIOSITY(addr == ma->start);
             /* XREF 307599 on rounding module end to the next PAGE boundary */
-            ASSERT_CURIOSITY((app_pc)ALIGN_FORWARD(addr+len, PAGE_SIZE) == ma->end);
+            ASSERT_CURIOSITY((app_pc)ALIGN_FORWARD(addr + len, PAGE_SIZE) == ma->end);
             os_get_module_info_unlock();
             /* i#210:
              * we only think a module is removed if its first memory region
@@ -3908,9 +3915,9 @@ pre_system_call(dcontext_t *dcontext)
              */
             if (ma != NULL && ma->start == addr)
                 module_list_remove(addr, ALIGN_FORWARD(len, PAGE_SIZE));
-        } else 
+        } else
             os_get_module_info_unlock();
-        app_memory_deallocation(dcontext, (app_pc)addr, len, 
+        app_memory_deallocation(dcontext, (app_pc)addr, len,
                                 false /* don't own thread_initexit_lock */,
                                 true /* image, FIXME: though not necessarily */);
         /* FIXME: case 4983 use is_elf_so_header() */
@@ -3924,14 +3931,14 @@ pre_system_call(dcontext_t *dcontext)
              unsigned long flags, unsigned long new_addr)
         */
         dr_mem_info_t info;
-        app_pc addr = (void *) sys_param(dcontext, 0);
-        size_t old_len = (size_t) sys_param(dcontext, 1);
-        size_t new_len = (size_t) sys_param(dcontext, 2);
+        app_pc addr = (void *)sys_param(dcontext, 0);
+        size_t old_len = (size_t)sys_param(dcontext, 1);
+        size_t new_len = (size_t)sys_param(dcontext, 2);
         DEBUG_DECLARE(bool ok;)
-        LOG(THREAD, LOG_SYSCALLS, 2, "syscall: mremap addr="PFX" size="PFX"\n",
-            addr, old_len);
+        LOG(THREAD, LOG_SYSCALLS, 2, "syscall: mremap addr=" PFX " size=" PFX "\n", addr,
+            old_len);
         /* post_system_call does the work */
-        dcontext->sys_param0 = (reg_t) addr;
+        dcontext->sys_param0 = (reg_t)addr;
         dcontext->sys_param1 = old_len;
         dcontext->sys_param2 = new_len;
         /* i#173
@@ -3939,7 +3946,7 @@ pre_system_call(dcontext_t *dcontext)
          * new memory region in the post_system_call
          */
         DEBUG_DECLARE(ok =)
-            query_memory_ex(addr, &info);
+        query_memory_ex(addr, &info);
         ASSERT(ok);
         dcontext->sys_param3 = info.prot;
         dcontext->sys_param4 = info.type;
@@ -3958,52 +3965,51 @@ pre_system_call(dcontext_t *dcontext)
         */
         uint res;
         DEBUG_DECLARE(app_pc end;)
-        app_pc addr  = (void *) sys_param(dcontext, 0);
-        size_t len  = (size_t) sys_param(dcontext, 1);
-        uint prot = (uint) sys_param(dcontext, 2);
+        app_pc addr = (void *)sys_param(dcontext, 0);
+        size_t len = (size_t)sys_param(dcontext, 1);
+        uint prot = (uint)sys_param(dcontext, 2);
         uint new_memprot;
         /* save params in case an undo is needed in post_system_call */
-        dcontext->sys_param0 = (reg_t) addr;
+        dcontext->sys_param0 = (reg_t)addr;
         dcontext->sys_param1 = len;
         dcontext->sys_param2 = prot;
         LOG(THREAD, LOG_SYSCALLS, 2,
-            "syscall: mprotect addr="PFX" size="PFX" prot=%s\n",
-            addr, len, memprot_string(osprot_to_memprot(prot)));
+            "syscall: mprotect addr=" PFX " size=" PFX " prot=%s\n", addr, len,
+            memprot_string(osprot_to_memprot(prot)));
 
         /* PR 413109 - fail mprotect if start region is unknown; seen in hostd.
-         * FIXME: get_memory_info_from_os() should be used instead of 
+         * FIXME: get_memory_info_from_os() should be used instead of
          *      vmvector_lookup_data() to catch mprotect failure cases on shared
-         *      memory allocated by another process.  However, till PROC_MAPS 
-         *      are implemented on visor, get_memory_info_from_os() can't 
-         *      distinguish between inaccessible and unallocated, so it doesn't 
-         *      work.  Once PROC_MAPS is available on visor use 
+         *      memory allocated by another process.  However, till PROC_MAPS
+         *      are implemented on visor, get_memory_info_from_os() can't
+         *      distinguish between inaccessible and unallocated, so it doesn't
+         *      work.  Once PROC_MAPS is available on visor use
          *      get_memory_info_from_os() and resolve case.
          *
          * FIXME: Failing mprotect if addr isn't allocated doesn't help if there
-         *      are unallocated pages in the middle of the the mprotect region. 
-         *      As it will be expensive to do page wise check for each mprotect 
-         *      syscall just to guard against a corner case, it might be better 
-         *      to let the system call fail and recover in post_system_call(). 
+         *      are unallocated pages in the middle of the the mprotect region.
+         *      As it will be expensive to do page wise check for each mprotect
+         *      syscall just to guard against a corner case, it might be better
+         *      to let the system call fail and recover in post_system_call().
          *      See PR 410921.
          */
-        if (!vmvector_lookup_data(all_memory_areas, addr, NULL, 
-                                  IF_DEBUG_ELSE(&end, NULL), NULL)) {
-            LOG(THREAD, LOG_SYSCALLS, 2,
-                "\t"PFX" isn't mapped; aborting mprotect\n", addr);
+        if (!vmvector_lookup_data(all_memory_areas, addr, NULL, IF_DEBUG_ELSE(&end, NULL),
+                                  NULL)) {
+            LOG(THREAD, LOG_SYSCALLS, 2, "\t" PFX " isn't mapped; aborting mprotect\n",
+                addr);
             execute_syscall = false;
             SET_RETURN_VAL(dcontext, -ENOMEM);
             DODEBUG({ dcontext->expect_last_syscall_to_fail = true; });
             break;
         } else {
-            /* If mprotect region spans beyond the end of the vmarea then it 
-             * spans 2 or more vmareas with dissimilar protection (xref 
+            /* If mprotect region spans beyond the end of the vmarea then it
+             * spans 2 or more vmareas with dissimilar protection (xref
              * PR 410921) or has unallocated regions in between (PR 413109).
              */
             DODEBUG(dcontext->mprot_multi_areas = (addr + len) > end ? true : false;);
         }
 
-        res = app_memory_protection_change(dcontext, addr, len, 
-                                           osprot_to_memprot(prot),
+        res = app_memory_protection_change(dcontext, addr, len, osprot_to_memprot(prot),
                                            &new_memprot, NULL);
         if (res != DO_APP_MEM_PROT_CHANGE) {
             if (res == FAIL_APP_MEM_PROT_CHANGE) {
@@ -4013,19 +4019,18 @@ pre_system_call(dcontext_t *dcontext)
                 ASSERT_NOT_REACHED();
             }
             execute_syscall = false;
-        }
-        else {
+        } else {
             /* FIXME Store state for undo if the syscall fails. */
             /* update all_memory_areas list */
             all_memory_areas_lock();
             ASSERT(vmvector_overlap(all_memory_areas, addr, addr + len) ||
                    /* we could synch: instead, relax assert if DR areas not in allmem */
                    are_dynamo_vm_areas_stale());
-            LOG(GLOBAL, LOG_VMAREAS|LOG_SYSCALLS, 3,
-                "\tupdating all_memory_areas "PFX"-"PFX" prot->%d\n",
-                addr, addr+len, osprot_to_memprot(prot));
-            update_all_memory_areas(addr, addr+len, osprot_to_memprot(prot),
-                                    -1/*type unchanged*/);
+            LOG(GLOBAL, LOG_VMAREAS | LOG_SYSCALLS, 3,
+                "\tupdating all_memory_areas " PFX "-" PFX " prot->%d\n", addr,
+                addr + len, osprot_to_memprot(prot));
+            update_all_memory_areas(addr, addr + len, osprot_to_memprot(prot),
+                                    -1 /*type unchanged*/);
             all_memory_areas_unlock();
         }
         break;
@@ -4047,11 +4052,11 @@ pre_system_call(dcontext_t *dcontext)
         break;
     }
 
-    /****************************************************************************/
-    /* SPAWNING */
+        /****************************************************************************/
+        /* SPAWNING */
 
     case SYS_clone: {
-        /* in /usr/src/linux/arch/i386/kernel/process.c 
+        /* in /usr/src/linux/arch/i386/kernel/process.c
          * 32-bit params: flags, newsp, ptid, tls, ctid
          * 64-bit params: should be the same yet tls (for ARCH_SET_FS) is in r8?!?
          *   I don't see how sys_clone gets its special args: shouldn't it
@@ -4059,17 +4064,18 @@ pre_system_call(dcontext_t *dcontext)
          *   sys_clone(unsigned long clone_flags, unsigned long newsp,
          *     void __user *parent_tid, void __user *child_tid, struct pt_regs *regs)
          */
-        uint flags = (uint) sys_param(dcontext, 0);
-        LOG(THREAD, LOG_SYSCALLS, 2, "syscall: clone with flags = "PFX"\n", flags);
-        LOG(THREAD, LOG_SYSCALLS, 2, "args: "PFX", "PFX", "PFX", "PFX", "PFX"\n",
-            sys_param(dcontext, 0), sys_param(dcontext, 1), sys_param(dcontext, 2),
-            sys_param(dcontext, 3), sys_param(dcontext, 4));
+        uint flags = (uint)sys_param(dcontext, 0);
+        LOG(THREAD, LOG_SYSCALLS, 2, "syscall: clone with flags = " PFX "\n", flags);
+        LOG(THREAD, LOG_SYSCALLS, 2,
+            "args: " PFX ", " PFX ", " PFX ", " PFX ", " PFX "\n", sys_param(dcontext, 0),
+            sys_param(dcontext, 1), sys_param(dcontext, 2), sys_param(dcontext, 3),
+            sys_param(dcontext, 4));
         handle_clone(dcontext, flags);
         if ((flags & CLONE_VM) == 0) {
             LOG(THREAD, LOG_SYSCALLS, 1, "\tWARNING: CLONE_VM not set!\n");
         }
         /* save for post_system_call */
-        dcontext->sys_param0 = (reg_t) flags;
+        dcontext->sys_param0 = (reg_t)flags;
 
         /* For thread creation clone syscalls a clone_record_t structure
          * containing the pc after the app's syscall instr and other data
@@ -4099,8 +4105,8 @@ pre_system_call(dcontext_t *dcontext)
         thread_record_t **threads;
         int num_threads, i;
         mutex_lock(&thread_initexit_lock);
-        get_list_of_threads_ex(&threads, &num_threads, true/*include execve*/);
-        for (i=0; i<num_threads; i++) {
+        get_list_of_threads_ex(&threads, &num_threads, true /*include execve*/);
+        for (i = 0; i < num_threads; i++) {
             if (threads[i]->execve) {
                 LOG(THREAD, LOG_SYSCALLS, 2, "cleaning up earlier vfork thread %d\n",
                     threads[i]->id);
@@ -4108,11 +4114,11 @@ pre_system_call(dcontext_t *dcontext)
             }
         }
         mutex_unlock(&thread_initexit_lock);
-        global_heap_free(threads, num_threads*sizeof(thread_record_t*)
-                         HEAPACCT(ACCT_THREAD_MGT));
+        global_heap_free(
+            threads, num_threads * sizeof(thread_record_t *) HEAPACCT(ACCT_THREAD_MGT));
 
         /* save for post_system_call, treated as if SYS_clone */
-        dcontext->sys_param0 = (reg_t) flags;
+        dcontext->sys_param0 = (reg_t)flags;
 
         /* vfork has the same needs as clone.  Pass info via a clone_record_t
          * structure to child.  See SYS_clone for info about i#149/PR 403015.
@@ -4134,32 +4140,33 @@ pre_system_call(dcontext_t *dcontext)
         break;
     }
 
-    /****************************************************************************/
-    /* SIGNALS */
- 
-    case SYS_rt_sigaction: {   /* 174 */
+        /****************************************************************************/
+        /* SIGNALS */
+
+    case SYS_rt_sigaction: { /* 174 */
         /* in /usr/src/linux/kernel/signal.c:
            asmlinkage long
-           sys_rt_sigaction(int sig, const struct sigaction *act, 
+           sys_rt_sigaction(int sig, const struct sigaction *act,
              struct sigaction *oact, size_t sigsetsize)
          */
-        int sig  = (int) sys_param(dcontext, 0);
-        const kernel_sigaction_t *act = (const kernel_sigaction_t *) sys_param(dcontext, 1);
-        kernel_sigaction_t *oact = (kernel_sigaction_t *) sys_param(dcontext, 2);
-        size_t sigsetsize = (size_t) sys_param(dcontext, 3);
+        int sig = (int)sys_param(dcontext, 0);
+        const kernel_sigaction_t *act =
+            (const kernel_sigaction_t *)sys_param(dcontext, 1);
+        kernel_sigaction_t *oact = (kernel_sigaction_t *)sys_param(dcontext, 2);
+        size_t sigsetsize = (size_t)sys_param(dcontext, 3);
         /* post_syscall does some work as well */
-        dcontext->sys_param0 = (reg_t) sig;
-        dcontext->sys_param1 = (reg_t) act;
-        dcontext->sys_param2 = (reg_t) oact;
-        dcontext->sys_param3 = (reg_t) sigsetsize;
+        dcontext->sys_param0 = (reg_t)sig;
+        dcontext->sys_param1 = (reg_t)act;
+        dcontext->sys_param2 = (reg_t)oact;
+        dcontext->sys_param3 = (reg_t)sigsetsize;
         execute_syscall = handle_sigaction(dcontext, sig, act, oact, sigsetsize);
         if (!execute_syscall) {
             SET_RETURN_VAL(dcontext, 0);
         }
         break;
     }
-#ifndef X64
-    case SYS_sigreturn: {      /* 119 */
+#    ifndef X64
+    case SYS_sigreturn: { /* 119 */
         /* in /usr/src/linux/arch/i386/kernel/signal.c:
            asmlinkage int sys_sigreturn(unsigned long __unused)
          */
@@ -4170,8 +4177,8 @@ pre_system_call(dcontext_t *dcontext)
          */
         break;
     }
-#endif
-    case SYS_rt_sigreturn: {   /* 173 */
+#    endif
+    case SYS_rt_sigreturn: { /* 173 */
         /* in /usr/src/linux/arch/i386/kernel/signal.c:
            asmlinkage int sys_rt_sigreturn(unsigned long __unused)
          */
@@ -4179,15 +4186,14 @@ pre_system_call(dcontext_t *dcontext)
         /* see comment for SYS_sigreturn on return val */
         break;
     }
-    case SYS_sigaltstack: {    /* 186 */
+    case SYS_sigaltstack: { /* 186 */
         /* in /usr/src/linux/arch/i386/kernel/signal.c:
            asmlinkage int
            sys_sigaltstack(const stack_t *uss, stack_t *uoss)
         */
-        const stack_t *uss = (const stack_t *) sys_param(dcontext, 0);
-        stack_t *uoss = (stack_t *) sys_param(dcontext, 1);
-        execute_syscall =
-            handle_sigaltstack(dcontext, uss, uoss);
+        const stack_t *uss = (const stack_t *)sys_param(dcontext, 0);
+        stack_t *uoss = (stack_t *)sys_param(dcontext, 1);
+        execute_syscall = handle_sigaltstack(dcontext, uss, uoss);
         if (!execute_syscall) {
             SET_RETURN_VAL(dcontext, 0);
         }
@@ -4196,7 +4202,7 @@ pre_system_call(dcontext_t *dcontext)
     case SYS_rt_sigprocmask: { /* 175 */
         /* in /usr/src/linux/kernel/signal.c:
            asmlinkage long
-           sys_rt_sigprocmask(int how, sigset_t *set, sigset_t *oset, 
+           sys_rt_sigprocmask(int how, sigset_t *set, sigset_t *oset,
              size_t sigsetsize)
          */
         /* we also need access to the params in post_system_call */
@@ -4204,10 +4210,10 @@ pre_system_call(dcontext_t *dcontext)
         dcontext->sys_param1 = sys_param(dcontext, 1);
         dcontext->sys_param2 = sys_param(dcontext, 2);
         dcontext->sys_param3 = sys_param(dcontext, 3);
-        handle_sigprocmask(dcontext, (int) sys_param(dcontext, 0),
-                           (kernel_sigset_t *) sys_param(dcontext, 1),
-                           (kernel_sigset_t *) sys_param(dcontext, 2),
-                           (size_t) sys_param(dcontext, 3));
+        handle_sigprocmask(dcontext, (int)sys_param(dcontext, 0),
+                           (kernel_sigset_t *)sys_param(dcontext, 1),
+                           (kernel_sigset_t *)sys_param(dcontext, 2),
+                           (size_t)sys_param(dcontext, 3));
         break;
     }
     case SYS_rt_sigsuspend: { /* 179 */
@@ -4215,43 +4221,43 @@ pre_system_call(dcontext_t *dcontext)
            asmlinkage int
            sys_rt_sigsuspend(sigset_t *unewset, size_t sigsetsize)
          */
-        handle_sigsuspend(dcontext, (kernel_sigset_t *) sys_param(dcontext, 0),
-                          (size_t) sys_param(dcontext, 1));
+        handle_sigsuspend(dcontext, (kernel_sigset_t *)sys_param(dcontext, 0),
+                          (size_t)sys_param(dcontext, 1));
         break;
     }
-    case SYS_kill: {           /* 37 */
+    case SYS_kill: { /* 37 */
         /* in /usr/src/linux/kernel/signal.c:
          * asmlinkage long sys_kill(int pid, int sig)
          */
-        pid_t pid = (pid_t) sys_param(dcontext, 0);
-        uint sig = (uint) sys_param(dcontext, 1);
+        pid_t pid = (pid_t)sys_param(dcontext, 0);
+        uint sig = (uint)sys_param(dcontext, 1);
         /* We check whether targeting this process or this process group */
         if (pid == get_process_id() || pid == 0 || pid == -get_process_group_id()) {
             handle_self_signal(dcontext, sig);
         }
         break;
     }
-#if defined(SYS_tkill)
-    case SYS_tkill: {          /* 238 */
+#    if defined(SYS_tkill)
+    case SYS_tkill: { /* 238 */
         /* in /usr/src/linux/kernel/signal.c:
          * asmlinkage long sys_tkill(int pid, int sig)
          */
-        pid_t tid = (pid_t) sys_param(dcontext, 0);
-        uint sig = (uint) sys_param(dcontext, 1);
+        pid_t tid = (pid_t)sys_param(dcontext, 0);
+        uint sig = (uint)sys_param(dcontext, 1);
         if (tid == get_thread_id()) {
             handle_self_signal(dcontext, sig);
         }
         break;
     }
-#endif
-#if defined(SYS_tgkill)
-    case SYS_tgkill: {          /* 270 */
+#    endif
+#    if defined(SYS_tgkill)
+    case SYS_tgkill: { /* 270 */
         /* in /usr/src/linux/kernel/signal.c:
          * asmlinkage long sys_tgkill(int tgid, int pid, int sig)
          */
-        pid_t tgid = (pid_t) sys_param(dcontext, 0);
-        pid_t tid = (pid_t) sys_param(dcontext, 1);
-        uint sig = (uint) sys_param(dcontext, 2);
+        pid_t tgid = (pid_t)sys_param(dcontext, 0);
+        pid_t tid = (pid_t)sys_param(dcontext, 1);
+        uint sig = (uint)sys_param(dcontext, 2);
         /* some kernels support -1 values:
          +   tgkill(-1, tid, sig)  == tkill(tid, sig)
          *   tgkill(tgid, -1, sig) == kill(tgid, sig)
@@ -4259,28 +4265,27 @@ pre_system_call(dcontext_t *dcontext)
          * I don't want to kill the thread when the signal is never sent!
          * FIXME: the 1st is in my tkill manpage, but not my 2.6.20 kernel sources!
          */
-        if ((tgid == -1 || tgid == get_process_id()) &&
-            tid == get_thread_id()) {
+        if ((tgid == -1 || tgid == get_process_id()) && tid == get_thread_id()) {
             handle_self_signal(dcontext, sig);
         }
         break;
     }
-#endif
-    case SYS_setitimer:       /* 104 */
+#    endif
+    case SYS_setitimer: /* 104 */
         dcontext->sys_param0 = sys_param(dcontext, 0);
         dcontext->sys_param1 = sys_param(dcontext, 1);
         dcontext->sys_param2 = sys_param(dcontext, 2);
-        handle_pre_setitimer(dcontext, (int) sys_param(dcontext, 0),
-                             (const struct itimerval *) sys_param(dcontext, 1),
-                             (struct itimerval *) sys_param(dcontext, 2));
+        handle_pre_setitimer(dcontext, (int)sys_param(dcontext, 0),
+                             (const struct itimerval *)sys_param(dcontext, 1),
+                             (struct itimerval *)sys_param(dcontext, 2));
         break;
-    case SYS_getitimer:      /* 105 */
+    case SYS_getitimer: /* 105 */
         dcontext->sys_param0 = sys_param(dcontext, 0);
         dcontext->sys_param1 = sys_param(dcontext, 1);
         break;
 
-#if 0
-# ifndef X64
+#    if 0
+#        ifndef X64
     case SYS_signal: {         /* 48 */
         /* in /usr/src/linux/kernel/signal.c:
            asmlinkage unsigned long
@@ -4310,87 +4315,90 @@ pre_system_call(dcontext_t *dcontext)
          */
         break;
     }
-# endif
-#else
-    /* until we've implemented them, keep down here to get warning: */
-# ifndef X64
+#        endif
+#    else
+        /* until we've implemented them, keep down here to get warning: */
+#        ifndef X64
     case SYS_signal:
     case SYS_sigaction:
     case SYS_sigsuspend:
     case SYS_sigprocmask:
-# endif
-#endif
+#        endif
+#    endif
 
-#ifndef X64
-    case SYS_sigpending:      /* 73 */
-    case SYS_sgetmask:        /* 68 */
-    case SYS_ssetmask:        /* 69 */
-#endif
-    case SYS_rt_sigpending:   /* 176 */
-    case SYS_rt_sigtimedwait: /* 177 */
+#    ifndef X64
+    case SYS_sigpending: /* 73 */
+    case SYS_sgetmask:   /* 68 */
+    case SYS_ssetmask:   /* 69 */
+#    endif
+    case SYS_rt_sigpending:     /* 176 */
+    case SYS_rt_sigtimedwait:   /* 177 */
     case SYS_rt_sigqueueinfo: { /* 178 */
         /* FIXME: handle all of these syscalls! */
-        LOG(THREAD, LOG_ASYNCH|LOG_SYSCALLS, 1,
+        LOG(THREAD, LOG_ASYNCH | LOG_SYSCALLS, 1,
             "WARNING: unhandled signal system call %d\n", mc->xax);
         break;
     }
 
     case SYS_close: {
         /* in fs/open.c: asmlinkage long sys_close(unsigned int fd) */
-        uint fd = (uint) sys_param(dcontext, 0);
+        uint fd = (uint)sys_param(dcontext, 0);
         LOG(THREAD, LOG_SYSCALLS, 3, "syscall: close fd %d\n", fd);
-#ifdef DEBUG
+#    ifdef DEBUG
         if (stats->loglevel > 0) {
             /* I assume other threads' files, and for that matter forked children's
              * files, will not be completely closed just by us closing them
              */
             if (fd == main_logfile || fd == dcontext->logfile) {
-                LOG(THREAD, LOG_TOP|LOG_SYSCALLS, 1,
+                LOG(THREAD, LOG_TOP | LOG_SYSCALLS, 1,
                     "\tWARNING: app trying to close DynamoRIO file!  Not allowing it.\n");
-                execute_syscall = false;    /* PR 402766 - break, not return. */
+                execute_syscall = false; /* PR 402766 - break, not return. */
                 SET_RETURN_VAL(dcontext, -EBADF);
                 DODEBUG({ dcontext->expect_last_syscall_to_fail = true; });
                 break;
             }
         }
-#endif
+#    endif
         /* Xref PR 258731 - duplicate STDOUT/STDERR when app closes them so we (or
          * a client) can continue to use them for logging. */
         if (DYNAMO_OPTION(dup_stdout_on_close) && fd == STDOUT) {
             our_stdout = dup_syscall(fd);
-            LOG(THREAD, LOG_TOP|LOG_SYSCALLS, 1,
+            LOG(THREAD, LOG_TOP | LOG_SYSCALLS, 1,
                 "WARNING: app is closing stdout=%d - duplicating descriptor for "
-                "DynamoRIO usage got %d.\n", fd, our_stdout);
+                "DynamoRIO usage got %d.\n",
+                fd, our_stdout);
         }
         if (DYNAMO_OPTION(dup_stderr_on_close) && fd == STDERR) {
             our_stderr = dup_syscall(fd);
-            LOG(THREAD, LOG_TOP|LOG_SYSCALLS, 1,
+            LOG(THREAD, LOG_TOP | LOG_SYSCALLS, 1,
                 "WARNING: app is closing stderr=%d - duplicating descriptor for "
-                "DynamoRIO usage got %d.\n", fd, our_stderr);
+                "DynamoRIO usage got %d.\n",
+                fd, our_stderr);
         }
         if (DYNAMO_OPTION(dup_stdin_on_close) && fd == STDIN) {
             our_stdin = dup_syscall(fd);
-            LOG(THREAD, LOG_TOP|LOG_SYSCALLS, 1,
+            LOG(THREAD, LOG_TOP | LOG_SYSCALLS, 1,
                 "WARNING: app is closing stdin=%d - duplicating descriptor for "
-                "DynamoRIO usage got %d.\n", fd, our_stdin);
+                "DynamoRIO usage got %d.\n",
+                fd, our_stdin);
         }
         break;
     }
 
-#ifdef DEBUG
+#    ifdef DEBUG
     case SYS_open: {
         dcontext->sys_param0 = sys_param(dcontext, 0);
         break;
     }
-#endif
+#    endif
 
     default: {
-#ifdef VMX86_SERVER
+#    ifdef VMX86_SERVER
         if (is_vmkuw_sysnum(mc->xax)) {
             execute_syscall = vmkuw_pre_system_call(dcontext);
             break;
         }
-#endif
+#    endif
     }
 
     } /* end switch */
@@ -4409,8 +4417,8 @@ allmem_info_free(void *data)
 static void *
 allmem_info_dup(void *data)
 {
-    allmem_info_t *src = (allmem_info_t *) data;
-    allmem_info_t *dst = 
+    allmem_info_t *src = (allmem_info_t *)data;
+    allmem_info_t *dst =
         HEAP_TYPE_ALLOC(GLOBAL_DCONTEXT, allmem_info_t, ACCT_MEM_MGT, PROTECTED);
     ASSERT(src != NULL);
     *dst = *src;
@@ -4420,24 +4428,22 @@ allmem_info_dup(void *data)
 static bool
 allmem_should_merge(bool adjacent, void *data1, void *data2)
 {
-    allmem_info_t *i1 = (allmem_info_t *) data1;
-    allmem_info_t *i2 = (allmem_info_t *) data2;
+    allmem_info_t *i1 = (allmem_info_t *)data1;
+    allmem_info_t *i2 = (allmem_info_t *)data2;
     /* we do want to merge identical regions, whether overlapping or
      * adjacent, to avoid continual splitting due to mprotect
      * fragmenting our list
      */
-    return (i1->prot == i2->prot &&
-            i1->type == i2->type);
+    return (i1->prot == i2->prot && i1->type == i2->type);
 }
 
 static void *
 allmem_info_merge(void *dst_data, void *src_data)
 {
     DODEBUG({
-      allmem_info_t *src = (allmem_info_t *) src_data;
-      allmem_info_t *dst = (allmem_info_t *) dst_data;
-      ASSERT(src->prot == dst->prot &&
-             src->type == dst->type);
+        allmem_info_t *src = (allmem_info_t *)src_data;
+        allmem_info_t *dst = (allmem_info_t *)dst_data;
+        ASSERT(src->prot == dst->prot && src->type == dst->type);
     });
     allmem_info_free(src_data);
     return dst_data;
@@ -4460,7 +4466,7 @@ void
 update_all_memory_areas(app_pc start, app_pc end_in, uint prot, int type)
 {
     allmem_info_t *info;
-    app_pc end = (app_pc) ALIGN_FORWARD(end_in, PAGE_SIZE);
+    app_pc end = (app_pc)ALIGN_FORWARD(end_in, PAGE_SIZE);
     ASSERT(ALIGNED(start, PAGE_SIZE));
     /* all_memory_areas lock is held higher up the call chain to avoid rank
      * order violation with heap_unit_lock */
@@ -4471,23 +4477,24 @@ update_all_memory_areas(app_pc start, app_pc end_in, uint prot, int type)
         bool removed;
         if (type == -1) {
             /* we assume the entire region is the same type, if -1 passed in */
-            if (vmvector_lookup_data(all_memory_areas, start,
-                                     NULL, NULL, (void **) &info)) {
+            if (vmvector_lookup_data(all_memory_areas, start, NULL, NULL,
+                                     (void **)&info)) {
                 type = info->type;
                 DODEBUG({
                     /* [start..end_in) may cross multiple different-prot regions,
                      * but should all be same type
                      */
-                    ASSERT(vmvector_lookup_data(all_memory_areas, end_in - 1,
-                                                NULL, NULL, (void **) &info));
+                    ASSERT(vmvector_lookup_data(all_memory_areas, end_in - 1, NULL, NULL,
+                                                (void **)&info));
                     ASSERT(info->type == type);
                 });
             } else
                 ASSERT_NOT_REACHED();
         }
-        LOG(THREAD_GET, LOG_VMAREAS|LOG_SYSCALLS, 4,
-            "update_all_memory_areas: overlap found, removing and adding: "
-            PFX"-"PFX" prot=%d\n", start, end, prot);
+        LOG(THREAD_GET, LOG_VMAREAS | LOG_SYSCALLS, 4,
+            "update_all_memory_areas: overlap found, removing and adding: " PFX "-" PFX
+            " prot=%d\n",
+            start, end, prot);
         /* New region to be added overlaps with one or more existing
          * regions.  Split already existing region(s) accordingly and add
          * the new region */
@@ -4497,9 +4504,9 @@ update_all_memory_areas(app_pc start, app_pc end_in, uint prot, int type)
         /* can't pass in -1 when no existing entry */
         ASSERT(type >= 0);
     }
-    LOG(THREAD_GET, LOG_VMAREAS|LOG_SYSCALLS, 3,
-        "update_all_memory_areas: adding: "PFX"-"PFX" prot=%d type=%d\n",
-        start, end, prot, type);
+    LOG(THREAD_GET, LOG_VMAREAS | LOG_SYSCALLS, 3,
+        "update_all_memory_areas: adding: " PFX "-" PFX " prot=%d type=%d\n", start, end,
+        prot, type);
     info = HEAP_TYPE_ALLOC(GLOBAL_DCONTEXT, allmem_info_t, ACCT_MEM_MGT, PROTECTED);
     info->prot = prot;
     ASSERT(type >= 0);
@@ -4514,8 +4521,8 @@ remove_from_all_memory_areas(app_pc start, app_pc end)
     DEBUG_DECLARE(dcontext_t *dcontext = get_thread_private_dcontext());
     ok = vmvector_remove(all_memory_areas, start, end);
     ASSERT(ok);
-    LOG(THREAD, LOG_VMAREAS|LOG_SYSCALLS, 3,
-        "remove_from_all_memory_areas: removed: "PFX"-"PFX"\n", start, end);
+    LOG(THREAD, LOG_VMAREAS | LOG_SYSCALLS, 3,
+        "remove_from_all_memory_areas: removed: " PFX "-" PFX "\n", start, end);
     return ok;
 }
 
@@ -4533,14 +4540,15 @@ mmap_check_for_module_overlap(app_pc base, size_t size, bool readable, uint64 in
         /* FIXME - how can we distinguish between the loader mapping the segments
          * over the initial map from someone just mapping over part of a module? If
          * is the latter case need to adjust the view size or remove from module list. */
-        LOG(GLOBAL, LOG_VMAREAS, 2, "%s mmap overlapping module area : \n"
-            "\tmap : base="PFX" base+size="PFX" inode="UINT64_FORMAT_STRING"\n"
-            "\tmod : start="PFX" end="PFX" inode="UINT64_FORMAT_STRING"\n",
-            at_map ? "new" : "existing", base, base+size, inode,
-            ma->start, ma->end, ma->names.inode);
+        LOG(GLOBAL, LOG_VMAREAS, 2,
+            "%s mmap overlapping module area : \n"
+            "\tmap : base=" PFX " base+size=" PFX " inode=" UINT64_FORMAT_STRING "\n"
+            "\tmod : start=" PFX " end=" PFX " inode=" UINT64_FORMAT_STRING "\n",
+            at_map ? "new" : "existing", base, base + size, inode, ma->start, ma->end,
+            ma->names.inode);
         ASSERT_CURIOSITY(base >= ma->start);
         if (at_map) {
-            ASSERT_CURIOSITY(base+size <= ma->end);
+            ASSERT_CURIOSITY(base + size <= ma->end);
         } else {
             /* FIXME - I'm having problems with this check for existing maps.  I
              * haven't been able to get gdb to break in early enough to really get a good
@@ -4556,7 +4564,7 @@ mmap_check_for_module_overlap(app_pc base, size_t size, bool readable, uint64 in
              * is elsewhere in the address space (so who and how allocated that adjacent
              * memory). I've yet to see any issue with dynamically loaded modules so
              * it's probably the loader merging regions.  Still worth investigating. */
-            ASSERT_CURIOSITY(inode == 0 /*see above comment*/|| base+size <= ma->end);
+            ASSERT_CURIOSITY(inode == 0 /*see above comment*/ || base + size <= ma->end);
         }
         ASSERT_CURIOSITY(ma->names.inode == inode || inode == 0 /* for .bss */);
         DODEBUG({
@@ -4591,12 +4599,12 @@ process_mmap(dcontext_t *dcontext, app_pc base, size_t size, uint prot,
     app_pc area_start;
     app_pc area_end;
     allmem_info_t *info;
-#ifdef CLIENT_INTERFACE
+#    ifdef CLIENT_INTERFACE
     bool inform_client = false;
-#endif
+#    endif
 
-    LOG(THREAD, LOG_SYSCALLS, 4, "process_mmap("PFX","PFX",%s,%s)\n",
-        base, size, memprot_string(memprot), map_type);
+    LOG(THREAD, LOG_SYSCALLS, 4, "process_mmap(" PFX "," PFX ",%s,%s)\n", base, size,
+        memprot_string(memprot), map_type);
     /* Notes on how ELF SOs are mapped in.
      *
      * o The initial mmap for an ELF file specifies enough space for
@@ -4623,8 +4631,8 @@ process_mmap(dcontext_t *dcontext, app_pc base, size_t size, uint prot,
     /* FIXME - get inode for check */
     if (TEST(MAP_ANONYMOUS, flags)) {
         /* not an ELF mmap */
-    } else if (mmap_check_for_module_overlap(base, size,
-                                             TEST(MEMPROT_READ, memprot), 0, true)) {
+    } else if (mmap_check_for_module_overlap(base, size, TEST(MEMPROT_READ, memprot), 0,
+                                             true)) {
         /* FIXME - how can we distinguish between the loader mapping the segments
          * over the initial map from someone just mapping over part of a module? If
          * is the latter case need to adjust the view size or remove from module list. */
@@ -4632,11 +4640,12 @@ process_mmap(dcontext_t *dcontext, app_pc base, size_t size, uint prot,
         DODEBUG({ map_type = "ELF SO"; });
     } else if (TEST(MEMPROT_READ, memprot) && is_elf_so_header(base, size)) {
         maps_iter_t iter;
-        bool found_map = false;;
+        bool found_map = false;
+        ;
         uint64 inode = 0;
         char *filename = "";
-        LOG(THREAD, LOG_SYSCALLS|LOG_VMAREAS, 2, "dlopen "PFX"-"PFX"%s\n",
-            base, base+size, TEST(MEMPROT_EXEC, memprot) ? " +x": "");
+        LOG(THREAD, LOG_SYSCALLS | LOG_VMAREAS, 2, "dlopen " PFX "-" PFX "%s\n", base,
+            base + size, TEST(MEMPROT_EXEC, memprot) ? " +x" : "");
         image = true;
         DODEBUG({ map_type = "ELF SO"; });
         /* Mapping in a new module.  From what we've observed of the loader's
@@ -4657,7 +4666,7 @@ process_mmap(dcontext_t *dcontext, app_pc base, size_t size, uint prot,
          * tell when the loader is finished.  The downside is that at the initial map
          * the memory layout isn't finalized (memory beyond the first segment will
          * be shifted for page alignment reasons), so we have to be careful and
-         * make adjustments to read anything beyond the first segment until the 
+         * make adjustments to read anything beyond the first segment until the
          * loader finishes. This goes for the client too as it gets notified when we
          * add to the list.  FIXME we could try to track the expected segment overmaps
          * and only notify the client after the last one (though that's still before
@@ -4678,30 +4687,30 @@ process_mmap(dcontext_t *dcontext, app_pc base, size_t size, uint prot,
             }
         }
         maps_iterator_stop(&iter);
-#ifdef HAVE_PROC_MAPS
+#    ifdef HAVE_PROC_MAPS
         ASSERT_CURIOSITY(found_map); /* barring weird races we should find this map */
-#else /* HAVE_PROC_MAPS */
-        /* Without /proc/maps or other memory querying interface available at 
-         * library map time, there is no way to find out the name of the file 
-         * that was mapped, thus its inode isn't available either.  
+#    else                            /* HAVE_PROC_MAPS */
+        /* Without /proc/maps or other memory querying interface available at
+         * library map time, there is no way to find out the name of the file
+         * that was mapped, thus its inode isn't available either.
          *
-         * Just module_list_add with no filename will still result in 
-         * library name being extracted from the .dynamic section and added 
+         * Just module_list_add with no filename will still result in
+         * library name being extracted from the .dynamic section and added
          * to the module list.  However, this name may not always exist, thus
          * we might have a library with no file name available at all!
          *
-         * Note: visor implements vsi mem maps that give file info, but, no 
+         * Note: visor implements vsi mem maps that give file info, but, no
          *       path, should be ok.  xref PR 401580.
          *
          * Once PR 235433 is implemented in visor then fix maps_iterator*() to
          * use vsi to find out page protection info, file name & inode.
          */
-#endif /* HAVE_PROC_MAPS */
+#    endif                           /* HAVE_PROC_MAPS */
         /* XREF 307599 on rounding module end to the next PAGE boundary */
         module_list_add(base, ALIGN_FORWARD(size, PAGE_SIZE), true, filename, inode);
-#ifdef CLIENT_INTERFACE
+#    ifdef CLIENT_INTERFACE
         inform_client = true;
-#endif
+#    endif
         if (found_map)
             dr_strfree(filename HEAPACCT(ACCT_OTHER));
     }
@@ -4709,19 +4718,18 @@ process_mmap(dcontext_t *dcontext, app_pc base, size_t size, uint prot,
     all_memory_areas_lock();
     sync_all_memory_areas();
     if (vmvector_lookup_data(all_memory_areas, base, &area_start, &area_end,
-                             (void **) &info)) {
+                             (void **)&info)) {
         uint new_memprot;
-        LOG(THREAD, LOG_SYSCALLS, 4, "\tprocess overlap w/"PFX"-"PFX" prot=%d\n",
+        LOG(THREAD, LOG_SYSCALLS, 4, "\tprocess overlap w/" PFX "-" PFX " prot=%d\n",
             area_start, area_end, info->prot);
         /* can't hold lock across call to app_memory_protection_change */
         all_memory_areas_unlock();
         if (info->prot != memprot) {
             DEBUG_DECLARE(uint res =)
-                app_memory_protection_change(dcontext, base, size, memprot, 
-                                             &new_memprot, NULL);
+            app_memory_protection_change(dcontext, base, size, memprot, &new_memprot,
+                                         NULL);
             ASSERT_NOT_IMPLEMENTED(res != PRETEND_APP_MEM_PROT_CHANGE &&
                                    res != SUBSET_APP_MEM_PROT_CHANGE);
-                   
         }
         all_memory_areas_lock();
     }
@@ -4738,11 +4746,11 @@ process_mmap(dcontext_t *dcontext, app_pc base, size_t size, uint prot,
         STATS_INC(num_app_code_modules);
     LOG(THREAD, LOG_SYSCALLS, 4, "\t app_mem_alloc -- DONE\n");
 
-#ifdef CLIENT_INTERFACE
+#    ifdef CLIENT_INTERFACE
     /* invoke the client event only after DR's state is consistent */
     if (inform_client && dynamo_initialized)
         instrument_module_load_trigger(base);
-#endif
+#    endif
 }
 
 /* Returns false if system call should NOT be executed
@@ -4761,7 +4769,7 @@ post_system_call(dcontext_t *dcontext)
      * appear to be failures but are not. They are handled on a
      * case-by-case basis in the switch statement below.
      */
-    ptr_int_t result = (ptr_int_t) mc->xax; /* signed */
+    ptr_int_t result = (ptr_int_t)mc->xax; /* signed */
     bool success = (result >= 0);
     app_pc base;
     size_t size;
@@ -4789,17 +4797,16 @@ post_system_call(dcontext_t *dcontext)
         mc->xbp = dcontext->sys_xbp;
     }
 
-
     /* handle fork, try to do it early before too much logging occurs */
     if (sysnum == SYS_fork ||
         (sysnum == SYS_clone && !TEST(CLONE_VM, dcontext->sys_param0))) {
         if (result == 0) {
             /* we're the child */
             thread_id_t child = get_sys_thread_id();
-#ifdef DEBUG
+#    ifdef DEBUG
             thread_id_t parent = get_parent_id();
             SYSLOG_INTERNAL_INFO("-- parent %d forked child %d --", parent, child);
-#endif
+#    endif
             /* first, fix TLS of dcontext */
             ASSERT(parent != 0);
             /* change parent pid to our pid */
@@ -4807,7 +4814,7 @@ post_system_call(dcontext_t *dcontext)
             dcontext->owning_thread = child;
             dcontext->owning_process = get_process_id();
 
-            /* now let dynamo initialize new shared memory, logfiles, etc. 
+            /* now let dynamo initialize new shared memory, logfiles, etc.
              * need access to static vars in dynamo.c, that's why we don't do it. */
             /* FIXME - xref PR 246902 - dispatch runs a lot of code before
              * getting to post_system_call() is any of that going to be messed up
@@ -4822,37 +4829,35 @@ post_system_call(dcontext_t *dcontext)
         }
     }
 
-
-    LOG(THREAD, LOG_SYSCALLS, 2,
-        "post syscall: sysnum="PFX", result="PFX" (%d)\n",
+    LOG(THREAD, LOG_SYSCALLS, 2, "post syscall: sysnum=" PFX ", result=" PFX " (%d)\n",
         sysnum, mc->xax, (int)mc->xax);
 
     switch (sysnum) {
 
-    /****************************************************************************/
-    /* MEMORY REGIONS */
+        /****************************************************************************/
+        /* MEMORY REGIONS */
 
-#ifdef DEBUG
+#    ifdef DEBUG
     case SYS_open: {
         if (success) {
             /* useful for figuring out what module was loaded that then triggers
              * module.c elf curiosities
              */
-            LOG(THREAD, LOG_SYSCALLS, 2, "SYS_open %s => %d\n",
-                dcontext->sys_param0, (int)result);
+            LOG(THREAD, LOG_SYSCALLS, 2, "SYS_open %s => %d\n", dcontext->sys_param0,
+                (int)result);
         }
         break;
     }
-#endif
+#    endif
 
-#ifndef X64
+#    ifndef X64
     case SYS_mmap2:
-#endif
+#    endif
     case SYS_mmap: {
         uint flags;
         DEBUG_DECLARE(char *map_type;)
         RSTATS_INC(num_app_mmaps);
-        base = (app_pc) mc->xax; /* For mmap, it's NOT arg->addr! */
+        base = (app_pc)mc->xax; /* For mmap, it's NOT arg->addr! */
         /* mmap isn't simply a user-space wrapper for mmap2. It's called
          * directly when dynamically loading an SO, i.e., dlopen(). */
         success = mmap_syscall_succeeded((app_pc)result);
@@ -4860,36 +4865,35 @@ post_system_call(dcontext_t *dcontext)
          * largest uint value of any errno and the addr returned is
          * page-aligned.
          */
-        ASSERT_CURIOSITY(!success ||
-                         ((app_pc)result < (app_pc)(ptr_int_t)-0x1000 &&
-                          ALIGNED(base, PAGE_SIZE)));
+        ASSERT_CURIOSITY(
+            !success ||
+            ((app_pc)result < (app_pc)(ptr_int_t)-0x1000 && ALIGNED(base, PAGE_SIZE)));
         if (!success)
             goto exit_post_system_call;
-#ifndef X64
+#    ifndef X64
         if (sysnum == SYS_mmap) {
             /* The syscall succeeded so the read of 'arg' should be
              * safe. */
-            mmap_arg_struct_t *arg = (mmap_arg_struct_t *) dcontext->sys_param0;
-            size = (size_t) arg->len;
-            prot = (uint) arg->prot;
-            flags = (uint) arg->flags;
+            mmap_arg_struct_t *arg = (mmap_arg_struct_t *)dcontext->sys_param0;
+            size = (size_t)arg->len;
+            prot = (uint)arg->prot;
+            flags = (uint)arg->flags;
             DEBUG_DECLARE(map_type = "mmap";)
+        } else {
+#    endif
+            size = (size_t)dcontext->sys_param1;
+            prot = (uint)dcontext->sys_param2;
+            flags = (uint)dcontext->sys_param3;
+            DEBUG_DECLARE(map_type = IF_X64_ELSE("mmap2", "mmap");)
+#    ifndef X64
         }
-        else {
-#endif
-            size = (size_t) dcontext->sys_param1;
-            prot = (uint) dcontext->sys_param2;
-            flags = (uint) dcontext->sys_param3;
-            DEBUG_DECLARE(map_type = IF_X64_ELSE("mmap2","mmap");)
-#ifndef X64
-        }
-#endif
+#    endif
         process_mmap(dcontext, base, size, prot, flags _IF_DEBUG(map_type));
         break;
     }
     case SYS_munmap: {
-        app_pc addr = (app_pc) dcontext->sys_param0;
-        size_t len = (size_t) dcontext->sys_param1;
+        app_pc addr = (app_pc)dcontext->sys_param0;
+        size_t len = (size_t)dcontext->sys_param1;
         /* We assumed in pre_system_call() that the unmap would succeed
          * and flushed fragments and removed the region from exec areas.
          * If the unmap failed, we re-add the region to exec areas.
@@ -4912,11 +4916,11 @@ post_system_call(dcontext_t *dcontext)
             dr_mem_info_t info;
             /* must go to os to get real memory since we already removed */
             DEBUG_DECLARE(ok =)
-                query_memory_ex_from_os(addr, &info);
+            query_memory_ex_from_os(addr, &info);
             ASSERT(ok);
             app_memory_allocation(dcontext, addr, len, info.prot,
-                                  info.type == DR_MEMTYPE_IMAGE
-                                  _IF_DEBUG("failed munmap"));
+                                  info.type ==
+                                      DR_MEMTYPE_IMAGE _IF_DEBUG("failed munmap"));
             all_memory_areas_lock();
             ASSERT(!vmvector_overlap(all_memory_areas, addr, addr + len) ||
                    are_dynamo_vm_areas_stale());
@@ -4927,26 +4931,24 @@ post_system_call(dcontext_t *dcontext)
         break;
     }
     case SYS_mremap: {
-        app_pc old_base = (app_pc) dcontext->sys_param0;
-        size_t old_size = (size_t) dcontext->sys_param1;
-        base = (app_pc) mc->xax;
-        size = (size_t) dcontext->sys_param2;
+        app_pc old_base = (app_pc)dcontext->sys_param0;
+        size_t old_size = (size_t)dcontext->sys_param1;
+        base = (app_pc)mc->xax;
+        size = (size_t)dcontext->sys_param2;
         /* even if no shift, count as munmap plus mmap */
         RSTATS_INC(num_app_munmaps);
         RSTATS_INC(num_app_mmaps);
-        success = !(result == -EINVAL ||
-                    result == -EAGAIN ||
-                    result == -ENOMEM ||
+        success = !(result == -EINVAL || result == -EAGAIN || result == -ENOMEM ||
                     result == -EFAULT);
         /* The syscall either failed OR the retcode is less than the
          * largest uint value of any errno and the addr returned is
          * is page-aligned.
          */
-        ASSERT_CURIOSITY(!success ||
-                         ((app_pc)result < (app_pc)(ptr_int_t)-0x1000 &&
-                          ALIGNED(base, PAGE_SIZE)));
+        ASSERT_CURIOSITY(
+            !success ||
+            ((app_pc)result < (app_pc)(ptr_int_t)-0x1000 && ALIGNED(base, PAGE_SIZE)));
         if (!success)
-             goto exit_post_system_call;
+            goto exit_post_system_call;
 
         if (base != old_base || size < old_size) { /* take action only if
                                                     * there was a change */
@@ -4961,11 +4963,11 @@ post_system_call(dcontext_t *dcontext)
             info.prot = dcontext->sys_param3;
             info.type = dcontext->sys_param4;
             DODEBUG({
-                    /* we don't expect to see remappings of modules */
-                    os_get_module_info_lock();
-                    ASSERT_CURIOSITY(!module_overlaps(base, size));
-                    os_get_module_info_unlock();
-                });
+                /* we don't expect to see remappings of modules */
+                os_get_module_info_lock();
+                ASSERT_CURIOSITY(!module_overlaps(base, size));
+                os_get_module_info_unlock();
+            });
             /* Verify that the current prot on the new region (according to
              * the os) is the same as what the prot used to be for the old
              * region.
@@ -4976,27 +4978,24 @@ post_system_call(dcontext_t *dcontext)
                 ASSERT(memprot == info.prot);
             });
             app_memory_allocation(dcontext, base, size, info.prot,
-                                  info.type == DR_MEMTYPE_IMAGE
-                                  _IF_DEBUG("mremap"));
+                                  info.type == DR_MEMTYPE_IMAGE _IF_DEBUG("mremap"));
             /* Now modify the all-mems list. */
             /* We don't expect an existing entry for the new region. */
             all_memory_areas_lock();
-            
+
             /* i#175
              * there are cases that base = mremap(old_base, old_size, size),
-             * where old_base = base, and old_size > size, 
+             * where old_base = base, and old_size > size,
              * they do overlap and should not cause assertion failure.
              * So if the new mremaped memory fall into old memory region,
              * assertion success.
              */
-            ASSERT((base >= old_base             && 
-                    base < (old_base + old_size) &&
-                    (base + size) > old_base     && 
-                    (base + size) <= (old_base + size)) ||
+            ASSERT((base >= old_base && base < (old_base + old_size) &&
+                    (base + size) > old_base && (base + size) <= (old_base + size)) ||
                    !vmvector_overlap(all_memory_areas, base, base + size) ||
                    are_dynamo_vm_areas_stale());
             DEBUG_DECLARE(ok =)
-                remove_from_all_memory_areas(old_base, old_base+old_size);
+            remove_from_all_memory_areas(old_base, old_base + old_size);
             ASSERT(ok);
             update_all_memory_areas(base, base + size, info.prot, info.type);
             all_memory_areas_unlock();
@@ -5004,22 +5003,21 @@ post_system_call(dcontext_t *dcontext)
         break;
     }
     case SYS_mprotect: {
-        base = (app_pc) dcontext->sys_param0;
+        base = (app_pc)dcontext->sys_param0;
         size = dcontext->sys_param1;
         prot = dcontext->sys_param2;
-#ifdef VMX86_SERVER
+#    ifdef VMX86_SERVER
         /* PR 475111: workaround for PR 107872 */
-        if (os_in_vmkernel_userworld() &&
-            result == -EBUSY && prot == PROT_NONE) {
+        if (os_in_vmkernel_userworld() && result == -EBUSY && prot == PROT_NONE) {
             result = mprotect_syscall(base, size, PROT_READ);
             SET_RETURN_VAL(dcontext, result);
             success = (result >= 0);
-            LOG(THREAD, LOG_VMAREAS, 1, 
-                "re-doing mprotect -EBUSY for "PFX"-"PFX" => %d\n",
-                base, base + size, (int)result);
-            SYSLOG_INTERNAL_WARNING_ONCE("re-doing mprotect for PR 475111, PR 107872"); 
+            LOG(THREAD, LOG_VMAREAS, 1,
+                "re-doing mprotect -EBUSY for " PFX "-" PFX " => %d\n", base, base + size,
+                (int)result);
+            SYSLOG_INTERNAL_WARNING_ONCE("re-doing mprotect for PR 475111, PR 107872");
         }
-#endif
+#    endif
         /* FIXME i#143: we need to tweak the returned oldprot for
          * writable areas we've made read-only
          */
@@ -5027,11 +5025,11 @@ post_system_call(dcontext_t *dcontext)
             uint memprot = 0;
             /* Revert the prot bits if needed. */
             DEBUG_DECLARE(ok =)
-                get_memory_info_from_os(base, NULL, NULL, &memprot);
+            get_memory_info_from_os(base, NULL, NULL, &memprot);
             ASSERT(ok);
             LOG(THREAD, LOG_SYSCALLS, 3,
-                "syscall: mprotect failed: "PFX"-"PFX" prot->%d\n",
-                base, base+size, osprot_to_memprot(prot));
+                "syscall: mprotect failed: " PFX "-" PFX " prot->%d\n", base, base + size,
+                osprot_to_memprot(prot));
             LOG(THREAD, LOG_SYSCALLS, 3, "\told prot->%d\n", memprot);
             if (prot != memprot_to_osprot(memprot)) {
                 /* We're trying to reverse the prot change, assuming that
@@ -5041,34 +5039,32 @@ post_system_call(dcontext_t *dcontext)
                  */
                 uint new_memprot;
                 DEBUG_DECLARE(uint res =)
-                    app_memory_protection_change(dcontext, base, size,
-                                                 osprot_to_memprot(prot),
-                                                 &new_memprot,
-                                                 NULL);
+                app_memory_protection_change(dcontext, base, size,
+                                             osprot_to_memprot(prot), &new_memprot, NULL);
                 ASSERT_NOT_IMPLEMENTED(res != SUBSET_APP_MEM_PROT_CHANGE);
                 ASSERT(res == DO_APP_MEM_PROT_CHANGE ||
                        res == PRETEND_APP_MEM_PROT_CHANGE);
 
-                /* PR 410921 - Revert the changes to all-mems list. 
-                 * FIXME: This fix assumes the whole region had the prot & 
-                 * type, which is true in the cases we have seen so far, but 
-                 * theoretically may not be true.  If it isn't true, multiple 
-                 * memory areas with different types/protections might have 
-                 * been changed in pre_system_call(), so will have to keep a 
-                 * list of all vmareas changed.  This might be expensive for 
+                /* PR 410921 - Revert the changes to all-mems list.
+                 * FIXME: This fix assumes the whole region had the prot &
+                 * type, which is true in the cases we have seen so far, but
+                 * theoretically may not be true.  If it isn't true, multiple
+                 * memory areas with different types/protections might have
+                 * been changed in pre_system_call(), so will have to keep a
+                 * list of all vmareas changed.  This might be expensive for
                  * each mprotect syscall to guard against a rare theoretical bug.
                  */
                 ASSERT_CURIOSITY(!dcontext->mprot_multi_areas);
                 all_memory_areas_lock();
                 ASSERT(vmvector_overlap(all_memory_areas, base, base + size) ||
-                       /* we could synch up: instead we relax the assert if 
+                       /* we could synch up: instead we relax the assert if
                         * DR areas not in allmem */
                        are_dynamo_vm_areas_stale());
-                LOG(GLOBAL, LOG_VMAREAS, 3, 
-                    "\tupdating all_memory_areas "PFX"-"PFX" prot->%d\n",
-                    base, base + size, osprot_to_memprot(prot));
+                LOG(GLOBAL, LOG_VMAREAS, 3,
+                    "\tupdating all_memory_areas " PFX "-" PFX " prot->%d\n", base,
+                    base + size, osprot_to_memprot(prot));
                 update_all_memory_areas(base, base + size, memprot,
-                                        -1/*type unchanged*/);
+                                        -1 /*type unchanged*/);
                 all_memory_areas_unlock();
             }
         }
@@ -5080,12 +5076,12 @@ post_system_call(dcontext_t *dcontext)
          * (if it failed, the old break will be returned).  We stored
          * the old break in sys_param1 in pre-syscall.
          */
-        app_pc old_brk = (app_pc) dcontext->sys_param1;
-        app_pc new_brk = (app_pc) result;
+        app_pc old_brk = (app_pc)dcontext->sys_param1;
+        app_pc new_brk = (app_pc)result;
         if (new_brk < old_brk) {
             all_memory_areas_lock();
             DEBUG_DECLARE(ok =)
-                remove_from_all_memory_areas(new_brk, old_brk);
+            remove_from_all_memory_areas(new_brk, old_brk);
             ASSERT(ok);
             all_memory_areas_unlock();
         } else if (new_brk > old_brk) {
@@ -5096,33 +5092,33 @@ post_system_call(dcontext_t *dcontext)
             ASSERT(info != NULL);
             update_all_memory_areas(old_brk, new_brk,
                                     /* be paranoid */
-                                    (info != NULL) ? info->prot :
-                                    MEMPROT_READ|MEMPROT_WRITE, DR_MEMTYPE_DATA);
+                                    (info != NULL) ? info->prot
+                                                   : MEMPROT_READ | MEMPROT_WRITE,
+                                    DR_MEMTYPE_DATA);
             all_memory_areas_unlock();
         }
         break;
     }
 
-    /****************************************************************************/
-    /* SPAWNING -- fork mostly handled above */
+        /****************************************************************************/
+        /* SPAWNING -- fork mostly handled above */
 
     case SYS_clone: {
         /* in /usr/src/linux/arch/i386/kernel/process.c */
-        LOG(THREAD, LOG_SYSCALLS, 2, "syscall: clone returned "PFX"\n", mc->xax);
+        LOG(THREAD, LOG_SYSCALLS, 2, "syscall: clone returned " PFX "\n", mc->xax);
         break;
     }
 
     case SYS_fork: {
-        LOG(THREAD, LOG_SYSCALLS, 2, "syscall: fork returned "PFX"\n", mc->xax);
+        LOG(THREAD, LOG_SYSCALLS, 2, "syscall: fork returned " PFX "\n", mc->xax);
         break;
     }
 
     case SYS_vfork: {
-        LOG(THREAD, LOG_SYSCALLS, 2, "syscall: vfork returned "PFX"\n", mc->xax);
+        LOG(THREAD, LOG_SYSCALLS, 2, "syscall: vfork returned " PFX "\n", mc->xax);
         if (was_clone_thread_syscall(dcontext)) {
             /* restore xsp in parent */
-            LOG(THREAD, LOG_SYSCALLS, 2,
-                "vfork: restoring xsp from "PFX" to "PFX"\n",
+            LOG(THREAD, LOG_SYSCALLS, 2, "vfork: restoring xsp from " PFX " to " PFX "\n",
                 mc->xsp, dcontext->sys_param1);
             mc->xsp = dcontext->sys_param1;
         }
@@ -5142,21 +5138,20 @@ post_system_call(dcontext_t *dcontext)
         break; /* unnecessary but good form so keep it */
     }
 
-    /****************************************************************************/
-    /* SIGNALS */
+        /****************************************************************************/
+        /* SIGNALS */
 
-    case SYS_rt_sigaction: {   /* 174 */
+    case SYS_rt_sigaction: { /* 174 */
         /* in /usr/src/linux/kernel/signal.c:
            asmlinkage long
-           sys_rt_sigaction(int sig, const struct sigaction *act, 
+           sys_rt_sigaction(int sig, const struct sigaction *act,
              struct sigaction *oact, size_t sigsetsize)
          */
         /* FIXME i#148: Handle syscall failure. */
-        int sig  = (int) dcontext->sys_param0;
-        const kernel_sigaction_t *act =
-            (const kernel_sigaction_t *) dcontext->sys_param1;
-        kernel_sigaction_t *oact = (kernel_sigaction_t *) dcontext->sys_param2;
-        size_t sigsetsize = (size_t) dcontext->sys_param3;
+        int sig = (int)dcontext->sys_param0;
+        const kernel_sigaction_t *act = (const kernel_sigaction_t *)dcontext->sys_param1;
+        kernel_sigaction_t *oact = (kernel_sigaction_t *)dcontext->sys_param2;
+        size_t sigsetsize = (size_t)dcontext->sys_param3;
         if (!success)
             goto exit_post_system_call;
 
@@ -5166,44 +5161,43 @@ post_system_call(dcontext_t *dcontext)
     case SYS_rt_sigprocmask: { /* 175 */
         /* in /usr/src/linux/kernel/signal.c:
            asmlinkage long
-           sys_rt_sigprocmask(int how, sigset_t *set, sigset_t *oset, 
+           sys_rt_sigprocmask(int how, sigset_t *set, sigset_t *oset,
              size_t sigsetsize)
          */
         /* FIXME i#148: Handle syscall failure. */
-        handle_post_sigprocmask(dcontext, (int) dcontext->sys_param0,
-                                (kernel_sigset_t *) dcontext->sys_param1,
-                                (kernel_sigset_t *) dcontext->sys_param2,
-                                (size_t) dcontext->sys_param3);
+        handle_post_sigprocmask(
+            dcontext, (int)dcontext->sys_param0, (kernel_sigset_t *)dcontext->sys_param1,
+            (kernel_sigset_t *)dcontext->sys_param2, (size_t)dcontext->sys_param3);
         break;
     }
 
-#ifndef X64
-    case SYS_sigreturn:        /* 119 */
-#endif
-    case SYS_rt_sigreturn:     /* 173 */
+#    ifndef X64
+    case SYS_sigreturn: /* 119 */
+#    endif
+    case SYS_rt_sigreturn: /* 173 */
         /* there is no return value: it's just the value of eax, so avoid
          * assert below
          */
         success = true;
         break;
 
-    case SYS_setitimer:       /* 104 */
-        handle_post_setitimer(dcontext, success, (int) dcontext->sys_param0,
-                              (const struct itimerval *) dcontext->sys_param1,
-                              (struct itimerval *) dcontext->sys_param2);
+    case SYS_setitimer: /* 104 */
+        handle_post_setitimer(dcontext, success, (int)dcontext->sys_param0,
+                              (const struct itimerval *)dcontext->sys_param1,
+                              (struct itimerval *)dcontext->sys_param2);
         break;
-    case SYS_getitimer:      /* 105 */
-        handle_post_getitimer(dcontext, success, (int) dcontext->sys_param0,
-                              (struct itimerval *) dcontext->sys_param1);
+    case SYS_getitimer: /* 105 */
+        handle_post_getitimer(dcontext, success, (int)dcontext->sys_param0,
+                              (struct itimerval *)dcontext->sys_param1);
         break;
 
-#ifdef VMX86_SERVER
+#    ifdef VMX86_SERVER
     default:
         if (is_vmkuw_sysnum(sysnum)) {
             vmkuw_post_system_call(dcontext);
             break;
         }
-#endif
+#    endif
 
     } /* switch */
 
@@ -5212,53 +5206,55 @@ post_system_call(dcontext_t *dcontext)
             STATS_INC(post_syscall_ignorable);
         } else {
             /* Many syscalls can fail though they aren't ignored.  However, they
-             * shouldn't happen without us knowing about them.  See PR 402769 
+             * shouldn't happen without us knowing about them.  See PR 402769
              * for SYS_close case.
              */
             if (!(success || sysnum == SYS_close ||
                   dcontext->expect_last_syscall_to_fail)) {
                 SYSLOG_INTERNAL_ERROR_ONCE("Unexpected failure of non-ignorable"
-                                           " syscall (%d)", sysnum);
+                                           " syscall (%d)",
+                                           sysnum);
             }
         }
     });
 
+exit_post_system_call:
 
- exit_post_system_call:
-
-#ifdef CLIENT_INTERFACE 
+#    ifdef CLIENT_INTERFACE
     /* The instrument_post_syscall should be called after DR finishes all
-     * its operations, since DR needs to know the real syscall results, 
+     * its operations, since DR needs to know the real syscall results,
      * and any changes made by the client are simply to fool the app.
-     * Also, dr_syscall_invoke_another() needs to set eax, which shouldn't 
+     * Also, dr_syscall_invoke_another() needs to set eax, which shouldn't
      * affect the result of the 1st syscall. Xref i#1.
      */
     /* after restore of xbp so client sees it as though was sysenter */
     instrument_post_syscall(dcontext, sysnum);
-#endif
+#    endif
 
     dcontext->whereami = old_whereami;
 }
 
 /***************************************************************************/
-#ifdef HAVE_PROC_MAPS
+#    ifdef HAVE_PROC_MAPS
 /* Memory areas provided by kernel in /proc */
 
-/* On all supported linux kernels /proc/self/maps -> /proc/$pid/maps 
+/* On all supported linux kernels /proc/self/maps -> /proc/$pid/maps
  * However, what we want is /proc/$tid/maps, so we can't use "self"
  */
-#define PROC_SELF_MAPS "/proc/self/maps"
+#        define PROC_SELF_MAPS "/proc/self/maps"
 
 /* these are defined in /usr/src/linux/fs/proc/array.c */
-#define MAPS_LINE_LENGTH        4096
+#        define MAPS_LINE_LENGTH 4096
 /* for systems with sizeof(void*) == 4: */
-#define MAPS_LINE_FORMAT4         "%08lx-%08lx %s %08lx %*s "UINT64_FORMAT_STRING" %4096s"
-#define MAPS_LINE_MAX4  49 /* sum of 8  1  8  1 4 1 8 1 5 1 10 1 */
+#        define MAPS_LINE_FORMAT4 \
+            "%08lx-%08lx %s %08lx %*s " UINT64_FORMAT_STRING " %4096s"
+#        define MAPS_LINE_MAX4 49 /* sum of 8  1  8  1 4 1 8 1 5 1 10 1 */
 /* for systems with sizeof(void*) == 8: */
-#define MAPS_LINE_FORMAT8         "%016lx-%016lx %s %016lx %*s "UINT64_FORMAT_STRING" %4096s"
-#define MAPS_LINE_MAX8  73 /* sum of 16  1  16  1 4 1 16 1 5 1 10 1 */
+#        define MAPS_LINE_FORMAT8 \
+            "%016lx-%016lx %s %016lx %*s " UINT64_FORMAT_STRING " %4096s"
+#        define MAPS_LINE_MAX8 73 /* sum of 16  1  16  1 4 1 16 1 5 1 10 1 */
 
-#define MAPS_LINE_MAX   MAPS_LINE_MAX8
+#        define MAPS_LINE_MAX MAPS_LINE_MAX8
 
 /* can't use fopen -- strategy: read into buffer, look for newlines.
  * fail if single line too large for buffer -- so size it appropriately:
@@ -5267,7 +5263,7 @@ post_system_call(dcontext_t *dcontext)
  * low by using static bufs (it's over 4K after all).
  * FIXME: now we're using 16K right here: should we shrink?
  */
-#define BUFSIZE (MAPS_LINE_LENGTH+8)
+#        define BUFSIZE (MAPS_LINE_LENGTH + 8)
 static char buf_scratch[BUFSIZE];
 static char comment_buf_scratch[BUFSIZE];
 /* To satisfy our two uses (inner use with memory_info_buf_lock versus
@@ -5278,35 +5274,35 @@ static char comment_buf_scratch[BUFSIZE];
  */
 static char buf_iter[BUFSIZE];
 static char comment_buf_iter[BUFSIZE];
-#endif /* HAVE_PROC_MAPS */
+#    endif /* HAVE_PROC_MAPS */
 
 static bool
 maps_iterator_start(maps_iter_t *iter, bool may_alloc)
 {
-#ifdef HAVE_PROC_MAPS
+#    ifdef HAVE_PROC_MAPS
     char maps_name[24]; /* should only need 16 for 5-digit tid */
 
     /* Don't assign the local ptrs until the lock is grabbed to make
      * their relationship clear. */
     if (may_alloc) {
         mutex_lock(&maps_iter_buf_lock);
-        iter->buf = (char *) &buf_iter;
-        iter->comment_buffer = (char *) &comment_buf_iter;
+        iter->buf = (char *)&buf_iter;
+        iter->comment_buffer = (char *)&comment_buf_iter;
     } else {
         mutex_lock(&memory_info_buf_lock);
-        iter->buf = (char *) &buf_scratch;
-        iter->comment_buffer = (char *) &comment_buf_scratch;
+        iter->buf = (char *)&buf_scratch;
+        iter->comment_buffer = (char *)&comment_buf_scratch;
     }
 
     /* We need the maps for our thread id, not process id.
      * "/proc/self/maps" uses pid which fails if primary thread in group
      * has exited.
      */
-    snprintf(maps_name, BUFFER_SIZE_ELEMENTS(maps_name),
-             "/proc/%d/maps", get_thread_id());
+    snprintf(maps_name, BUFFER_SIZE_ELEMENTS(maps_name), "/proc/%d/maps",
+             get_thread_id());
     iter->maps = os_open(maps_name, OS_OPEN_READ);
     ASSERT(iter->maps != INVALID_FILE);
-    iter->buf[BUFSIZE-1] = '\0'; /* permanently */
+    iter->buf[BUFSIZE - 1] = '\0'; /* permanently */
 
     iter->may_alloc = may_alloc;
     iter->newline = NULL;
@@ -5314,16 +5310,16 @@ maps_iterator_start(maps_iter_t *iter, bool may_alloc)
     iter->vm_start = NULL;
     iter->comment = iter->comment_buffer;
     return true;
-#else /* HAVE_PROC_MAPS */
+#    else  /* HAVE_PROC_MAPS */
     /* FIXME PR 235433: for VMX86_SERVER use VSI queries */
     return false;
-#endif /* HAVE_PROC_MAPS */
+#    endif /* HAVE_PROC_MAPS */
 }
 
 static void
 maps_iterator_stop(maps_iter_t *iter)
 {
-#ifdef HAVE_PROC_MAPS
+#    ifdef HAVE_PROC_MAPS
     ASSERT((iter->may_alloc && OWN_MUTEX(&maps_iter_buf_lock)) ||
            (!iter->may_alloc && OWN_MUTEX(&memory_info_buf_lock)));
     os_close(iter->maps);
@@ -5331,13 +5327,13 @@ maps_iterator_stop(maps_iter_t *iter)
         mutex_unlock(&maps_iter_buf_lock);
     else
         mutex_unlock(&memory_info_buf_lock);
-#endif /* HAVE_PROC_MAPS */
+#    endif /* HAVE_PROC_MAPS */
 }
 
 static bool
 maps_iterator_next(maps_iter_t *iter)
 {
-#ifdef HAVE_PROC_MAPS
+#    ifdef HAVE_PROC_MAPS
     char perm[16];
     char *line;
     int len;
@@ -5345,11 +5341,10 @@ maps_iterator_next(maps_iter_t *iter)
     ASSERT((iter->may_alloc && OWN_MUTEX(&maps_iter_buf_lock)) ||
            (!iter->may_alloc && OWN_MUTEX(&memory_info_buf_lock)));
     if (iter->newline == NULL) {
-        iter->bufwant = BUFSIZE-1;
+        iter->bufwant = BUFSIZE - 1;
         iter->bufread = os_read(iter->maps, iter->buf, iter->bufwant);
         ASSERT(iter->bufread <= iter->bufwant);
-        LOG(GLOBAL, LOG_VMAREAS, 6,
-            "get_memory_info_from_os: bytes read %d/want %d\n",
+        LOG(GLOBAL, LOG_VMAREAS, 6, "get_memory_info_from_os: bytes read %d/want %d\n",
             iter->bufread, iter->bufwant);
         if (iter->bufread <= 0)
             return false;
@@ -5369,7 +5364,7 @@ maps_iterator_next(maps_iter_t *iter)
             /* since strings may overlap, should use memmove, not strncpy */
             /* FIXME corner case: if len == 0, nothing to move */
             memmove(iter->buf, line, len);
-            iter->bufread = os_read(iter->maps, iter->buf+len, iter->bufwant);
+            iter->bufread = os_read(iter->maps, iter->buf + len, iter->bufwant);
             ASSERT(iter->bufread <= iter->bufwant);
             if (iter->bufread <= 0)
                 return false;
@@ -5379,44 +5374,41 @@ maps_iterator_next(maps_iter_t *iter)
             line = iter->buf;
         }
     }
-    LOG(GLOBAL, LOG_VMAREAS, 6, 
-        "\nget_memory_info_from_os: newline=[%s]\n",
+    LOG(GLOBAL, LOG_VMAREAS, 6, "\nget_memory_info_from_os: newline=[%s]\n",
         iter->newline ? iter->newline : "(null)");
 
     /* buffer is big enough to hold at least one line */
     ASSERT(iter->newline != NULL);
     *iter->newline = '\0';
-    LOG(GLOBAL, LOG_VMAREAS, 6, 
-        "\nget_memory_info_from_os: line=[%s]\n", line);
-    iter->comment_buffer[0]='\0';
+    LOG(GLOBAL, LOG_VMAREAS, 6, "\nget_memory_info_from_os: line=[%s]\n", line);
+    iter->comment_buffer[0] = '\0';
     len = sscanf(line,
-#ifdef IA32_ON_IA64
+#        ifdef IA32_ON_IA64
                  MAPS_LINE_FORMAT8, /* cross-compiling! */
-#else              
-                 sizeof(void*) == 4 ? MAPS_LINE_FORMAT4 : MAPS_LINE_FORMAT8,
-#endif
-                 (unsigned long*)&iter->vm_start, (unsigned long*)&iter->vm_end,
-                 perm, (unsigned long*)&iter->offset, &iter->inode,
-                 iter->comment_buffer);
+#        else
+                 sizeof(void *) == 4 ? MAPS_LINE_FORMAT4 : MAPS_LINE_FORMAT8,
+#        endif
+                 (unsigned long *)&iter->vm_start, (unsigned long *)&iter->vm_end, perm,
+                 (unsigned long *)&iter->offset, &iter->inode, iter->comment_buffer);
     if (iter->vm_start <= prev_start) {
         /* the maps file has expanded underneath us (presumably due to our
          * own committing while iterating): skip ahead */
-        LOG(GLOBAL, LOG_VMAREAS, 2, 
+        LOG(GLOBAL, LOG_VMAREAS, 2,
             "maps_iterator_next: maps file changed: skipping 0x%08x\n", prev_start);
         iter->vm_start = prev_start;
         return maps_iterator_next(iter);
     }
-    if (len<6)
-        iter->comment_buffer[0]='\0';
+    if (len < 6)
+        iter->comment_buffer[0] = '\0';
     iter->prot = permstr_to_memprot(perm);
     return true;
-#else /* HAVE_PROC_MAPS */
+#    else  /* HAVE_PROC_MAPS */
     /* FIXME PR 235433: for VMX86_SERVER use VSI queries */
     return false;
-#endif /* HAVE_PROC_MAPS */
+#    endif /* HAVE_PROC_MAPS */
 }
 
-#ifndef HAVE_PROC_MAPS
+#    ifndef HAVE_PROC_MAPS
 /* PR 361594: os-independent alternative to /proc/maps, though this
  * relies on user libraries
  */
@@ -5431,7 +5423,7 @@ typedef struct _dl_iterate_data_t {
 static int
 dl_iterate_get_path_cb(struct dl_phdr_info *info, size_t size, void *data)
 {
-    dl_iterate_data_t *iter_data = (dl_iterate_data_t *) data;
+    dl_iterate_data_t *iter_data = (dl_iterate_data_t *)data;
     /* info->dlpi->addr is offset from preferred so we need to calculate the
      * absolute address of the base.
      * we can calculate the absolute address of the first segment, but ELF
@@ -5449,15 +5441,15 @@ dl_iterate_get_path_cb(struct dl_phdr_info *info, size_t size, void *data)
         module_vaddr_from_prog_header((app_pc)info->dlpi_phdr, info->dlpi_phnum, NULL);
     app_pc base = info->dlpi_addr + min_vaddr;
     LOG(GLOBAL, LOG_VMAREAS, 2,
-        "dl_iterate_get_path_cb: addr="PFX" hdrs="PFX" base="PFX" name=%s\n",
+        "dl_iterate_get_path_cb: addr=" PFX " hdrs=" PFX " base=" PFX " name=%s\n",
         info->dlpi_addr, info->dlpi_phdr, base, info->dlpi_name);
     /* all we have is an addr somewhere in the module, so we need the end */
     if (module_walk_program_headers(base,
                                     /* FIXME: don't have view size: but
                                      * anything larger than header sizes works
                                      */
-                                    PAGE_SIZE, 
-                                    false, &pref_start, &pref_end, NULL, NULL)) {
+                                    PAGE_SIZE, false, &pref_start, &pref_end, NULL,
+                                    NULL)) {
         /* we're passed back start,end of preferred base */
         if (iter_data->target_addr >= base &&
             iter_data->target_addr < base + (pref_end - pref_start)) {
@@ -5479,7 +5471,7 @@ dl_iterate_get_path_cb(struct dl_phdr_info *info, size_t size, void *data)
     }
     return 0; /* keep looking */
 }
-#endif
+#    endif
 
 /* Finds the bounds of the library with name "name".  If "name" is NULL,
  * "start" must be non-NULL and must be an address within the library.
@@ -5494,11 +5486,11 @@ dl_iterate_get_path_cb(struct dl_phdr_info *info, size_t size, void *data)
  * module_list) since is only used for dr and client libraries which aren't on the list.
  */
 static int
-get_library_bounds(const char *name, app_pc *start/*IN/OUT*/, app_pc *end/*OUT*/,
-                   char *fullpath/*OPTIONAL OUT*/, size_t path_size)
+get_library_bounds(const char *name, app_pc *start /*IN/OUT*/, app_pc *end /*OUT*/,
+                   char *fullpath /*OPTIONAL OUT*/, size_t path_size)
 {
     int count = 0;
-#ifdef HAVE_PROC_MAPS
+#    ifdef HAVE_PROC_MAPS
     bool found_library = false;
     char libname[MAXIMUM_PATH];
     const char *name_cmp = name;
@@ -5506,14 +5498,14 @@ get_library_bounds(const char *name, app_pc *start/*IN/OUT*/, app_pc *end/*OUT*/
     app_pc last_base = NULL;
     app_pc last_end = NULL;
     size_t image_size = 0;
-#else
+#    else
     dl_iterate_data_t iter_data;
-#endif
+#    endif
     app_pc cur_end = NULL;
     app_pc mod_start = NULL;
     ASSERT(name != NULL || start != NULL);
 
-#ifndef HAVE_PROC_MAPS
+#    ifndef HAVE_PROC_MAPS
     /* PR 361594: os-independent alternative to /proc/maps */
     ASSERT(start != NULL);
     /* We don't have the base and we can't walk backwards (see comments above)
@@ -5523,21 +5515,20 @@ get_library_bounds(const char *name, app_pc *start/*IN/OUT*/, app_pc *end/*OUT*/
     iter_data.target_addr = *start;
     iter_data.path_out = fullpath;
     iter_data.path_size = (fullpath == NULL) ? 0 : path_size;
-    DEBUG_DECLARE(int res = )
-        dl_iterate_phdr(dl_iterate_get_path_cb, &iter_data);
+    DEBUG_DECLARE(int res =)
+    dl_iterate_phdr(dl_iterate_get_path_cb, &iter_data);
     ASSERT(res == 1);
     mod_start = iter_data.mod_start;
     cur_end = iter_data.mod_end;
     count = 1;
-    LOG(GLOBAL, LOG_VMAREAS, 2,
-        "get_library_bounds %s => "PFX"-"PFX" %s\n",
+    LOG(GLOBAL, LOG_VMAREAS, 2, "get_library_bounds %s => " PFX "-" PFX " %s\n",
         name == NULL ? "<null>" : name, mod_start, cur_end,
         fullpath == NULL ? "<no path requested>" : fullpath);
-#else
-    maps_iterator_start(&iter, false/*won't alloc*/);
+#    else
+    maps_iterator_start(&iter, false /*won't alloc*/);
     libname[0] = '\0';
     while (maps_iterator_next(&iter)) {
-        LOG(GLOBAL, LOG_VMAREAS, 5,"start="PFX" end="PFX" prot=%x comment=%s\n",
+        LOG(GLOBAL, LOG_VMAREAS, 5, "start=" PFX " end=" PFX " prot=%x comment=%s\n",
             iter.vm_start, iter.vm_end, iter.prot, iter.comment);
 
         /* Record the base of each differently-named set of entries up until
@@ -5561,8 +5552,8 @@ get_library_bounds(const char *name, app_pc *start/*IN/OUT*/, app_pc *end/*OUT*/
             if (!found_library) {
                 size_t mod_readable_sz;
                 char *dst = (fullpath != NULL) ? fullpath : libname;
-                size_t dstsz = (fullpath != NULL) ? path_size :
-                    BUFFER_SIZE_ELEMENTS(libname);
+                size_t dstsz =
+                    (fullpath != NULL) ? path_size : BUFFER_SIZE_ELEMENTS(libname);
                 char *slash = rindex(iter.comment, '/');
                 ASSERT_CURIOSITY(slash != NULL);
                 ASSERT_CURIOSITY((slash - iter.comment) < dstsz);
@@ -5600,7 +5591,7 @@ get_library_bounds(const char *name, app_pc *start/*IN/OUT*/, app_pc *end/*OUT*/
             }
             count++;
             cur_end = iter.vm_end;
-#if 0
+#        if 0
             /* FIXME: this is for libdynamorio.so only: */
             if (TESTANY(SELFPROT_ANY_DATA_SECTION, dynamo_options.protect_mask) &&
                 TESTALL(MEMPROT_READ|MEMPROT_WRITE, iter.prot)) {
@@ -5610,7 +5601,7 @@ get_library_bounds(const char *name, app_pc *start/*IN/OUT*/, app_pc *end/*OUT*/
                  * examine each rw section and decide on frequency of unprotection.
                  */
             }
-#endif
+#        endif
         } else if (found_library) {
             /* hit non-matching, we expect module segments to be adjacent */
             break;
@@ -5629,7 +5620,8 @@ get_library_bounds(const char *name, app_pc *start/*IN/OUT*/, app_pc *end/*OUT*/
                                                    * alignment and no data section?
                                                    * curiosity for now*/);
         ASSERT_CURIOSITY(iter.inode == 0); /* .bss is anonymous */
-        ASSERT_CURIOSITY(iter.vm_end - mod_start >= image_size);/* should be big enough */
+        ASSERT_CURIOSITY(iter.vm_end - mod_start >=
+                         image_size); /* should be big enough */
         count++;
         cur_end = mod_start + image_size;
     } else {
@@ -5638,7 +5630,7 @@ get_library_bounds(const char *name, app_pc *start/*IN/OUT*/, app_pc *end/*OUT*/
         ASSERT_CURIOSITY(image_size == 0 || cur_end - mod_start == image_size);
     }
     maps_iterator_stop(&iter);
-#endif
+#    endif
 
     if (start != NULL)
         *start = mod_start;
@@ -5667,25 +5659,24 @@ get_dynamo_library_bounds(void)
     extern int dynamorio_so_start, dynamorio_so_end;
     app_pc check_start, check_end;
     char *libdir;
-    dynamo_dll_start = (app_pc) &dynamorio_so_start;
-    dynamo_dll_end = (app_pc) ALIGN_FORWARD(&dynamorio_so_end, PAGE_SIZE);
-#ifndef HAVE_PROC_MAPS
+    dynamo_dll_start = (app_pc)&dynamorio_so_start;
+    dynamo_dll_end = (app_pc)ALIGN_FORWARD(&dynamorio_so_end, PAGE_SIZE);
+#    ifndef HAVE_PROC_MAPS
     check_start = dynamo_dll_start;
-#endif
-    res = get_library_bounds(DYNAMORIO_LIBRARY_NAME,
-                             &check_start, &check_end,
+#    endif
+    res = get_library_bounds(DYNAMORIO_LIBRARY_NAME, &check_start, &check_end,
                              dynamorio_library_path,
                              BUFFER_SIZE_ELEMENTS(dynamorio_library_path));
-    LOG(GLOBAL, LOG_VMAREAS, 1, PRODUCT_NAME" library path: %s\n",
+    LOG(GLOBAL, LOG_VMAREAS, 1, PRODUCT_NAME " library path: %s\n",
         dynamorio_library_path);
     ASSERT(check_start == dynamo_dll_start && check_end == dynamo_dll_end);
-    LOG(GLOBAL, LOG_VMAREAS, 1, "DR library bounds: "PFX" to "PFX"\n",
+    LOG(GLOBAL, LOG_VMAREAS, 1, "DR library bounds: " PFX " to " PFX "\n",
         dynamo_dll_start, dynamo_dll_end);
-#ifdef STATIC_LIBRARY
+#    ifdef STATIC_LIBRARY
     dynamorio_library_path[0] = '\0';
-#else
+#    else
     ASSERT(res > 0);
-#endif
+#    endif
 
     /* Issue 20: we need the path to the alt arch */
     strncpy(dynamorio_alt_arch_path, dynamorio_library_path,
@@ -5700,32 +5691,32 @@ get_dynamo_library_bounds(void)
         SYSLOG_INTERNAL_WARNING("unable to determine lib path for cross-arch execve");
     }
     NULL_TERMINATE_BUFFER(dynamorio_alt_arch_path);
-    LOG(GLOBAL, LOG_VMAREAS, 1, PRODUCT_NAME" alt arch path: %s\n",
+    LOG(GLOBAL, LOG_VMAREAS, 1, PRODUCT_NAME " alt arch path: %s\n",
         dynamorio_alt_arch_path);
 
     return res;
 }
 
-#ifdef DEBUG
+#    ifdef DEBUG
 void
 mem_stats_snapshot()
 {
     /* FIXME: NYI */
 }
-#endif
+#    endif
 
 bool
 is_in_dynamo_dll(app_pc pc)
 {
     ASSERT(dynamo_dll_start != NULL);
-#ifdef VMX86_SERVER
+#    ifdef VMX86_SERVER
     /* We want to consider vmklib as part of the DR lib for allowing
      * execution (_init calls os_in_vmkernel_classic()) and for
      * reporting crashes as our fault
      */
     if (vmk_in_vmklib(pc))
         return true;
-#endif
+#    endif
     return (pc >= dynamo_dll_start && pc < dynamo_dll_end);
 }
 
@@ -5750,59 +5741,57 @@ get_dynamorio_dll_end()
 app_pc
 get_dynamorio_dll_preferred_base()
 {
-    /* on Linux there is no preferred base if we're PIC, 
+    /* on Linux there is no preferred base if we're PIC,
      * therefore is always equal to dynamo_dll_start  */
     return get_dynamorio_dll_start();
 }
 
-
 /***************************************************************************/
-#ifndef HAVE_PROC_MAPS
+#    ifndef HAVE_PROC_MAPS
 /* PR 361594: os-independent alternative to /proc/maps */
 
-# define VSYSCALL_PAGE_SO_NAME "linux-gate.so"
-/* For now we assume no OS config has user addresses above this value 
+#        define VSYSCALL_PAGE_SO_NAME "linux-gate.so"
+/* For now we assume no OS config has user addresses above this value
  * We just go to max 32-bit (64-bit not supported yet: want lazy probing),
  * if don't have any kind of mmap iterator
  */
-# define USER_MAX 0xfffff000
+#        define USER_MAX 0xfffff000
 
 /* callback for dl_iterate_phdr() for adding existing modules to our lists */
 static int
 dl_iterate_get_areas_cb(struct dl_phdr_info *info, size_t size, void *data)
 {
-    int *count = (int *) data;
+    int *count = (int *)data;
     uint i;
     /* see comments in dl_iterate_get_path_cb() */
     app_pc modend;
-    app_pc min_vaddr = module_vaddr_from_prog_header((app_pc)info->dlpi_phdr,
-                                                     info->dlpi_phnum, &modend);
+    app_pc min_vaddr =
+        module_vaddr_from_prog_header((app_pc)info->dlpi_phdr, info->dlpi_phnum, &modend);
     app_pc modbase = info->dlpi_addr + min_vaddr;
     size_t modsize = modend - min_vaddr;
     LOG(GLOBAL, LOG_VMAREAS, 2,
-        "dl_iterate_get_areas_cb: addr="PFX" hdrs="PFX" base="PFX" name=%s\n",
+        "dl_iterate_get_areas_cb: addr=" PFX " hdrs=" PFX " base=" PFX " name=%s\n",
         info->dlpi_addr, info->dlpi_phdr, modbase, info->dlpi_name);
     ASSERT(info->dlpi_phnum == module_num_program_headers(modbase));
 
-# ifndef X64
+#        ifndef X64
     if (modsize == PAGE_SIZE && info->dlpi_name[0] == '\0') {
         /* Candidate for VDSO.  Xref PR 289138 on using AT_SYSINFO to locate. */
         /* Xref VSYSCALL_PAGE_START_HARDCODED but later linuxes randomize */
         char *soname;
-        if (module_walk_program_headers(modbase, modsize, false,
-                                        NULL, NULL, &soname, NULL) &&
-            strncmp(soname, VSYSCALL_PAGE_SO_NAME,
-                    strlen(VSYSCALL_PAGE_SO_NAME)) == 0) {
+        if (module_walk_program_headers(modbase, modsize, false, NULL, NULL, &soname,
+                                        NULL) &&
+            strncmp(soname, VSYSCALL_PAGE_SO_NAME, strlen(VSYSCALL_PAGE_SO_NAME)) == 0) {
             ASSERT(!dynamo_initialized); /* .data should be +w */
             ASSERT(vsyscall_page_start == NULL);
             vsyscall_page_start = modbase;
-            LOG(GLOBAL, LOG_VMAREAS, 1, "found vsyscall page @ "PFX"\n",
+            LOG(GLOBAL, LOG_VMAREAS, 1, "found vsyscall page @ " PFX "\n",
                 vsyscall_page_start);
         }
     }
-# endif
+#        endif
     if (modbase != vsyscall_page_start)
-        module_list_add(modbase, modsize, false, info->dlpi_name, 0/*don't have inode*/);
+        module_list_add(modbase, modsize, false, info->dlpi_name, 0 /*don't have inode*/);
 
     for (i = 0; i < info->dlpi_phnum; i++) {
         app_pc start, end;
@@ -5811,18 +5800,18 @@ dl_iterate_get_areas_cb(struct dl_phdr_info *info, size_t size, void *data)
         if (module_read_program_header(modbase, i, &start, &end, &prot, &align)) {
             start += info->dlpi_addr;
             end += info->dlpi_addr;
-            LOG(GLOBAL, LOG_VMAREAS, 2,
-                "\tsegment %d: "PFX"-"PFX" %s align=%d\n",
-                i, start, end, memprot_string(prot), align);
-            start = (app_pc) ALIGN_BACKWARD(start, PAGE_SIZE);
-            end = (app_pc) ALIGN_FORWARD(end, PAGE_SIZE);
+            LOG(GLOBAL, LOG_VMAREAS, 2, "\tsegment %d: " PFX "-" PFX " %s align=%d\n", i,
+                start, end, memprot_string(prot), align);
+            start = (app_pc)ALIGN_BACKWARD(start, PAGE_SIZE);
+            end = (app_pc)ALIGN_FORWARD(end, PAGE_SIZE);
             LOG(GLOBAL, LOG_VMAREAS, 4,
-                "find_executable_vm_areas: adding: "PFX"-"PFX" prot=%d\n",
-                start, end, prot);
+                "find_executable_vm_areas: adding: " PFX "-" PFX " prot=%d\n", start, end,
+                prot);
             all_memory_areas_lock();
             update_all_memory_areas(start, end, prot, DR_MEMTYPE_IMAGE);
             all_memory_areas_unlock();
-            if (app_memory_allocation(NULL, start, end - start, prot, true/*image*/
+            if (app_memory_allocation(NULL, start, end - start, prot,
+                                      true /*image*/
                                       _IF_DEBUG("ELF SO")))
                 (*count)++;
         }
@@ -5830,18 +5819,18 @@ dl_iterate_get_areas_cb(struct dl_phdr_info *info, size_t size, void *data)
     return 0; /* keep iterating */
 }
 
-/* helper for find_vm_areas_via_probe() and get_memory_info_from_os() 
+/* helper for find_vm_areas_via_probe() and get_memory_info_from_os()
  * returns the passed-in pc if the probe was successful; else, returns
  * where the next probe should be (to skip DR memory).
  * if the probe was successful, returns in prot the results.
  */
 static app_pc
-probe_address(dcontext_t *dcontext, app_pc pc_in,
-              byte *our_heap_start, byte *our_heap_end, OUT uint *prot)
+probe_address(dcontext_t *dcontext, app_pc pc_in, byte *our_heap_start,
+              byte *our_heap_end, OUT uint *prot)
 {
     app_pc base;
     size_t size;
-    app_pc pc = (app_pc) ALIGN_BACKWARD(pc_in, PAGE_SIZE);
+    app_pc pc = (app_pc)ALIGN_BACKWARD(pc_in, PAGE_SIZE);
     ASSERT(ALIGNED(pc, PAGE_SIZE));
     ASSERT(prot != NULL);
     *prot = MEMPROT_NONE;
@@ -5849,46 +5838,52 @@ probe_address(dcontext_t *dcontext, app_pc pc_in,
     /* skip our own vmheap */
     if (pc >= our_heap_start && pc < our_heap_end)
         return our_heap_end;
-# ifdef STACK_GUARD_PAGE
+#        ifdef STACK_GUARD_PAGE
     /* if no vmheap and we probe our own stack, the SIGSEGV handler will
      * report stack overflow as it checks that prior to handling TRY
      */
     if (is_stack_overflow(dcontext, pc))
         return pc + PAGE_SIZE;
-# endif
-# ifdef VMX86_SERVER
+#        endif
+#        ifdef VMX86_SERVER
     /* Workaround for PR 380621 */
     if (is_vmkernel_addr_in_user_space(pc, &base)) {
-        LOG(GLOBAL, LOG_VMAREAS, 4, "%s: skipping vmkernel region "PFX"-"PFX"\n",
+        LOG(GLOBAL, LOG_VMAREAS, 4, "%s: skipping vmkernel region " PFX "-" PFX "\n",
             __func__, pc, base);
         return base;
     }
-# endif
-    /* Only for find_vm_areas_via_probe(), skip modules added by 
-     * dl_iterate_get_areas_cb.  Subsequent probes are about gettting 
+#        endif
+    /* Only for find_vm_areas_via_probe(), skip modules added by
+     * dl_iterate_get_areas_cb.  Subsequent probes are about gettting
      * info from OS, so do the actual probe.  See PR 410907.
      */
     if (!dynamo_initialized && get_memory_info(pc, &base, &size, prot))
         return base + size;
 
-    TRY_EXCEPT(dcontext, /* try */ {
-        PROBE_READ_PC(pc);
-        *prot |= MEMPROT_READ;
-    }, /* except */ {
-        /* nothing: just continue */
-    });
+    TRY_EXCEPT(dcontext, /* try */
+               {
+                   PROBE_READ_PC(pc);
+                   *prot |= MEMPROT_READ;
+               },
+               /* except */
+               {
+                   /* nothing: just continue */
+               });
     /* x86 can't be writable w/o being readable.  avoiding nested TRY though. */
     if (TEST(MEMPROT_READ, *prot)) {
-        TRY_EXCEPT(dcontext, /* try */ {
-            PROBE_WRITE_PC(pc);
-            *prot |= MEMPROT_WRITE;
-        }, /* except */ {
-            /* nothing: just continue */
-        });
+        TRY_EXCEPT(dcontext, /* try */
+                   {
+                       PROBE_WRITE_PC(pc);
+                       *prot |= MEMPROT_WRITE;
+                   },
+                   /* except */
+                   {
+                       /* nothing: just continue */
+                   });
     }
 
-    LOG(GLOBAL, LOG_VMAREAS, 5, "%s: probe "PFX" => %s\n",
-        __func__, pc, memprot_string(*prot));
+    LOG(GLOBAL, LOG_VMAREAS, 5, "%s: probe " PFX " => %s\n", __func__, pc,
+        memprot_string(*prot));
 
     /* PR 403000 - for unaligned probes return the address passed in as arg. */
     return pc_in;
@@ -5896,8 +5891,7 @@ probe_address(dcontext_t *dcontext, app_pc pc_in,
 
 /* helper for find_vm_areas_via_probe() */
 static inline int
-probe_add_region(app_pc *last_start, uint *last_prot,
-                 app_pc pc, uint prot, bool force)
+probe_add_region(app_pc *last_start, uint *last_prot, app_pc pc, uint prot, bool force)
 {
     int count = 0;
     if (force || prot != *last_prot) {
@@ -5907,8 +5901,8 @@ probe_add_region(app_pc *last_start, uint *last_prot,
             /* images were done separately */
             update_all_memory_areas(*last_start, pc, *last_prot, DR_MEMTYPE_DATA);
             all_memory_areas_unlock();
-            if (app_memory_allocation(NULL, *last_start, pc - *last_start,
-                                      *last_prot, false/*!image*/ _IF_DEBUG("")))
+            if (app_memory_allocation(NULL, *last_start, pc - *last_start, *last_prot,
+                                      false /*!image*/ _IF_DEBUG("")))
                 count++;
         }
         *last_prot = prot;
@@ -5950,13 +5944,13 @@ find_vm_areas_via_probe(void)
     byte *our_heap_start, *our_heap_end;
     get_vmm_heap_bounds(&our_heap_start, &our_heap_end);
 
-    DEBUG_DECLARE(int res = )
-       dl_iterate_phdr(dl_iterate_get_areas_cb, &count);
+    DEBUG_DECLARE(int res =)
+    dl_iterate_phdr(dl_iterate_get_areas_cb, &count);
     ASSERT(res == 0);
 
     ASSERT(dcontext != NULL);
 
-#ifdef VMX86_SERVER
+#        ifdef VMX86_SERVER
     /* We only need to probe inside allocated regions */
     void *iter = vmk_mmaps_iter_start();
     if (iter != NULL) { /* backward compatibility: support lack of iter */
@@ -5964,18 +5958,18 @@ find_vm_areas_via_probe(void)
         size_t length;
         char name[MAXIMUM_PATH];
         LOG(GLOBAL, LOG_ALL, 1, "VSI mmaps:\n");
-        while (vmk_mmaps_iter_next(iter, &start, &length, (int *)&prot,
-                                   name, BUFFER_SIZE_ELEMENTS(name))) {
-            LOG(GLOBAL, LOG_ALL, 1, "\t"PFX"-"PFX": %d %s\n",
-                start, start + length, prot, name);
+        while (vmk_mmaps_iter_next(iter, &start, &length, (int *)&prot, name,
+                                   BUFFER_SIZE_ELEMENTS(name))) {
+            LOG(GLOBAL, LOG_ALL, 1, "\t" PFX "-" PFX ": %d %s\n", start, start + length,
+                prot, name);
             ASSERT(ALIGNED(start, PAGE_SIZE));
             last_prot = MEMPROT_NONE;
-            for (pc = start; pc < start + length; ) {
+            for (pc = start; pc < start + length;) {
                 prot = MEMPROT_NONE;
                 app_pc next_pc =
                     probe_address(dcontext, pc, our_heap_start, our_heap_end, &prot);
-                count += probe_add_region(&last_start, &last_prot, pc, prot,
-                                          next_pc != pc);
+                count +=
+                    probe_add_region(&last_start, &last_prot, pc, prot, next_pc != pc);
                 if (next_pc != pc) {
                     pc = next_pc;
                     last_prot = MEMPROT_NONE; /* ensure we add adjacent region */
@@ -5989,14 +5983,14 @@ find_vm_areas_via_probe(void)
         vmk_mmaps_iter_stop(iter);
         return count;
     } /* else, fall back to full probing */
-#else
-# ifdef X64
+#        else
+#            ifdef X64
 /* no lazy probing support yet */
-#  error X64 requires HAVE_PROC_MAPS: PR 364552
-# endif
-#endif
+#                error X64 requires HAVE_PROC_MAPS: PR 364552
+#            endif
+#        endif
     ASSERT(ALIGNED(USER_MAX, PAGE_SIZE));
-    for (pc = (app_pc) PAGE_SIZE; pc < (app_pc) USER_MAX; ) {
+    for (pc = (app_pc)PAGE_SIZE; pc < (app_pc)USER_MAX;) {
         prot = MEMPROT_NONE;
         app_pc next_pc = probe_address(dcontext, pc, our_heap_start, our_heap_end, &prot);
         count += probe_add_region(&last_start, &last_prot, pc, prot, next_pc != pc);
@@ -6011,9 +6005,8 @@ find_vm_areas_via_probe(void)
     return count;
 }
 
-#endif /* !HAVE_PROC_MAPS */
+#    endif /* !HAVE_PROC_MAPS */
 /***************************************************************************/
-
 
 /* assumed to be called after find_dynamo_library_vm_areas() */
 int
@@ -6041,11 +6034,11 @@ find_executable_vm_areas(void)
         all_memory_areas_unlock();
     }
 
-#ifndef HAVE_PROC_MAPS
+#    ifndef HAVE_PROC_MAPS
     count = find_vm_areas_via_probe();
-#else
+#    else
     maps_iter_t iter;
-    maps_iterator_start(&iter, true/*may alloc*/);
+    maps_iterator_start(&iter, true /*may alloc*/);
     while (maps_iterator_next(&iter)) {
         bool image = false;
         size_t size = iter.vm_end - iter.vm_start;
@@ -6055,26 +6048,26 @@ find_executable_vm_areas(void)
          * or future list, even w/ -executable_if_alloc
          */
 
-        LOG(GLOBAL, LOG_VMAREAS, 2,
-            "start="PFX" end="PFX" prot=%x comment=%s\n",
+        LOG(GLOBAL, LOG_VMAREAS, 2, "start=" PFX " end=" PFX " prot=%x comment=%s\n",
             iter.vm_start, iter.vm_end, iter.prot, iter.comment);
-        /* Issue 89: the vdso might be loaded inside ld.so as below, 
+        /* Issue 89: the vdso might be loaded inside ld.so as below,
          * which causes ASSERT_CURIOSITY in mmap_check_for_module_overlap fail.
          * b7fa3000-b7fbd000 r-xp 00000000 08:01 108679     /lib/ld-2.8.90.so
          * b7fbd000-b7fbe000 r-xp b7fbd000 00:00 0          [vdso]
          * b7fbe000-b7fbf000 r--p 0001a000 08:01 108679     /lib/ld-2.8.90.so
          * b7fbf000-b7fc0000 rw-p 0001b000 08:01 108679     /lib/ld-2.8.90.so
-         * So we always first check if it is a vdso page before calling 
+         * So we always first check if it is a vdso page before calling
          * mmap_check_for_module_overlap.
          * Update: with i#160/PR 562667 handling non-contiguous modules like
          * ld.so we now gracefully handle other objects like vdso in gaps in
          * module, but it's simpler to leave this ordering here.
          */
         if (strncmp(iter.comment, VSYSCALL_PAGE_MAPS_NAME,
-                    strlen(VSYSCALL_PAGE_MAPS_NAME)) == 0
+                    strlen(VSYSCALL_PAGE_MAPS_NAME)) ==
+            0
             /* Older kernels do not label it as "[vdso]", but it is hardcoded there */
             IF_NOT_X64(|| iter.vm_start == VSYSCALL_PAGE_START_HARDCODED)) {
-# ifndef X64
+#        ifndef X64
             /* We assume no vsyscall page for x64; thus, checking the
              * hardcoded address shouldn't have any false positives.
              */
@@ -6087,17 +6080,17 @@ find_executable_vm_areas(void)
              */
             DODEBUG({ map_type = "VDSO"; });
             vsyscall_page_start = iter.vm_start;
-            LOG(GLOBAL, LOG_VMAREAS, 1, "found vsyscall page @ "PFX" %s\n",
+            LOG(GLOBAL, LOG_VMAREAS, 1, "found vsyscall page @ " PFX " %s\n",
                 vsyscall_page_start, iter.comment);
-# else
+#        else
             /* i#172
              * fix bugs for OS where vdso page is set unreadable as below
              * ffffffffff600000-ffffffffffe00000 ---p 00000000 00:00 0 [vdso]
              * but it is readable indeed.
              */
-            if (!TESTALL((PROT_READ|PROT_EXEC), iter.prot))
-                iter.prot |= (PROT_READ|PROT_EXEC);
-# endif
+            if (!TESTALL((PROT_READ | PROT_EXEC), iter.prot))
+                iter.prot |= (PROT_READ | PROT_EXEC);
+#        endif
         } else if (mmap_check_for_module_overlap(iter.vm_start, size,
                                                  TEST(MEMPROT_READ, iter.prot),
                                                  iter.inode, false)) {
@@ -6112,22 +6105,22 @@ find_executable_vm_areas(void)
             DODEBUG({ map_type = "ELF SO"; });
             LOG(GLOBAL, LOG_VMAREAS, 2,
                 "Found already mapped module first segment :\n"
-                "\t"PFX"-"PFX"%s inode="UINT64_FORMAT_STRING" name=%s\n",
-                iter.vm_start, iter.vm_end, TEST(MEMPROT_EXEC, iter.prot) ? " +x": "",
+                "\t" PFX "-" PFX "%s inode=" UINT64_FORMAT_STRING " name=%s\n",
+                iter.vm_start, iter.vm_end, TEST(MEMPROT_EXEC, iter.prot) ? " +x" : "",
                 iter.inode, iter.comment);
-            ASSERT_CURIOSITY(iter.inode != 0); /* mapped images should have inodes */
+            ASSERT_CURIOSITY(iter.inode != 0);  /* mapped images should have inodes */
             ASSERT_CURIOSITY(iter.offset == 0); /* first map shouldn't have offset */
             /* Get size by walking the program headers. Size includes the .bss section. */
-            if (module_walk_program_headers(iter.vm_start, size, false,
-                                            &mod_base, &mod_end, NULL, NULL)) {
+            if (module_walk_program_headers(iter.vm_start, size, false, &mod_base,
+                                            &mod_end, NULL, NULL)) {
                 image_size = mod_end - mod_base;
             } else {
                 ASSERT_NOT_REACHED();
             }
             LOG(GLOBAL, LOG_VMAREAS, 2,
                 "Found already mapped module total module :\n"
-                "\t"PFX"-"PFX" inode="UINT64_FORMAT_STRING" name=%s\n",
-                iter.vm_start, iter.vm_start+image_size, iter.inode, iter.comment);
+                "\t" PFX "-" PFX " inode=" UINT64_FORMAT_STRING " name=%s\n",
+                iter.vm_start, iter.vm_start + image_size, iter.inode, iter.comment);
             module_list_add(iter.vm_start, image_size, false, iter.comment, iter.inode);
         } else if (iter.inode != 0) {
             DODEBUG({ map_type = "Mapped File"; });
@@ -6135,13 +6128,13 @@ find_executable_vm_areas(void)
 
         /* add all regions (incl. dynamo_areas and stack) to all_memory_areas */
         LOG(GLOBAL, LOG_VMAREAS, 4,
-            "find_executable_vm_areas: adding: "PFX"-"PFX" prot=%d\n",
-            iter.vm_start, iter.vm_end, iter.prot);
+            "find_executable_vm_areas: adding: " PFX "-" PFX " prot=%d\n", iter.vm_start,
+            iter.vm_end, iter.prot);
         all_memory_areas_lock();
         update_all_memory_areas(iter.vm_start, iter.vm_end, iter.prot,
                                 image ? DR_MEMTYPE_IMAGE : DR_MEMTYPE_DATA);
         all_memory_areas_unlock();
-    
+
         /* FIXME: best if we could pass every region to vmareas, but
          * it has no way of determining if this is a stack b/c we don't have
          * a dcontext at this point -- so we just don't pass the stack
@@ -6150,10 +6143,9 @@ find_executable_vm_areas(void)
                                   iter.prot, image _IF_DEBUG(map_type))) {
             count++;
         }
-
     }
     maps_iterator_stop(&iter);
-#endif /* HAVE_PROC_MAPS */
+#    endif /* HAVE_PROC_MAPS */
 
     DODEBUG({
         LOG(GLOBAL, LOG_VMAREAS, 4, "init: all memory areas:\n");
@@ -6167,7 +6159,7 @@ find_executable_vm_areas(void)
     STATS_ADD(num_app_code_modules, count);
 
     /* now that we have the modules set up, query libc */
-    get_libc_errno_location(true/*force init*/);
+    get_libc_errno_location(true /*force init*/);
 
     return count;
 }
@@ -6184,19 +6176,19 @@ find_dynamo_library_vm_areas(void)
      * Assumption: we don't need to have the protection flags for DR sub-regions.
      */
     add_dynamo_vm_area(get_dynamorio_dll_start(), get_dynamorio_dll_end(),
-                       MEMPROT_READ|MEMPROT_WRITE|MEMPROT_EXEC,
+                       MEMPROT_READ | MEMPROT_WRITE | MEMPROT_EXEC,
                        true /* from image */ _IF_DEBUG(dynamorio_library_path));
-#ifdef VMX86_SERVER
+#    ifdef VMX86_SERVER
     if (os_in_vmkernel_userworld())
         vmk_add_vmklib_to_dynamo_areas();
-#endif
+#    endif
     return 1;
 }
 
 bool
 get_stack_bounds(dcontext_t *dcontext, byte **base, byte **top)
 {
-    os_thread_data_t *ostd = (os_thread_data_t *) dcontext->os_field;
+    os_thread_data_t *ostd = (os_thread_data_t *)dcontext->os_field;
     if (ostd->stack_base == NULL) {
         /* initialize on-demand since don't have app esp handy in os_thread_init()
          * FIXME: the comment here -- ignoring it for now, if hit cases confirming
@@ -6205,18 +6197,18 @@ get_stack_bounds(dcontext_t *dcontext, byte **base, byte **top)
          * routine called from x86.asm new_thread_dynamo_start and internal_dynamo_start,
          * and the latter is not a do-once...
          */
-         size_t size = 0;
-         bool ok;
-         /* store stack info at thread startup, since stack can get fragmented in
-          * /proc/self/maps w/ later mprotects and it can be hard to piece together later
-          */
-         /* FIXME: once our mem list is robust use it */
-         ok = get_memory_info_from_os((app_pc)get_mcontext(dcontext)->xsp,
-                                      &ostd->stack_base, &size, NULL);
-         ASSERT(ok);
-         ostd->stack_top = ostd->stack_base + size;
-         LOG(THREAD, LOG_THREADS, 1, "App stack is "PFX"-"PFX"\n",
-             ostd->stack_base, ostd->stack_top);
+        size_t size = 0;
+        bool ok;
+        /* store stack info at thread startup, since stack can get fragmented in
+         * /proc/self/maps w/ later mprotects and it can be hard to piece together later
+         */
+        /* FIXME: once our mem list is robust use it */
+        ok = get_memory_info_from_os((app_pc)get_mcontext(dcontext)->xsp,
+                                     &ostd->stack_base, &size, NULL);
+        ASSERT(ok);
+        ostd->stack_top = ostd->stack_base + size;
+        LOG(THREAD, LOG_THREADS, 1, "App stack is " PFX "-" PFX "\n", ostd->stack_base,
+            ostd->stack_top);
     }
     if (base != NULL)
         *base = ostd->stack_base;
@@ -6225,11 +6217,11 @@ get_stack_bounds(dcontext_t *dcontext, byte **base, byte **top)
     return true;
 }
 
-#ifdef RETURN_AFTER_CALL
+#    ifdef RETURN_AFTER_CALL
 initial_call_stack_status_t
 at_initial_stack_bottom(dcontext_t *dcontext, app_pc target_pc)
 {
-    os_thread_data_t *ostd = (os_thread_data_t *) dcontext->os_field;
+    os_thread_data_t *ostd = (os_thread_data_t *)dcontext->os_field;
     if (target_pc == ostd->stack_bottom_pc) {
         return INITIAL_STACK_BOTTOM_REACHED;
     } else {
@@ -6237,7 +6229,7 @@ at_initial_stack_bottom(dcontext_t *dcontext, app_pc target_pc)
     }
     /* we never start with an INITIAL_STACK_EMPTY */
 }
-#endif /* RETURN_AFTER_CALL */
+#    endif /* RETURN_AFTER_CALL */
 
 /* Use our cached data structures to retrieve memory info */
 bool
@@ -6250,13 +6242,13 @@ query_memory_ex(const byte *pc, OUT dr_mem_info_t *out_info)
     all_memory_areas_lock();
     sync_all_memory_areas();
     if (vmvector_lookup_data(all_memory_areas, (app_pc)pc, &start, &end,
-                             (void **) &info)) {
+                             (void **)&info)) {
         ASSERT(info != NULL);
         out_info->base_pc = start;
         out_info->size = (end - start);
         out_info->prot = info->prot;
         out_info->type = info->type;
-#ifdef HAVE_PROC_MAPS
+#    ifdef HAVE_PROC_MAPS
         DODEBUG({
             byte *from_os_base_pc;
             size_t from_os_size;
@@ -6270,11 +6262,9 @@ query_memory_ex(const byte *pc, OUT dr_mem_info_t *out_info)
             if ((from_os_prot == info->prot ||
                  /* allow maps to have +x (PR 213256) */
                  (from_os_prot & (~MEMPROT_EXEC)) == info->prot) &&
-                ((info->type == DR_MEMTYPE_IMAGE &&
-                  from_os_base_pc >= start &&
+                ((info->type == DR_MEMTYPE_IMAGE && from_os_base_pc >= start &&
                   from_os_size <= (end - start)) ||
-                 (from_os_base_pc == start &&
-                  from_os_size == (end - start)))) {
+                 (from_os_base_pc == start && from_os_size == (end - start)))) {
                 /* ok.  easier to think of forward logic. */
             } else {
                 /* /proc/maps could break/combine regions listed so region bounds as
@@ -6286,26 +6276,27 @@ query_memory_ex(const byte *pc, OUT dr_mem_info_t *out_info)
                 DODEBUG({
                     /* we add the whole client lib as a single entry */
                     if (IF_CLIENT_INTERFACE_ELSE(!is_in_client_lib(start) ||
-                                                 !is_in_client_lib(end - 1), true)) {
-                        SYSLOG_INTERNAL_WARNING("get_memory_info mismatch! "
+                                                     !is_in_client_lib(end - 1),
+                                                 true)) {
+                        SYSLOG_INTERNAL_WARNING(
+                            "get_memory_info mismatch! "
                             "(can happen if os combines entries in /proc/pid/maps)\n"
-                            "\tos says: "PFX"-"PFX" prot="PFX"\n"
-                            "\tcache says: "PFX"-"PFX" prot="PFX"\n",
-                            from_os_base_pc, from_os_base_pc + from_os_size,
-                            from_os_prot, start, end, info->prot);
+                            "\tos says: " PFX "-" PFX " prot=" PFX "\n"
+                            "\tcache says: " PFX "-" PFX " prot=" PFX "\n",
+                            from_os_base_pc, from_os_base_pc + from_os_size, from_os_prot,
+                            start, end, info->prot);
                     }
                 });
             }
         });
-#endif
+#    endif
     } else {
         app_pc prev, next;
-        found = vmvector_lookup_prev_next(all_memory_areas, (app_pc)pc,
-                                          &prev, &next);
+        found = vmvector_lookup_prev_next(all_memory_areas, (app_pc)pc, &prev, &next);
         ASSERT(found);
         if (prev != NULL) {
-            found = vmvector_lookup_data(all_memory_areas, prev,
-                                         NULL, &out_info->base_pc, NULL);
+            found = vmvector_lookup_data(all_memory_areas, prev, NULL, &out_info->base_pc,
+                                         NULL);
             ASSERT(found);
         } else
             out_info->base_pc = NULL;
@@ -6318,17 +6309,16 @@ query_memory_ex(const byte *pc, OUT dr_mem_info_t *out_info)
          * if executing from what we think is unreadable memory, so
          * best to check with the OS (xref PR 363811).
          */
-#ifdef HAVE_PROC_MAPS
+#    ifdef HAVE_PROC_MAPS
         byte *from_os_base_pc;
         size_t from_os_size;
         uint from_os_prot;
-        if (get_memory_info_from_os(pc, &from_os_base_pc, &from_os_size,
-                                    &from_os_prot) && 
+        if (get_memory_info_from_os(pc, &from_os_base_pc, &from_os_size, &from_os_prot) &&
             /* maps file shows our reserved-but-not-committed regions, which
              * are holes in all_memory_areas
              */
             from_os_prot != MEMPROT_NONE) {
-            SYSLOG_INTERNAL_ERROR("all_memory_areas is missing region "PFX"-"PFX"!",
+            SYSLOG_INTERNAL_ERROR("all_memory_areas is missing region " PFX "-" PFX "!",
                                   from_os_base_pc, from_os_base_pc + from_os_size);
             DOLOG(4, LOG_VMAREAS, print_all_memory_areas(THREAD_GET););
             ASSERT_NOT_REACHED();
@@ -6338,12 +6328,12 @@ query_memory_ex(const byte *pc, OUT dr_mem_info_t *out_info)
             out_info->prot = from_os_prot;
             out_info->type = DR_MEMTYPE_DATA; /* hopefully we won't miss an image */
         }
-#else
+#    else
         /* We now have nested probes, but currently probing sometimes calls
          * get_memory_info(), so we can't probe here unless we remove that call
          * there.
          */
-#endif
+#    endif
     }
     all_memory_areas_unlock();
     return true;
@@ -6374,9 +6364,9 @@ bool
 query_memory_ex_from_os(const byte *pc, OUT dr_mem_info_t *info)
 {
     bool have_type = false;
-#ifndef HAVE_PROC_MAPS
+#    ifndef HAVE_PROC_MAPS
     app_pc probe_pc, next_pc;
-    app_pc start_pc = (app_pc) pc, end_pc = (app_pc) pc + PAGE_SIZE;
+    app_pc start_pc = (app_pc)pc, end_pc = (app_pc)pc + PAGE_SIZE;
     byte *our_heap_start, *our_heap_end;
     uint cur_prot = MEMPROT_NONE;
     dcontext_t *dcontext = get_thread_private_dcontext();
@@ -6387,8 +6377,8 @@ query_memory_ex_from_os(const byte *pc, OUT dr_mem_info_t *info)
     get_vmm_heap_bounds(&our_heap_start, &our_heap_end);
     /* FIXME PR 235433: replace w/ real query to avoid all these probes */
 
-    next_pc = probe_address(dcontext, (app_pc) pc, our_heap_start,
-                            our_heap_end, &cur_prot);
+    next_pc =
+        probe_address(dcontext, (app_pc)pc, our_heap_start, our_heap_end, &cur_prot);
     if (next_pc != pc) {
         if (pc >= our_heap_start && pc < our_heap_end) {
             /* Just making all readable for now */
@@ -6400,21 +6390,21 @@ query_memory_ex_from_os(const byte *pc, OUT dr_mem_info_t *info)
             return false;
         }
     } else {
-        for (probe_pc = (app_pc) ALIGN_BACKWARD(pc, PAGE_SIZE) - PAGE_SIZE;
-             probe_pc > (app_pc) NULL; probe_pc -= PAGE_SIZE) {
+        for (probe_pc = (app_pc)ALIGN_BACKWARD(pc, PAGE_SIZE) - PAGE_SIZE;
+             probe_pc > (app_pc)NULL; probe_pc -= PAGE_SIZE) {
             uint prot = MEMPROT_NONE;
-            next_pc = probe_address(dcontext, probe_pc, our_heap_start,
-                                    our_heap_end, &prot);
+            next_pc =
+                probe_address(dcontext, probe_pc, our_heap_start, our_heap_end, &prot);
             if (next_pc != pc || prot != cur_prot)
                 break;
         }
         start_pc = probe_pc + PAGE_SIZE;
         ASSERT(ALIGNED(USER_MAX, PAGE_SIZE));
-        for (probe_pc = (app_pc) ALIGN_FORWARD(pc, PAGE_SIZE);
-             probe_pc < (app_pc) USER_MAX; probe_pc += PAGE_SIZE) {
+        for (probe_pc = (app_pc)ALIGN_FORWARD(pc, PAGE_SIZE); probe_pc < (app_pc)USER_MAX;
+             probe_pc += PAGE_SIZE) {
             uint prot = MEMPROT_NONE;
-            next_pc = probe_address(dcontext, probe_pc, our_heap_start,
-                                    our_heap_end, &prot);
+            next_pc =
+                probe_address(dcontext, probe_pc, our_heap_start, our_heap_end, &prot);
             if (next_pc != pc || prot != cur_prot)
                 break;
         }
@@ -6430,13 +6420,13 @@ query_memory_ex_from_os(const byte *pc, OUT dr_mem_info_t *info)
         info->type = DR_MEMTYPE_FREE;
         have_type = true;
     }
-#else
+#    else
     maps_iter_t iter;
     app_pc last_end = NULL;
-    app_pc next_start = (app_pc) POINTER_MAX;
+    app_pc next_start = (app_pc)POINTER_MAX;
     bool found = false;
     ASSERT(info != NULL);
-    maps_iterator_start(&iter, false/*won't alloc*/);
+    maps_iterator_start(&iter, false /*won't alloc*/);
     while (maps_iterator_next(&iter)) {
         if (pc >= iter.vm_start && pc < iter.vm_end) {
             info->base_pc = iter.vm_start;
@@ -6447,12 +6437,12 @@ query_memory_ex_from_os(const byte *pc, OUT dr_mem_info_t *info)
              *   ffffe000-fffff000 ---p 00000000 00:00 0
              * We return "rx" as the permissions in that case.
              */
-            if (vsyscall_page_start != NULL &&
-                pc >= vsyscall_page_start && pc < vsyscall_page_start+PAGE_SIZE) {
+            if (vsyscall_page_start != NULL && pc >= vsyscall_page_start &&
+                pc < vsyscall_page_start + PAGE_SIZE) {
                 ASSERT(iter.vm_start == vsyscall_page_start);
                 ASSERT(iter.vm_end - iter.vm_start == PAGE_SIZE);
                 if (iter.prot == MEMPROT_NONE) {
-                    info->prot = (MEMPROT_READ|MEMPROT_EXEC);
+                    info->prot = (MEMPROT_READ | MEMPROT_EXEC);
                 }
             }
             found = true;
@@ -6471,7 +6461,7 @@ query_memory_ex_from_os(const byte *pc, OUT dr_mem_info_t *info)
         info->type = DR_MEMTYPE_FREE;
         have_type = true;
     }
-#endif
+#    endif
     if (!have_type) {
         /* We pass 0 instead of info->size b/c even if marked as +r we can still
          * get SIGBUS if beyond end of mmapped file: not uncommon if querying
@@ -6483,8 +6473,8 @@ query_memory_ex_from_os(const byte *pc, OUT dr_mem_info_t *info)
          * The cleaner fix is to allow safe_read to work w/o a dcontext: PR 529066.
          */
         if (TEST(MEMPROT_READ, info->prot) &&
-            is_elf_so_header(info->base_pc, (get_thread_private_dcontext() == NULL) ? 
-                             info->size : 0))
+            is_elf_so_header(info->base_pc,
+                             (get_thread_private_dcontext() == NULL) ? info->size : 0))
             info->type = DR_MEMTYPE_IMAGE;
         else {
             /* FIXME: won't quite match find_executable_vm_areas marking as
@@ -6528,7 +6518,7 @@ all_memory_areas_lock()
     if (self_owns_write_lock(&all_memory_areas->lock)) {
         all_memory_areas_recursion++;
         /* we have a 5-deep path:
-         *   global_heap_alloc | heap_create_unit | get_guarded_real_memory | 
+         *   global_heap_alloc | heap_create_unit | get_guarded_real_memory |
          *   heap_low_on_memory | release_guarded_real_memory
          */
         ASSERT_CURIOSITY(all_memory_areas_recursion <= 4);
@@ -6542,8 +6532,7 @@ all_memory_areas_unlock()
     /* ok to ask for locks or mark stale before all_memory_areas is allocated,
      * during heap init and before we can allocate it.  no lock needed then.
      */
-    ASSERT(all_memory_areas != NULL ||
-           get_num_threads() <= 1 /*must be only DR thread*/);
+    ASSERT(all_memory_areas != NULL || get_num_threads() <= 1 /*must be only DR thread*/);
     if (all_memory_areas == NULL)
         return;
     if (all_memory_areas_recursion > 0) {
@@ -6553,16 +6542,16 @@ all_memory_areas_unlock()
         write_unlock(&all_memory_areas->lock);
 }
 
-
 /* in utils.c, exported only for our hack! */
-extern void deadlock_avoidance_unlock(mutex_t *lock, bool ownable);
+extern void
+deadlock_avoidance_unlock(mutex_t *lock, bool ownable);
 
 void
 mutex_wait_contended_lock(mutex_t *lock)
 {
     IF_CLIENT_INTERFACE(dcontext_t *dcontext = get_thread_private_dcontext();)
     /* FIXME: we don't actually use system calls to synchronize on Linux,
-     * one day we would use futex(2) on this path (PR 295561). 
+     * one day we would use futex(2) on this path (PR 295561).
      * For now we use a busy-wait lock.
      * If we do use a true wait need to set client_thread_safe_for_synch around it */
 
@@ -6570,29 +6559,28 @@ mutex_wait_contended_lock(mutex_t *lock)
     atomic_dec_and_test(&lock->lock_requests);
 
     while (!mutex_trylock(lock)) {
-#ifdef CLIENT_INTERFACE
+#    ifdef CLIENT_INTERFACE
         if (dcontext != NULL && IS_CLIENT_THREAD(dcontext) &&
             (mutex_t *)dcontext->client_data->client_grab_mutex == lock)
             dcontext->client_data->client_thread_safe_for_synch = true;
-#endif
+#    endif
         thread_yield();
-#ifdef CLIENT_INTERFACE
+#    ifdef CLIENT_INTERFACE
         if (dcontext != NULL && IS_CLIENT_THREAD(dcontext) &&
             (mutex_t *)dcontext->client_data->client_grab_mutex == lock)
             dcontext->client_data->client_thread_safe_for_synch = false;
-#endif
+#    endif
     }
 
-#ifdef DEADLOCK_AVOIDANCE
+#    ifdef DEADLOCK_AVOIDANCE
     /* HACK: trylock's success causes it to do DEADLOCK_AVOIDANCE_LOCK, so to
      * avoid two in a row (causes assertion on owner) we unlock here
      * In the future we will remove the trylock here and this will go away.
      */
     deadlock_avoidance_unlock(lock, true);
-#endif
+#    endif
 
     return;
-    
 }
 
 void
@@ -6637,16 +6625,16 @@ typedef struct linux_event_t {
     mutex_t lock;
 } linux_event_t;
 
-
-/* FIXME: this routine will need to have a macro wrapper to let us assign different ranks to 
- * all events for DEADLOCK_AVOIDANCE.  Currently a single rank seems to work.
+/* FIXME: this routine will need to have a macro wrapper to let us assign different ranks
+ * to all events for DEADLOCK_AVOIDANCE.  Currently a single rank seems to work.
  */
 event_t
 create_event()
 {
-    event_t e = (event_t) global_heap_alloc(sizeof(linux_event_t) HEAPACCT(ACCT_OTHER));
+    event_t e = (event_t)global_heap_alloc(sizeof(linux_event_t) HEAPACCT(ACCT_OTHER));
     e->signaled = false;
-    ASSIGN_INIT_LOCK_FREE(e->lock, event_lock); /* FIXME: we'll need to pass the event name here */
+    ASSIGN_INIT_LOCK_FREE(e->lock,
+                          event_lock); /* FIXME: we'll need to pass the event name here */
     return e;
 }
 
@@ -6663,7 +6651,8 @@ signal_event(event_t e)
 {
     mutex_lock(&e->lock);
     e->signaled = true;
-    LOG(THREAD_GET, LOG_THREADS, 3,"thread %d signalling event "PFX"\n",get_thread_id(),e);
+    LOG(THREAD_GET, LOG_THREADS, 3, "thread %d signalling event " PFX "\n",
+        get_thread_id(), e);
     mutex_unlock(&e->lock);
 }
 
@@ -6672,7 +6661,8 @@ reset_event(event_t e)
 {
     mutex_lock(&e->lock);
     e->signaled = false;
-    LOG(THREAD_GET, LOG_THREADS, 3,"thread %d resetting event "PFX"\n",get_thread_id(),e);
+    LOG(THREAD_GET, LOG_THREADS, 3, "thread %d resetting event " PFX "\n",
+        get_thread_id(), e);
     mutex_unlock(&e->lock);
 }
 
@@ -6681,25 +6671,26 @@ reset_event(event_t e)
 void
 wait_for_event(event_t e)
 {
-#ifdef DEBUG
+#    ifdef DEBUG
     dcontext_t *dcontext = get_thread_private_dcontext();
-#endif
+#    endif
     /* Use a user-space event on Linux, a kernel event on Windows. */
-    LOG(THREAD, LOG_THREADS, 3, "thread %d waiting for event "PFX"\n",get_thread_id(),e);
+    LOG(THREAD, LOG_THREADS, 3, "thread %d waiting for event " PFX "\n", get_thread_id(),
+        e);
     while (true) {
         if (e->signaled) {
             mutex_lock(&e->lock);
             if (!e->signaled) {
                 /* some other thread beat us to it */
-                LOG(THREAD, LOG_THREADS, 3, "thread %d was beaten to event "PFX"\n",
-                    get_thread_id(),e);
+                LOG(THREAD, LOG_THREADS, 3, "thread %d was beaten to event " PFX "\n",
+                    get_thread_id(), e);
                 mutex_unlock(&e->lock);
             } else {
                 /* reset the event */
                 e->signaled = false;
                 mutex_unlock(&e->lock);
                 LOG(THREAD, LOG_THREADS, 3,
-                    "thread %d finished waiting for event "PFX"\n", get_thread_id(),e);
+                    "thread %d finished waiting for event " PFX "\n", get_thread_id(), e);
                 return;
             }
         }
@@ -6713,14 +6704,14 @@ os_random_seed()
     uint seed;
     /* reading from /dev/urandom for a non-blocking random */
     int urand = os_open("/dev/urandom", OS_OPEN_READ);
-    DEBUG_DECLARE(int read = )os_read(urand, &seed, sizeof(seed));
+    DEBUG_DECLARE(int read =) os_read(urand, &seed, sizeof(seed));
     ASSERT(read == sizeof(seed));
     os_close(urand);
-    
+
     return seed;
 }
 
-#ifdef RCT_IND_BRANCH
+#    ifdef RCT_IND_BRANCH
 /* Analyze a range in a possibly new module
  * return false if not a code section in a module
  * otherwise returns true and adds all valid targets for rct_ind_branch_check
@@ -6735,55 +6726,54 @@ rct_analyze_module_at_violation(dcontext_t *dcontext, app_pc target_pc)
     app_pc code_start;
     size_t code_size;
     uint prot;
-     
+
     if (!get_memory_info(target_pc, &code_start, &code_size, &prot))
         return false;
-    /* TODO: in almost all cases expect the region at module_base+module_size to be 
-     * the corresponding data section.  
+    /* TODO: in almost all cases expect the region at module_base+module_size to be
+     * the corresponding data section.
      * Writable yet initialized data indeed needs to be processed.
      */
 
     if (code_size > 0) {
         app_pc code_end = code_start + code_size;
-        
+
         app_pc data_start;
         size_t data_size;
 
-        ASSERT(TESTALL(MEMPROT_READ|MEMPROT_EXEC, prot)); /* code */
+        ASSERT(TESTALL(MEMPROT_READ | MEMPROT_EXEC, prot)); /* code */
 
         if (!get_memory_info(code_end, &data_start, &data_size, &prot))
             return false;
 
         ASSERT(data_start == code_end);
-        ASSERT(TESTALL(MEMPROT_READ|MEMPROT_WRITE, prot)); /* data */
+        ASSERT(TESTALL(MEMPROT_READ | MEMPROT_WRITE, prot)); /* data */
 
         app_pc text_start = code_start;
         app_pc text_end = data_start + data_size;
 
-        /* TODO: performance: should do this only in case relocation info is not present */
-        DEBUG_DECLARE(uint found = )
-            find_address_references(dcontext, text_start, text_end, 
-                                    code_start, code_end);
-        LOG(GLOBAL, LOG_RCT, 2, PFX"-"PFX" : %d ind targets of %d code size", 
-            text_start, text_end,
-            found, code_size);
+        /* TODO: performance: should do this only in case relocation info is not present
+         */
+        DEBUG_DECLARE(uint found =)
+        find_address_references(dcontext, text_start, text_end, code_start, code_end);
+        LOG(GLOBAL, LOG_RCT, 2, PFX "-" PFX " : %d ind targets of %d code size",
+            text_start, text_end, found, code_size);
         return true;
     }
     return false;
 }
 
-#ifdef X64
+#        ifdef X64
 bool
 rct_add_rip_rel_addr(dcontext_t *dcontext, app_pc tgt _IF_DEBUG(app_pc src))
 {
     /* FIXME PR 276762: not implemented */
     return false;
 }
-#endif
-#endif /* RCT_IND_BRANCH */
+#        endif
+#    endif /* RCT_IND_BRANCH */
 
-#ifdef HOT_PATCHING_INTERFACE
-void*
+#    ifdef HOT_PATCHING_INTERFACE
+void *
 get_drmarker_hotp_policy_status_table()
 {
     ASSERT_NOT_IMPLEMENTED(false);
@@ -6797,11 +6787,10 @@ set_drmarker_hotp_policy_status_table(void *new_table)
 }
 
 byte *
-hook_text(byte *hook_code_buf, const app_pc image_addr, 
-          intercept_function_t hook_func, const void *callee_arg,
-          const after_intercept_action_t action_after,
-          const bool abort_if_hooked, const bool ignore_cti,
-          byte **app_code_copy_p, byte **alt_exit_cti_p)
+hook_text(byte *hook_code_buf, const app_pc image_addr, intercept_function_t hook_func,
+          const void *callee_arg, const after_intercept_action_t action_after,
+          const bool abort_if_hooked, const bool ignore_cti, byte **app_code_copy_p,
+          byte **alt_exit_cti_p)
 {
     ASSERT_NOT_IMPLEMENTED(false);
     return NULL;
@@ -6818,7 +6807,7 @@ insert_jmp_at_tramp_entry(byte *trampoline, byte *target)
 {
     ASSERT_NOT_IMPLEMENTED(false);
 }
-#endif  /* HOT_PATCHING_INTERFACE */
+#    endif /* HOT_PATCHING_INTERFACE */
 
 bool
 aslr_is_possible_attack(app_pc target)
@@ -6841,14 +6830,13 @@ take_over_primary_thread()
 }
 
 bool
-os_current_user_directory(char *directory_prefix /* INOUT */,
-                          uint directory_len,
+os_current_user_directory(char *directory_prefix /* INOUT */, uint directory_len,
                           bool create)
 {
-#if 0
+#    if 0
     /* FIXME: case 9922 */
     ASSERT_NOT_IMPLEMENTED(true);
-#endif
+#    endif
     return false;
 }
 

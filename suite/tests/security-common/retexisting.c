@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -35,7 +35,7 @@
 ptr_int_t
 precious()
 {
-#ifdef USER32    /* map user32.dll for a RunAll test */
+#ifdef USER32 /* map user32.dll for a RunAll test */
     MessageBeep(0);
 #endif
     print("M-m-my PRECIOUS is stolen! ATTACK SUCCESSFUL!\n");
@@ -44,19 +44,19 @@ precious()
 
 ptr_int_t
 #ifdef X64
-# ifdef WINDOWS  /* 5th param is on the stack */
+#    ifdef WINDOWS /* 5th param is on the stack */
 ring(int x1, int x2, int x3, int x4, int x)
-# else  /* 7th param is on the stack */
+#    else /* 7th param is on the stack */
 ring(int x1, int x2, int x3, int x4, int x5, int x6, int x)
-# endif
+#    endif
 #else
 ring(int x)
 #endif
 {
     print("looking at ring\n");
-    *(ptr_int_t*) (((ptr_int_t*)&x) - IF_X64_ELSE(IF_WINDOWS_ELSE(5, 1), 1))
-        = (ptr_int_t)&precious;
-    return (ptr_int_t) x;
+    *(ptr_int_t *)(((ptr_int_t *)&x) - IF_X64_ELSE(IF_WINDOWS_ELSE(5, 1), 1)) =
+        (ptr_int_t)&precious;
+    return (ptr_int_t)x;
 }
 
 ptr_int_t
@@ -77,10 +77,10 @@ ptr_int_t
 twofoo()
 {
     ptr_int_t a = foo();
-    print("first foo a="SZFMT"\n", a);
+    print("first foo a=" SZFMT "\n", a);
 
     a += foo();
-    print("second foo a="SZFMT"\n", a);
+    print("second foo a=" SZFMT "\n", a);
     return a;
 }
 
@@ -93,11 +93,11 @@ main()
     twofoo();
     print("starting bad function\n");
 #ifdef X64
-# ifdef WINDOWS
+#    ifdef WINDOWS
     ring(1, 2, 3, 4, 5);
-# else
+#    else
     ring(1, 2, 3, 4, 5, 6, 7);
-# endif
+#    endif
 #else
     ring(1);
 #endif

@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -40,21 +40,21 @@
 
 #include "../globals.h"
 #include "proc.h"
-#include "instr.h" /* for dr_insert_{save,restore}_fpstate */
-#include "instrument.h" /* for dr_insert_{save,restore}_fpstate */
+#include "instr.h"        /* for dr_insert_{save,restore}_fpstate */
+#include "instrument.h"   /* for dr_insert_{save,restore}_fpstate */
 #include "instr_create.h" /* for dr_insert_{save,restore}_fpstate */
-#include "decode.h" /* for dr_insert_{save,restore}_fpstate */
+#include "decode.h"       /* for dr_insert_{save,restore}_fpstate */
 
 #ifdef DEBUG
 /* case 10450: give messages to clients */
-# undef ASSERT /* N.B.: if have issues w/ DYNAMO_OPTION, re-instate */
-# undef ASSERT_TRUNCATE
-# undef ASSERT_BITFIELD_TRUNCATE
-# undef ASSERT_NOT_REACHED
-# define ASSERT DO_NOT_USE_ASSERT_USE_CLIENT_ASSERT_INSTEAD
-# define ASSERT_TRUNCATE DO_NOT_USE_ASSERT_USE_CLIENT_ASSERT_INSTEAD
-# define ASSERT_BITFIELD_TRUNCATE DO_NOT_USE_ASSERT_USE_CLIENT_ASSERT_INSTEAD
-# define ASSERT_NOT_REACHED DO_NOT_USE_ASSERT_USE_CLIENT_ASSERT_INSTEAD
+#    undef ASSERT /* N.B.: if have issues w/ DYNAMO_OPTION, re-instate */
+#    undef ASSERT_TRUNCATE
+#    undef ASSERT_BITFIELD_TRUNCATE
+#    undef ASSERT_NOT_REACHED
+#    define ASSERT DO_NOT_USE_ASSERT_USE_CLIENT_ASSERT_INSTEAD
+#    define ASSERT_TRUNCATE DO_NOT_USE_ASSERT_USE_CLIENT_ASSERT_INSTEAD
+#    define ASSERT_BITFIELD_TRUNCATE DO_NOT_USE_ASSERT_USE_CLIENT_ASSERT_INSTEAD
+#    define ASSERT_NOT_REACHED DO_NOT_USE_ASSERT_USE_CLIENT_ASSERT_INSTEAD
 #endif
 
 /* Intel processors:  ebx:edx:ecx spell GenuineIntel */
@@ -77,41 +77,41 @@ static ptr_uint_t mask; /* bits that should be 0 to be cache-line-aligned */
 
 static uint L1_icache_size = CACHE_SIZE_UNKNOWN;
 static uint L1_dcache_size = CACHE_SIZE_UNKNOWN;
-static uint L2_cache_size  = CACHE_SIZE_UNKNOWN;
+static uint L2_cache_size = CACHE_SIZE_UNKNOWN;
 
-static uint vendor   = VENDOR_UNKNOWN;
-static uint family   = 0;
-static uint type     = 0;
-static uint model    = 0;
+static uint vendor = VENDOR_UNKNOWN;
+static uint family = 0;
+static uint type = 0;
+static uint model = 0;
 static uint stepping = 0;
 
 /* Feature bits in 4 32-bit values: features in edx,
  * features in ecx, extended features in edx, and
  * extended features in ecx
  */
-static features_t features = {0, 0, 0, 0};
+static features_t features = { 0, 0, 0, 0 };
 
 /* The brand string is a 48-character, null terminated string.
- * Declare as a 12-element uint so the compiler won't complain 
+ * Declare as a 12-element uint so the compiler won't complain
  * when we store GPRs to it.  Initialization is "unknown" .
  */
-static uint brand_string[12] = {0x6e6b6e75, 0x006e776f};
+static uint brand_string[12] = { 0x6e6b6e75, 0x006e776f };
 
 static void
 set_cache_size(uint val, uint *dst)
 {
     CLIENT_ASSERT(dst != NULL, "invalid internal param");
     switch (val) {
-        case 8:    *dst = CACHE_SIZE_8_KB;   break;
-        case 16:   *dst = CACHE_SIZE_16_KB;  break;
-        case 32:   *dst = CACHE_SIZE_32_KB;  break;
-        case 64:   *dst = CACHE_SIZE_64_KB;  break;
-        case 128:  *dst = CACHE_SIZE_128_KB; break;
-        case 256:  *dst = CACHE_SIZE_256_KB; break;
-        case 512:  *dst = CACHE_SIZE_512_KB; break;
-        case 1024: *dst = CACHE_SIZE_1_MB;   break;
-        case 2048: *dst = CACHE_SIZE_2_MB;   break;
-        default: SYSLOG_INTERNAL_ERROR("Unknown processor cache size"); break;
+    case 8: *dst = CACHE_SIZE_8_KB; break;
+    case 16: *dst = CACHE_SIZE_16_KB; break;
+    case 32: *dst = CACHE_SIZE_32_KB; break;
+    case 64: *dst = CACHE_SIZE_64_KB; break;
+    case 128: *dst = CACHE_SIZE_128_KB; break;
+    case 256: *dst = CACHE_SIZE_256_KB; break;
+    case 512: *dst = CACHE_SIZE_512_KB; break;
+    case 1024: *dst = CACHE_SIZE_1_MB; break;
+    case 2048: *dst = CACHE_SIZE_2_MB; break;
+    default: SYSLOG_INTERNAL_ERROR("Unknown processor cache size"); break;
     }
 }
 
@@ -122,21 +122,21 @@ get_cache_sizes_amd(uint max_ext_val)
 
     if (max_ext_val >= 0x80000005) {
 #ifdef LINUX
-        our_cpuid((int*)cpuid_res_local, 0x80000005);
+        our_cpuid((int *)cpuid_res_local, 0x80000005);
 #else
         __cpuid(cpuid_res_local, 0x80000005);
 #endif
-        set_cache_size((cpuid_res_local[2]/*ecx*/ >> 24), &L1_icache_size);
-        set_cache_size((cpuid_res_local[3]/*edx*/ >> 24), &L1_dcache_size);
+        set_cache_size((cpuid_res_local[2] /*ecx*/ >> 24), &L1_icache_size);
+        set_cache_size((cpuid_res_local[3] /*edx*/ >> 24), &L1_dcache_size);
     }
 
     if (max_ext_val >= 0x80000006) {
 #ifdef LINUX
-        our_cpuid((int*)cpuid_res_local, 0x80000006);
+        our_cpuid((int *)cpuid_res_local, 0x80000006);
 #else
         __cpuid(cpuid_res_local, 0x80000006);
 #endif
-        set_cache_size((cpuid_res_local[2]/*ecx*/ >> 16), &L2_cache_size);
+        set_cache_size((cpuid_res_local[2] /*ecx*/ >> 16), &L2_cache_size);
     }
 }
 
@@ -151,7 +151,7 @@ get_cache_sizes_intel(uint max_val)
         return;
 
 #ifdef LINUX
-    our_cpuid((int*)cache_codes, 2);
+    our_cpuid((int *)cache_codes, 2);
 #else
     __cpuid(cache_codes, 2);
 #endif
@@ -161,51 +161,51 @@ get_cache_sizes_intel(uint max_val)
      */
     CLIENT_ASSERT((cache_codes[0] & 0xff) == 1, "cpuid error");
     cache_codes[0] &= ~0xff;
-    
-    /* Cache codes are stored in consecutive bytes in the 
-     * GP registers.  For each register, a 1 in bit 31 
+
+    /* Cache codes are stored in consecutive bytes in the
+     * GP registers.  For each register, a 1 in bit 31
      * indicates that the codes should be ignored... zero
      * all four bytes when that happens
      */
-    for (i=0; i<4; i++) {
+    for (i = 0; i < 4; i++) {
         if (cache_codes[i] & 0x80000000)
             cache_codes[i] = 0;
     }
-    
+
     /* Table 3-17, pg 3-171 of IA-32 instruction set reference lists
      * all codes.  Omitting L3 cache characteristics for now...
      */
-    for (i=0; i<16; i++) {
-        switch (((uchar*)cache_codes)[i]) {
-            case 0x06: L1_icache_size = CACHE_SIZE_8_KB; break;
-            case 0x08: L1_icache_size = CACHE_SIZE_16_KB; break;
-            case 0x0a: L1_dcache_size = CACHE_SIZE_8_KB; break;
-            case 0x0c: L1_dcache_size = CACHE_SIZE_16_KB; break;
-            case 0x2c: L1_dcache_size = CACHE_SIZE_32_KB; break;
-            case 0x30: L1_icache_size = CACHE_SIZE_32_KB; break;
-            case 0x41: L2_cache_size = CACHE_SIZE_128_KB; break;
-            case 0x42: L2_cache_size = CACHE_SIZE_256_KB; break;
-            case 0x43: L2_cache_size = CACHE_SIZE_512_KB; break;
-            case 0x44: L2_cache_size = CACHE_SIZE_1_MB; break;
-            case 0x45: L2_cache_size = CACHE_SIZE_2_MB; break;
-            case 0x60: L1_dcache_size = CACHE_SIZE_16_KB; break;
-            case 0x66: L1_dcache_size = CACHE_SIZE_8_KB; break;
-            case 0x67: L1_dcache_size = CACHE_SIZE_16_KB; break;
-            case 0x68: L1_dcache_size = CACHE_SIZE_32_KB; break;
-            case 0x78: L2_cache_size = CACHE_SIZE_1_MB; break;
-            case 0x79: L2_cache_size = CACHE_SIZE_128_KB; break;
-            case 0x7a: L2_cache_size = CACHE_SIZE_256_KB; break;
-            case 0x7b: L2_cache_size = CACHE_SIZE_512_KB; break;
-            case 0x7c: L2_cache_size = CACHE_SIZE_1_MB; break;
-            case 0x7d: L2_cache_size = CACHE_SIZE_2_MB; break;
-            case 0x7f: L2_cache_size = CACHE_SIZE_512_KB; break;
-            case 0x82: L2_cache_size = CACHE_SIZE_256_KB; break;
-            case 0x83: L2_cache_size = CACHE_SIZE_512_KB; break;
-            case 0x84: L2_cache_size = CACHE_SIZE_1_MB; break;
-            case 0x85: L2_cache_size = CACHE_SIZE_2_MB; break;
-            case 0x86: L2_cache_size = CACHE_SIZE_512_KB; break;
-            case 0x87: L2_cache_size = CACHE_SIZE_1_MB; break;
-            default: break;
+    for (i = 0; i < 16; i++) {
+        switch (((uchar *)cache_codes)[i]) {
+        case 0x06: L1_icache_size = CACHE_SIZE_8_KB; break;
+        case 0x08: L1_icache_size = CACHE_SIZE_16_KB; break;
+        case 0x0a: L1_dcache_size = CACHE_SIZE_8_KB; break;
+        case 0x0c: L1_dcache_size = CACHE_SIZE_16_KB; break;
+        case 0x2c: L1_dcache_size = CACHE_SIZE_32_KB; break;
+        case 0x30: L1_icache_size = CACHE_SIZE_32_KB; break;
+        case 0x41: L2_cache_size = CACHE_SIZE_128_KB; break;
+        case 0x42: L2_cache_size = CACHE_SIZE_256_KB; break;
+        case 0x43: L2_cache_size = CACHE_SIZE_512_KB; break;
+        case 0x44: L2_cache_size = CACHE_SIZE_1_MB; break;
+        case 0x45: L2_cache_size = CACHE_SIZE_2_MB; break;
+        case 0x60: L1_dcache_size = CACHE_SIZE_16_KB; break;
+        case 0x66: L1_dcache_size = CACHE_SIZE_8_KB; break;
+        case 0x67: L1_dcache_size = CACHE_SIZE_16_KB; break;
+        case 0x68: L1_dcache_size = CACHE_SIZE_32_KB; break;
+        case 0x78: L2_cache_size = CACHE_SIZE_1_MB; break;
+        case 0x79: L2_cache_size = CACHE_SIZE_128_KB; break;
+        case 0x7a: L2_cache_size = CACHE_SIZE_256_KB; break;
+        case 0x7b: L2_cache_size = CACHE_SIZE_512_KB; break;
+        case 0x7c: L2_cache_size = CACHE_SIZE_1_MB; break;
+        case 0x7d: L2_cache_size = CACHE_SIZE_2_MB; break;
+        case 0x7f: L2_cache_size = CACHE_SIZE_512_KB; break;
+        case 0x82: L2_cache_size = CACHE_SIZE_256_KB; break;
+        case 0x83: L2_cache_size = CACHE_SIZE_512_KB; break;
+        case 0x84: L2_cache_size = CACHE_SIZE_1_MB; break;
+        case 0x85: L2_cache_size = CACHE_SIZE_2_MB; break;
+        case 0x86: L2_cache_size = CACHE_SIZE_512_KB; break;
+        case 0x87: L2_cache_size = CACHE_SIZE_1_MB; break;
+        default: break;
         }
     }
 }
@@ -232,7 +232,7 @@ get_processor_specific_info(void)
     /* FIXME: Perhaps we should abort when the cpuid instruction
      * doesn't exist since the cache_line_size may be incorrect.
      * (see case 463 for discussion)
-    */
+     */
     if (!cpuid_supported()) {
         ASSERT_CURIOSITY(false && "cpuid instruction unsupported");
         SYSLOG_INTERNAL_WARNING("cpuid instruction unsupported -- cache_line_size "
@@ -263,7 +263,7 @@ get_processor_specific_info(void)
     } else {
         vendor = VENDOR_UNKNOWN;
         SYSLOG_INTERNAL_ERROR("Running on unknown processor type");
-        LOG(GLOBAL, LOG_TOP, 1, "cpuid returned "PFX" "PFX" "PFX" "PFX"\n",
+        LOG(GLOBAL, LOG_TOP, 1, "cpuid returned " PFX " " PFX " " PFX " " PFX "\n",
             res_eax, res_ebx, res_ecx, res_edx);
     }
 
@@ -273,7 +273,7 @@ get_processor_specific_info(void)
 #else
     __cpuid(cpuid_res_local, 0x80000000);
 #endif
-    max_ext_val = cpuid_res_local[0]/*eax*/;
+    max_ext_val = cpuid_res_local[0] /*eax*/;
 
     /* Extended feature flags */
     if (max_ext_val >= 0x80000001) {
@@ -302,12 +302,12 @@ get_processor_specific_info(void)
      *   extended family, extended model, type, family, model, stepping id
      *   20:27,           16:19,          12:13, 8:11,  4:7,   0:3
      */
-    type   = (res_eax >> 12) & 0x3;
-    family = (res_eax >>  8) & 0xf;
-    model  = (res_eax >>  4) & 0xf;
+    type = (res_eax >> 12) & 0x3;
+    family = (res_eax >> 8) & 0xf;
+    model = (res_eax >> 4) & 0xf;
     stepping = res_eax & 0xf;
 
-    /* Pages 3-164 and 3-165 of the IA-32 instruction set 
+    /* Pages 3-164 and 3-165 of the IA-32 instruction set
      * reference instruct us to adjust the family and model
      * numbers as follows.
      */
@@ -360,9 +360,9 @@ get_processor_specific_info(void)
     /* Processor brand string */
     if (max_ext_val >= 0x80000004) {
 #ifdef LINUX
-        our_cpuid((int*)&brand_string[0], 0x80000002);
-        our_cpuid((int*)&brand_string[4], 0x80000003);
-        our_cpuid((int*)&brand_string[8], 0x80000004);
+        our_cpuid((int *)&brand_string[0], 0x80000002);
+        our_cpuid((int *)&brand_string[4], 0x80000003);
+        our_cpuid((int *)&brand_string[8], 0x80000004);
 #else
         __cpuid(&brand_string[0], 0x80000002);
         __cpuid(&brand_string[4], 0x80000003);
@@ -386,24 +386,24 @@ proc_init(void)
         proc_get_cache_size_str(proc_get_L1_dcache_size()),
         proc_get_cache_size_str(proc_get_L2_cache_size()));
     LOG(GLOBAL, LOG_TOP, 1, "Processor brand string = %s\n", brand_string);
-    LOG(GLOBAL, LOG_TOP, 1, "Type=0x%x, Family=0x%x, Model=0x%x, Stepping=0x%x\n",
-        type, family, model, stepping);
+    LOG(GLOBAL, LOG_TOP, 1, "Type=0x%x, Family=0x%x, Model=0x%x, Stepping=0x%x\n", type,
+        family, model, stepping);
 
 #ifdef X64
     CLIENT_ASSERT(proc_has_feature(FEATURE_LAHF),
                   "Unsupported processor type - processor must support LAHF/SAHF in "
                   "64bit mode.");
     if (!proc_has_feature(FEATURE_LAHF)) {
-        FATAL_USAGE_ERROR(UNSUPPORTED_PROCESSOR_LAHF, 2,
-                          get_application_name(), get_application_pid());
+        FATAL_USAGE_ERROR(UNSUPPORTED_PROCESSOR_LAHF, 2, get_application_name(),
+                          get_application_pid());
     }
 #endif
 
 #ifdef DEBUG
-    /* FIXME: This is a small subset of processor features.  If we 
+    /* FIXME: This is a small subset of processor features.  If we
      * care enough to add more, it would probably be best to loop
      * through a const array of feature names.
-    */
+     */
     if (stats->loglevel > 0 && (stats->logmask & LOG_TOP) != 0) {
         if (proc_has_feature(FEATURE_XD_Bit))
             LOG(GLOBAL, LOG_TOP, 1, "\tProcessor has XD Bit\n");
@@ -421,7 +421,7 @@ proc_init(void)
 #endif
     /* PR 264138: for 32-bit CONTEXT we assume fxsave layout */
     CLIENT_ASSERT((proc_has_feature(FEATURE_FXSR) && proc_has_feature(FEATURE_SSE)) ||
-                  (!proc_has_feature(FEATURE_FXSR) && !proc_has_feature(FEATURE_SSE)),
+                      (!proc_has_feature(FEATURE_FXSR) && !proc_has_feature(FEATURE_SSE)),
                   "Unsupported processor type: SSE and FXSR must match");
 }
 
@@ -437,18 +437,21 @@ proc_get_family(void)
     return family;
 }
 
-uint proc_get_type(void)
+uint
+proc_get_type(void)
 {
     return type;
 }
 
 /* FIXME: Add MODEL_ constants to proc.h?? */
-uint proc_get_model(void)
+uint
+proc_get_model(void)
 {
     return model;
 }
 
-uint proc_get_stepping(void)
+uint
+proc_get_stepping(void)
 {
     return stepping;
 }
@@ -507,18 +510,8 @@ proc_get_L2_cache_size(void)
 const char *
 proc_get_cache_size_str(cache_size_t size)
 {
-    static const char *strings[] = {
-        "8 KB",
-        "16 KB",
-        "32 KB",
-        "64 KB",
-        "128 KB",
-        "256 KB",
-        "512 KB",
-        "1 MB",
-        "2 MB",
-        "unknown"
-    };
+    static const char *strings[] = { "8 KB",   "16 KB",  "32 KB", "64 KB", "128 KB",
+                                     "256 KB", "512 KB", "1 MB",  "2 MB",  "unknown" };
     CLIENT_ASSERT(size <= CACHE_SIZE_UNKNOWN, "proc_get_cache_size_str: invalid size");
     return strings[size];
 }
@@ -542,7 +535,7 @@ ptr_uint_t
 proc_bump_to_end_of_cache_line(ptr_uint_t sz)
 {
     if ((sz & mask) == 0x0)
-        return sz;      /* sz already a multiple of the line size */
+        return sz; /* sz already a multiple of the line size */
 
     return ((sz + cache_line_size) & ~mask);
 }
@@ -551,7 +544,7 @@ proc_bump_to_end_of_cache_line(ptr_uint_t sz)
 void *
 proc_get_containing_page(void *addr)
 {
-    return (void *) (((ptr_uint_t)addr) & ~(PAGE_SIZE-1));
+    return (void *)(((ptr_uint_t)addr) & ~(PAGE_SIZE - 1));
 }
 
 /* No synchronization routines necessary.  The Pentium hardware
@@ -570,9 +563,9 @@ size_t
 proc_fpstate_save_size(void)
 {
     CLIENT_ASSERT(opnd_size_in_bytes(OPSZ_512) == 512 &&
-                  opnd_size_in_bytes(OPSZ_108) == 108,
+                      opnd_size_in_bytes(OPSZ_108) == 108,
                   "internal sizing discrepancy");
-    return (proc_has_feature(FEATURE_FXSR) ?  512 : 108);
+    return (proc_has_feature(FEATURE_FXSR) ? 512 : 108);
 }
 
 DR_API
@@ -580,14 +573,14 @@ DR_API
  * which must be 512 bytes for processors with the FXSR feature, and
  * 108 bytes for those without (where this routine does not support
  * 16-bit operand sizing).
- * 
+ *
  * DynamoRIO does NOT save the application's floating-point, MMX, or SSE state
  * on context switches!  Thus if a client performs any floating-point operations
  * in its main routines called by DynamoRIO, the client must save and restore
  * the floating-point/MMX/SSE state.
  * If the client needs to do so inside the code cache the client should implement
  * that itself.
- * return number of bytes written 
+ * return number of bytes written
  */
 size_t
 proc_save_fpstate(byte *buf)
@@ -599,13 +592,13 @@ proc_save_fpstate(byte *buf)
 #ifdef WINDOWS
         dr_fxsave(buf);
 #else
-        asm volatile("fxsave %0 ; fnclex ; finit"  : "=m" ((*buf)));
+        asm volatile("fxsave %0 ; fnclex ; finit" : "=m"((*buf)));
 #endif
     } else {
 #ifdef WINDOWS
         dr_fnsave(buf);
 #else
-        asm volatile("fnsave %0 ; fwait" : "=m" ((*buf)));
+        asm volatile("fnsave %0 ; fwait" : "=m"((*buf)));
 #endif
     }
     return proc_fpstate_save_size();
@@ -617,7 +610,7 @@ DR_API
  * and 108 bytes for those without (where this routine does not
  * support 16-bit operand sizing).
  */
-void 
+void
 proc_restore_fpstate(byte *buf)
 {
     /* MUST be 16-byte aligned */
@@ -627,22 +620,21 @@ proc_restore_fpstate(byte *buf)
 #ifdef WINDOWS
         dr_fxrstor(buf);
 #else
-        asm volatile("fxrstor %0" : : "m" ((*buf)));
+        asm volatile("fxrstor %0" : : "m"((*buf)));
 #endif
     } else {
 #ifdef WINDOWS
         dr_frstor(buf);
 #else
-        asm volatile("frstor %0" : : "m" ((*buf)));
+        asm volatile("frstor %0" : : "m"((*buf)));
 #endif
     }
 }
 
 void
-dr_insert_save_fpstate(void *drcontext, instrlist_t *ilist, instr_t *where,
-                       opnd_t buf)
+dr_insert_save_fpstate(void *drcontext, instrlist_t *ilist, instr_t *where, opnd_t buf)
 {
-    dcontext_t *dcontext = (dcontext_t *) drcontext;
+    dcontext_t *dcontext = (dcontext_t *)drcontext;
     if (proc_has_feature(FEATURE_FXSR)) {
         /* we want "fxsave, fnclex, finit" */
         CLIENT_ASSERT(opnd_get_size(buf) == OPSZ_512,
@@ -662,10 +654,9 @@ dr_insert_save_fpstate(void *drcontext, instrlist_t *ilist, instr_t *where,
 }
 
 void
-dr_insert_restore_fpstate(void *drcontext, instrlist_t *ilist, instr_t *where,
-                          opnd_t buf)
+dr_insert_restore_fpstate(void *drcontext, instrlist_t *ilist, instr_t *where, opnd_t buf)
 {
-    dcontext_t *dcontext = (dcontext_t *) drcontext;
+    dcontext_t *dcontext = (dcontext_t *)drcontext;
     if (proc_has_feature(FEATURE_FXSR)) {
         CLIENT_ASSERT(opnd_get_size(buf) == OPSZ_512,
                       "dr_insert_save_fpstate: opnd size must be OPSZ_512");

@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -39,21 +39,20 @@
 
 #ifndef DRGUI_DEMO /* around whole file */
 
-#include "stdafx.h"
-#include "DynamoRIO.h"
-#include "CmdlineDlg.h"
+#    include "stdafx.h"
+#    include "DynamoRIO.h"
+#    include "CmdlineDlg.h"
 
-#ifdef _DEBUG
-#define new DEBUG_NEW
-#undef THIS_FILE
+#    ifdef _DEBUG
+#        define new DEBUG_NEW
+#        undef THIS_FILE
 static char THIS_FILE[] = __FILE__;
-#endif
+#    endif
 
 /////////////////////////////////////////////////////////////////////////////
 // CCmdlineDlg dialog
 
-
-CCmdlineDlg::CCmdlineDlg(CWnd* pParent /*=NULL*/)
+CCmdlineDlg::CCmdlineDlg(CWnd *pParent /*=NULL*/)
     : CDialog(CCmdlineDlg::IDD, pParent)
 {
     //{{AFX_DATA_INIT(CCmdlineDlg)
@@ -62,7 +61,7 @@ CCmdlineDlg::CCmdlineDlg(CWnd* pParent /*=NULL*/)
     //}}AFX_DATA_INIT
 }
 
-CCmdlineDlg::CCmdlineDlg(CString wdir, CWnd* pParent /*=NULL*/)
+CCmdlineDlg::CCmdlineDlg(CString wdir, CWnd *pParent /*=NULL*/)
     : CDialog(CCmdlineDlg::IDD, pParent)
 {
     //{{AFX_DATA_INIT(CCmdlineDlg)
@@ -71,8 +70,8 @@ CCmdlineDlg::CCmdlineDlg(CString wdir, CWnd* pParent /*=NULL*/)
     m_WorkingDir = wdir;
 }
 
-
-void CCmdlineDlg::DoDataExchange(CDataExchange* pDX)
+void
+CCmdlineDlg::DoDataExchange(CDataExchange *pDX)
 {
     CDialog::DoDataExchange(pDX);
     //{{AFX_DATA_MAP(CCmdlineDlg)
@@ -81,17 +80,17 @@ void CCmdlineDlg::DoDataExchange(CDataExchange* pDX)
     //}}AFX_DATA_MAP
 }
 
-
 BEGIN_MESSAGE_MAP(CCmdlineDlg, CDialog)
-    //{{AFX_MSG_MAP(CCmdlineDlg)
-    ON_BN_CLICKED(IDC_WORKING_DIR_BROWSE, OnWorkingDirBrowse)
-    //}}AFX_MSG_MAP
-    END_MESSAGE_MAP()
+//{{AFX_MSG_MAP(CCmdlineDlg)
+ON_BN_CLICKED(IDC_WORKING_DIR_BROWSE, OnWorkingDirBrowse)
+//}}AFX_MSG_MAP
+END_MESSAGE_MAP()
 
-    /////////////////////////////////////////////////////////////////////////////
-    // CCmdlineDlg message handlers
+/////////////////////////////////////////////////////////////////////////////
+// CCmdlineDlg message handlers
 
-    BOOL CCmdlineDlg::OnInitDialog()
+BOOL
+CCmdlineDlg::OnInitDialog()
 {
     CDialog::OnInitDialog();
     UpdateData(FALSE); // write to controls
@@ -100,7 +99,8 @@ BEGIN_MESSAGE_MAP(CCmdlineDlg, CDialog)
 
 static TCHAR szFilter[] = _T("Directories (*)|*|All Files (*.*)|*.*||");
 
-void CCmdlineDlg::OnWorkingDirBrowse() 
+void
+CCmdlineDlg::OnWorkingDirBrowse()
 {
     TCHAR folder[MAX_PATH];
     BROWSEINFO bi;
@@ -120,17 +120,20 @@ void CCmdlineDlg::OnWorkingDirBrowse()
     UpdateData(FALSE);
 }
 
-CString CCmdlineDlg::GetWorkingDir()
+CString
+CCmdlineDlg::GetWorkingDir()
 {
     return m_WorkingDir;
 }
 
-CString CCmdlineDlg::GetArguments()
+CString
+CCmdlineDlg::GetArguments()
 {
     return m_CmdLine;
 }
 
-void CCmdlineDlg::OnOK() 
+void
+CCmdlineDlg::OnOK()
 {
     CDialog::OnOK();
 }

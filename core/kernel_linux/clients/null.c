@@ -3,9 +3,9 @@
 MODULE_LICENSE("Dual BSD/GPL");
 
 static dr_emit_flags_t
-bb_event(void *drcontext, void *tag, instrlist_t *bb, bool for_trace,
-         bool translating) {
-    return DR_EMIT_DEFAULT;    
+bb_event(void *drcontext, void *tag, instrlist_t *bb, bool for_trace, bool translating)
+{
+    return DR_EMIT_DEFAULT;
 }
 
 void

@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -36,14 +36,14 @@
 #include "../fragment.h" /* for rct_module_table_t, is inlined so need struct definition
                        * FIXME - remove this header dependency */
 
-#define OS_IMAGE_READ    IMAGE_SCN_MEM_READ
-#define OS_IMAGE_WRITE   IMAGE_SCN_MEM_WRITE
+#define OS_IMAGE_READ IMAGE_SCN_MEM_READ
+#define OS_IMAGE_WRITE IMAGE_SCN_MEM_WRITE
 #define OS_IMAGE_EXECUTE IMAGE_SCN_MEM_EXECUTE
 
 typedef struct _os_module_data_t {
-    app_pc preferred_base; /* module preferred base from the PE headers */
-    uint checksum; /* module checksum from the PE headers */
-    uint timestamp; /* module timestamp from the PE headers */
+    app_pc preferred_base;       /* module preferred base from the PE headers */
+    uint checksum;               /* module checksum from the PE headers */
+    uint timestamp;              /* module timestamp from the PE headers */
     size_t module_internal_size; /* module internal size (from PE headers SizeOfImage) */
 
     size_t code_size; /* sum of the size of all code sections */
@@ -55,12 +55,12 @@ typedef struct _os_module_data_t {
     char *product_name;
 
     /* ALSR sharing - we'll to keep a reference to the original
-     * application section to maintain no-clobber transparency 
+     * application section to maintain no-clobber transparency
      * disallowing modifications to the original file.
      *
      * Note: on detach we do NOT release any such handles: detached
      * processes will have to be killed for us to release the file
-     * handles, non-transparent only with respect to DLLs that get 
+     * handles, non-transparent only with respect to DLLs that get
      * unloaded after detach while native.
      */
     HANDLE noclobber_section_handle;

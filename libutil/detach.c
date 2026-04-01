@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -33,14 +33,14 @@
 /* note - include order matters */
 #include <tchar.h>
 #include "share.h"
-#include "win32/ntdll.h"  /* just for typedefs and defines */
+#include "win32/ntdll.h" /* just for typedefs and defines */
 #include "processes.h"
 #include "win32/drmarker.h"
 #include <AccCtrl.h>
 #include <Aclapi.h>
 #include <stdio.h>
 
-/* detach.c(74) : warning C4055: 'type cast' : from data pointer 
+/* detach.c(74) : warning C4055: 'type cast' : from data pointer
  *  'void *' to function pointer 'unsigned long (__stdcall *)(void *)'
  * (cf. drmarker.h)
  */
@@ -49,57 +49,55 @@
 #define PAGE_SIZE 0x1000
 #define MIN_ALLOCATION_SIZE 0x10000
 
-typedef NTSTATUS (NTAPI *NtCreateThreadType) (OUT PHANDLE ThreadHandle,
-                                              IN ACCESS_MASK DesiredAccess,
-                                              IN POBJECT_ATTRIBUTES ObjectAttributes,
-                                              IN HANDLE ProcessHandle,
-                                              OUT PCLIENT_ID ClientId,
-                                              IN PCONTEXT ThreadContext,
-                                              IN PUSER_STACK UserStack,
-                                              IN BOOLEAN CreateSuspended);
+typedef NTSTATUS(NTAPI *NtCreateThreadType)(
+    OUT PHANDLE ThreadHandle, IN ACCESS_MASK DesiredAccess,
+    IN POBJECT_ATTRIBUTES ObjectAttributes, IN HANDLE ProcessHandle,
+    OUT PCLIENT_ID ClientId, IN PCONTEXT ThreadContext, IN PUSER_STACK UserStack,
+    IN BOOLEAN CreateSuspended);
 NtCreateThreadType NtCreateThread = NULL;
 
 #ifdef X64
 typedef unsigned __int64 ptr_uint_t;
-# define CXT_XIP Rip
-# define CXT_XAX Rax
-# define CXT_XCX Rcx
-# define CXT_XDX Rdx
-# define CXT_XBX Rbx
-# define CXT_XSP Rsp
-# define CXT_XBP Rbp
-# define CXT_XSI Rsi
-# define CXT_XDI Rdi
+#    define CXT_XIP Rip
+#    define CXT_XAX Rax
+#    define CXT_XCX Rcx
+#    define CXT_XDX Rdx
+#    define CXT_XBX Rbx
+#    define CXT_XSP Rsp
+#    define CXT_XBP Rbp
+#    define CXT_XSI Rsi
+#    define CXT_XDI Rdi
 /* It looks like both CONTEXT.Xmm0 and CONTEXT.FltSave.XmmRegisters[0] are filled in.
  * We use the latter so that we don't have to hardcode the index.
  */
-# define CXT_XMM(cxt, idx) ((dr_xmm_t*)&((cxt)->FltSave.XmmRegisters[idx]))
+#    define CXT_XMM(cxt, idx) ((dr_xmm_t *)&((cxt)->FltSave.XmmRegisters[idx]))
 /* they kept the 32-bit EFlags field; sure, the upper 32 bits of Rflags
  * are undefined right now, but doesn't seem very forward-thinking. */
-# define CXT_XFLAGS EFlags
+#    define CXT_XFLAGS EFlags
 #else
 typedef uint ptr_uint_t;
-# define CXT_XIP Eip
-# define CXT_XAX Eax
-# define CXT_XCX Ecx
-# define CXT_XDX Edx
-# define CXT_XBX Ebx
-# define CXT_XSP Esp
-# define CXT_XBP Ebp
-# define CXT_XSI Esi
-# define CXT_XDI Edi
-# define CXT_XFLAGS EFlags
+#    define CXT_XIP Eip
+#    define CXT_XAX Eax
+#    define CXT_XCX Ecx
+#    define CXT_XDX Edx
+#    define CXT_XBX Ebx
+#    define CXT_XSP Esp
+#    define CXT_XBP Ebp
+#    define CXT_XSI Esi
+#    define CXT_XDI Edi
+#    define CXT_XFLAGS EFlags
 /* This is not documented, but CONTEXT.ExtendedRegisters looks like fxsave layout.
  * Presumably there are no processors that have SSE but not FXSR
  * (we ASSERT on that in proc_init()).
  */
-# define FXSAVE_XMM0_OFFSET 160
-# define CXT_XMM(cxt, idx) \
-    ((dr_xmm_t*)&((cxt)->ExtendedRegisters[FXSAVE_XMM0_OFFSET + (idx)*16]))
+#    define FXSAVE_XMM0_OFFSET 160
+#    define CXT_XMM(cxt, idx) \
+        ((dr_xmm_t *)&((cxt)->ExtendedRegisters[FXSAVE_XMM0_OFFSET + (idx)*16]))
 #endif
 
 #ifndef X64
-DWORD WINAPI dummy_func(LPVOID dummy_arg)
+DWORD WINAPI
+dummy_func(LPVOID dummy_arg)
 {
     return (DWORD)dummy_arg;
 }
@@ -108,10 +106,10 @@ DWORD WINAPI dummy_func(LPVOID dummy_arg)
 /* Returns NULL on error. NOTE - on Vista there is no kernel32!BaseThreadStartThunk,
  * rather there is the moral equivalent ntdll!RtlUserThreadStart which is exported
  * (so doesn't require this convoluted lookup). */
-static void*
+static void *
 get_kernel_thread_start_thunk()
 {
-    static void* start_address = NULL;
+    static void *start_address = NULL;
     DWORD platform = 0;
 
     get_platform(&platform);
@@ -120,8 +118,7 @@ get_kernel_thread_start_thunk()
         return NULL;
 
     if (start_address == NULL) {
-        HANDLE hThread = CreateThread(NULL, 0, dummy_func, NULL,
-                                      CREATE_SUSPENDED, NULL);
+        HANDLE hThread = CreateThread(NULL, 0, dummy_func, NULL, CREATE_SUSPENDED, NULL);
         if (hThread != NULL) {
             CONTEXT cxt;
             cxt.ContextFlags = CONTEXT_FULL;
@@ -134,7 +131,7 @@ get_kernel_thread_start_thunk()
                  * ever add some synchronization mechanisms to share module
                  * might as well use here as well. */
                 start_address = (void *)cxt.Eip;
-#ifdef DEBUG
+#    ifdef DEBUG
                 {
                     TCHAR buf[MAX_PATH];
                     MEMORY_BASIC_INFORMATION mbi;
@@ -144,17 +141,17 @@ get_kernel_thread_start_thunk()
                     VirtualQuery(start_address, &mbi, sizeof(mbi));
                     /* a module handle is just the allocation base of the
                      * module */
-                    GetModuleFileName((HMODULE)mbi.AllocationBase,
-                                      buf, BUFFER_SIZE_ELEMENTS(buf));
+                    GetModuleFileName((HMODULE)mbi.AllocationBase, buf,
+                                      BUFFER_SIZE_ELEMENTS(buf));
                     NULL_TERMINATE_BUFFER(buf);
                     /* can't believe there is no stristr */
-                    while(buf[i] != _T('\0')) {
+                    while (buf[i] != _T('\0')) {
                         buf[i] = _totupper(buf[i]);
                         i++;
                     }
                     DO_ASSERT(_tcsstr(buf, _T("KERNEL32.DLL")) != NULL);
                 }
-#endif
+#    endif
             }
             /* don't terminate, otherwise won't be cleaned up on 2k */
             /* thread routine is empty so just resume */
@@ -184,17 +181,16 @@ get_kernel_thread_start_thunk()
  *    but this still works fine and that would complicate argument handling.
  */
 static HANDLE
-nt_create_thread(HANDLE hProcess, PTHREAD_START_ROUTINE start_addr,
-                 void *arg, const void *arg_buf, SIZE_T arg_buf_size,
-                 SIZE_T stack_reserve, SIZE_T stack_commit, bool suspended,
-                 ptr_uint_t *tid, bool target_api, bool target_64bit,
-                 void **remote_stack /* OUT */)
+nt_create_thread(HANDLE hProcess, PTHREAD_START_ROUTINE start_addr, void *arg,
+                 const void *arg_buf, SIZE_T arg_buf_size, SIZE_T stack_reserve,
+                 SIZE_T stack_commit, bool suspended, ptr_uint_t *tid, bool target_api,
+                 bool target_64bit, void **remote_stack /* OUT */)
 {
     HANDLE hThread = NULL;
-    USER_STACK stack = {0};
+    USER_STACK stack = { 0 };
     OBJECT_ATTRIBUTES oa;
     CLIENT_ID cid;
-    CONTEXT context = {0};
+    CONTEXT context = { 0 };
     SIZE_T num_commit_bytes, code;
     unsigned long old_prot;
     void *p;
@@ -213,9 +209,10 @@ nt_create_thread(HANDLE hProcess, PTHREAD_START_ROUTINE start_addr,
         /* FIXME - on Vista we could instead use NtCreateThreadEx which is what all
          * the api routines use and requires less setup. But it also uses structs that
          * we haven't fully reversed or found good documentation for. */
-        /* Don't need a lock, writing the pointer (4 [8 on 64-bit] byte write) is atomic. */
-        NtCreateThread = (NtCreateThreadType)
-            GetProcAddress(GetModuleHandle(L"ntdll.dll"), "NtCreateThread");
+        /* Don't need a lock, writing the pointer (4 [8 on 64-bit] byte write) is atomic.
+         */
+        NtCreateThread = (NtCreateThreadType)GetProcAddress(GetModuleHandle(L"ntdll.dll"),
+                                                            "NtCreateThread");
         if (NtCreateThread == NULL)
             goto error;
     }
@@ -259,19 +256,17 @@ nt_create_thread(HANDLE hProcess, PTHREAD_START_ROUTINE start_addr,
      * CreateThread as closely as possible.  If we do anything post system
      * call should be sure to always create the thread suspended.
      */
-    code = GetSecurityInfo(hProcess, SE_KERNEL_OBJECT,
-                           DACL_SECURITY_INFORMATION,
-                           NULL, NULL, NULL, NULL, &sd);
+    code = GetSecurityInfo(hProcess, SE_KERNEL_OBJECT, DACL_SECURITY_INFORMATION, NULL,
+                           NULL, NULL, NULL, &sd);
     DO_ASSERT(code == ERROR_SUCCESS);
- 
+
     InitializeObjectAttributes(&oa, NULL, OBJ_CASE_INSENSITIVE, NULL, sd);
-  
+
     stack.ExpandableStackBottom =
         VirtualAllocEx(hProcess, NULL,
                        /* we leave the top page MEM_FREE: we could reserve it instead
                         * and then adjust our get_stack_bounds() core assert */
-                       stack_reserve - PAGE_SIZE,
-                       MEM_RESERVE, PAGE_READWRITE);
+                       stack_reserve - PAGE_SIZE, MEM_RESERVE, PAGE_READWRITE);
     if (remote_stack != NULL)
         *remote_stack = stack.ExpandableStackBottom;
     if (stack.ExpandableStackBottom == NULL)
@@ -280,21 +275,19 @@ nt_create_thread(HANDLE hProcess, PTHREAD_START_ROUTINE start_addr,
     /* We provide non-committed boundary page on each side of the stack just to
      * be safe (note we will get a stack overflow exception if stack grows to
      * 3rd to last page of this region (xpsp2)). */
-    stack.ExpandableStackBottom =
-        ((byte *)stack.ExpandableStackBottom) + PAGE_SIZE;
-    stack.ExpandableStackBase = 
-        ((byte *)stack.ExpandableStackBottom) + stack_reserve - (2*PAGE_SIZE);
+    stack.ExpandableStackBottom = ((byte *)stack.ExpandableStackBottom) + PAGE_SIZE;
+    stack.ExpandableStackBase =
+        ((byte *)stack.ExpandableStackBottom) + stack_reserve - (2 * PAGE_SIZE);
     /* PR 252008: WOW64's initial APC uses the stack base, ignoring CONTEXT.Esp,
      * so we put an extra page in place for the nudge arg.  It should be
      * freed w/ no problems since the Bottom's region is freed.
      * An alternative is a separate allocation and setting NUDGE_FREE_ARG,
-     * but the caller is the one who knows the structure of the arg.            
+     * but the caller is the one who knows the structure of the arg.
      */
     if (wow64)
-        stack.ExpandableStackBase = ((byte*)stack.ExpandableStackBase) - PAGE_SIZE;
+        stack.ExpandableStackBase = ((byte *)stack.ExpandableStackBase) - PAGE_SIZE;
 
-    stack.ExpandableStackLimit = 
-        ((byte *)stack.ExpandableStackBase) - stack_commit;
+    stack.ExpandableStackLimit = ((byte *)stack.ExpandableStackBase) - stack_commit;
     num_commit_bytes = stack_commit + PAGE_SIZE;
     p = ((byte *)stack.ExpandableStackBase) - num_commit_bytes;
     if (wow64)
@@ -302,7 +295,7 @@ nt_create_thread(HANDLE hProcess, PTHREAD_START_ROUTINE start_addr,
     p = VirtualAllocEx(hProcess, p, num_commit_bytes, MEM_COMMIT, PAGE_READWRITE);
     if (p == NULL)
         goto error;
-    if (!VirtualProtectEx(hProcess, p, PAGE_SIZE, PAGE_READWRITE|PAGE_GUARD, &old_prot))
+    if (!VirtualProtectEx(hProcess, p, PAGE_SIZE, PAGE_READWRITE | PAGE_GUARD, &old_prot))
         goto error;
 
     get_platform(&platform);
@@ -331,8 +324,8 @@ nt_create_thread(HANDLE hProcess, PTHREAD_START_ROUTINE start_addr,
     if (arg_buf != NULL) {
         SIZE_T written;
         if (wow64) { /* PR 252008: see above */
-            thread_arg = (void *)
-                (((byte *)stack.ExpandableStackBase) + PAGE_SIZE - arg_buf_size);
+            thread_arg =
+                (void *)(((byte *)stack.ExpandableStackBase) + PAGE_SIZE - arg_buf_size);
         } else {
             context.CXT_XSP -= ALIGN_FORWARD(arg_buf_size, STACK_ALIGNMENT);
             thread_arg = (void *)context.CXT_XSP;
@@ -352,7 +345,7 @@ nt_create_thread(HANDLE hProcess, PTHREAD_START_ROUTINE start_addr,
     if (target_api) {
         if (platform == PLATFORM_VISTA) {
             context.CXT_XIP = (ptr_uint_t)GetProcAddress(GetModuleHandle(L"ntdll.dll"),
-                                               "RtlUserThreadStart");
+                                                         "RtlUserThreadStart");
         } else {
             context.CXT_XIP = (ptr_uint_t)get_kernel_thread_start_thunk();
         }
@@ -362,7 +355,7 @@ nt_create_thread(HANDLE hProcess, PTHREAD_START_ROUTINE start_addr,
         context.Ebx = (ptr_uint_t)thread_arg;
     } else
 #endif /* !X64 */
-       {
+    {
         void *buf[2];
         bool res;
         SIZE_T written;
@@ -372,12 +365,12 @@ nt_create_thread(HANDLE hProcess, PTHREAD_START_ROUTINE start_addr,
         /* set up arg on stack, give NULL return address */
         buf[1] = thread_arg;
         buf[0] = NULL;
-        res = WriteProcessMemory(hProcess, (void *)context.CXT_XSP, &buf,
-                                 sizeof(buf), &written);
+        res = WriteProcessMemory(hProcess, (void *)context.CXT_XSP, &buf, sizeof(buf),
+                                 &written);
         if (!res || written != sizeof(buf)) {
             goto error;
         }
-    }                           
+    }
     if (context.CXT_XIP == 0) {
         DO_ASSERT(false);
         goto error;
@@ -386,16 +379,15 @@ nt_create_thread(HANDLE hProcess, PTHREAD_START_ROUTINE start_addr,
     /* NOTE - CreateThread passes NULL for object attributes so despite Nebbet
      * must be optional (checked NTsp6a, XPsp2). We don't pass NULL so we can
      * specify the security descriptor. */
-    if (!NT_SUCCESS(NtCreateThread(&hThread, THREAD_ALL_ACCESS, &oa, 
-                                   hProcess, &cid, &context, &stack, 
-                                   (byte)(suspended ? TRUE : FALSE)))) {
+    if (!NT_SUCCESS(NtCreateThread(&hThread, THREAD_ALL_ACCESS, &oa, hProcess, &cid,
+                                   &context, &stack, (byte)(suspended ? TRUE : FALSE)))) {
         goto error;
     }
 
     if (tid != NULL)
-       *tid = (ptr_uint_t)cid.UniqueThread;
+        *tid = (ptr_uint_t)cid.UniqueThread;
 
- exit:
+exit:
     if (sd != NULL) {
         /* Free the security descriptor. */
         LocalFree(sd);
@@ -403,7 +395,7 @@ nt_create_thread(HANDLE hProcess, PTHREAD_START_ROUTINE start_addr,
 
     return hThread;
 
- error:
+error:
     if (stack.ExpandableStackBottom != NULL) {
         /* Free remote stack on error. */
         VirtualFreeEx(hProcess, stack.ExpandableStackBottom, 0, MEM_RELEASE);
@@ -418,7 +410,7 @@ nt_create_thread(HANDLE hProcess, PTHREAD_START_ROUTINE start_addr,
 /* flag defines for create_remote_thread */
 /* Use ntdll!NtCreateThread instead of kernel32!CreateThread to allow creating
  * threads in a different session (case 872). */
-#define CREATE_REMOTE_THREAD_USE_NT               0x01
+#define CREATE_REMOTE_THREAD_USE_NT 0x01
 
 /* If ...USE_NT then target the natively created thread to the same entry point as
  * the api routines would (kernel32!BaseThreadStartThunk for pre-Vista and
@@ -426,19 +418,19 @@ nt_create_thread(HANDLE hProcess, PTHREAD_START_ROUTINE start_addr,
  * returning from its thread function.  NOTE - be very careful about who frees the
  * new thread's stack. On NT and 2k returning from the thread function will free the
  * stack while on >= XP it won't. */
-#define CREATE_REMOTE_THREAD_TARGET_API           0x02
+#define CREATE_REMOTE_THREAD_TARGET_API 0x02
 
 /* 64kb, same as allocation granularity so is as small as we can get */
 #define STACK_RESERVE 0x10000
-/* 12kb, matches current core stack size, note can expand to 
+/* 12kb, matches current core stack size, note can expand to
  * STACK_RESERVE - (5 * PAGE_SIZE), i.e. 44kb */
 #define STACK_COMMIT 0x3000
 
 /* returns NULL on failure */
 static HANDLE
-create_remote_thread(HANDLE hProc, PTHREAD_START_ROUTINE pfnThreadRtn,
-                     void *arg, const void *arg_buf, SIZE_T arg_buf_size,
-                     uint flags, void **remote_stack /* OUT */)
+create_remote_thread(HANDLE hProc, PTHREAD_START_ROUTINE pfnThreadRtn, void *arg,
+                     const void *arg_buf, SIZE_T arg_buf_size, uint flags,
+                     void **remote_stack /* OUT */)
 {
     HANDLE hThread = NULL;
     if (remote_stack != NULL)
@@ -449,12 +441,12 @@ create_remote_thread(HANDLE hProc, PTHREAD_START_ROUTINE pfnThreadRtn,
         hThread = nt_create_thread(hProc, pfnThreadRtn, arg, arg_buf, arg_buf_size,
                                    STACK_RESERVE, STACK_COMMIT, false, NULL,
                                    TEST(CREATE_REMOTE_THREAD_TARGET_API, flags),
-                                   false /* !64-bit */,
-                                   remote_stack);
+                                   false /* !64-bit */, remote_stack);
     } else {
         DO_ASSERT(false && "not tested (not currently used)");
         DO_ASSERT(false && "if used for nudge need update flags for stack/arg freeing");
-        DO_ASSERT(arg_buf == NULL && "no support for buffer arguments to "
+        DO_ASSERT(arg_buf == NULL &&
+                  "no support for buffer arguments to "
                   "create_remote_thread when not using NT");
 
         hThread = CreateRemoteThread(hProc, NULL, 0, pfnThreadRtn, arg, 0, NULL);
@@ -464,11 +456,12 @@ create_remote_thread(HANDLE hProc, PTHREAD_START_ROUTINE pfnThreadRtn,
 
 /* define this here so that clients don't need to know about dr_marker_t */
 DWORD
-get_dr_marker(process_id_t ProcessID, dr_marker_t *marker, 
+get_dr_marker(process_id_t ProcessID, dr_marker_t *marker,
               hotp_policy_status_table_t **hotp_status, int *found);
 
 DWORD
-nudge_dr(process_id_t pid, BOOL allow_upgraded_perms, DWORD timeout_ms, nudge_arg_t *nudge_arg)
+nudge_dr(process_id_t pid, BOOL allow_upgraded_perms, DWORD timeout_ms,
+         nudge_arg_t *nudge_arg)
 {
     DWORD res = ERROR_SUCCESS;
     int found;
@@ -493,25 +486,17 @@ nudge_dr(process_id_t pid, BOOL allow_upgraded_perms, DWORD timeout_ms, nudge_ar
      * hit if process turns out not to be running under DR, but we avoid the
      * race of the process exiting and it's id getting recycled, the os won't
      * recycle the id till we free our handle */
-    hProcess = OpenProcess(PROCESS_QUERY_INFORMATION + 
-                           PROCESS_VM_WRITE + 
-                           PROCESS_VM_READ + 
-                           PROCESS_VM_OPERATION + 
-                           PROCESS_CREATE_THREAD + 
-                           READ_CONTROL +
-                           SYNCHRONIZE, 
+    hProcess = OpenProcess(PROCESS_QUERY_INFORMATION + PROCESS_VM_WRITE +
+                               PROCESS_VM_READ + PROCESS_VM_OPERATION +
+                               PROCESS_CREATE_THREAD + READ_CONTROL + SYNCHRONIZE,
                            FALSE, (DWORD)pid);
     res = GetLastError();
     if (hProcess == NULL) {
         if (allow_upgraded_perms) {
             acquire_privileges();
-            hProcess = OpenProcess(PROCESS_QUERY_INFORMATION + 
-                                   PROCESS_VM_WRITE + 
-                                   PROCESS_VM_READ + 
-                                   PROCESS_VM_OPERATION + 
-                                   PROCESS_CREATE_THREAD +
-                                   READ_CONTROL +
-                                   SYNCHRONIZE, 
+            hProcess = OpenProcess(PROCESS_QUERY_INFORMATION + PROCESS_VM_WRITE +
+                                       PROCESS_VM_READ + PROCESS_VM_OPERATION +
+                                       PROCESS_CREATE_THREAD + READ_CONTROL + SYNCHRONIZE,
                                    FALSE, (DWORD)pid);
             res = GetLastError();
             release_privileges();
@@ -534,19 +519,17 @@ nudge_dr(process_id_t pid, BOOL allow_upgraded_perms, DWORD timeout_ms, nudge_ar
         goto exit;
     }
 
-    pfnThreadRtn = (PTHREAD_START_ROUTINE) marker.dr_generic_nudge_target;
+    pfnThreadRtn = (PTHREAD_START_ROUTINE)marker.dr_generic_nudge_target;
 
-    if (pfnThreadRtn != NULL) {    /* Fix for case 5464. */
+    if (pfnThreadRtn != NULL) { /* Fix for case 5464. */
         /* We use the native api to create the thread (CREATE_REMOTE_THREAD_USE_NT)
          * to avoid session id issues.  FIXME - we don't really need to TARGET_API
          * anymore since the nudge routine never returns now (which could simplify
          * the core nudge thread detection a little).  Note - if we stop using USE_NT
          * we need to update the stack freeing code below and change the nudge flags. */
-        hThread = create_remote_thread(hProcess, pfnThreadRtn,
-                                       NULL, (void *)nudge_arg, sizeof(nudge_arg_t),
-                                       CREATE_REMOTE_THREAD_USE_NT |
-                                       CREATE_REMOTE_THREAD_TARGET_API,
-                                       &remote_stack);
+        hThread = create_remote_thread(
+            hProcess, pfnThreadRtn, NULL, (void *)nudge_arg, sizeof(nudge_arg_t),
+            CREATE_REMOTE_THREAD_USE_NT | CREATE_REMOTE_THREAD_TARGET_API, &remote_stack);
         if (hThread == NULL) {
             res = GetLastError();
             goto exit;
@@ -576,13 +559,13 @@ nudge_dr(process_id_t pid, BOOL allow_upgraded_perms, DWORD timeout_ms, nudge_ar
          *   kernel doesn't free the stack.
          * As such we are left with two options: free the app stack here (nudgee free) or
          * have the nudge thread creator free the app stack (nudger free). We use
-         * nudge flags to specify which we are using. */ 
+         * nudge flags to specify which we are using. */
         if (TEST(NUDGE_NUDGER_FREE_STACK, nudge_arg->flags) && remote_stack != NULL) {
             VirtualFreeEx(hProcess, remote_stack, 0, MEM_RELEASE);
         }
     }
 
- exit:
+exit:
     if (hThread != NULL)
         CloseHandle(hThread);
     if (hProcess != NULL)
@@ -590,23 +573,23 @@ nudge_dr(process_id_t pid, BOOL allow_upgraded_perms, DWORD timeout_ms, nudge_ar
     return res;
 }
 
-/* Detaches from the specified process by creating a thread in the target 
- * process that directly targets the detach routine.  
+/* Detaches from the specified process by creating a thread in the target
+ * process that directly targets the detach routine.
  */
 DWORD
 detach(process_id_t pid, BOOL allow_upgraded_perms, DWORD timeout_ms)
 {
-    return generic_nudge(pid, allow_upgraded_perms, NUDGE_GENERIC(detach), 0,
-                         NULL, timeout_ms);
+    return generic_nudge(pid, allow_upgraded_perms, NUDGE_GENERIC(detach), 0, NULL,
+                         timeout_ms);
 }
 
 /* generic nudge DR, action mask determines which actions will be executed */
 DWORD
-generic_nudge(process_id_t pid, BOOL allow_upgraded_perms, DWORD action_mask, 
+generic_nudge(process_id_t pid, BOOL allow_upgraded_perms, DWORD action_mask,
               client_id_t client_id /* optional */, uint64 client_arg /* optional */,
               DWORD timeout_ms)
 {
-    nudge_arg_t arg = {0};
+    nudge_arg_t arg = { 0 };
     arg.version = NUDGE_ARG_CURRENT_VERSION;
     arg.nudge_action_mask = action_mask;
     /* default flags */
@@ -616,20 +599,20 @@ generic_nudge(process_id_t pid, BOOL allow_upgraded_perms, DWORD action_mask,
 }
 
 /* Loads the specified dll in process pid and waits on the loading thread, does
- * not free the dll once the loading thread exits. Usual usage is for the 
- * loaded dll to do something in its DllMain. If you do not want the dll to 
- * stay loaded its DllMain should return false. To unload a dll from a process 
- * later, inject another dll whose dll main unloads that dll and then returns 
+ * not free the dll once the loading thread exits. Usual usage is for the
+ * loaded dll to do something in its DllMain. If you do not want the dll to
+ * stay loaded its DllMain should return false. To unload a dll from a process
+ * later, inject another dll whose dll main unloads that dll and then returns
  * false. If loading_thread != NULL returns a handle to the loading thread (dll
- * could call FreeLibraryAndExitThread on itself in its dll main to return a 
- * value out via the exit code). inject_dll provides no way to pass arguments 
+ * could call FreeLibraryAndExitThread on itself in its dll main to return a
+ * value out via the exit code). inject_dll provides no way to pass arguments
  * in to the dll. */
 DWORD
-inject_dll(process_id_t pid, const WCHAR *dll_name, BOOL allow_upgraded_perms, 
+inject_dll(process_id_t pid, const WCHAR *dll_name, BOOL allow_upgraded_perms,
            DWORD timeout_ms, PHANDLE loading_thread)
 {
     DWORD res;
-    PTHREAD_START_ROUTINE pfnThreadRtn= NULL;
+    PTHREAD_START_ROUTINE pfnThreadRtn = NULL;
     HANDLE hThread = NULL, hProcess = NULL, file_tmp = NULL;
     void *remote_stack = NULL;
     DWORD platform = 0;
@@ -639,41 +622,34 @@ inject_dll(process_id_t pid, const WCHAR *dll_name, BOOL allow_upgraded_perms,
     if (loading_thread != NULL)
         *loading_thread = NULL;
 
-    file_tmp = CreateFile(dll_name, 0, 0, NULL, OPEN_EXISTING, 
-                          FILE_ATTRIBUTE_NORMAL, NULL);
+    file_tmp =
+        CreateFile(dll_name, 0, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (file_tmp == INVALID_HANDLE_VALUE)
         return ERROR_FILE_NOT_FOUND;
     CloseHandle(file_tmp);
-        
-    hProcess = OpenProcess(PROCESS_QUERY_INFORMATION + 
-                           PROCESS_VM_WRITE + 
-                           PROCESS_VM_READ + 
-                           PROCESS_VM_OPERATION + 
-                           PROCESS_CREATE_THREAD +
-                           READ_CONTROL +
-                           SYNCHRONIZE, 
+
+    hProcess = OpenProcess(PROCESS_QUERY_INFORMATION + PROCESS_VM_WRITE +
+                               PROCESS_VM_READ + PROCESS_VM_OPERATION +
+                               PROCESS_CREATE_THREAD + READ_CONTROL + SYNCHRONIZE,
                            FALSE, (DWORD)pid);
     if (hProcess == NULL) {
         if (allow_upgraded_perms) {
             acquire_privileges();
-            hProcess = OpenProcess(PROCESS_QUERY_INFORMATION + 
-                                   PROCESS_VM_WRITE + 
-                                   PROCESS_VM_READ + 
-                                   PROCESS_VM_OPERATION + 
-                                   PROCESS_CREATE_THREAD +
-                                   READ_CONTROL +
-                                   SYNCHRONIZE, 
+            hProcess = OpenProcess(PROCESS_QUERY_INFORMATION + PROCESS_VM_WRITE +
+                                       PROCESS_VM_READ + PROCESS_VM_OPERATION +
+                                       PROCESS_CREATE_THREAD + READ_CONTROL + SYNCHRONIZE,
                                    FALSE, (DWORD)pid);
             release_privileges();
             if (hProcess == NULL) {
                 return GetLastError();
             }
-        } else { 
+        } else {
             return GetLastError();
         }
     }
 
-    pfnThreadRtn = (PTHREAD_START_ROUTINE) GetProcAddress(GetModuleHandle(TEXT("Kernel32")), "LoadLibraryW");
+    pfnThreadRtn = (PTHREAD_START_ROUTINE)GetProcAddress(
+        GetModuleHandle(TEXT("Kernel32")), "LoadLibraryW");
     if (pfnThreadRtn == NULL) {
         res = GetLastError();
         goto exit;
@@ -681,15 +657,14 @@ inject_dll(process_id_t pid, const WCHAR *dll_name, BOOL allow_upgraded_perms,
     /* USE_NT to avoid session id issues, TARGET_API so LoadLibrary can return, if
      * stop using NT need to update stack freeing case below and allocate space to
      * hold the remote library name ourselves like we used to. */
-    hThread = create_remote_thread(hProcess, pfnThreadRtn,
-                                   NULL, dll_name, sizeof(WCHAR)*(1 + wcslen(dll_name)),
-                                   CREATE_REMOTE_THREAD_USE_NT |
-                                   CREATE_REMOTE_THREAD_TARGET_API , &remote_stack);
+    hThread = create_remote_thread(
+        hProcess, pfnThreadRtn, NULL, dll_name, sizeof(WCHAR) * (1 + wcslen(dll_name)),
+        CREATE_REMOTE_THREAD_USE_NT | CREATE_REMOTE_THREAD_TARGET_API, &remote_stack);
     if (hThread == NULL) {
         res = GetLastError();
         goto exit;
     }
-    
+
     res = WaitForSingleObject(hThread, timeout_ms);
     if (res == WAIT_FAILED) {
         res = GetLastError();
@@ -704,13 +679,13 @@ inject_dll(process_id_t pid, const WCHAR *dll_name, BOOL allow_upgraded_perms,
      * (returning from LoadLibrary or calling ExitThread), though not if it terminates
      * itself (which it shouldn't do, lock issues etc.).  On XP and higher the stack
      * won't be freed since we didn't inform csrss of this thread so we free here. */
-    if (remote_stack != NULL &&
-        platform != PLATFORM_WIN_NT_4 && platform != PLATFORM_WIN_2000) {
+    if (remote_stack != NULL && platform != PLATFORM_WIN_NT_4 &&
+        platform != PLATFORM_WIN_2000) {
         VirtualFreeEx(hProcess, remote_stack, 0, MEM_RELEASE);
     }
     res = ERROR_SUCCESS;
 
- exit:
+exit:
     if (hThread != NULL) {
         if (loading_thread != NULL) {
             *loading_thread = hThread;

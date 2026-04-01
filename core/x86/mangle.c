@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -48,12 +48,12 @@
 #include "decode_fast.h"
 #include "disassemble.h"
 #ifdef STEAL_REGISTER
-#include "steal_reg.h"
+#    include "steal_reg.h"
 #endif
 #include "instrument.h" /* for dr_insert_call */
 
 #ifdef RCT_IND_BRANCH
-# include "../rct.h" /* rct_add_rip_rel_addr */
+#    include "../rct.h" /* rct_add_rip_rel_addr */
 #endif
 
 #ifdef LINUX
@@ -61,12 +61,13 @@
 #endif
 
 #ifdef LINUX_KERNEL
-#include "kernel_interface.h"
+#    include "kernel_interface.h"
 #endif
 
 #ifdef WINDOWS
 /* in callback.c */
-extern void callback_start_return(void);
+extern void
+callback_start_return(void);
 #endif
 
 /* make code more readable by shortening long lines
@@ -74,7 +75,7 @@ extern void callback_start_return(void);
  * client asserts on setting translation fields
  */
 #define POST instrlist_meta_postinsert
-#define PRE  instrlist_meta_preinsert
+#define PRE instrlist_meta_preinsert
 
 #if defined(NATIVE_RETURN) && !defined(DEBUG)
 extern int num_fragments;
@@ -91,7 +92,7 @@ static instr_t *
 convert_to_near_rel_common(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr)
 {
     int opcode = instr_get_opcode(instr);
-    DEBUG_DECLARE(const instr_info_t * info = instr_get_instr_info(instr);)
+    DEBUG_DECLARE(const instr_info_t *info = instr_get_instr_info(instr);)
     app_pc target = NULL;
 
     if (opcode == OP_jmp_short) {
@@ -145,7 +146,7 @@ convert_to_near_rel_common(dcontext_t *dcontext, instrlist_t *ilist, instr_t *in
         * the taken-branch path made me choose the former solution.
         */
 
-        /* SUMMARY: 
+        /* SUMMARY:
          * expand 'shortjump foo' to:
                           shortjump taken
                           jmp-short nottaken
@@ -161,8 +162,9 @@ convert_to_near_rel_common(dcontext_t *dcontext, instrlist_t *ilist, instr_t *in
             ASSERT(!instr_ok_to_mangle(instr));
             instrlist_meta_postinsert(ilist, instr, nottaken);
             instrlist_meta_postinsert(ilist, instr, taken);
-            instrlist_meta_postinsert(ilist, instr, INSTR_CREATE_jmp_short
-                                      (dcontext, opnd_create_instr(nottaken)));
+            instrlist_meta_postinsert(
+                ilist, instr,
+                INSTR_CREATE_jmp_short(dcontext, opnd_create_instr(nottaken)));
             instr_set_target(instr, opnd_create_instr(taken));
             return taken;
         }
@@ -210,8 +212,7 @@ convert_to_near_rel_common(dcontext_t *dcontext, instrlist_t *ilist, instr_t *in
         instr_set_raw_byte(instr, offs, decode_first_opcode_byte(OP_jmp));
         offs++;
         /* for x64 we may not reach, but we go ahead and try */
-        instr_set_raw_word(instr, offs, (int)
-                           (target - (instr->bytes + mangled_sz)));
+        instr_set_raw_word(instr, offs, (int)(target - (instr->bytes + mangled_sz)));
         offs += sizeof(int);
         ASSERT(offs == mangled_sz);
         LOG(THREAD, LOG_INTERP, 2, "convert_to_near_rel: jecxz/loop* opcode\n");
@@ -220,9 +221,9 @@ convert_to_near_rel_common(dcontext_t *dcontext, instrlist_t *ilist, instr_t *in
         return instr;
     }
 
-    LOG(THREAD, LOG_INTERP, 1, "convert_to_near_rel: unknown opcode: %d %s\n",
-        opcode, info->name);
-    ASSERT_NOT_REACHED();      /* conversion not possible OR not a short-form cti */
+    LOG(THREAD, LOG_INTERP, 1, "convert_to_near_rel: unknown opcode: %d %s\n", opcode,
+        info->name);
+    ASSERT_NOT_REACHED(); /* conversion not possible OR not a short-form cti */
     return instr;
 }
 
@@ -251,15 +252,14 @@ convert_to_near_rel(dcontext_t *dcontext, instr_t *instr)
  * Returns the pc of the instruction after the remangled sequence.
  */
 byte *
-remangle_short_rewrite(dcontext_t *dcontext,
-                       instr_t *instr, byte *pc, app_pc target)
+remangle_short_rewrite(dcontext_t *dcontext, instr_t *instr, byte *pc, app_pc target)
 {
     ASSERT(instr_is_cti_short_rewrite(instr, pc));
 
     /* first set the target in the actual operand src0 */
     if (target == NULL) {
         /* acquire existing absolute target */
-        int rel_target = *((int *)(pc+5));
+        int rel_target = *((int *)(pc + 5));
         target = pc + CTI_SHORT_REWRITE_LENGTH + rel_target;
     }
     instr_set_target(instr, opnd_create_pc(target));
@@ -273,7 +273,7 @@ remangle_short_rewrite(dcontext_t *dcontext,
     instr_set_raw_word(instr, 5, (int)(target - (pc + CTI_SHORT_REWRITE_LENGTH)));
     /* now make operands valid */
     instr_set_operands_valid(instr, true);
-    return (pc+CTI_SHORT_REWRITE_LENGTH);
+    return (pc + CTI_SHORT_REWRITE_LENGTH);
 }
 
 /* Returns the amount of data pushed.  Does NOT fix up the xsp value pushed
@@ -288,9 +288,9 @@ uint
 insert_push_all_registers(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
                           bool stack_align16)
 {
-    PRE(ilist, instr, INSTR_CREATE_lea
-        (dcontext, opnd_create_reg(REG_XSP),
-         OPND_CREATE_MEM_lea(REG_XSP, REG_NULL, 0, - XMM_SLOTS_SIZE)));
+    PRE(ilist, instr,
+        INSTR_CREATE_lea(dcontext, opnd_create_reg(REG_XSP),
+                         OPND_CREATE_MEM_lea(REG_XSP, REG_NULL, 0, -XMM_SLOTS_SIZE)));
     if (preserve_xmm_caller_saved()) {
         /* PR 264138: we must preserve xmm0-5 if on a 64-bit kernel */
         int i;
@@ -299,17 +299,18 @@ insert_push_all_registers(dcontext_t *dcontext, instrlist_t *ilist, instr_t *ins
          * guide says to use movlps+movhps for unaligned stores, but
          * for simplicity and smaller code I'm using movups anyway.
          */
-        uint opcode = (proc_has_feature(FEATURE_SSE2) ?
-                       (stack_align16 ? OP_movdqa : OP_movdqu) :
-                       (stack_align16 ? OP_movaps : OP_movups));
+        uint opcode =
+            (proc_has_feature(FEATURE_SSE2) ? (stack_align16 ? OP_movdqa : OP_movdqu)
+                                            : (stack_align16 ? OP_movaps : OP_movups));
         ASSERT(proc_has_feature(FEATURE_SSE));
-        for (i=0; i<NUM_XMM_SAVED; i++) {
-            PRE(ilist, instr, instr_create_1dst_1src
-                (dcontext, opcode,
-                 opnd_create_base_disp(REG_XSP, REG_NULL, 0, i*XMM_REG_SIZE, OPSZ_16),
-                 opnd_create_reg(REG_XMM0 + (reg_id_t)i)));
+        for (i = 0; i < NUM_XMM_SAVED; i++) {
+            PRE(ilist, instr,
+                instr_create_1dst_1src(dcontext, opcode,
+                                       opnd_create_base_disp(REG_XSP, REG_NULL, 0,
+                                                             i * XMM_REG_SIZE, OPSZ_16),
+                                       opnd_create_reg(REG_XMM0 + (reg_id_t)i)));
         }
-        ASSERT(i*XMM_REG_SIZE == XMM_SAVED_SIZE);
+        ASSERT(i * XMM_REG_SIZE == XMM_SAVED_SIZE);
         ASSERT(XMM_SAVED_SIZE <= XMM_SLOTS_SIZE);
     }
 #ifdef X64
@@ -331,10 +332,10 @@ insert_push_all_registers(dcontext_t *dcontext, instrlist_t *ilist, instr_t *ins
     PRE(ilist, instr, INSTR_CREATE_push(dcontext, opnd_create_reg(REG_RBP)));
     PRE(ilist, instr, INSTR_CREATE_push(dcontext, opnd_create_reg(REG_RSI)));
     PRE(ilist, instr, INSTR_CREATE_push(dcontext, opnd_create_reg(REG_RDI)));
-    return 16*XSP_SZ + XMM_SLOTS_SIZE;
+    return 16 * XSP_SZ + XMM_SLOTS_SIZE;
 #else
     PRE(ilist, instr, INSTR_CREATE_pusha(dcontext));
-    return 8*XSP_SZ + XMM_SLOTS_SIZE;
+    return 8 * XSP_SZ + XMM_SLOTS_SIZE;
 #endif
 }
 
@@ -372,24 +373,26 @@ insert_pop_all_registers(dcontext_t *dcontext, instrlist_t *ilist, instr_t *inst
         int i;
         /* See discussion in emit_fcache_enter_shared on which opcode
          * is better. */
-        uint opcode = (proc_has_feature(FEATURE_SSE2) ?
-                       (stack_align16 ? OP_movdqa : OP_movdqu) :
-                       (stack_align16 ? OP_movaps : OP_movups));
+        uint opcode =
+            (proc_has_feature(FEATURE_SSE2) ? (stack_align16 ? OP_movdqa : OP_movdqu)
+                                            : (stack_align16 ? OP_movaps : OP_movups));
         ASSERT(proc_has_feature(FEATURE_SSE));
-        for (i=0; i<NUM_XMM_SAVED; i++) {
-            PRE(ilist, instr, instr_create_1dst_1src
-                (dcontext, opcode, opnd_create_reg(REG_XMM0 + (reg_id_t)i),
-                 opnd_create_base_disp(REG_XSP, REG_NULL, 0, i*XMM_REG_SIZE, OPSZ_16)));
+        for (i = 0; i < NUM_XMM_SAVED; i++) {
+            PRE(ilist, instr,
+                instr_create_1dst_1src(dcontext, opcode,
+                                       opnd_create_reg(REG_XMM0 + (reg_id_t)i),
+                                       opnd_create_base_disp(REG_XSP, REG_NULL, 0,
+                                                             i * XMM_REG_SIZE, OPSZ_16)));
         }
-        ASSERT(i*XMM_REG_SIZE == XMM_SAVED_SIZE);
+        ASSERT(i * XMM_REG_SIZE == XMM_SAVED_SIZE);
         ASSERT(XMM_SAVED_SIZE <= XMM_SLOTS_SIZE);
     }
-    PRE(ilist, instr, INSTR_CREATE_lea
-        (dcontext, opnd_create_reg(REG_XSP),
-         OPND_CREATE_MEM_lea(REG_XSP, REG_NULL, 0, XMM_SLOTS_SIZE)));
+    PRE(ilist, instr,
+        INSTR_CREATE_lea(dcontext, opnd_create_reg(REG_XSP),
+                         OPND_CREATE_MEM_lea(REG_XSP, REG_NULL, 0, XMM_SLOTS_SIZE)));
 }
 
-/* utility routines for inserting clean calls to an instrumentation routine 
+/* utility routines for inserting clean calls to an instrumentation routine
  * strategy is very similar to fcache_enter/return
  * FIXME: try to share code with fcache_enter/return?
  *
@@ -434,18 +437,18 @@ insert_pop_all_registers(dcontext_t *dcontext, instrlist_t *ilist, instr_t *inst
  */
 
 void
-insert_get_mcontext_base(dcontext_t *dcontext, instrlist_t *ilist, 
-                         instr_t *where, reg_id_t reg)
+insert_get_mcontext_base(dcontext_t *dcontext, instrlist_t *ilist, instr_t *where,
+                         reg_id_t reg)
 {
-    PRE(ilist, where, instr_create_restore_from_tls
-        (dcontext, reg, TLS_DCONTEXT_SLOT));
+    PRE(ilist, where, instr_create_restore_from_tls(dcontext, reg, TLS_DCONTEXT_SLOT));
 
     /* An extra level of indirection with SELFPROT_DCONTEXT */
     if (TEST(SELFPROT_DCONTEXT, dynamo_options.protect_mask)) {
         ASSERT_NOT_TESTED();
-        PRE(ilist, where, INSTR_CREATE_mov_ld
-            (dcontext, opnd_create_reg(reg), 
-             OPND_CREATE_MEMPTR(reg, offsetof(dcontext_t, upcontext))));
+        PRE(ilist, where,
+            INSTR_CREATE_mov_ld(
+                dcontext, opnd_create_reg(reg),
+                OPND_CREATE_MEMPTR(reg, offsetof(dcontext_t, upcontext))));
     }
 }
 
@@ -453,7 +456,7 @@ insert_get_mcontext_base(dcontext_t *dcontext, instrlist_t *ilist,
 static inline int
 clean_call_beyond_mcontext(void)
 {
-    return XSP_SZ/*errno*/ IF_X64(+ XSP_SZ/*align*/);
+    return XSP_SZ /*errno*/ IF_X64(+XSP_SZ /*align*/);
 }
 
 void
@@ -462,14 +465,13 @@ clean_call_clear_saved_interrupt_flag(dcontext_t *dcontext, byte *sp)
     /* The mcontext is pushed onto the dstack. The first sizeof(reg_t) bytes of
      * the dstack are wasted because x86's push X does (rsp -= 8; *rsp = X).
      */
-    dr_mcontext_t* mc =
-        (dr_mcontext_t*) (dcontext->dstack - sizeof(dr_mcontext_t));
-    ASSERT(dcontext->dstack - sizeof(reg_t) == (byte*) &mc->pc);
-    if (sp <= (byte*) &mc->xflags) {
-         /* Clean call pushes 0 before it pushes xflags. */
-         ASSERT(mc->pc == 0);
-         mc->xflags &= ~EFLAGS_IF;
-     }
+    dr_mcontext_t *mc = (dr_mcontext_t *)(dcontext->dstack - sizeof(dr_mcontext_t));
+    ASSERT(dcontext->dstack - sizeof(reg_t) == (byte *)&mc->pc);
+    if (sp <= (byte *)&mc->xflags) {
+        /* Clean call pushes 0 before it pushes xflags. */
+        ASSERT(mc->pc == 0);
+        mc->xflags &= ~EFLAGS_IF;
+    }
 }
 
 /* prepare_for and cleanup_after assume that the stack looks the same after
@@ -480,14 +482,14 @@ clean_call_clear_saved_interrupt_flag(dcontext_t *dcontext, byte *sp)
  * instrumentation routine should call proc_save_fpstate() and then
  * proc_restore_fpstate()
  * (This is because of expense:
- *   fsave takes 118 cycles!  
+ *   fsave takes 118 cycles!
  *   frstor (separated by 6 instrs from fsave) takes 89 cycles
  *   fxsave and fxrstor are not available on HP machine!
  *   supposedly they came out in PII
  *   on balrog: fxsave 91 cycles, fxrstor 173)
  *
  * For x64, changes the stack pointer by a multiple of 16.
- * 
+ *
  * NOTE: The client interface's get/set mcontext functions and the
  * hotpatching gateway rely on the app's context being available
  * on the dstack in a particular format.  Do not corrupt this data
@@ -511,14 +513,12 @@ prepare_for_clean_call(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr)
      * away xax in a TLS slot and then load the dcontext there.
      */
     if (SCRATCH_ALWAYS_TLS()) {
-        PRE(ilist, instr, instr_create_save_to_tls
-            (dcontext, REG_XAX, TLS_XAX_SLOT));
+        PRE(ilist, instr, instr_create_save_to_tls(dcontext, REG_XAX, TLS_XAX_SLOT));
 
-        insert_get_mcontext_base(dcontext, ilist, instr,
-                                 REG_XAX);
+        insert_get_mcontext_base(dcontext, ilist, instr, REG_XAX);
 
-        PRE(ilist, instr, instr_create_save_to_dc_via_reg
-            (dcontext, REG_XAX, REG_XSP, XSP_OFFSET));
+        PRE(ilist, instr,
+            instr_create_save_to_dc_via_reg(dcontext, REG_XAX, REG_XSP, XSP_OFFSET));
 
         /* DSTACK_OFFSET isn't within the upcontext so if it's separate this won't
          * work right.  FIXME - the dcontext accessing routines are a mess of shared
@@ -531,21 +531,20 @@ prepare_for_clean_call(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr)
          */
         if (INTERNAL_OPTION(private_peb) && should_swap_peb_pointer()) {
             preinsert_swap_peb(dcontext, ilist, instr, !SCRATCH_ALWAYS_TLS(),
-                               REG_XAX/*dc*/, REG_XSP/*scratch*/, true/*to priv*/);
+                               REG_XAX /*dc*/, REG_XSP /*scratch*/, true /*to priv*/);
         }
 #endif
-        PRE(ilist, instr, instr_create_restore_from_dc_via_reg
-            (dcontext, REG_XAX, REG_XSP, DSTACK_OFFSET));
+        PRE(ilist, instr,
+            instr_create_restore_from_dc_via_reg(dcontext, REG_XAX, REG_XSP,
+                                                 DSTACK_OFFSET));
 
         /* restore xax before pushing the context on the dstack */
-        PRE(ilist, instr, instr_create_restore_from_tls
-            (dcontext, REG_XAX, TLS_XAX_SLOT));  
-    }
-    else {
+        PRE(ilist, instr, instr_create_restore_from_tls(dcontext, REG_XAX, TLS_XAX_SLOT));
+    } else {
         PRE(ilist, instr, instr_create_save_to_dcontext(dcontext, REG_XSP, XSP_OFFSET));
         PRE(ilist, instr, instr_create_restore_dynamo_stack(dcontext));
     }
-    
+
     /* Save flags and all registers, in dr_mcontext_t order.
      * Leave a slot for pc, which we do not fill in: it's wasted for now.
      * FIXME PR 218131: we could have a special dstack+XSP_SZ field that we
@@ -560,8 +559,8 @@ prepare_for_clean_call(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr)
     /* Base of dstack is 16-byte aligned, and we've done 2 pushes, so we're
      * 16-byte aligned for x64
      */
-    dstack_offs += insert_push_all_registers(dcontext, ilist, instr,
-                                             IF_X64_ELSE(true, false));
+    dstack_offs +=
+        insert_push_all_registers(dcontext, ilist, instr, IF_X64_ELSE(true, false));
 
     /* Note that we do NOT bother to put the correct pre-push app xsp value on the
      * stack here, as an optimization for callees who never ask for it: instead we
@@ -575,29 +574,26 @@ prepare_for_clean_call(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr)
     PRE(ilist, instr,
         INSTR_CREATE_push(dcontext,
                           opnd_create_base_disp(REG_XSP, REG_NULL, 0,
-                          dstack_offs - eflags_offs, OPSZ_STACK)));
+                                                dstack_offs - eflags_offs, OPSZ_STACK)));
     PRE(ilist, instr,
         INSTR_CREATE_and(dcontext,
-                         opnd_create_base_disp(REG_XSP, REG_NULL, 0, 0,
-                                               OPSZ_STACK),
+                         opnd_create_base_disp(REG_XSP, REG_NULL, 0, 0, OPSZ_STACK),
                          OPND_CREATE_INT32(~(EFLAGS_NON_SYSTEM | EFLAGS_IF))));
 #else
     /* clear eflags for callee's usage */
-    PRE(ilist, instr,
-        INSTR_CREATE_push_imm(dcontext, OPND_CREATE_INT32(0)));
+    PRE(ilist, instr, INSTR_CREATE_push_imm(dcontext, OPND_CREATE_INT32(0)));
 #endif
     PRE(ilist, instr, INSTR_CREATE_popf(dcontext));
 
 #ifdef WINDOWS
     /* must preserve the LastErrorCode (if call a Win32 API routine could
      * overwrite the app's error code) */
-    preinsert_get_last_error(dcontext, ilist, instr,
-                             REG_EAX);
+    preinsert_get_last_error(dcontext, ilist, instr, REG_EAX);
     /* by pushing errno onto stack, it's then in place to be an argument
      * to SetLastError for cleanup!
      */
     /* FIXME: no longer necessary, update this and cleanup_after_clean_call.
-     * All cleanup_call users most importantly, pre_system_call and 
+     * All cleanup_call users most importantly, pre_system_call and
      * post_system_call would need not to reserve room for errno:
      * except for our private loader w/ client-dependent libs we do need
      * to handle and isolate (limited) Win32 API usage
@@ -608,8 +604,9 @@ prepare_for_clean_call(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr)
     if (SCRATCH_ALWAYS_TLS()) {
         /* eax is dead here (already saved to stack) */
         insert_get_mcontext_base(dcontext, ilist, instr, REG_XAX);
-        PRE(ilist, instr, instr_create_restore_from_dc_via_reg
-            (dcontext, REG_XAX, REG_EAX, ERRNO_OFFSET));
+        PRE(ilist, instr,
+            instr_create_restore_from_dc_via_reg(dcontext, REG_XAX, REG_EAX,
+                                                 ERRNO_OFFSET));
     } else {
         PRE(ilist, instr,
             instr_create_restore_from_dcontext(dcontext, REG_EAX, ERRNO_OFFSET));
@@ -623,9 +620,9 @@ prepare_for_clean_call(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr)
     /* PR 218790: maintain 16-byte rsp alignment.
      * insert_parameter_preparation() currently assumes we leave rsp aligned.
      */
-    PRE(ilist, instr, INSTR_CREATE_lea
-        (dcontext, opnd_create_reg(REG_XSP),
-         OPND_CREATE_MEM_lea(REG_XSP, REG_NULL, 0, -(int)XSP_SZ)));
+    PRE(ilist, instr,
+        INSTR_CREATE_lea(dcontext, opnd_create_reg(REG_XSP),
+                         OPND_CREATE_MEM_lea(REG_XSP, REG_NULL, 0, -(int)XSP_SZ)));
     dstack_offs += XSP_SZ;
 #endif
     ASSERT(dstack_offs == sizeof(dr_mcontext_t) + clean_call_beyond_mcontext());
@@ -639,9 +636,9 @@ cleanup_after_clean_call(dcontext_t *dcontext, instrlist_t *ilist, instr_t *inst
 
 #ifdef X64
     /* PR 218790: remove the padding we added for 16-byte rsp alignment */
-    PRE(ilist, instr, INSTR_CREATE_lea
-        (dcontext, opnd_create_reg(REG_XSP),
-         OPND_CREATE_MEM_lea(REG_XSP, REG_NULL, 0, XSP_SZ)));
+    PRE(ilist, instr,
+        INSTR_CREATE_lea(dcontext, opnd_create_reg(REG_XSP),
+                         OPND_CREATE_MEM_lea(REG_XSP, REG_NULL, 0, XSP_SZ)));
 #endif
     /* restore app's error code */
     PRE(ilist, instr,
@@ -655,11 +652,10 @@ cleanup_after_clean_call(dcontext_t *dcontext, instrlist_t *ilist, instr_t *inst
     if (SCRATCH_ALWAYS_TLS()) {
         /* xbx is dead (haven't restored yet) and eax contains the errno */
         insert_get_mcontext_base(dcontext, ilist, instr, REG_XBX);
-        PRE(ilist, instr, instr_create_save_to_dc_via_reg
-            (dcontext, REG_XBX, REG_EAX, ERRNO_OFFSET));
-    } else {
         PRE(ilist, instr,
-            instr_create_save_to_dcontext(dcontext, REG_EAX, ERRNO_OFFSET));
+            instr_create_save_to_dc_via_reg(dcontext, REG_XBX, REG_EAX, ERRNO_OFFSET));
+    } else {
+        PRE(ilist, instr, instr_create_save_to_dcontext(dcontext, REG_EAX, ERRNO_OFFSET));
     }
 #endif
 
@@ -673,11 +669,9 @@ cleanup_after_clean_call(dcontext_t *dcontext, instrlist_t *ilist, instr_t *inst
      * dynamically.  Save xax in TLS so we can use it as scratch.
      */
     if (SCRATCH_ALWAYS_TLS()) {
-        PRE(ilist, instr, instr_create_save_to_tls
-            (dcontext, REG_XAX, TLS_XAX_SLOT));
+        PRE(ilist, instr, instr_create_save_to_tls(dcontext, REG_XAX, TLS_XAX_SLOT));
 
-        insert_get_mcontext_base(dcontext, ilist, instr,
-                                 REG_XAX);
+        insert_get_mcontext_base(dcontext, ilist, instr, REG_XAX);
 
 #if defined(WINDOWS) && defined(CLIENT_INTERFACE)
         /* i#249: swap PEB pointers while we have dcxt in reg.  We risk "silent
@@ -685,17 +679,15 @@ cleanup_after_clean_call(dcontext_t *dcontext, instrlist_t *ilist, instr_t *inst
          */
         if (INTERNAL_OPTION(private_peb) && should_swap_peb_pointer()) {
             preinsert_swap_peb(dcontext, ilist, instr, !SCRATCH_ALWAYS_TLS(),
-                               REG_XAX/*dc*/, REG_XSP/*scratch*/, false/*to app*/);
+                               REG_XAX /*dc*/, REG_XSP /*scratch*/, false /*to app*/);
         }
 #endif
 
-        PRE(ilist, instr, instr_create_restore_from_dc_via_reg
-            (dcontext, REG_XAX, REG_XSP, XSP_OFFSET));
+        PRE(ilist, instr,
+            instr_create_restore_from_dc_via_reg(dcontext, REG_XAX, REG_XSP, XSP_OFFSET));
 
-        PRE(ilist, instr, instr_create_restore_from_tls
-            (dcontext, REG_XAX, TLS_XAX_SLOT));
-    }
-    else {
+        PRE(ilist, instr, instr_create_restore_from_tls(dcontext, REG_XAX, TLS_XAX_SLOT));
+    } else {
         PRE(ilist, instr,
             instr_create_restore_from_dcontext(dcontext, REG_XSP, XSP_OFFSET));
     }
@@ -715,14 +707,12 @@ shrink_reg_for_param(reg_id_t regular, opnd_t arg)
         /* PR 250976 #2: leave 64-bit only if an immed w/ top bit set (we
          * assume user wants sign-extension; that is after all what happens
          * on a push of a 32-bit immed) */
-        if (!opnd_is_immed_int(arg) ||
-            (opnd_get_immed_int(arg) & 0x80000000) == 0)
+        if (!opnd_is_immed_int(arg) || (opnd_get_immed_int(arg) & 0x80000000) == 0)
             return reg_64_to_32(regular);
     }
 #endif
     return regular;
 }
-
 
 /* Returns the change in the stack pointer.
  * N.B.: due to stack alignment and minimum stack reservation, do
@@ -801,8 +791,8 @@ insert_parameter_preparation(dcontext_t *dcontext, instrlist_t *ilist, instr_t *
         for (r = 0; r < opnd_num_regs_used(args[i]); r++) {
             reg_id_t used = opnd_get_reg_used(args[i], r);
             IF_X64(int parm;)
-            LOG(THREAD, LOG_INTERP, 4,
-                "ipp: considering arg %d reg %d == %s\n", i, r, reg_names[used]);
+            LOG(THREAD, LOG_INTERP, 4, "ipp: considering arg %d reg %d == %s\n", i, r,
+                reg_names[used]);
             if (clean_call && !restore_xax && reg_overlap(used, REG_XAX))
                 restore_xax = true;
             if (reg_overlap(used, REG_XSP)) {
@@ -810,7 +800,7 @@ insert_parameter_preparation(dcontext_t *dcontext, instrlist_t *ilist, instr_t *
                                      "Non-clean-call argument: REG_XSP not supported"));
                 CLIENT_ASSERT(used == REG_XSP,
                               "Call argument: sub-reg-xsp not supported");
-                if (clean_call && /*x64*/parameters_stack_padded() && !restore_xsp)
+                if (clean_call && /*x64*/ parameters_stack_padded() && !restore_xsp)
                     restore_xsp = true;
             }
 #ifdef X64
@@ -872,8 +862,8 @@ insert_parameter_preparation(dcontext_t *dcontext, instrlist_t *ilist, instr_t *
          * the dr_mcontext_t on the stack if in a clean call.  FIXME: what if not?
          */
         opnd_t arg = args[i];
-        CLIENT_ASSERT(opnd_get_size(arg) == OPSZ_PTR || opnd_is_immed_int(arg)
-                      IF_X64(|| opnd_get_size(arg) == OPSZ_4),
+        CLIENT_ASSERT(opnd_get_size(arg) == OPSZ_PTR ||
+                          opnd_is_immed_int(arg) IF_X64(|| opnd_get_size(arg) == OPSZ_4),
                       "Clean call arg has unsupported size");
 
 #ifdef X64
@@ -881,9 +871,9 @@ insert_parameter_preparation(dcontext_t *dcontext, instrlist_t *ilist, instr_t *
         for (r = 0; r < opnd_num_regs_used(arg); r++) {
             reg_id_t used = opnd_get_reg_used(arg, r);
             int parm = reg_parameter_num(used);
-            /* See comments in loop above */ 
+            /* See comments in loop above */
             if ((parm == 0 && num_args > 1) || parm > (int)i ||
-                 reg_overlap(used, REG_XSP)) {
+                reg_overlap(used, REG_XSP)) {
                 int disp = 0;
                 if (clean_call && opnd_is_reg(arg)) {
                     /* We can point at the dr_mcontext_t slot.
@@ -903,8 +893,9 @@ insert_parameter_preparation(dcontext_t *dcontext, instrlist_t *ilist, instr_t *
                     /* xsp was adjusted up above; we simply store to xsp offsets */
                     disp = param_stack + XSP_SZ * arg_pre_push;
                     if (opnd_is_reg(arg) && opnd_get_size(arg) == OPSZ_PTR) {
-                        POST(ilist, prev, INSTR_CREATE_mov_st
-                             (dcontext, OPND_CREATE_MEMPTR(REG_XSP, disp), arg));
+                        POST(ilist, prev,
+                             INSTR_CREATE_mov_st(dcontext,
+                                                 OPND_CREATE_MEMPTR(REG_XSP, disp), arg));
                     } else {
                         reg_id_t xsp_scratch = regparms[0];
                         /* don't want to just change size since will read extra bytes.
@@ -917,8 +908,9 @@ insert_parameter_preparation(dcontext_t *dcontext, instrlist_t *ilist, instr_t *
                                 /* FIXME: rather than putting xsp into mcontext
                                  * slot, better to just do local get from dcontext
                                  * like we do for 32-bit below? */
-                                POST(ilist, prev, instr_create_restore_from_tls
-                                     (dcontext, REG_XAX, TLS_XAX_SLOT));
+                                POST(ilist, prev,
+                                     instr_create_restore_from_tls(dcontext, REG_XAX,
+                                                                   TLS_XAX_SLOT));
                             }
                             opnd_replace_reg(&arg, REG_XSP, xsp_scratch);
                         }
@@ -927,33 +919,38 @@ insert_parameter_preparation(dcontext_t *dcontext, instrlist_t *ilist, instr_t *
                                                  OPND_CREATE_MEMPTR(REG_XSP, disp),
                                                  opnd_create_reg(regparms[0])));
                         /* If sub-ptr-size, zero-extend is what we want so no movsxd */
-                        POST(ilist, prev, INSTR_CREATE_mov_ld
-                             (dcontext, opnd_create_reg
-                              (shrink_reg_for_param(regparms[0], arg)), arg));
+                        POST(ilist, prev,
+                             INSTR_CREATE_mov_ld(
+                                 dcontext,
+                                 opnd_create_reg(shrink_reg_for_param(regparms[0], arg)),
+                                 arg));
                         if (reg_overlap(used, REG_XSP)) {
                             int xsp_disp = opnd_get_reg_dcontext_offs(REG_XSP) +
                                 clean_call_beyond_mcontext() + total_stack;
-                            POST(ilist, prev, INSTR_CREATE_mov_ld
-                                 (dcontext, opnd_create_reg(xsp_scratch),
-                                  OPND_CREATE_MEMPTR(REG_XSP, xsp_disp)));
+                            POST(ilist, prev,
+                                 INSTR_CREATE_mov_ld(
+                                     dcontext, opnd_create_reg(xsp_scratch),
+                                     OPND_CREATE_MEMPTR(REG_XSP, xsp_disp)));
                             if (xsp_scratch == REG_XAX) {
-                                POST(ilist, prev, instr_create_save_to_tls
-                                     (dcontext, REG_XAX, TLS_XAX_SLOT));
+                                POST(ilist, prev,
+                                     instr_create_save_to_tls(dcontext, REG_XAX,
+                                                              TLS_XAX_SLOT));
                             }
                         }
                         if (opnd_uses_reg(arg, regparms[0])) {
                             /* must restore since earlier arg might have clobbered */
                             int mc_disp = opnd_get_reg_dcontext_offs(regparms[0]) +
                                 clean_call_beyond_mcontext() + total_stack;
-                            POST(ilist, prev, INSTR_CREATE_mov_ld
-                                 (dcontext, opnd_create_reg(regparms[0]),
-                                  OPND_CREATE_MEMPTR(REG_XSP, mc_disp)));
+                            POST(ilist, prev,
+                                 INSTR_CREATE_mov_ld(
+                                     dcontext, opnd_create_reg(regparms[0]),
+                                     OPND_CREATE_MEMPTR(REG_XSP, mc_disp)));
                         }
                     }
                     arg_pre_push++; /* running counter */
                 }
-                arg = opnd_create_base_disp(REG_XSP, REG_NULL, 0,
-                                            disp, opnd_get_size(arg));
+                arg =
+                    opnd_create_base_disp(REG_XSP, REG_NULL, 0, disp, opnd_get_size(arg));
                 break; /* once we've handled arg ignore futher reg refs */
             }
         }
@@ -963,10 +960,10 @@ insert_parameter_preparation(dcontext_t *dcontext, instrlist_t *ilist, instr_t *
             reg_id_t regparm = shrink_reg_for_param(regparms[i], arg);
             if (opnd_is_immed_int(arg)) {
                 POST(ilist, mark,
-                    INSTR_CREATE_mov_imm(dcontext, opnd_create_reg(regparm), arg));
+                     INSTR_CREATE_mov_imm(dcontext, opnd_create_reg(regparm), arg));
             } else {
                 POST(ilist, mark,
-                    INSTR_CREATE_mov_ld(dcontext, opnd_create_reg(regparm), arg));
+                     INSTR_CREATE_mov_ld(dcontext, opnd_create_reg(regparm), arg));
             }
         } else {
             if (push) {
@@ -984,15 +981,17 @@ insert_parameter_preparation(dcontext_t *dcontext, instrlist_t *ilist, instr_t *
                             ASSERT(!opnd_uses_reg(arg, scratch)); /* can't use 3 regs */
                         }
                         opnd_replace_reg(&arg, REG_XSP, scratch);
-                        POST(ilist, mark, instr_create_restore_from_tls
-                             (dcontext, scratch, TLS_XAX_SLOT));
+                        POST(ilist, mark,
+                             instr_create_restore_from_tls(dcontext, scratch,
+                                                           TLS_XAX_SLOT));
                         POST(ilist, mark, INSTR_CREATE_push(dcontext, arg));
-                        POST(ilist, mark, instr_create_restore_from_dc_via_reg
-                            (dcontext, scratch, scratch, XSP_OFFSET));
-                        insert_get_mcontext_base
-                            (dcontext, ilist, instr_get_next(mark), scratch);
-                        POST(ilist, mark, instr_create_save_to_tls
-                             (dcontext, scratch, TLS_XAX_SLOT));
+                        POST(ilist, mark,
+                             instr_create_restore_from_dc_via_reg(dcontext, scratch,
+                                                                  scratch, XSP_OFFSET));
+                        insert_get_mcontext_base(dcontext, ilist, instr_get_next(mark),
+                                                 scratch);
+                        POST(ilist, mark,
+                             instr_create_save_to_tls(dcontext, scratch, TLS_XAX_SLOT));
                     } else
                         POST(ilist, mark, INSTR_CREATE_push(dcontext, arg));
                 }
@@ -1005,8 +1004,7 @@ insert_parameter_preparation(dcontext_t *dcontext, instrlist_t *ilist, instr_t *
                      * so go through scratch reg */
                     ASSERT(NUM_REGPARM > 0);
                     POST(ilist, mark,
-                         INSTR_CREATE_mov_st(dcontext,
-                                             OPND_CREATE_MEMPTR(REG_XSP, offs),
+                         INSTR_CREATE_mov_st(dcontext, OPND_CREATE_MEMPTR(REG_XSP, offs),
                                              opnd_create_reg(regparms[0])));
                     POST(ilist, mark,
                          INSTR_CREATE_mov_imm(dcontext, opnd_create_reg(regparms[0]),
@@ -1021,9 +1019,10 @@ insert_parameter_preparation(dcontext_t *dcontext, instrlist_t *ilist, instr_t *
                                                  OPND_CREATE_MEMPTR(REG_XSP, offs),
                                                  opnd_create_reg(regparms[0])));
                         POST(ilist, mark,
-                             INSTR_CREATE_mov_ld(dcontext, opnd_create_reg
-                                                 (shrink_reg_for_param(regparms[0], arg)),
-                                                 arg));
+                             INSTR_CREATE_mov_ld(
+                                 dcontext,
+                                 opnd_create_reg(shrink_reg_for_param(regparms[0], arg)),
+                                 arg));
                     } else {
                         POST(ilist, mark,
                              INSTR_CREATE_mov_st(dcontext,
@@ -1037,10 +1036,10 @@ insert_parameter_preparation(dcontext_t *dcontext, instrlist_t *ilist, instr_t *
     }
     if (!push && total_stack > 0) {
         POST(ilist, prev, /* before everything else: pre-push and args */
-            /* can we use sub?  may as well preserve eflags */
-            INSTR_CREATE_lea(dcontext, opnd_create_reg(REG_XSP),
-                             OPND_CREATE_MEM_lea(REG_XSP, REG_NULL, 0,
-                                                 -(int)total_stack)));
+             /* can we use sub?  may as well preserve eflags */
+             INSTR_CREATE_lea(
+                 dcontext, opnd_create_reg(REG_XSP),
+                 OPND_CREATE_MEM_lea(REG_XSP, REG_NULL, 0, -(int)total_stack)));
     }
     if (restore_xsp) {
         /* before restore_xax, since we're going to clobber xax */
@@ -1049,8 +1048,8 @@ insert_parameter_preparation(dcontext_t *dcontext, instrlist_t *ilist, instr_t *
         /* skip rest of what prepare_for_clean_call adds */
         disp += clean_call_beyond_mcontext();
         insert_get_mcontext_base(dcontext, ilist, where, REG_XAX);
-        PRE(ilist, where, instr_create_restore_from_dc_via_reg
-            (dcontext, REG_XAX, REG_XAX, XSP_OFFSET));
+        PRE(ilist, where,
+            instr_create_restore_from_dc_via_reg(dcontext, REG_XAX, REG_XAX, XSP_OFFSET));
         PRE(ilist, where,
             INSTR_CREATE_mov_st(dcontext, OPND_CREATE_MEMPTR(REG_XSP, disp),
                                 opnd_create_reg(REG_XAX)));
@@ -1080,7 +1079,7 @@ insert_meta_call_vargs(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
                        bool clean_call, void *callee, uint num_args, va_list ap)
 {
     instr_t *in = (instr == NULL) ? instrlist_last(ilist) : instr_get_prev(instr);
-    uint stack_for_params = 
+    uint stack_for_params =
         insert_parameter_preparation(dcontext, ilist, instr, clean_call, num_args, ap);
     IF_X64(ASSERT(ALIGNED(stack_for_params, 16)));
     PRE(ilist, instr, INSTR_CREATE_call(dcontext, opnd_create_pc(callee)));
@@ -1089,9 +1088,9 @@ insert_meta_call_vargs(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
          * i.e., support calling a stdcall routine?
          */
         PRE(ilist, instr,
-            INSTR_CREATE_lea(dcontext, opnd_create_reg(REG_XSP),
-                             opnd_create_base_disp(REG_XSP, REG_NULL, 0,
-                                                   stack_for_params, OPSZ_lea)));
+            INSTR_CREATE_lea(
+                dcontext, opnd_create_reg(REG_XSP),
+                opnd_create_base_disp(REG_XSP, REG_NULL, 0, stack_for_params, OPSZ_lea)));
     }
     /* mark it all meta */
     if (in == NULL)
@@ -1107,8 +1106,8 @@ insert_meta_call_vargs(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
 /* If jmp_instr == NULL, uses jmp_tag, otherwise uses jmp_instr
  */
 void
-insert_clean_call_with_arg_jmp_if_ret_true(dcontext_t *dcontext,
-            instrlist_t *ilist, instr_t *instr,  void *callee, int arg,
+insert_clean_call_with_arg_jmp_if_ret_true(dcontext_t *dcontext, instrlist_t *ilist,
+                                           instr_t *instr, void *callee, int arg,
                                            app_pc jmp_tag, instr_t *jmp_instr)
 {
     instr_t *false_popa, *jcc;
@@ -1117,23 +1116,22 @@ insert_clean_call_with_arg_jmp_if_ret_true(dcontext_t *dcontext,
     dr_insert_call(dcontext, ilist, instr, callee, 1, OPND_CREATE_INT32(arg));
 
     /* if the return value (xax) is 0, then jmp to internal false path */
-    PRE(ilist,instr, /* can't cmp w/ 64-bit immed so use test (shorter anyway) */
+    PRE(ilist, instr, /* can't cmp w/ 64-bit immed so use test (shorter anyway) */
         INSTR_CREATE_test(dcontext, opnd_create_reg(REG_XAX), opnd_create_reg(REG_XAX)));
     /* fill in jcc target once have false path */
     jcc = INSTR_CREATE_jcc(dcontext, OP_jz, opnd_create_pc(NULL));
     PRE(ilist, instr, jcc);
-    
+
     /* if it falls through, then it's true, so restore and jmp to true tag
      * passed in by caller
      */
     cleanup_after_clean_call(dcontext, ilist, instr);
     if (jmp_instr == NULL) {
         /* an exit cti, not a meta instr */
-        instrlist_preinsert
-            (ilist, instr, INSTR_CREATE_jmp(dcontext, opnd_create_pc(jmp_tag)));
+        instrlist_preinsert(ilist, instr,
+                            INSTR_CREATE_jmp(dcontext, opnd_create_pc(jmp_tag)));
     } else {
-        PRE(ilist, instr,
-            INSTR_CREATE_jmp(dcontext, opnd_create_instr(jmp_instr)));
+        PRE(ilist, instr, INSTR_CREATE_jmp(dcontext, opnd_create_instr(jmp_instr)));
     }
 
     /* otherwise (if returned false), just do standard popf and continue */
@@ -1162,31 +1160,30 @@ static instr_t *
 native_ret_mangle_direct_call(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
                               instr_t *next_instr, uint retaddr)
 {
-# ifdef NATIVE_RETURN_CALLDEPTH
+#    ifdef NATIVE_RETURN_CALLDEPTH
     uint flags = 0;
-# endif
+#    endif
     IF_X64(ASSERT_NOT_IMPLEMENTED(false));
     /* ENORMOUS HACK -- READ BY MANGLE_RETURN */
-    static_retaddr = (app_pc) retaddr;
+    static_retaddr = (app_pc)retaddr;
 
     /* HACKS to deal with places where ret addr is taken inside a real callee:
-         0x40170199   e8 32 fa ff ff       call   $0x4016fbd0 
+         0x40170199   e8 32 fa ff ff       call   $0x4016fbd0
              continuing in callee at 0x4016fbd0
-         0x4016fbd0   8b 1c 24             mov    (%esp) -> %ebx 
-         0x4016fbd3   c3                   ret    %esp (%esp) -> %esp 
+         0x4016fbd0   8b 1c 24             mov    (%esp) -> %ebx
+         0x4016fbd3   c3                   ret    %esp (%esp) -> %esp
      * also this:
-         0x400a9bab   e8 00 00 00 00       call   $0x400a9bb0 
+         0x400a9bab   e8 00 00 00 00       call   $0x400a9bb0
              continuing in callee at 0x400a9bb0
-         0x400a9bb0   8d 04 c0             lea    (%eax,%eax,8) -> %eax 
-         0x400a9bb3   03 04 24             add    (%esp) %eax -> %eax 
-         0x400a9bb6   05 0d 00 00 00       add    $0x0000000d %eax -> %eax 
-         0x400a9bbb   83 c4 04             add    $0x04 %esp -> %esp 
-         0x400a9bbe   ff e0                jmp    %eax 
+         0x400a9bb0   8d 04 c0             lea    (%eax,%eax,8) -> %eax
+         0x400a9bb3   03 04 24             add    (%esp) %eax -> %eax
+         0x400a9bb6   05 0d 00 00 00       add    $0x0000000d %eax -> %eax
+         0x400a9bbb   83 c4 04             add    $0x04 %esp -> %esp
+         0x400a9bbe   ff e0                jmp    %eax
      */
-    if (instr_raw_bits_valid(next_instr) &&
-        instr_length(dcontext, next_instr) == 3) {
+    if (instr_raw_bits_valid(next_instr) && instr_length(dcontext, next_instr) == 3) {
         byte *b = instr_get_raw_bits(next_instr);
-        if (*b==0x8b && *(b+1)==0x1c && *(b+2)==0x24) {
+        if (*b == 0x8b && *(b + 1) == 0x1c && *(b + 2) == 0x24) {
             LOG(THREAD, LOG_INTERP, 3, "mangling load of return address!\n");
             /* we can't delete next_instr (in local var in mangle()) */
             /* cannot call instr_reset, it will kill prev & next ptrs */
@@ -1199,15 +1196,15 @@ native_ret_mangle_direct_call(dcontext_t *dcontext, instrlist_t *ilist, instr_t 
     } else if (instr_raw_bits_valid(next_instr) &&
                instr_length(dcontext, next_instr) == 14) {
         byte *b = instr_get_raw_bits(next_instr);
-        if (*b==0x8d && *(b+1)==0x04 && *(b+2)==0xc0 &&
-            *(b+3)==0x03 && *(b+4)==0x04 && *(b+5)==0x24) {
+        if (*b == 0x8d && *(b + 1) == 0x04 && *(b + 2) == 0xc0 && *(b + 3) == 0x03 &&
+            *(b + 4) == 0x04 && *(b + 5) == 0x24) {
             LOG(THREAD, LOG_INTERP, 3, "mangling load of return address!\n");
             instrlist_preinsert(ilist, next_instr,
                                 instr_create_raw_3bytes(dcontext, 0x8d, 0x04, 0xc0));
             instrlist_preinsert(ilist, next_instr,
                                 INSTR_CREATE_add(dcontext, opnd_create_reg(REG_EAX),
                                                  OPND_CREATE_INT32(retaddr)));
-            instr_set_raw_bits(next_instr, b+6, 8);
+            instr_set_raw_bits(next_instr, b + 6, 8);
             next_instr = instr_get_next(instr);
         }
     }
@@ -1223,11 +1220,11 @@ FIXME: coordinate this w/ ret site:       restore flags
         skip:
           continue in callee
      */
-# ifdef NATIVE_RETURN_CALLDEPTH
+#    ifdef NATIVE_RETURN_CALLDEPTH
     if (!TEST(FRAG_WRITES_EFLAGS_6, flags)) {
         /* save app's eax */
         instrlist_preinsert(ilist, instr,
-                         instr_create_save_to_dcontext(dcontext, REG_EAX, XAX_OFFSET));
+                            instr_create_save_to_dcontext(dcontext, REG_EAX, XAX_OFFSET));
         /* save flags */
         instrlist_preinsert(ilist, instr, INSTR_CREATE_lahf(dcontext));
     }
@@ -1235,48 +1232,51 @@ FIXME: coordinate this w/ ret site:       restore flags
         /* must have saved eax */
         ASSERT(!TEST(FRAG_WRITES_EFLAGS_6, flags));
         /* seto al */
-        instrlist_preinsert(ilist, instr,
-                INSTR_CREATE_setcc(dcontext, OP_seto, opnd_create_reg(REG_AL)));
+        instrlist_preinsert(
+            ilist, instr, INSTR_CREATE_setcc(dcontext, OP_seto, opnd_create_reg(REG_AL)));
     }
 
     /* inc call_depth */
-    instrlist_preinsert(ilist, instr,
-                        INSTR_CREATE_inc(dcontext, opnd_create_dcontext_field(dcontext,
-                                                                              CALL_DEPTH_OFFSET)));
+    instrlist_preinsert(
+        ilist, instr,
+        INSTR_CREATE_inc(dcontext,
+                         opnd_create_dcontext_field(dcontext, CALL_DEPTH_OFFSET)));
 
     if ((flags & FRAG_WRITES_EFLAGS_OF) == 0) {
         /* now do an add such that OF will be set only if seto set al to 1 */
-        instrlist_preinsert(ilist, instr,
-         INSTR_CREATE_add(dcontext,
-                          opnd_create_reg(REG_AL), OPND_CREATE_INT8(0x7f)));
+        instrlist_preinsert(
+            ilist, instr,
+            INSTR_CREATE_add(dcontext, opnd_create_reg(REG_AL), OPND_CREATE_INT8(0x7f)));
     }
     if ((flags & FRAG_WRITES_EFLAGS_6) == 0) {
         instrlist_preinsert(ilist, instr, INSTR_CREATE_sahf(dcontext));
-        instrlist_preinsert(ilist, instr,
-                 instr_create_restore_from_dcontext(dcontext, REG_EAX, XAX_OFFSET));
+        instrlist_preinsert(
+            ilist, instr,
+            instr_create_restore_from_dcontext(dcontext, REG_EAX, XAX_OFFSET));
     }
-# endif
+#    endif
 
     /* tell call to target next instr */
     instr_set_target(instr, opnd_create_instr(next_instr));
 
-# ifdef NATIVE_RETURN_CALLDEPTH
+#    ifdef NATIVE_RETURN_CALLDEPTH
     /* FIXME: these flags should be based on retaddr */
     if ((flags & FRAG_WRITES_EFLAGS_OF) == 0) {
         /* now do an add such that OF will be set only if seto set al to 1 */
-        instrlist_preinsert(ilist, instr,
-         INSTR_CREATE_add(dcontext,
-                          opnd_create_reg(REG_AL), OPND_CREATE_INT8(0x7f)));
+        instrlist_preinsert(
+            ilist, instr,
+            INSTR_CREATE_add(dcontext, opnd_create_reg(REG_AL), OPND_CREATE_INT8(0x7f)));
     }
     if ((flags & FRAG_WRITES_EFLAGS_6) == 0) {
         instrlist_preinsert(ilist, next_instr, INSTR_CREATE_sahf(dcontext));
-        instrlist_preinsert(ilist, next_instr,
-                 instr_create_restore_from_dcontext(dcontext, REG_EAX, XAX_OFFSET));
+        instrlist_preinsert(
+            ilist, next_instr,
+            instr_create_restore_from_dcontext(dcontext, REG_EAX, XAX_OFFSET));
     }
-# endif
+#    endif
 
-    instrlist_preinsert(ilist, next_instr, INSTR_CREATE_jmp(dcontext,
-                                                opnd_create_pc((app_pc)retaddr)));
+    instrlist_preinsert(ilist, next_instr,
+                        INSTR_CREATE_jmp(dcontext, opnd_create_pc((app_pc)retaddr)));
     return next_instr;
 }
 
@@ -1302,7 +1302,7 @@ save edx
     */
     uint flags = (FRAG_WRITES_EFLAGS_OF | FRAG_WRITES_EFLAGS_6);
     instr_t *addinstr = NULL;
-    
+
     /* do normal_ret first */
     instr_t *nxt = instr_get_next(instr); /* next_instr is after flag saving! */
 
@@ -1314,7 +1314,7 @@ save edx
     IF_X64(ASSERT_NOT_IMPLEMENTED(false));
 
     /* see if ret has an immed int operand, assumed to be 1st src */
-            
+
     if (instr_num_srcs(instr) > 0 && opnd_is_immed_int(instr_get_src(instr, 0))) {
         /* if has an operand, return removes some stack space,
          * AFTER the return address is popped
@@ -1327,34 +1327,33 @@ save edx
             add = opnd_create_immed_int(val, OPSZ_4);
         /* addl sizeof_param_area, %esp */
         /* insert this add AFTER the flags have been saved! */
-         if (!INTERNAL_OPTION(unsafe_ignore_eflags)) {
-             instrlist_preinsert(ilist, next_instr,
-                                 INSTR_CREATE_add(dcontext,
-                                                  opnd_create_reg(REG_ESP), add));
-         }
-         else {
-             addinstr = INSTR_CREATE_add(dcontext, opnd_create_reg(REG_ESP), add);
-         }
+        if (!INTERNAL_OPTION(unsafe_ignore_eflags)) {
+            instrlist_preinsert(
+                ilist, next_instr,
+                INSTR_CREATE_add(dcontext, opnd_create_reg(REG_ESP), add));
+        } else {
+            addinstr = INSTR_CREATE_add(dcontext, opnd_create_reg(REG_ESP), add);
+        }
     }
-            
+
     if (instr_raw_bits_valid(instr)) {
-        app_pc pc = (app_pc) instr_get_raw_bits(instr);
-        LOG(THREAD, LOG_INTERP, 3, "checking ret at address "PFX"\n", pc);
+        app_pc pc = (app_pc)instr_get_raw_bits(instr);
+        LOG(THREAD, LOG_INTERP, 3, "checking ret at address " PFX "\n", pc);
         if (is_dynamo_address(pc)) {
-            LOG(THREAD, LOG_INTERP, 3, "found a ret at dynamo address "PFX"\n", pc);
+            LOG(THREAD, LOG_INTERP, 3, "found a ret at dynamo address " PFX "\n", pc);
         }
         /* 0x4000d090 on cagfarm* and atari, 0x4000d080 on kobold */
-        if (pc == (app_pc) 0x4000d090 || pc == (app_pc) 0x4000d080 ||
+        if (pc == (app_pc)0x4000d090 || pc == (app_pc)0x4000d080 ||
             (is_dynamo_address(pc) &&
-# ifdef DEBUG
+#    ifdef DEBUG
              ((automatic_startup && GLOBAL_STAT(num_fragments) < 32) ||
               (!automatic_startup && GLOBAL_STAT(num_fragments) < 5))
-# else
+#    else
              /* could use GLOBAL_STAT but only if option is on */
              ((automatic_startup && num_fragments < 32) ||
               (!automatic_startup && num_fragments < 5))
-# endif
-             )) {
+#    endif
+                 )) {
             code_cache_ret = false;
         }
     }
@@ -1377,68 +1376,70 @@ save edx
     } else {
         instr_t *prev;
 
-# ifdef NATIVE_RETURN_CALLDEPTH
+#    ifdef NATIVE_RETURN_CALLDEPTH
         /* cmp call_depth, 0 */
-        instrlist_preinsert(ilist, instr,
-                            INSTR_CREATE_cmp(dcontext,
-                                             opnd_create_dcontext_field(dcontext, CALL_DEPTH_OFFSET),
-                                             OPND_CREATE_INT32(0)));
+        instrlist_preinsert(
+            ilist, instr,
+            INSTR_CREATE_cmp(dcontext,
+                             opnd_create_dcontext_field(dcontext, CALL_DEPTH_OFFSET),
+                             OPND_CREATE_INT32(0)));
         /* je normal_ret */
-        instrlist_preinsert(ilist, instr, INSTR_CREATE_jcc(dcontext, OP_je,
-                                                           opnd_create_instr(save_ecx)));
+        instrlist_preinsert(
+            ilist, instr, INSTR_CREATE_jcc(dcontext, OP_je, opnd_create_instr(save_ecx)));
         /* dec call_depth */
-        instrlist_preinsert(ilist, instr,
-                            INSTR_CREATE_dec(dcontext, opnd_create_dcontext_field(dcontext,
-                                                                                  CALL_DEPTH_OFFSET)));
+        instrlist_preinsert(
+            ilist, instr,
+            INSTR_CREATE_dec(dcontext,
+                             opnd_create_dcontext_field(dcontext, CALL_DEPTH_OFFSET)));
 
         if ((flags & FRAG_WRITES_EFLAGS_OF) == 0) {
             /* now do an add such that OF will be set only if seto set al to 1 */
             instrlist_preinsert(ilist, instr,
-                                INSTR_CREATE_add(dcontext,
-                                                 opnd_create_reg(REG_AL),
+                                INSTR_CREATE_add(dcontext, opnd_create_reg(REG_AL),
                                                  OPND_CREATE_INT8(0x7f)));
         }
         if ((flags & FRAG_WRITES_EFLAGS_6) == 0) {
             instrlist_preinsert(ilist, instr, INSTR_CREATE_sahf(dcontext));
-            instrlist_preinsert(ilist, instr,
-                                instr_create_restore_from_dcontext(dcontext, REG_EAX, XAX_OFFSET));
+            instrlist_preinsert(
+                ilist, instr,
+                instr_create_restore_from_dcontext(dcontext, REG_EAX, XAX_OFFSET));
         }
-# endif
+#    endif
 
         /* leave ret instr where it is */
 
         /* HACKS to deal with places where ret addr is taken inside a real callee:
-         0x400864b6   8b 4c 24 00          mov    (%esp) -> %ecx 
-         0x400864ba   89 4a 14             mov    %ecx -> 0x14(%edx) 
-         0x400864bd   89 6a 0c             mov    %ebp -> 0xc(%edx) 
-         0x400864c0   89 42 18             mov    %eax -> 0x18(%edx) 
-         0x400864c3   c3                   ret    %esp (%esp) -> %esp 
+         0x400864b6   8b 4c 24 00          mov    (%esp) -> %ecx
+         0x400864ba   89 4a 14             mov    %ecx -> 0x14(%edx)
+         0x400864bd   89 6a 0c             mov    %ebp -> 0xc(%edx)
+         0x400864c0   89 42 18             mov    %eax -> 0x18(%edx)
+         0x400864c3   c3                   ret    %esp (%esp) -> %esp
          */
         prev = instr_get_prev(instr);
         if (prev != NULL && instr_raw_bits_valid(prev) &&
             instr_length(dcontext, prev) > 4) {
             uint len = instr_length(dcontext, prev);
             byte *b = instr_get_raw_bits(prev) + len - 1;
-            if (len > 13 &&
-                       *b==0x18 && *(b-1)==0x42 && *(b-2)==0x89 &&
-                       *(b-3)==0x0c && *(b-4)==0x6a && *(b-5)==0x89 && 
-                       *(b-6)==0x14 && *(b-7)==0x4a && *(b-8)==0x89 && 
-                       *(b-9)==0x00 && *(b-10)==0x24 && *(b-11)==0x4c && *(b-12)==0x8b) {
+            if (len > 13 && *b == 0x18 && *(b - 1) == 0x42 && *(b - 2) == 0x89 &&
+                *(b - 3) == 0x0c && *(b - 4) == 0x6a && *(b - 5) == 0x89 &&
+                *(b - 6) == 0x14 && *(b - 7) == 0x4a && *(b - 8) == 0x89 &&
+                *(b - 9) == 0x00 && *(b - 10) == 0x24 && *(b - 11) == 0x4c &&
+                *(b - 12) == 0x8b) {
                 instr_t *raw;
                 LOG(THREAD, LOG_INTERP, 3, "mangling load of return address!\n");
-                instr_set_raw_bits(prev, instr_get_raw_bits(prev), len-13);
+                instr_set_raw_bits(prev, instr_get_raw_bits(prev), len - 13);
                 /* PROBLEM: don't know app retaddr!
-                 * ENORMOUS HACK: assume no calls or threads in between, 
+                 * ENORMOUS HACK: assume no calls or threads in between,
                  * use statically stored one from last call
                  * Also assumes only a single caller
                  */
                 IF_X64(ASSERT_NOT_IMPLEMENTED(false));
-                instrlist_preinsert(ilist, instr,
-                                    INSTR_CREATE_mov_imm(dcontext,
-                                                         opnd_create_reg(REG_ECX),
-                                                         OPND_CREATE_INT32((uint)static_retaddr)));
+                instrlist_preinsert(
+                    ilist, instr,
+                    INSTR_CREATE_mov_imm(dcontext, opnd_create_reg(REG_ECX),
+                                         OPND_CREATE_INT32((uint)static_retaddr)));
                 raw = instr_build_bits(dcontext, OP_UNDECODED, 9);
-                instr_set_raw_bytes(raw, b-8, 9);               
+                instr_set_raw_bytes(raw, b - 8, 9);
                 instrlist_preinsert(ilist, instr, raw);
             }
         }
@@ -1449,8 +1450,8 @@ save edx
 /*###########################################################################*/
 #ifdef RETURN_STACK
 static instr_t *
-return_stack_mangle_direct_call(dcontext_t *dcontext, instrlist_t *ilist,
-                                instr_t *instr, instr_t *next_instr, uint retaddr)
+return_stack_mangle_direct_call(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
+                                instr_t *next_instr, uint retaddr)
 {
     instr_t *cleanup;
     IF_X64(ASSERT_NOT_IMPLEMENTED(false));
@@ -1467,19 +1468,14 @@ return_stack_mangle_direct_call(dcontext_t *dcontext, instrlist_t *ilist,
      *   swap to app stack
      */
     cleanup = instr_create_save_dynamo_return_stack(dcontext);
-    PRE(ilist, instr,
-        INSTR_CREATE_push_imm(dcontext, OPND_CREATE_INT32(retaddr)));
-    PRE(ilist, instr,
-        instr_create_save_to_dcontext(dcontext, REG_ESP, XSP_OFFSET));
-    PRE(ilist, instr,
-        instr_create_restore_dynamo_return_stack(dcontext));
-    PRE(ilist, instr,
-        INSTR_CREATE_push_imm(dcontext, OPND_CREATE_INT32(retaddr)));
+    PRE(ilist, instr, INSTR_CREATE_push_imm(dcontext, OPND_CREATE_INT32(retaddr)));
+    PRE(ilist, instr, instr_create_save_to_dcontext(dcontext, REG_ESP, XSP_OFFSET));
+    PRE(ilist, instr, instr_create_restore_dynamo_return_stack(dcontext));
+    PRE(ilist, instr, INSTR_CREATE_push_imm(dcontext, OPND_CREATE_INT32(retaddr)));
     instr_set_target(instr, opnd_create_instr(cleanup));
     /* an exit cti, not a meta instr */
-    instrlist_preinsert
-        (ilist, next_instr, INSTR_CREATE_jmp(dcontext,
-                                             opnd_create_pc(retaddr)));
+    instrlist_preinsert(ilist, next_instr,
+                        INSTR_CREATE_jmp(dcontext, opnd_create_pc(retaddr)));
     PRE(ilist, next_instr, cleanup);
     PRE(ilist, next_instr,
         instr_create_restore_from_dcontext(dcontext, REG_ESP, XSP_OFFSET));
@@ -1496,8 +1492,7 @@ insert_push_immed_ptrsz(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr
      * access to TOS if this thread is suspended in between or another
      * thread is trying to read its stack, but o/w we have to spill and
      * restore a register. */
-    PRE(ilist, instr,
-        INSTR_CREATE_push_imm(dcontext, OPND_CREATE_INT32((int)val)));
+    PRE(ilist, instr, INSTR_CREATE_push_imm(dcontext, OPND_CREATE_INT32((int)val)));
     /* push is sign-extended, so we can skip top half if all 0s or all 1s in top
      * 33 bits */
     if ((val >> 31) != 0 && (val >> 31) != 0x1ffffffff) {
@@ -1508,8 +1503,7 @@ insert_push_immed_ptrsz(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr
                                 OPND_CREATE_INT32((int)(val >> 32))));
     }
 #else
-    PRE(ilist, instr,
-        INSTR_CREATE_push_imm(dcontext, OPND_CREATE_INT32(val)));
+    PRE(ilist, instr, INSTR_CREATE_push_imm(dcontext, OPND_CREATE_INT32(val)));
 #endif
 }
 
@@ -1519,12 +1513,11 @@ insert_push_retaddr(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
                     ptr_int_t retaddr, opnd_size_t opsize)
 {
     if (opsize == OPSZ_2) {
-        ptr_int_t val = retaddr & (ptr_int_t) 0x0000ffff;
+        ptr_int_t val = retaddr & (ptr_int_t)0x0000ffff;
         /* can't do a non-default operand size with a push immed so we emulate */
         PRE(ilist, instr,
             INSTR_CREATE_lea(dcontext, opnd_create_reg(REG_XSP),
-                             opnd_create_base_disp(REG_XSP, REG_NULL, 0, -2,
-                                                   OPSZ_lea)));
+                             opnd_create_base_disp(REG_XSP, REG_NULL, 0, -2, OPSZ_lea)));
         PRE(ilist, instr,
             INSTR_CREATE_mov_st(dcontext, OPND_CREATE_MEM16(REG_XSP, 2),
                                 OPND_CREATE_INT16(val)));
@@ -1532,13 +1525,12 @@ insert_push_retaddr(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
         insert_push_immed_ptrsz(dcontext, ilist, instr, retaddr);
     } else {
 #ifdef X64
-        ptr_int_t val = retaddr & (ptr_int_t) 0xffffffff;
+        ptr_int_t val = retaddr & (ptr_int_t)0xffffffff;
         ASSERT(opsize == OPSZ_4);
         /* can't do a non-default operand size with a push immed so we emulate */
         PRE(ilist, instr,
             INSTR_CREATE_lea(dcontext, opnd_create_reg(REG_XSP),
-                             opnd_create_base_disp(REG_XSP, REG_NULL, 0, -4,
-                                                   OPSZ_lea)));
+                             opnd_create_base_disp(REG_XSP, REG_NULL, 0, -4, OPSZ_lea)));
         PRE(ilist, instr,
             INSTR_CREATE_mov_st(dcontext, OPND_CREATE_MEM32(REG_XSP, 4),
                                 OPND_CREATE_INT32(val)));
@@ -1617,33 +1609,34 @@ mangle_direct_call(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
          */
 #endif
         return next_instr;
-    } 
+    }
 
     /* For CI builds, use the translation field so we can handle cases
      * where the client has changed the target and invalidated the raw
      * bits.  We'll make sure the translation is always set for direct
      * calls.
      */
-    curaddr = (ptr_uint_t) instr_get_translation(instr);
+    curaddr = (ptr_uint_t)instr_get_translation(instr);
     if (curaddr == 0 && instr_raw_bits_valid(instr))
-        curaddr = (ptr_uint_t) instr_get_raw_bits(instr);
+        curaddr = (ptr_uint_t)instr_get_raw_bits(instr);
     ASSERT(curaddr != 0);
     retaddr = curaddr + len;
-    ASSERT(retaddr == (ptr_uint_t) decode_next_pc(dcontext, (byte *)curaddr));
+    ASSERT(retaddr == (ptr_uint_t)decode_next_pc(dcontext, (byte *)curaddr));
 
 #if defined(RETURN_STACK) || defined(NATIVE_RETURN)
     /* ASSUMPTION: a call to the next instr is not going to ever have a matching ret!
      * FIXME: have a flag to turn this off...aggressiveness level?
      */
     if (target == (app_pc)retaddr) {
-        LOG(THREAD, LOG_INTERP, 3, "found call to next instruction "PFX"\n", target);
+        LOG(THREAD, LOG_INTERP, 3, "found call to next instruction " PFX "\n", target);
 #endif
 
 #ifdef CHECK_RETURNS_SSE2
         /* ASSUMPTION: a call to the next instr is not going to ever have a
          * matching ret! */
         if (target == (app_pc)retaddr) {
-            LOG(THREAD, LOG_INTERP, 3, "found call to next instruction "PFX"\n", target);
+            LOG(THREAD, LOG_INTERP, 3, "found call to next instruction " PFX "\n",
+                target);
         } else {
             check_return_handle_call(dcontext, ilist, next_instr);
         }
@@ -1666,7 +1659,7 @@ mangle_direct_call(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
 
         /* convert a direct call to a push of the return address */
         insert_push_retaddr(dcontext, ilist, instr, retaddr, opnd_get_size(pushop));
-        
+
         /* remove the call */
         instrlist_remove(ilist, instr);
         instr_destroy(dcontext, instr);
@@ -1675,18 +1668,15 @@ mangle_direct_call(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
 #if defined(RETURN_STACK) || defined(NATIVE_RETURN)
     }
     /* "real" call (not to next instr) */
-# ifdef NATIVE_RETURN
-    return native_ret_mangle_direct_call(dcontext, ilist, instr,
-                                         next_instr, retaddr);
-# else /* RETURN_STACK */
-    return return_stack_mangle_direct_call(dcontext, ilist, instr,
-                                           next_instr, retaddr);
-# endif
+#    ifdef NATIVE_RETURN
+    return native_ret_mangle_direct_call(dcontext, ilist, instr, next_instr, retaddr);
+#    else /* RETURN_STACK */
+    return return_stack_mangle_direct_call(dcontext, ilist, instr, next_instr, retaddr);
+#    endif
 #endif
 }
 
-
-/* We spill to XCX(private dcontext) slot for private fragments, 
+/* We spill to XCX(private dcontext) slot for private fragments,
  * and to TLS MANGLE_XCX_SPILL_SLOT for shared fragments.
  * (Except for DYNAMO_OPTION(private_ib_in_tls), for which all use tls,
  *  but that has a performance hit because of the extra data cache line)
@@ -1700,11 +1690,11 @@ mangle_direct_call(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
  * targets, we should have the private ibl have special code to test the
  * flags and copy xcx to the tls slot if necessary.
  */
-#define SAVE_TO_DC_OR_TLS(dc, flags, reg, tls_offs, dc_offs)                      \
-    ((DYNAMO_OPTION(private_ib_in_tls) || TEST(FRAG_SHARED, (flags))) ?           \
-     INSTR_CREATE_mov_st(dcontext, opnd_create_tls_slot(os_tls_offset(tls_offs)), \
-                         opnd_create_reg(reg)) :                                  \
-     instr_create_save_to_dcontext((dc), (reg), (dc_offs)))
+#define SAVE_TO_DC_OR_TLS(dc, flags, reg, tls_offs, dc_offs)                            \
+    ((DYNAMO_OPTION(private_ib_in_tls) || TEST(FRAG_SHARED, (flags)))                   \
+         ? INSTR_CREATE_mov_st(dcontext, opnd_create_tls_slot(os_tls_offset(tls_offs)), \
+                               opnd_create_reg(reg))                                    \
+         : instr_create_save_to_dcontext((dc), (reg), (dc_offs)))
 
 /***************************************************************************
  * INDIRECT CALL
@@ -1733,14 +1723,14 @@ mangle_indirect_call(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
 
     /* If a client changes an instr, or our own mangle_rel_addr() does,
      * the raw bits won't be valid but the translation should be */
-    curaddr = (ptr_uint_t) instr_get_translation(instr);
+    curaddr = (ptr_uint_t)instr_get_translation(instr);
     if (curaddr == 0 && instr_raw_bits_valid(instr))
-        curaddr = (ptr_uint_t) instr_get_raw_bits(instr);
+        curaddr = (ptr_uint_t)instr_get_raw_bits(instr);
     ASSERT(curaddr != 0);
     if (instr_raw_bits_valid(instr))
         retaddr = curaddr + instr->length;
     else /* mangle_rel_addr() may have changed length: use original! */
-        retaddr = (ptr_uint_t) decode_next_pc(dcontext, (byte *)curaddr);
+        retaddr = (ptr_uint_t)decode_next_pc(dcontext, (byte *)curaddr);
     ASSERT(retaddr != 0);
 
     /* If this call is marked for conversion, do minimal processing.
@@ -1771,25 +1761,25 @@ mangle_indirect_call(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
     }
     insert_push_retaddr(dcontext, ilist, next_instr, retaddr, opnd_get_size(pushop));
 #endif
-    
+
     /* save away xcx so that we can use it */
     /* (it's restored in x86.s (indirect_branch_lookup) */
     PRE(ilist, instr,
         SAVE_TO_DC_OR_TLS(dcontext, flags, REG_XCX, MANGLE_XCX_SPILL_SLOT, XCX_OFFSET));
-    
+
 #ifdef STEAL_REGISTER
     /* Steal edi if call uses it, using original call instruction */
     steal_reg(dcontext, instr, ilist);
     if (ilist->flags)
         restore_state(dcontext, next_instr, ilist);
-    /* It's impossible for our register stealing to use ecx
-     * because no call can simultaneously use 3 registers, right?
-     * Maximum is 2, in something like "call *(edi,ecx,4)"?
-     * If it is possible, need to make sure stealing's use of ecx
-     * doesn't conflict w/ our use
-     */
-#endif    
-    
+        /* It's impossible for our register stealing to use ecx
+         * because no call can simultaneously use 3 registers, right?
+         * Maximum is 2, in something like "call *(edi,ecx,4)"?
+         * If it is possible, need to make sure stealing's use of ecx
+         * doesn't conflict w/ our use
+         */
+#endif
+
     /* change: call /2, Ev -> movl Ev, %xcx */
     target = instr_get_src(instr, 0);
     if (instr_get_opcode(instr) == OP_call_far_ind) {
@@ -1829,7 +1819,7 @@ mangle_indirect_call(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
             addr_size = OPSZ_2;
             reg_target = REG_XCX; /* we use movzx below so size doesn't have to match */
         }
-            
+
         target = opnd_create_base_disp(opnd_get_base(target), opnd_get_index(target),
                                        opnd_get_scale(target), opnd_get_disp(target),
                                        addr_size);
@@ -1845,7 +1835,7 @@ mangle_indirect_call(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
         instr_set_translation(instr, instr_get_raw_bits(instr));
     }
     instr_set_our_mangling(instr, true);
-    
+
 #ifdef RETURN_STACK
     /* NEW CALL HANDLING: RETURN STACK! */
     /* Change call to this:
@@ -1860,20 +1850,14 @@ mangle_indirect_call(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
      */
     IF_X64(ASSERT_NOT_IMPLEMENTED(false));
     cleanup = instr_create_save_dynamo_return_stack(dcontext);
-    PRE(ilist, next_instr,
-        INSTR_CREATE_push_imm(dcontext, OPND_CREATE_INT32(retaddr)));
-    PRE(ilist, next_instr,
-        instr_create_save_to_dcontext(dcontext, REG_ESP, XSP_OFFSET));
-    PRE(ilist, next_instr,
-        instr_create_restore_dynamo_return_stack(dcontext));
-    PRE(ilist, next_instr,
-        INSTR_CREATE_push_imm(dcontext, OPND_CREATE_INT32(retaddr)));
-    PRE(ilist, next_instr,
-        INSTR_CREATE_call(dcontext, opnd_create_instr(cleanup)));
+    PRE(ilist, next_instr, INSTR_CREATE_push_imm(dcontext, OPND_CREATE_INT32(retaddr)));
+    PRE(ilist, next_instr, instr_create_save_to_dcontext(dcontext, REG_ESP, XSP_OFFSET));
+    PRE(ilist, next_instr, instr_create_restore_dynamo_return_stack(dcontext));
+    PRE(ilist, next_instr, INSTR_CREATE_push_imm(dcontext, OPND_CREATE_INT32(retaddr)));
+    PRE(ilist, next_instr, INSTR_CREATE_call(dcontext, opnd_create_instr(cleanup)));
     /* an exit cti, not a meta instr */
-    instrlist_preinsert
-        (ilist, next_instr,
-         INSTR_CREATE_jmp(dcontext, opnd_create_pc(retaddr))); 
+    instrlist_preinsert(ilist, next_instr,
+                        INSTR_CREATE_jmp(dcontext, opnd_create_pc(retaddr)));
     PRE(ilist, next_instr, cleanup);
     PRE(ilist, next_instr,
         instr_create_restore_from_dcontext(dcontext, REG_ESP, XSP_OFFSET));
@@ -1894,15 +1878,16 @@ mangle_indirect_call(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
           jmp exit_stub (already added (==next_instr))
      */
     /* inc call_depth */
-# ifdef NATIVE_RETURN_CALLDEPTH
+#    ifdef NATIVE_RETURN_CALLDEPTH
+    instrlist_preinsert(
+        ilist, next_instr,
+        INSTR_CREATE_inc(dcontext,
+                         opnd_create_dcontext_field(dcontext, CALL_DEPTH_OFFSET)));
+#    endif
     instrlist_preinsert(ilist, next_instr,
-                        INSTR_CREATE_inc(dcontext, opnd_create_dcontext_field(dcontext,
-                                                                              CALL_DEPTH_OFFSET)));
-# endif
+                        INSTR_CREATE_call(dcontext, opnd_create_instr(next_instr)));
     instrlist_preinsert(ilist, next_instr,
-                       INSTR_CREATE_call(dcontext, opnd_create_instr(next_instr)));
-    instrlist_preinsert(ilist, next_instr, INSTR_CREATE_jmp(dcontext,
-                                                opnd_create_pc((app_pc)retaddr)));
+                        INSTR_CREATE_jmp(dcontext, opnd_create_pc((app_pc)retaddr)));
 #endif
 }
 
@@ -1937,7 +1922,7 @@ mangle_return(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
         SAVE_TO_DC_OR_TLS(dcontext, flags, REG_XCX, MANGLE_XCX_SPILL_SLOT, XCX_OFFSET));
 
     /* see if ret has an immed int operand, assumed to be 1st src */
-            
+
     if (instr_num_srcs(instr) > 0 && opnd_is_immed_int(instr_get_src(instr, 0))) {
         /* if has an operand, return removes some stack space,
          * AFTER the return address is popped
@@ -1946,7 +1931,7 @@ mangle_return(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
          * interrupted in the ret mangle region. However, the return address is
          * restored, which is all that should matter.
          */
-        int val = (int) opnd_get_immed_int(instr_get_src(instr, 0));
+        int val = (int)opnd_get_immed_int(instr_get_src(instr, 0));
         IF_X64(ASSERT_TRUNCATE(val, int, opnd_get_immed_int(instr_get_src(instr, 0))));
         /* addl sizeof_param_area, %xsp
          * except that clobbers the flags, so we use lea */
@@ -1954,13 +1939,13 @@ mangle_return(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
             INSTR_CREATE_lea(dcontext, opnd_create_reg(REG_XSP),
                              opnd_create_base_disp(REG_XSP, REG_NULL, 0, val, OPSZ_lea)));
     }
-            
+
     /* don't need to steal edi since return cannot use registers */
 
     /* the retaddr operand is always the final source for all OP_ret* instrs */
     retaddr = instr_get_src(instr, instr_num_srcs(instr) - 1);
 
-    if (X64_MODE_DC(dcontext) && 
+    if (X64_MODE_DC(dcontext) &&
         (instr_get_opcode(instr) == OP_iret || instr_get_opcode(instr) == OP_ret_far) &&
         opnd_get_size(retaddr) == OPSZ_4) {
         /* N.B.: For some unfathomable reason iret and ret_far default to operand
@@ -1996,9 +1981,9 @@ mangle_return(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
              */
             IF_LINUX_KERNEL(ASSERT_NOT_IMPLEMENTED(false));
             /* we need to zero out the top 2 bytes */
-            PRE(ilist, instr, INSTR_CREATE_movzx
-                (dcontext,
-                 opnd_create_reg(REG_ECX), opnd_create_reg(REG_CX)));
+            PRE(ilist, instr,
+                INSTR_CREATE_movzx(dcontext, opnd_create_reg(REG_ECX),
+                                   opnd_create_reg(REG_CX)));
         }
     }
 
@@ -2019,23 +2004,23 @@ mangle_return(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
          */
         PRE(ilist, instr,
             INSTR_CREATE_lea(dcontext, opnd_create_reg(REG_XSP),
-                             opnd_create_base_disp
-                             (REG_XSP, REG_NULL, 0,
-                              opnd_size_in_bytes(opnd_get_size(retaddr)), OPSZ_lea)));
+                             opnd_create_base_disp(
+                                 REG_XSP, REG_NULL, 0,
+                                 opnd_size_in_bytes(opnd_get_size(retaddr)), OPSZ_lea)));
     }
 
 #ifdef LINUX_KERNEL
     /* We process iret in mangle_return_to_user. */
-	ASSERT(instr_get_opcode(instr) != OP_iret);
+    ASSERT(instr_get_opcode(instr) != OP_iret);
 #else
     if (instr_get_opcode(instr) == OP_iret) {
         instr_t *popf;
 
         /* Xref PR 215553 and PR 191977 - we actually see this on 64-bit Vista */
-# ifndef X64
+#    ifndef X64
         ASSERT_NOT_TESTED();
-# endif
-        LOG(THREAD, LOG_INTERP, 2, "Encountered iret at "PFX" - mangling\n",
+#    endif
+        LOG(THREAD, LOG_INTERP, 2, "Encountered iret at " PFX " - mangling\n",
             instr_get_translation(instr));
         STATS_INC(num_irets);
 
@@ -2044,16 +2029,16 @@ mangle_return(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
          * the above and additionally adds pop->RSP pop->ss.  N.B.: like OP_far_ret we
          * ignore the CS and SS segment changes (FIXME: see the comments there for why,
          * can we do better?). */
-        
+
         /* Return address is already popped, next up is CS segment which we ignore so
          * adjust stack pointer. Note we can use an add here since the eflags will
          * be written below. */
         PRE(ilist, instr,
-            INSTR_CREATE_add(dcontext, opnd_create_reg(REG_XSP),
-                             OPND_CREATE_INT8
-                             (opnd_size_in_bytes(opnd_get_size(retaddr)))));
+            INSTR_CREATE_add(
+                dcontext, opnd_create_reg(REG_XSP),
+                OPND_CREATE_INT8(opnd_size_in_bytes(opnd_get_size(retaddr)))));
 
-        /* Next up is xflags, we use a popf. Popf should be setting the right flags 
+        /* Next up is xflags, we use a popf. Popf should be setting the right flags
          * (it's difficult to tell because in the docs iret lists the flags it does
          * set while popf lists the flags it doesn't set). The docs aren't entirely
          * clear, but any flag that we or a user mode program would care about should
@@ -2069,13 +2054,12 @@ mangle_return(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
             PRE(ilist, instr, popf);
             /* flags are already set, must use lea to fix stack */
             PRE(ilist, instr,
-                INSTR_CREATE_lea(dcontext, opnd_create_reg(REG_XSP),
-                                 opnd_create_base_disp
-                                 (REG_XSP, REG_NULL, 0, -4, OPSZ_lea)));
+                INSTR_CREATE_lea(
+                    dcontext, opnd_create_reg(REG_XSP),
+                    opnd_create_base_disp(REG_XSP, REG_NULL, 0, -4, OPSZ_lea)));
         } else {
             /* get popf size right the same way we do it for the return address */
-            DODEBUG(if (opnd_get_size(retaddr) == OPSZ_2)
-                        ASSERT_NOT_TESTED(););
+            DODEBUG(if (opnd_get_size(retaddr) == OPSZ_2) ASSERT_NOT_TESTED(););
             instr_set_src(popf, 1, retaddr);
             PRE(ilist, instr, popf);
         }
@@ -2185,7 +2169,6 @@ mangle_indirect_jump(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
      */
 }
 
-
 /***************************************************************************
  * SYSCALL
  */
@@ -2205,8 +2188,7 @@ find_syscall_num(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr)
          * may be other instrs placing operands into registers
          * for the syscall in between
          */
-        while (prev != NULL &&
-               instr_num_dsts(prev) > 0 &&
+        while (prev != NULL && instr_num_dsts(prev) > 0 &&
                opnd_is_reg(instr_get_dst(prev, 0)) &&
 #ifdef X64
                opnd_get_reg(instr_get_dst(prev, 0)) != REG_RAX &&
@@ -2219,24 +2201,20 @@ find_syscall_num(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr)
 #endif
             prev = instr_get_prev_expanded(dcontext, ilist, prev);
         }
-        if (prev != NULL &&
-            instr_get_opcode(prev) == OP_mov_imm &&
+        if (prev != NULL && instr_get_opcode(prev) == OP_mov_imm &&
             (IF_X64_ELSE(opnd_get_reg(instr_get_dst(prev, 0)) == REG_RAX, true) ||
              opnd_get_reg(instr_get_dst(prev, 0)) == REG_EAX)) {
 #ifdef CLIENT_INTERFACE
             instr_t *walk, *tgt;
 #endif
-            IF_X64(ASSERT_TRUNCATE(int, int,
-                                   opnd_get_immed_int(instr_get_src(prev, 0))));
-            syscall = (int) opnd_get_immed_int(instr_get_src(prev, 0));
+            IF_X64(ASSERT_TRUNCATE(int, int, opnd_get_immed_int(instr_get_src(prev, 0))));
+            syscall = (int)opnd_get_immed_int(instr_get_src(prev, 0));
 #ifdef CLIENT_INTERFACE
             /* if client added cti target in between, bail and assume non-ignorable */
-            for (walk = instrlist_first_expanded(dcontext, ilist);
-                 walk != NULL;
+            for (walk = instrlist_first_expanded(dcontext, ilist); walk != NULL;
                  walk = instr_get_next_expanded(dcontext, ilist, walk)) {
                 if (instr_is_cti(walk) && opnd_is_instr(instr_get_target(walk))) {
-                    for (tgt = opnd_get_instr(instr_get_target(walk));
-                         tgt != NULL;
+                    for (tgt = opnd_get_instr(instr_get_target(walk)); tgt != NULL;
                          tgt = instr_get_next_expanded(dcontext, ilist, tgt)) {
                         if (tgt == prev)
                             break;
@@ -2261,7 +2239,7 @@ find_syscall_num(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr)
  *
  * N.B.: mangle_clone_code() makes assumptions about this exact code layout
  *
- * CAUTION: don't use a lot of stack in the generated code because 
+ * CAUTION: don't use a lot of stack in the generated code because
  *          get_clone_record() makes assumptions about the usage of stack being
  *          less than a page.
  */
@@ -2269,25 +2247,25 @@ void
 mangle_insert_clone_code(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
                          bool skip _IF_X64(gencode_mode_t mode))
 {
-            /*
-                int 0x80
-            .if don't know sysnum statically:
-                jmp ignore  <-- modifiable jmp
-            .else
-                jmp xchg    # need this so can jmp to ignore if !CLONE_VM
-            .endif
-              xchg:
-                xchg xax,xcx
-                jecxz child
-                jmp parent
-              child:
-                # i#149/PR 403015: the child is on the dstack so no need to swap stacks
-                jmp new_thread_dynamo_start
-              parent:
-                xchg xax,xcx
-              ignore:
-                <post system call, etc.>
-            */
+    /*
+        int 0x80
+    .if don't know sysnum statically:
+        jmp ignore  <-- modifiable jmp
+    .else
+        jmp xchg    # need this so can jmp to ignore if !CLONE_VM
+    .endif
+      xchg:
+        xchg xax,xcx
+        jecxz child
+        jmp parent
+      child:
+        # i#149/PR 403015: the child is on the dstack so no need to swap stacks
+        jmp new_thread_dynamo_start
+      parent:
+        xchg xax,xcx
+      ignore:
+        <post system call, etc.>
+    */
     instr_t *in = instr_get_next(instr);
     instr_t *xchg = INSTR_CREATE_label(dcontext);
     instr_t *child = INSTR_CREATE_label(dcontext);
@@ -2300,34 +2278,30 @@ mangle_insert_clone_code(dcontext_t *dcontext, instrlist_t *ilist, instr_t *inst
         /* Insert a jmp that normally skips the clone stuff,
          * pre_system_call will modify it if it really is SYS_clone.
          */
-        PRE(ilist, in,
-            INSTR_CREATE_jmp(dcontext, opnd_create_instr(in)));
+        PRE(ilist, in, INSTR_CREATE_jmp(dcontext, opnd_create_instr(in)));
     } else {
         /* We have to do this even if we statically know the sysnum
          * because if CLONE_VM is not set this is a fork, and we then
          * want to skip our clone code.
          */
-        PRE(ilist, in,
-            INSTR_CREATE_jmp(dcontext, opnd_create_instr(xchg)));
+        PRE(ilist, in, INSTR_CREATE_jmp(dcontext, opnd_create_instr(xchg)));
     }
     PRE(ilist, in, xchg);
-    PRE(ilist, in, INSTR_CREATE_xchg(dcontext, opnd_create_reg(REG_XAX),
-                                     opnd_create_reg(REG_XCX)));
     PRE(ilist, in,
-        INSTR_CREATE_jecxz(dcontext, opnd_create_instr(child)));
-    PRE(ilist, in,
-        INSTR_CREATE_jmp(dcontext, opnd_create_instr(parent)));
+        INSTR_CREATE_xchg(dcontext, opnd_create_reg(REG_XAX), opnd_create_reg(REG_XCX)));
+    PRE(ilist, in, INSTR_CREATE_jecxz(dcontext, opnd_create_instr(child)));
+    PRE(ilist, in, INSTR_CREATE_jmp(dcontext, opnd_create_instr(parent)));
 
     PRE(ilist, in, child);
     /* an exit cti, not a meta instr */
-    instrlist_preinsert
-        (ilist, in,
-         INSTR_CREATE_jmp(dcontext, opnd_create_pc
-                          ((app_pc)get_new_thread_start(dcontext _IF_X64(mode)))));
+    instrlist_preinsert(ilist, in,
+                        INSTR_CREATE_jmp(dcontext,
+                                         opnd_create_pc((app_pc)get_new_thread_start(
+                                             dcontext _IF_X64(mode)))));
     instr_set_ok_to_mangle(instr_get_prev(in), false);
     PRE(ilist, in, parent);
-    PRE(ilist, in, INSTR_CREATE_xchg(dcontext, opnd_create_reg(REG_XAX),
-                                     opnd_create_reg(REG_XCX)));
+    PRE(ilist, in,
+        INSTR_CREATE_xchg(dcontext, opnd_create_reg(REG_XAX), opnd_create_reg(REG_XCX)));
 }
 #endif /* LINUX */
 
@@ -2339,10 +2313,10 @@ mangle_insert_clone_code(dcontext_t *dcontext, instrlist_t *ilist, instr_t *inst
 #endif
 #ifndef LINUX_KERNEL
 static void
-mangle_syscall(dcontext_t *dcontext, instrlist_t *ilist, uint flags,
-               instr_t *instr, instr_t *next_instr)
+mangle_syscall(dcontext_t *dcontext, instrlist_t *ilist, uint flags, instr_t *instr,
+               instr_t *next_instr)
 {
-# ifdef LINUX
+#    ifdef LINUX
     instr_t *skip_exit;
     if (get_syscall_method() != SYSCALL_METHOD_INT &&
         get_syscall_method() != SYSCALL_METHOD_SYSCALL &&
@@ -2350,7 +2324,8 @@ mangle_syscall(dcontext_t *dcontext, instrlist_t *ilist, uint flags,
         /* don't know convention on return address from kernel mode! */
         SYSLOG_INTERNAL_ERROR("unsupported system call method");
         LOG(THREAD, LOG_INTERP, 1, "don't know convention for this syscall method\n");
-        CLIENT_ASSERT(false, "Unsupported system call method detected. Please "
+        CLIENT_ASSERT(false,
+                      "Unsupported system call method detected. Please "
                       "reboot with the nosep kernel option if this is a 32-bit "
                       "2.5 or 2.6 version Linux kernel.");
     }
@@ -2380,11 +2355,12 @@ mangle_syscall(dcontext_t *dcontext, instrlist_t *ilist, uint flags,
     /* note that it's ok if this gets linked: we unlink all outgoing exits in
      * addition to changing the skip_exit jmp upon receiving a signal
      */
-    instrlist_preinsert(ilist, instr, INSTR_CREATE_jmp
-                        (dcontext, opnd_create_pc(instr_get_raw_bits(instr))));
+    instrlist_preinsert(
+        ilist, instr,
+        INSTR_CREATE_jmp(dcontext, opnd_create_pc(instr_get_raw_bits(instr))));
     PRE(ilist, instr, skip_exit);
 
-#  ifdef STEAL_REGISTER
+#        ifdef STEAL_REGISTER
     /* in linux, system calls get their parameters via registers.
      * edi is the last one used, but there are system calls that
      * use it, so we put the real value into edi.  plus things
@@ -2412,34 +2388,28 @@ mangle_syscall(dcontext_t *dcontext, instrlist_t *ilist, uint flags,
      *   add 4,esp         # clean up push of dcontext ptr
      */
     IF_X64(ASSERT_NOT_IMPLEMENTED(false));
-    PRE(ilist, instr,
-        INSTR_CREATE_push(dcontext, opnd_create_reg(REG_EDI)));
-    PRE(ilist, instr,
-        instr_create_restore_from_dcontext(dcontext, REG_EDI, XDI_OFFSET));
+    PRE(ilist, instr, INSTR_CREATE_push(dcontext, opnd_create_reg(REG_EDI)));
+    PRE(ilist, instr, instr_create_restore_from_dcontext(dcontext, REG_EDI, XDI_OFFSET));
 
     /* insert after in reverse order: */
     POST(ilist, instr,
-         INSTR_CREATE_add(dcontext, opnd_create_reg(REG_ESP),
-                          OPND_CREATE_INT8(4)));
-    POST(ilist, instr,
-         INSTR_CREATE_pop(dcontext, opnd_create_reg(REG_EBX)));
-    POST(ilist, instr,
-         instr_create_save_to_dcontext(dcontext, REG_EBX, XDI_OFFSET));
+         INSTR_CREATE_add(dcontext, opnd_create_reg(REG_ESP), OPND_CREATE_INT8(4)));
+    POST(ilist, instr, INSTR_CREATE_pop(dcontext, opnd_create_reg(REG_EBX)));
+    POST(ilist, instr, instr_create_save_to_dcontext(dcontext, REG_EBX, XDI_OFFSET));
     POST(ilist, instr,
          INSTR_CREATE_mov_ld(dcontext, opnd_create_reg(REG_EDI),
                              OPND_CREATE_MEM32(REG_ESP, 4)));
     POST(ilist, instr,
          INSTR_CREATE_mov_ld(dcontext, opnd_create_reg(REG_EBX),
                              opnd_create_reg(REG_EDI)));
-    POST(ilist, instr,
-         INSTR_CREATE_push(dcontext, opnd_create_reg(REG_EBX)));
-#  endif /* STEAL_REGISTER */
+    POST(ilist, instr, INSTR_CREATE_push(dcontext, opnd_create_reg(REG_EBX)));
+#        endif /* STEAL_REGISTER */
 
-# else /* WINDOWS */
+#    else /* WINDOWS */
     /* special handling of system calls is performed in shared_syscall or
      * in do_syscall
      */
-    
+
     /* FIXME: for ignorable syscalls,
      * do we need support for exiting mid-fragment prior to a syscall
      * like we do on Linux, to bound time in cache?
@@ -2454,9 +2424,9 @@ mangle_syscall(dcontext_t *dcontext, instrlist_t *ilist, uint flags,
              * xsi slot or the mangle-next-tag tls slot
              */
             if (DYNAMO_OPTION(shared_fragment_shared_syscalls)) {
-# ifdef X64
+#        ifdef X64
                 ASSERT(instr_raw_bits_valid(instr));
-                /* PR 244741: no 64-bit store-immed-to-mem 
+                /* PR 244741: no 64-bit store-immed-to-mem
                  * FIXME: would be nice to move this to the stub and
                  * use the dead rbx register!
                  */
@@ -2465,26 +2435,29 @@ mangle_syscall(dcontext_t *dcontext, instrlist_t *ilist, uint flags,
                 PRE(ilist, instr,
                     INSTR_CREATE_mov_imm(dcontext, opnd_create_reg(REG_XCX),
                                          OPND_CREATE_INTPTR((instr->bytes + len))));
-                PRE(ilist, instr, INSTR_CREATE_xchg
-                    (dcontext, opnd_create_tls_slot(os_tls_offset(MANGLE_NEXT_TAG_SLOT)),
-                     opnd_create_reg(REG_XCX)));
-# else
-                PRE(ilist, instr, INSTR_CREATE_mov_st
-                    (dcontext, opnd_create_tls_slot(os_tls_offset(MANGLE_NEXT_TAG_SLOT)),
-                     OPND_CREATE_INTPTR((instr->bytes + len))));
-# endif
-            }
-            else {
-                PRE(ilist, instr, instr_create_save_immed_to_dcontext
-                    (dcontext, (uint)(ptr_uint_t)(instr->bytes + len), XSI_OFFSET));
+                PRE(ilist, instr,
+                    INSTR_CREATE_xchg(
+                        dcontext,
+                        opnd_create_tls_slot(os_tls_offset(MANGLE_NEXT_TAG_SLOT)),
+                        opnd_create_reg(REG_XCX)));
+#        else
+                PRE(ilist, instr,
+                    INSTR_CREATE_mov_st(
+                        dcontext,
+                        opnd_create_tls_slot(os_tls_offset(MANGLE_NEXT_TAG_SLOT)),
+                        OPND_CREATE_INTPTR((instr->bytes + len))));
+#        endif
+            } else {
+                PRE(ilist, instr,
+                    instr_create_save_immed_to_dcontext(
+                        dcontext, (uint)(ptr_uint_t)(instr->bytes + len), XSI_OFFSET));
             }
         }
         /* Handle ignorable syscall.  non-ignorable system calls are
          * destroyed and removed from the list at the end of this func.
          */
         else if (!TEST(INSTR_NI_SYSCALL, instr->flags)) {
-            if (get_syscall_method() == SYSCALL_METHOD_INT &&
-                DYNAMO_OPTION(sygate_int)) {
+            if (get_syscall_method() == SYSCALL_METHOD_INT && DYNAMO_OPTION(sygate_int)) {
                 /* for Sygate need to mangle into a call to int_syscall_addr
                  * is anyone going to get screwed up by this change
                  * (say flags change?) [-ignore_syscalls only]*/
@@ -2553,24 +2526,24 @@ mangle_syscall(dcontext_t *dcontext, instrlist_t *ilist, uint flags,
     /* destroy the syscall instruction */
     instrlist_remove(ilist, instr);
     instr_destroy(dcontext, instr);
-# endif /* WINDOWS */
+#    endif /* WINDOWS */
 }
 #else /* LINUX_KERNEL */
 
 static void
 mangle_return_to_user(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr)
 {
-	/* A direct jump was created by build_bb_ilist that will send us back to
-	 * the dispatcher. The dispatcher emulates the instruction.
-	 *
-	 * TODO(peter): Perhaps for iret we want to use regular indirect IBL
-	 * processing when returning to the kernel. We'd need to perform an inline
-	 * check of the target code segment (CS & 3 == 0 --> kernel). If the target
-	 * is kernel, then we could use the existing code in mangle_return to pop the
-	 * interrupt stack frame and call the indirect branch linking code. I haven't
-	 * done this because performing the inline check transparently is a hassle (i.e.,
-	 * because of eflags issues).
-	 */
+    /* A direct jump was created by build_bb_ilist that will send us back to
+     * the dispatcher. The dispatcher emulates the instruction.
+     *
+     * TODO(peter): Perhaps for iret we want to use regular indirect IBL
+     * processing when returning to the kernel. We'd need to perform an inline
+     * check of the target code segment (CS & 3 == 0 --> kernel). If the target
+     * is kernel, then we could use the existing code in mangle_return to pop the
+     * interrupt stack frame and call the indirect branch linking code. I haven't
+     * done this because performing the inline check transparently is a hassle (i.e.,
+     * because of eflags issues).
+     */
     DODEBUG({
         /* TODO(peter): Support 32-bit iret and sysret. We'd have to create
          * different versions of native_sysret and native_iret. I'm not sure if
@@ -2619,8 +2592,7 @@ mangle_clone_code(dcontext_t *dcontext, byte *pc, bool skip)
     byte *target, *prev_pc;
     instr_t instr;
     instr_init(dcontext, &instr);
-    LOG(THREAD, LOG_SYSCALLS, 3,
-        "mangle_clone_code: pc="PFX", skip=%d\n", pc, skip);
+    LOG(THREAD, LOG_SYSCALLS, 3, "mangle_clone_code: pc=" PFX ", skip=%d\n", pc, skip);
     do {
         instr_reset(dcontext, &instr);
         pc = decode(dcontext, pc, &instr);
@@ -2650,15 +2622,15 @@ mangle_clone_code(dcontext_t *dcontext, byte *pc, bool skip)
         target = pc;
     }
     if (opnd_get_pc(instr_get_target(&instr)) != target) {
-        DEBUG_DECLARE(byte *nxt_pc;)
-        LOG(THREAD, LOG_SYSCALLS, 3,
-            "\tmodifying target of after-clone jmp to "PFX"\n", target);
+        DEBUG_DECLARE(byte * nxt_pc;)
+        LOG(THREAD, LOG_SYSCALLS, 3, "\tmodifying target of after-clone jmp to " PFX "\n",
+            target);
         instr_set_target(&instr, opnd_create_pc(target));
-        DEBUG_DECLARE(nxt_pc = ) instr_encode(dcontext, &instr, prev_pc);
+        DEBUG_DECLARE(nxt_pc =) instr_encode(dcontext, &instr, prev_pc);
         ASSERT(nxt_pc != NULL && nxt_pc == pc);
     } else {
-        LOG(THREAD, LOG_SYSCALLS, 3,
-            "\ttarget of after-clone jmp is already "PFX"\n", target);
+        LOG(THREAD, LOG_SYSCALLS, 3, "\ttarget of after-clone jmp is already " PFX "\n",
+            target);
     }
     instr_free(dcontext, &instr);
 }
@@ -2679,8 +2651,7 @@ mangle_syscall_code(dcontext_t *dcontext, fragment_t *f, byte *pc, bool skip)
     DEBUG_DECLARE(instr_t cti;)
     instr_init(dcontext, &instr);
     DODEBUG({ instr_init(dcontext, &cti); });
-    LOG(THREAD, LOG_SYSCALLS, 3,
-        "mangle_syscall_code: pc="PFX", skip=%d\n", pc, skip);
+    LOG(THREAD, LOG_SYSCALLS, 3, "mangle_syscall_code: pc=" PFX ", skip=%d\n", pc, skip);
     do {
         instr_reset(dcontext, &instr);
         prev_pc = pc;
@@ -2697,7 +2668,7 @@ mangle_syscall_code(dcontext_t *dcontext, fragment_t *f, byte *pc, bool skip)
         }
     } while (!instr_is_syscall(&instr));
     if (skip_pc != NULL) {
-        /* signal happened after skip jmp: nothing we can do here 
+        /* signal happened after skip jmp: nothing we can do here
          *
          * FIXME PR 213040: we should tell caller difference between
          * "no syscalls" and "too-close syscall" and have it take
@@ -2734,15 +2705,15 @@ mangle_syscall_code(dcontext_t *dcontext, fragment_t *f, byte *pc, bool skip)
     /* FIXME : this should work out to just a 1 byte write, but let's make
      * it more clear that this is atomic! */
     if (opnd_get_pc(instr_get_target(&instr)) != target) {
-        DEBUG_DECLARE(byte *nxt_pc;)
-        LOG(THREAD, LOG_SYSCALLS, 3,
-            "\tmodifying target of syscall jmp to "PFX"\n", target);
+        DEBUG_DECLARE(byte * nxt_pc;)
+        LOG(THREAD, LOG_SYSCALLS, 3, "\tmodifying target of syscall jmp to " PFX "\n",
+            target);
         instr_set_target(&instr, opnd_create_pc(target));
-        DEBUG_DECLARE(nxt_pc = ) instr_encode(dcontext, &instr, skip_pc);
+        DEBUG_DECLARE(nxt_pc =) instr_encode(dcontext, &instr, skip_pc);
         ASSERT(nxt_pc != NULL && nxt_pc == cti_pc);
     } else {
-        LOG(THREAD, LOG_SYSCALLS, 3,
-            "\ttarget of syscall jmp is already "PFX"\n", target);
+        LOG(THREAD, LOG_SYSCALLS, 3, "\ttarget of syscall jmp is already " PFX "\n",
+            target);
     }
     instr_free(dcontext, &instr);
     return true;
@@ -2774,26 +2745,25 @@ mangle_interrupt(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
 #endif /* WINDOWS */
 }
 
-
 /***************************************************************************
  * CPUID FOOLING
  */
 #ifdef FOOL_CPUID
 
-/* values returned by cpuid for Mobile Pentium MMX processor (family 5, model 8) 
+/* values returned by cpuid for Mobile Pentium MMX processor (family 5, model 8)
  * minus mmx (==0x00800000 in CPUID_1_EDX)
  * FIXME: change model number to a Pentium w/o MMX!
  */
-#define CPUID_0_EAX 0x00000001 
-#define CPUID_0_EBX 0x756e6547
-#define CPUID_0_ECX 0x6c65746e
-#define CPUID_0_EDX 0x49656e69
+#    define CPUID_0_EAX 0x00000001
+#    define CPUID_0_EBX 0x756e6547
+#    define CPUID_0_ECX 0x6c65746e
+#    define CPUID_0_EDX 0x49656e69
 /* extended family, extended model, type, family, model, stepping id: */
 /* 20:27,           16:19,          12:13, 8:11,  4:7,   0:3    */
-#define CPUID_1_EAX 0x00000581
-#define CPUID_1_EBX 0x00000000
-#define CPUID_1_ECX 0x00000000
-#define CPUID_1_EDX 0x000001bf
+#    define CPUID_1_EAX 0x00000581
+#    define CPUID_1_EBX 0x00000000
+#    define CPUID_1_ECX 0x00000000
+#    define CPUID_1_EDX 0x000001bf
 
 static void
 mangle_cpuid(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
@@ -2839,7 +2809,7 @@ mangle_cpuid(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
     op = instr_get_dst(prev, 0);
     if (!opnd_is_reg(op) || opnd_get_reg(op) != REG_EAX)
         goto cpuid_give_up;
-    
+
     if (input == 0) {
         out_eax = CPUID_0_EAX;
         out_ebx = CPUID_0_EBX;
@@ -2865,12 +2835,12 @@ mangle_cpuid(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
     PRE(ilist, instr,
         INSTR_CREATE_mov_imm(dcontext, opnd_create_reg(REG_EDX),
                              OPND_CREATE_INT32(out_edx)));
-    
+
     /* destroy the cpuid instruction */
     instrlist_remove(ilist, instr);
     instr_destroy(dcontext, instr);
     return;
- cpuid_give_up:
+cpuid_give_up:
     LOG(THREAD, LOG_INTERP, 1, "\tcpuid fool: giving up\n");
     return;
 }
@@ -2880,16 +2850,15 @@ static void
 mangle_exit_cti_prefixes(dcontext_t *dcontext, instr_t *instr)
 {
     uint prefixes = instr_get_prefixes(instr);
-    if (TESTANY(~(PREFIX_JCC_TAKEN|PREFIX_JCC_NOT_TAKEN), prefixes)) {
+    if (TESTANY(~(PREFIX_JCC_TAKEN | PREFIX_JCC_NOT_TAKEN), prefixes)) {
         /* Case 8738: while for transparency it would be best to maintain all
          * prefixes, our patching and other routines make assumptions about
-         * the length of exit ctis.  Plus our elision removes the whole 
+         * the length of exit ctis.  Plus our elision removes the whole
          * instr in any case.
          */
-        LOG(THREAD, LOG_INTERP, 4,
-            "\tremoving unknown prefixes "PFX" from "PFX"\n",
+        LOG(THREAD, LOG_INTERP, 4, "\tremoving unknown prefixes " PFX " from " PFX "\n",
             prefixes, instr_get_raw_bits(instr));
-        prefixes &= (PREFIX_JCC_TAKEN|PREFIX_JCC_NOT_TAKEN);
+        prefixes &= (PREFIX_JCC_TAKEN | PREFIX_JCC_NOT_TAKEN);
         instr_set_prefixes(instr, prefixes);
     }
 }
@@ -2906,13 +2875,13 @@ mangle_rel_addr(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
     ASSERT(instr_has_rel_addr_reference(instr));
     instr_get_rel_addr_target(instr, &tgt);
     STATS_INC(rip_rel_instrs);
-# ifdef RCT_IND_BRANCH
+#    ifdef RCT_IND_BRANCH
     if (TEST(OPTION_ENABLED, DYNAMO_OPTION(rct_ind_call)) ||
         TEST(OPTION_ENABLED, DYNAMO_OPTION(rct_ind_jump))) {
         /* PR 215408: record addresses taken via rip-relative instrs */
         rct_add_rip_rel_addr(dcontext, tgt _IF_DEBUG(instr_get_translation(instr)));
     }
-# endif
+#    endif
     if (opc == OP_lea) {
         /* segment overrides are ignored on lea */
         opnd_t immed;
@@ -2925,7 +2894,7 @@ mangle_rel_addr(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
          * Table 3-59 "64-bit Mode LEA Operation with Address and Operand Size
          * Attributes" */
         /* FIXME PR 253446: optimization: we could leave this as rip-rel if it
-         * still reaches from the code cache. */         
+         * still reaches from the code cache. */
         if (reg_get_size(opnd_get_reg(dst)) == OPSZ_8) {
             /* PR 253327: there is no explicit addr32 marker; we assume
              * that decode or the user already zeroed out the top bits
@@ -2938,8 +2907,7 @@ mangle_rel_addr(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
             ASSERT(reg_get_size(opnd_get_reg(dst)) == OPSZ_2);
             immed = OPND_CREATE_INT16((short)(ptr_int_t)tgt);
         }
-        PRE(ilist, instr,
-            INSTR_CREATE_mov_imm(dcontext, dst, immed));
+        PRE(ilist, instr, INSTR_CREATE_mov_imm(dcontext, dst, immed));
         instrlist_remove(ilist, instr);
         instr_destroy(dcontext, instr);
         STATS_INC(rip_rel_lea);
@@ -3026,7 +2994,7 @@ mangle_rel_addr(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
                     instr_create_restore_from_tls(dcontext, scratch_reg, TLS_XAX_SLOT));
             }
             STATS_INC(rip_rel_unreachable);
-        }        
+        }
     }
 }
 #endif
@@ -3039,8 +3007,8 @@ mangle_rel_addr(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr,
  * inserted instr -- but this slows down encoding in current implementation
  */
 void
-mangle(dcontext_t *dcontext, instrlist_t *ilist, uint flags,
-       bool mangle_calls, bool record_translation)
+mangle(dcontext_t *dcontext, instrlist_t *ilist, uint flags, bool mangle_calls,
+       bool record_translation)
 {
     instr_t *instr, *next_instr;
 #ifdef WINDOWS
@@ -3057,14 +3025,12 @@ mangle(dcontext_t *dcontext, instrlist_t *ilist, uint flags,
      * -- convert indirect branches into 'save %xcx; lea EA, %xcx';
      * -- convert indirect calls as a combination of direct call and
      *    indirect branch conversion;
-     * -- ifdef STEAL_REGISTER, steal edi for our own use. 
+     * -- ifdef STEAL_REGISTER, steal edi for our own use.
      */
 
     KSTART(mangling);
     instrlist_set_our_mangling(ilist, true); /* PR 267260 */
-    for (instr = instrlist_first(ilist);
-         instr != NULL;
-         instr = next_instr) {
+    for (instr = instrlist_first(ilist); instr != NULL; instr = next_instr) {
 
         /* don't mangle anything that mangle inserts! */
         next_instr = instr_get_next(instr);
@@ -3083,8 +3049,8 @@ mangle(dcontext_t *dcontext, instrlist_t *ilist, uint flags,
 #endif
 
         if (instr_is_exit_cti(instr)) {
-        	instr_t *cti_translation_label = INSTR_CREATE_label(dcontext);
-        	instr_set_cti_translation(cti_translation_label, true);
+            instr_t *cti_translation_label = INSTR_CREATE_label(dcontext);
+            instr_set_cti_translation(cti_translation_label, true);
             PRE(ilist, instr, cti_translation_label);
             mangle_exit_cti_prefixes(dcontext, instr);
 
@@ -3097,7 +3063,7 @@ mangle(dcontext_t *dcontext, instrlist_t *ilist, uint flags,
                 /* convert short jumps */
                 convert_to_near_rel(dcontext, instr);
             }
-            
+
             if (instr_get_opcode(instr) == OP_jmp_far) {
                 /* FIXME: case 6962: we don't support fully; just convert
                  * to near jmp.
@@ -3114,7 +3080,7 @@ mangle(dcontext_t *dcontext, instrlist_t *ilist, uint flags,
 #ifndef LINUX_KERNEL
         /* PR 240258: wow64 call* gateway is considered is_syscall */
         if (instr_is_syscall(instr)) {
-# ifdef WINDOWS
+#    ifdef WINDOWS
             /* For XP & 2003, which use sysenter, we process the syscall after all
              * mangling is completed, since we need to insert a reference to the
              * post-sysenter instruction. If that instruction is a 'ret', which
@@ -3123,13 +3089,12 @@ mangle(dcontext_t *dcontext, instrlist_t *ilist, uint flags,
              * that case, we defer syscall processing until mangling is completed.
              */
             if (!ignorable_sysenter)
-# endif
+#    endif
                 mangle_syscall(dcontext, ilist, flags, instr, next_instr);
             continue;
-        }
-        else 
+        } else
 #endif
-        if (instr_is_interrupt(instr)) { /* non-syscall interrupt */
+            if (instr_is_interrupt(instr)) { /* non-syscall interrupt */
             mangle_interrupt(dcontext, ilist, instr, next_instr);
             continue;
         }
@@ -3171,7 +3136,7 @@ mangle(dcontext_t *dcontext, instrlist_t *ilist, uint flags,
         } else if (instr_may_return_to_user(instr)) {
             /* Important that this comes before mangle_return because sysret and
              * iret are considered return instructions. */
-        	mangle_return_to_user(dcontext, ilist, instr);
+            mangle_return_to_user(dcontext, ilist, instr);
 #endif
         } else if (instr_is_return(instr)) {
             mangle_return(dcontext, ilist, instr, next_instr, flags);
@@ -3196,9 +3161,7 @@ mangle(dcontext_t *dcontext, instrlist_t *ilist, uint flags,
     /* Do XP & 2003 ignore-syscalls processing now. */
     if (ignorable_sysenter) {
         /* Check for any syscalls and process them. */
-        for (instr = instrlist_first(ilist);
-             instr != NULL;
-             instr = next_instr) {
+        for (instr = instrlist_first(ilist); instr != NULL; instr = next_instr) {
             next_instr = instr_get_next(instr);
             if (instr_opcode_valid(instr) && instr_is_syscall(instr))
                 mangle_syscall(dcontext, ilist, flags, instr, next_instr);
@@ -3233,15 +3196,15 @@ mangle(dcontext_t *dcontext, instrlist_t *ilist, uint flags,
 #undef SAVE_TO_DC_OR_TLS
 /* PR 244737: x64 uses tls to avoid reachability issues w/ absolute addresses */
 #ifdef X64
-# define SAVE_TO_DC_OR_TLS(dc, reg, tls_offs, dc_offs) \
-    instr_create_save_to_tls((dc), (reg), (tls_offs))
-# define RESTORE_FROM_DC_OR_TLS(dc, reg, tls_offs, dc_offs) \
-    instr_create_restore_from_tls((dc), (reg), (tls_offs))
+#    define SAVE_TO_DC_OR_TLS(dc, reg, tls_offs, dc_offs) \
+        instr_create_save_to_tls((dc), (reg), (tls_offs))
+#    define RESTORE_FROM_DC_OR_TLS(dc, reg, tls_offs, dc_offs) \
+        instr_create_restore_from_tls((dc), (reg), (tls_offs))
 #else
-# define SAVE_TO_DC_OR_TLS(dc, reg, tls_offs, dc_offs) \
-    instr_create_save_to_dcontext((dc), (reg), (dc_offs))
-# define RESTORE_FROM_DC_OR_TLS(dc, reg, tls_offs, dc_offs) \
-    instr_create_restore_from_dcontext((dc), (reg), (dc_offs))
+#    define SAVE_TO_DC_OR_TLS(dc, reg, tls_offs, dc_offs) \
+        instr_create_save_to_dcontext((dc), (reg), (dc_offs))
+#    define RESTORE_FROM_DC_OR_TLS(dc, reg, tls_offs, dc_offs) \
+        instr_create_restore_from_dcontext((dc), (reg), (dc_offs))
 #endif
 
 static void
@@ -3264,7 +3227,7 @@ sandbox_rep_instr(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr, inst
      *   if (xdi-xcx*opndsize < end_pc && xdi+xcx*opndsize > start_pc) => self-write
      * opndsize is 1,2, or 4 => use lea for mul
      *   lea (xdi,xcx,opndsize),xcx
-     * 
+     *
      *   save flags and xax
      *   save xbx
      *   lea (xdi,xcx,opndsize),xbx
@@ -3299,7 +3262,7 @@ sandbox_rep_instr(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr, inst
     instr_t *ok2 = INSTR_CREATE_label(dcontext);
     instr_t *jmp;
     app_pc after_write;
-    uint opndsize = opnd_size_in_bytes(opnd_get_size(instr_get_dst(instr,0)));
+    uint opndsize = opnd_size_in_bytes(opnd_get_size(instr_get_dst(instr, 0)));
     uint flags =
         instr_eflags_to_fragment_eflags(forward_eflags_analysis(dcontext, ilist, next));
     bool use_tls = IF_X64_ELSE(true, false);
@@ -3314,7 +3277,7 @@ sandbox_rep_instr(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr, inst
 
     if (next_app != NULL) {
         /* client may have inserted non-meta instrs, so use translation first
-         * (xref PR 472190) 
+         * (xref PR 472190)
          */
         if (instr_get_app_pc(next_app) != NULL)
             after_write = instr_get_app_pc(next_app);
@@ -3329,15 +3292,13 @@ sandbox_rep_instr(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr, inst
     }
 
     insert_save_eflags(dcontext, ilist, instr, flags, use_tls, !use_tls);
-    PRE(ilist, instr,
-        SAVE_TO_DC_OR_TLS(dcontext, REG_XBX, TLS_XBX_SLOT, XBX_OFFSET));
+    PRE(ilist, instr, SAVE_TO_DC_OR_TLS(dcontext, REG_XBX, TLS_XBX_SLOT, XBX_OFFSET));
     PRE(ilist, instr,
         INSTR_CREATE_lea(dcontext, opnd_create_reg(REG_XBX),
                          opnd_create_base_disp(REG_XDI, REG_XCX, opndsize, 0, OPSZ_lea)));
 #ifdef X64
     if ((ptr_uint_t)start_pc > UINT_MAX || (ptr_uint_t)end_pc > UINT_MAX) {
-        PRE(ilist, instr,
-            SAVE_TO_DC_OR_TLS(dcontext, REG_XDX, TLS_XDX_SLOT, XDX_OFFSET));
+        PRE(ilist, instr, SAVE_TO_DC_OR_TLS(dcontext, REG_XDX, TLS_XDX_SLOT, XDX_OFFSET));
     }
     if ((ptr_uint_t)start_pc > UINT_MAX) {
         PRE(ilist, instr,
@@ -3356,16 +3317,14 @@ sandbox_rep_instr(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr, inst
 #endif
     PRE(ilist, instr,
         INSTR_CREATE_mov_imm(dcontext, opnd_create_reg(REG_XBX), OPND_CREATE_INT32(0)));
+    PRE(ilist, instr, INSTR_CREATE_jcc(dcontext, OP_jle, opnd_create_instr(ok)));
     PRE(ilist, instr,
-        INSTR_CREATE_jcc(dcontext, OP_jle, opnd_create_instr(ok)));
+        INSTR_CREATE_lea(
+            dcontext, opnd_create_reg(REG_XBX),
+            opnd_create_base_disp(REG_NULL, REG_XCX, opndsize, 0, OPSZ_lea)));
+    PRE(ilist, instr, INSTR_CREATE_neg(dcontext, opnd_create_reg(REG_XBX)));
     PRE(ilist, instr,
-        INSTR_CREATE_lea(dcontext, opnd_create_reg(REG_XBX),
-                         opnd_create_base_disp(REG_NULL, REG_XCX, opndsize, 0, OPSZ_lea)));
-    PRE(ilist, instr,
-        INSTR_CREATE_neg(dcontext, opnd_create_reg(REG_XBX)));
-    PRE(ilist, instr,
-        INSTR_CREATE_add(dcontext, opnd_create_reg(REG_XBX),
-                         opnd_create_reg(REG_XDI)));
+        INSTR_CREATE_add(dcontext, opnd_create_reg(REG_XBX), opnd_create_reg(REG_XDI)));
 #ifdef X64
     if ((ptr_uint_t)end_pc > UINT_MAX) {
         PRE(ilist, instr,
@@ -3383,10 +3342,8 @@ sandbox_rep_instr(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr, inst
     }
 #endif
     PRE(ilist, instr,
-        INSTR_CREATE_mov_imm(dcontext, opnd_create_reg(REG_XBX),
-                             OPND_CREATE_INT32(0)));
-    PRE(ilist, instr,
-        INSTR_CREATE_jcc(dcontext, OP_jge, opnd_create_instr(ok)));
+        INSTR_CREATE_mov_imm(dcontext, opnd_create_reg(REG_XBX), OPND_CREATE_INT32(0)));
+    PRE(ilist, instr, INSTR_CREATE_jcc(dcontext, OP_jge, opnd_create_instr(ok)));
     PRE(ilist, instr,
         INSTR_CREATE_mov_imm(dcontext, opnd_create_reg(REG_XBX), OPND_CREATE_INT32(1)));
     PRE(ilist, instr, ok);
@@ -3399,11 +3356,10 @@ sandbox_rep_instr(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr, inst
 #endif
     /* instr goes here */
     PRE(ilist, next,
-        INSTR_CREATE_mov_ld(dcontext, opnd_create_reg(REG_XCX), opnd_create_reg(REG_XBX)));
-    PRE(ilist, next,
-        RESTORE_FROM_DC_OR_TLS(dcontext, REG_XBX, TLS_XBX_SLOT, XBX_OFFSET));
-    PRE(ilist, next,
-        INSTR_CREATE_jecxz(dcontext, opnd_create_instr(ok2)));
+        INSTR_CREATE_mov_ld(dcontext, opnd_create_reg(REG_XCX),
+                            opnd_create_reg(REG_XBX)));
+    PRE(ilist, next, RESTORE_FROM_DC_OR_TLS(dcontext, REG_XBX, TLS_XBX_SLOT, XBX_OFFSET));
+    PRE(ilist, next, INSTR_CREATE_jecxz(dcontext, opnd_create_instr(ok2)));
     PRE(ilist, next,
         INSTR_CREATE_mov_imm(dcontext, opnd_create_reg(REG_XCX),
                              OPND_CREATE_INT32(0))); /* on x64 top 32 bits zeroed */
@@ -3418,7 +3374,7 @@ static void
 sandbox_write(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr, instr_t *next,
               opnd_t op, app_pc start_pc, app_pc end_pc /* end is open */)
 {
-    /* can only test for equality w/o modifying flags, so save them 
+    /* can only test for equality w/o modifying flags, so save them
      * if (addr < end_pc && addr+opndsize > start_pc) => self-write
      *   <write memory>
      *   save flags and xax
@@ -3456,7 +3412,7 @@ sandbox_write(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr, instr_t 
 
     if (next_app != NULL) {
         /* client may have inserted non-meta instrs, so use translation first
-         * (xref PR 472190) 
+         * (xref PR 472190)
          */
         if (instr_get_app_pc(next_app) != NULL)
             after_write = instr_get_app_pc(next_app);
@@ -3471,11 +3427,9 @@ sandbox_write(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr, instr_t 
              * CALL* already means that we're leaving the block and it cannot be a selfmod
              * instruction even though it writes to memory
              */
-            DOLOG(4, LOG_INTERP, { 
-                loginst(dcontext, 4, next_app, "next app instr");
-            });
+            DOLOG(4, LOG_INTERP, { loginst(dcontext, 4, next_app, "next app instr"); });
             after_write = opnd_get_pc(instr_get_target(next_app));
-            LOG(THREAD, LOG_INTERP, 4, "after_write = "PFX" next should be final jmp\n",
+            LOG(THREAD, LOG_INTERP, 4, "after_write = " PFX " next should be final jmp\n",
                 after_write);
         } else
             after_write = instr_get_raw_bits(next_app);
@@ -3485,16 +3439,13 @@ sandbox_write(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr, instr_t 
     }
 
     insert_save_eflags(dcontext, ilist, next, flags, use_tls, !use_tls);
-    PRE(ilist, next,
-        SAVE_TO_DC_OR_TLS(dcontext, REG_XBX, TLS_XBX_SLOT, XBX_OFFSET));
+    PRE(ilist, next, SAVE_TO_DC_OR_TLS(dcontext, REG_XBX, TLS_XBX_SLOT, XBX_OFFSET));
     /* change to OPSZ_lea for lea */
     opnd_set_size(&op, OPSZ_lea);
-    PRE(ilist, next,
-        INSTR_CREATE_lea(dcontext, opnd_create_reg(REG_XBX), op));
+    PRE(ilist, next, INSTR_CREATE_lea(dcontext, opnd_create_reg(REG_XBX), op));
 #ifdef X64
     if ((ptr_uint_t)start_pc > UINT_MAX || (ptr_uint_t)end_pc > UINT_MAX) {
-        PRE(ilist, next,
-            SAVE_TO_DC_OR_TLS(dcontext, REG_XCX, TLS_XCX_SLOT, XCX_OFFSET));
+        PRE(ilist, next, SAVE_TO_DC_OR_TLS(dcontext, REG_XCX, TLS_XCX_SLOT, XCX_OFFSET));
     }
     if ((ptr_uint_t)end_pc > UINT_MAX) {
         PRE(ilist, next,
@@ -3511,12 +3462,11 @@ sandbox_write(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr, instr_t 
 #ifdef X64
     }
 #endif
+    PRE(ilist, next, INSTR_CREATE_jcc(dcontext, OP_jge, opnd_create_instr(ok)));
     PRE(ilist, next,
-        INSTR_CREATE_jcc(dcontext, OP_jge, opnd_create_instr(ok)));
-    PRE(ilist, next,
-        INSTR_CREATE_lea(dcontext, opnd_create_reg(REG_XBX),
-                         opnd_create_base_disp(REG_XBX, REG_NULL, 0,
-                                               opndsize, OPSZ_lea)));
+        INSTR_CREATE_lea(
+            dcontext, opnd_create_reg(REG_XBX),
+            opnd_create_base_disp(REG_XBX, REG_NULL, 0, opndsize, OPSZ_lea)));
 #ifdef X64
     if ((ptr_uint_t)start_pc > UINT_MAX) {
         PRE(ilist, next,
@@ -3533,11 +3483,9 @@ sandbox_write(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr, instr_t 
 #ifdef X64
     }
 #endif
-    PRE(ilist, next,
-        INSTR_CREATE_jcc(dcontext, OP_jle, opnd_create_instr(ok)));
+    PRE(ilist, next, INSTR_CREATE_jcc(dcontext, OP_jle, opnd_create_instr(ok)));
     insert_restore_eflags(dcontext, ilist, next, flags, use_tls, !use_tls);
-    PRE(ilist, next,
-        RESTORE_FROM_DC_OR_TLS(dcontext, REG_XBX, TLS_XBX_SLOT, XBX_OFFSET));
+    PRE(ilist, next, RESTORE_FROM_DC_OR_TLS(dcontext, REG_XBX, TLS_XBX_SLOT, XBX_OFFSET));
 #ifdef X64
     if ((ptr_uint_t)start_pc > UINT_MAX || (ptr_uint_t)end_pc > UINT_MAX) {
         PRE(ilist, next,
@@ -3550,8 +3498,7 @@ sandbox_write(dcontext_t *dcontext, instrlist_t *ilist, instr_t *instr, instr_t 
     instrlist_preinsert(ilist, next, jmp);
     PRE(ilist, next, ok);
     insert_restore_eflags(dcontext, ilist, next, flags, use_tls, !use_tls);
-    PRE(ilist, next,
-        RESTORE_FROM_DC_OR_TLS(dcontext, REG_XBX, TLS_XBX_SLOT, XBX_OFFSET));
+    PRE(ilist, next, RESTORE_FROM_DC_OR_TLS(dcontext, REG_XBX, TLS_XBX_SLOT, XBX_OFFSET));
 #ifdef X64
     if ((ptr_uint_t)start_pc > UINT_MAX || (ptr_uint_t)end_pc > UINT_MAX) {
         PRE(ilist, next,
@@ -3571,13 +3518,12 @@ sandbox_top_of_bb_check_s2ro(dcontext_t *dcontext, app_pc start_pc)
 }
 
 static void
-sandbox_top_of_bb(dcontext_t *dcontext, instrlist_t *ilist,
-                  bool s2ro, uint flags,
+sandbox_top_of_bb(dcontext_t *dcontext, instrlist_t *ilist, bool s2ro, uint flags,
                   app_pc start_pc, app_pc end_pc, /* end is open */
                   bool for_cache,
                   /* for obtaining the two patch locations: */
-                  patch_list_t *patchlist,
-                  cache_pc *copy_start_loc, cache_pc *copy_end_loc)
+                  patch_list_t *patchlist, cache_pc *copy_start_loc,
+                  cache_pc *copy_end_loc)
 {
     /* add check at top of ilist that compares actual app instructions versus
      * copy we saved, stored in cache right after fragment itself.  leave its
@@ -3686,14 +3632,12 @@ sandbox_top_of_bb(dcontext_t *dcontext, instrlist_t *ilist,
             counter = NULL;
         }
 #ifdef X64
-        PRE(ilist, instr,
-            SAVE_TO_DC_OR_TLS(dcontext, REG_XCX, TLS_XCX_SLOT, XCX_OFFSET));
+        PRE(ilist, instr, SAVE_TO_DC_OR_TLS(dcontext, REG_XCX, TLS_XCX_SLOT, XCX_OFFSET));
         saved_xcx = true;
         PRE(ilist, instr,
             INSTR_CREATE_mov_imm(dcontext, opnd_create_reg(REG_XCX),
                                  OPND_CREATE_INTPTR(counter)));
-        PRE(ilist, instr,
-            INSTR_CREATE_inc(dcontext, OPND_CREATE_MEM32(REG_XCX, 0)));
+        PRE(ilist, instr, INSTR_CREATE_inc(dcontext, OPND_CREATE_MEM32(REG_XCX, 0)));
         PRE(ilist, instr,
             INSTR_CREATE_cmp(dcontext, OPND_CREATE_MEM32(REG_XCX, 0),
                              OPND_CREATE_INT_32OR8((int)thresh)));
@@ -3701,11 +3645,10 @@ sandbox_top_of_bb(dcontext_t *dcontext, instrlist_t *ilist,
         PRE(ilist, instr,
             INSTR_CREATE_inc(dcontext, OPND_CREATE_ABSMEM(counter, OPSZ_4)));
         PRE(ilist, instr,
-            INSTR_CREATE_cmp(dcontext,
-                             OPND_CREATE_ABSMEM(counter, OPSZ_4),
+            INSTR_CREATE_cmp(dcontext, OPND_CREATE_ABSMEM(counter, OPSZ_4),
                              OPND_CREATE_INT_32OR8(thresh)));
 #endif
-        if (TEST(FRAG_WRITES_EFLAGS_6, flags) IF_X64(&& false)) {
+        if (TEST(FRAG_WRITES_EFLAGS_6, flags) IF_X64(&&false)) {
             jmp = INSTR_CREATE_jcc(dcontext, OP_jge, opnd_create_pc(start_pc));
             instr_branch_set_selfmod_exit(jmp, true);
             /* an exit cti, not a meta instr */
@@ -3722,8 +3665,9 @@ sandbox_top_of_bb(dcontext_t *dcontext, instrlist_t *ilist,
             if (!TEST(FRAG_WRITES_EFLAGS_6, flags)) {
                 ASSERT(restore_eflags_and_exit == NULL);
                 restore_eflags_and_exit = INSTR_CREATE_label(dcontext);
-                PRE(ilist, instr, INSTR_CREATE_jmp
-                    (dcontext, opnd_create_instr(restore_eflags_and_exit)));
+                PRE(ilist, instr,
+                    INSTR_CREATE_jmp(dcontext,
+                                     opnd_create_instr(restore_eflags_and_exit)));
             }
 #ifdef X64
             else {
@@ -3738,25 +3682,25 @@ sandbox_top_of_bb(dcontext_t *dcontext, instrlist_t *ilist,
     }
 
     if (!saved_xcx) {
-        PRE(ilist, instr,
-            SAVE_TO_DC_OR_TLS(dcontext, REG_XCX, TLS_XCX_SLOT, XCX_OFFSET));
+        PRE(ilist, instr, SAVE_TO_DC_OR_TLS(dcontext, REG_XCX, TLS_XCX_SLOT, XCX_OFFSET));
     }
-    PRE(ilist, instr,
-        SAVE_TO_DC_OR_TLS(dcontext, REG_XSI, TLS_XBX_SLOT, XSI_OFFSET));
-    PRE(ilist, instr,
-        SAVE_TO_DC_OR_TLS(dcontext, REG_XDI, TLS_XDX_SLOT, XDI_OFFSET));
+    PRE(ilist, instr, SAVE_TO_DC_OR_TLS(dcontext, REG_XSI, TLS_XBX_SLOT, XSI_OFFSET));
+    PRE(ilist, instr, SAVE_TO_DC_OR_TLS(dcontext, REG_XDI, TLS_XDX_SLOT, XDI_OFFSET));
     DOSTATS({
         if (GLOBAL_STATS_ON()) {
             /* We only do global inc, not bothering w/ thread-private stats.
              * We don't care about races: ballpark figure is good enough.
              * We could do a direct inc of memory for 32-bit.
              */
-            PRE(ilist, instr, INSTR_CREATE_mov_imm
-                (dcontext, opnd_create_reg(REG_XSI),
-                 OPND_CREATE_INTPTR(GLOBAL_STAT_ADDR(num_sandbox_execs))));
-            PRE(ilist, instr, INSTR_CREATE_inc
-                (dcontext, opnd_create_base_disp(REG_XSI, REG_NULL, 0, 0, OPSZ_STATS)));
-         }
+            PRE(ilist, instr,
+                INSTR_CREATE_mov_imm(
+                    dcontext, opnd_create_reg(REG_XSI),
+                    OPND_CREATE_INTPTR(GLOBAL_STAT_ADDR(num_sandbox_execs))));
+            PRE(ilist, instr,
+                INSTR_CREATE_inc(
+                    dcontext,
+                    opnd_create_base_disp(REG_XSI, REG_NULL, 0, 0, OPSZ_STATS)));
+        }
     });
     PRE(ilist, instr,
         INSTR_CREATE_mov_imm(dcontext, opnd_create_reg(REG_XSI),
@@ -3768,7 +3712,7 @@ sandbox_top_of_bb(dcontext_t *dcontext, instrlist_t *ilist,
     if (patchlist != NULL) {
         ASSERT(copy_start_loc != NULL);
         add_patch_marker(patchlist, instr_get_prev(instr), PATCH_ASSEMBLE_ABSOLUTE,
-                         -(short)sizeof(cache_pc), (ptr_uint_t*)copy_start_loc);
+                         -(short)sizeof(cache_pc), (ptr_uint_t *)copy_start_loc);
     }
     PRE(ilist, instr, INSTR_CREATE_cmps_1(dcontext));
     /* For a 1-byte copy size we cannot use "repe cmpsb" as it won't
@@ -3798,8 +3742,7 @@ sandbox_top_of_bb(dcontext_t *dcontext, instrlist_t *ilist,
         PRE(ilist, instr,
             INSTR_CREATE_mov_imm(dcontext, opnd_create_reg(REG_XCX),
                                  OPND_CREATE_INTPTR(end_pc - (start_pc + 1))));
-        PRE(ilist, instr,
-            INSTR_CREATE_jcc(dcontext, OP_jge, opnd_create_instr(forward)));
+        PRE(ilist, instr, INSTR_CREATE_jcc(dcontext, OP_jge, opnd_create_instr(forward)));
         PRE(ilist, instr,
             INSTR_CREATE_mov_imm(dcontext, opnd_create_reg(REG_XDI),
                                  /* will become copy end */
@@ -3807,7 +3750,7 @@ sandbox_top_of_bb(dcontext_t *dcontext, instrlist_t *ilist,
         if (patchlist != NULL) {
             ASSERT(copy_end_loc != NULL);
             add_patch_marker(patchlist, instr_get_prev(instr), PATCH_ASSEMBLE_ABSOLUTE,
-                             -(short)sizeof(cache_pc), (ptr_uint_t*)copy_end_loc);
+                             -(short)sizeof(cache_pc), (ptr_uint_t *)copy_end_loc);
         }
         PRE(ilist, instr,
             INSTR_CREATE_mov_imm(dcontext, opnd_create_reg(REG_XSI),
@@ -3824,8 +3767,7 @@ sandbox_top_of_bb(dcontext_t *dcontext, instrlist_t *ilist,
         RESTORE_FROM_DC_OR_TLS(dcontext, REG_XDI, TLS_XDX_SLOT, XDI_OFFSET));
     if (!TEST(FRAG_WRITES_EFLAGS_6, flags)) {
         instr_t *start_bb = INSTR_CREATE_label(dcontext);
-        PRE(ilist, instr,
-            INSTR_CREATE_jcc(dcontext, OP_je, opnd_create_instr(start_bb)));
+        PRE(ilist, instr, INSTR_CREATE_jcc(dcontext, OP_je, opnd_create_instr(start_bb)));
         if (restore_eflags_and_exit != NULL) /* somebody needs this label */
             PRE(ilist, instr, restore_eflags_and_exit);
         insert_restore_eflags(dcontext, ilist, instr, flags, use_tls, !use_tls);
@@ -3868,10 +3810,8 @@ insert_selfmod_sandbox(dcontext_t *dcontext, instrlist_t *ilist, uint flags,
         instrlist_set_translation_target(ilist, instr_get_raw_bits(instr));
     }
 
-    sandbox_top_of_bb(dcontext, ilist,
-                      sandbox_top_of_bb_check_s2ro(dcontext, start_pc),
-                      flags, start_pc, end_pc, for_cache,
-                      NULL, NULL, NULL);
+    sandbox_top_of_bb(dcontext, ilist, sandbox_top_of_bb_check_s2ro(dcontext, start_pc),
+                      flags, start_pc, end_pc, for_cache, NULL, NULL, NULL);
 
     if (INTERNAL_OPTION(sandbox_writes)) {
         for (; instr != NULL; instr = next) {
@@ -3890,7 +3830,7 @@ insert_selfmod_sandbox(dcontext_t *dcontext, instrlist_t *ilist, uint flags,
                 instrlist_set_our_mangling(ilist, false); /* PR 267260 */
                 return false;
             }
-        
+
             /* don't mangle anything that mangle inserts! */
             next = instr_get_next_expanded(dcontext, ilist, instr);
             if (!instr_ok_to_mangle(instr))
@@ -3909,26 +3849,26 @@ insert_selfmod_sandbox(dcontext_t *dcontext, instrlist_t *ilist, uint flags,
             }
 
             /* FIXME case 8165: optimize for multiple push/pop */
-            for (i=0; i<instr_num_dsts(instr); i++) {
+            for (i = 0; i < instr_num_dsts(instr); i++) {
                 op = instr_get_dst(instr, i);
                 if (opnd_is_memory_reference(op)) {
                     /* ignore CALL* since last anyways */
                     if (instr_is_call_indirect(instr)) {
                         ASSERT(next != NULL && !instr_raw_bits_valid(next));
                         /* FIXME case 8165: why do we ever care about the last
-                         * instruction modifying anything? 
+                         * instruction modifying anything?
                          */
                         /* conversion of IAT calls (but not elision)
                          * transforms this into a direct CALL,
                          * in that case 'next' is a direct jmp
                          * fall through, so has no exit flags
                          */
-                        ASSERT(TEST(INSTR_CALL_EXIT, instr_exit_branch_type(next)) || 
-                               (DYNAMO_OPTION(IAT_convert) && 
+                        ASSERT(TEST(INSTR_CALL_EXIT, instr_exit_branch_type(next)) ||
+                               (DYNAMO_OPTION(IAT_convert) &&
                                 TEST(INSTR_IND_CALL_DIRECT, instr->flags)));
 
-                        
-                        LOG(THREAD, LOG_INTERP, 3, " ignoring CALL* at end of fragment\n");
+                        LOG(THREAD, LOG_INTERP, 3,
+                            " ignoring CALL* at end of fragment\n");
                         /* This test could be done outside of this loop on
                          * destinations, but since it is rare it is faster
                          * to do it here.  Using continue instead of break in case
@@ -3955,16 +3895,16 @@ insert_selfmod_sandbox(dcontext_t *dcontext, instrlist_t *ilist, uint flags,
  */
 static bool selfmod_s2ro[] = { false, true };
 static uint selfmod_eflags[] = { FRAG_WRITES_EFLAGS_6, FRAG_WRITES_EFLAGS_OF, 0 };
-#define SELFMOD_NUM_S2RO   (sizeof(selfmod_s2ro)/sizeof(selfmod_s2ro[0]))
-#define SELFMOD_NUM_EFLAGS (sizeof(selfmod_eflags)/sizeof(selfmod_eflags[0]))
+#define SELFMOD_NUM_S2RO (sizeof(selfmod_s2ro) / sizeof(selfmod_s2ro[0]))
+#define SELFMOD_NUM_EFLAGS (sizeof(selfmod_eflags) / sizeof(selfmod_eflags[0]))
 #ifdef X64 /* additional complexity: start_pc > 4GB? */
-static app_pc selfmod_gt4G[] = { NULL, (app_pc)(POINTER_MAX-2)/*so end can be +2*/ };
-# define SELFMOD_NUM_GT4G   (sizeof(selfmod_gt4G)/sizeof(selfmod_gt4G[0]))
+static app_pc selfmod_gt4G[] = { NULL, (app_pc)(POINTER_MAX - 2) /*so end can be +2*/ };
+#    define SELFMOD_NUM_GT4G (sizeof(selfmod_gt4G) / sizeof(selfmod_gt4G[0]))
 #endif
-uint selfmod_copy_start_offs[SELFMOD_NUM_S2RO][SELFMOD_NUM_EFLAGS]
-    IF_X64([SELFMOD_NUM_GT4G]);
-uint selfmod_copy_end_offs[SELFMOD_NUM_S2RO][SELFMOD_NUM_EFLAGS]
-    IF_X64([SELFMOD_NUM_GT4G]);
+uint selfmod_copy_start_offs[SELFMOD_NUM_S2RO]
+                            [SELFMOD_NUM_EFLAGS] IF_X64([SELFMOD_NUM_GT4G]);
+uint selfmod_copy_end_offs[SELFMOD_NUM_S2RO]
+                          [SELFMOD_NUM_EFLAGS] IF_X64([SELFMOD_NUM_GT4G]);
 
 void
 set_selfmod_sandbox_offsets(dcontext_t *dcontext)
@@ -3992,22 +3932,20 @@ set_selfmod_sandbox_offsets(dcontext_t *dcontext)
                 instrlist_append(&ilist, INSTR_CREATE_label(dcontext));
                 init_patch_list(&patch, PATCH_TYPE_ABSOLUTE);
                 app_start = IF_X64_ELSE(selfmod_gt4G[k], NULL);
-                sandbox_top_of_bb(dcontext, &ilist,
-                                  selfmod_s2ro[i], selfmod_eflags[j],
+                sandbox_top_of_bb(dcontext, &ilist, selfmod_s2ro[i], selfmod_eflags[j],
                                   /* we must have a >1-byte region to get
                                    * both patch points */
-                                  app_start, app_start + 2, false,
-                                  &patch, &start_pc, &end_pc);
+                                  app_start, app_start + 2, false, &patch, &start_pc,
+                                  &end_pc);
                 len = encode_with_patch_list(dcontext, &patch, &ilist, buf);
                 ASSERT(len < BUFFER_SIZE_BYTES(buf));
                 IF_X64(ASSERT(CHECK_TRUNCATE_TYPE_uint(start_pc - buf)));
-                selfmod_copy_start_offs[i][j]IF_X64([k]) = (uint) (start_pc - buf);
+                selfmod_copy_start_offs[i][j] IF_X64([k]) = (uint)(start_pc - buf);
                 IF_X64(ASSERT(CHECK_TRUNCATE_TYPE_uint(end_pc - buf)));
-                selfmod_copy_end_offs[i][j]IF_X64([k]) = (uint) (end_pc - buf);
-                LOG(THREAD, LOG_EMIT, 3, "selfmod offs %d %d"IF_X64(" %d")": %u %u\n",
-                    i, j, IF_X64_(k)
-                    selfmod_copy_start_offs[i][j]IF_X64([k]),
-                    selfmod_copy_end_offs[i][j]IF_X64([k]));
+                selfmod_copy_end_offs[i][j] IF_X64([k]) = (uint)(end_pc - buf);
+                LOG(THREAD, LOG_EMIT, 3, "selfmod offs %d %d" IF_X64(" %d") ": %u %u\n",
+                    i, j, IF_X64_(k) selfmod_copy_start_offs[i][j] IF_X64([k]),
+                    selfmod_copy_end_offs[i][j] IF_X64([k]));
                 /* free the instrlist_t elements */
                 instrlist_clear(dcontext, &ilist);
 #ifdef X64
@@ -4027,13 +3965,14 @@ finalize_selfmod_sandbox(dcontext_t *dcontext, fragment_t *f)
     int k = ((ptr_uint_t)f->tag) > UINT_MAX ? 1 : 0;
 #endif
     i = (sandbox_top_of_bb_check_s2ro(dcontext, f->tag)) ? 1 : 0;
-    j = (TEST(FRAG_WRITES_EFLAGS_6, f->flags) ? 0 :
-         (TEST(FRAG_WRITES_EFLAGS_OF, f->flags) ? 1 : 2));
-    pc = FCACHE_ENTRY_PC(f) + selfmod_copy_start_offs[i][j]IF_X64([k]);
-    *((cache_pc*)pc) = copy_pc;
+    j = (TEST(FRAG_WRITES_EFLAGS_6, f->flags)
+             ? 0
+             : (TEST(FRAG_WRITES_EFLAGS_OF, f->flags) ? 1 : 2));
+    pc = FCACHE_ENTRY_PC(f) + selfmod_copy_start_offs[i][j] IF_X64([k]);
+    *((cache_pc *)pc) = copy_pc;
     if (FRAGMENT_SELFMOD_COPY_SIZE(f) - sizeof(uint) > 1) {
-        pc = FCACHE_ENTRY_PC(f) + selfmod_copy_end_offs[i][j]IF_X64([k]);
+        pc = FCACHE_ENTRY_PC(f) + selfmod_copy_end_offs[i][j] IF_X64([k]);
         /* subtract the size itself, stored at the end of the copy */
-        *((cache_pc*)pc) = (copy_pc + FRAGMENT_SELFMOD_COPY_SIZE(f) - sizeof(uint));
+        *((cache_pc *)pc) = (copy_pc + FRAGMENT_SELFMOD_COPY_SIZE(f) - sizeof(uint));
     } /* else, no 2nd patch point */
 }

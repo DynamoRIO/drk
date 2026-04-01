@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -56,21 +56,20 @@ verify_identical(instrlist_t *il1, instrlist_t *il2, app_pc label)
     }
 
     if (i != NULL || j != NULL) {
-        dr_fprintf(STDERR, "ERROR: mismatch in block at "PFX"\n", label);
+        dr_fprintf(STDERR, "ERROR: mismatch in block at " PFX "\n", label);
     }
 }
 
-static
-dr_emit_flags_t bb_event(void *drcontext, void *tag, instrlist_t *bb,
-                         bool for_trace, bool translating)
+static dr_emit_flags_t
+bb_event(void *drcontext, void *tag, instrlist_t *bb, bool for_trace, bool translating)
 {
     if (!translating) {
         app_pc pc = dr_fragment_app_pc(tag);
-        
+
         instrlist_t *copy = decode_as_bb(drcontext, pc);
         verify_identical(bb, copy, pc);
         instrlist_clear_and_destroy(drcontext, copy);
-        
+
         dr_mutex_lock(last_trace_mutex);
         if (last_trace_tag != NULL) {
             pc = dr_fragment_app_pc(last_trace_tag);
@@ -90,15 +89,15 @@ dr_emit_flags_t bb_event(void *drcontext, void *tag, instrlist_t *bb,
     return DR_EMIT_DEFAULT;
 }
 
-static
-dr_emit_flags_t trace_event(void *drcontext, void *tag, instrlist_t *trace,
-                            bool translating)
+static dr_emit_flags_t
+trace_event(void *drcontext, void *tag, instrlist_t *trace, bool translating)
 {
     instr_t *i;
     for (i = instrlist_first(trace); i != NULL; i = instr_get_next(i)) {
         if (instr_get_app_pc(i) == NULL) {
-            dr_fprintf(STDERR, "ERROR: app pc not available for all trace instrs "PFX"\n",
-                      dr_fragment_app_pc(tag));
+            dr_fprintf(STDERR,
+                       "ERROR: app pc not available for all trace instrs " PFX "\n",
+                       dr_fragment_app_pc(tag));
         }
     }
 
@@ -136,7 +135,8 @@ dr_exit(void)
 }
 
 DR_EXPORT
-void dr_init(client_id_t id)
+void
+dr_init(client_id_t id)
 {
     last_trace_mutex = dr_mutex_create();
     dr_fprintf(STDERR, "thank you for testing the client interface\n");

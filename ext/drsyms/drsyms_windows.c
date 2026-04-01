@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -56,7 +56,7 @@
  */
 
 #ifdef WINDOWS
-# define _CRT_SECURE_NO_DEPRECATE 1
+#    define _CRT_SECURE_NO_DEPRECATE 1
 #endif
 
 /* We use the DR API's mutex and heap whether as a client utility library
@@ -84,11 +84,12 @@ static hashtable_t modtable;
 static bool verbose = false;
 
 #undef NOTIFY /* from DrMem utils.h */
-#define NOTIFY(...) do { \
-    if (verbose) { \
-        dr_fprintf(STDERR, __VA_ARGS__); \
-    } \
-} while (0)
+#define NOTIFY(...)                          \
+    do {                                     \
+        if (verbose) {                       \
+            dr_fprintf(STDERR, __VA_ARGS__); \
+        }                                    \
+    } while (0)
 
 #define ALIGN_FORWARD(x, alignment) \
     ((((ptr_uint_t)x) + ((alignment)-1)) & (~((alignment)-1)))
@@ -98,10 +99,10 @@ static IF_WINDOWS_ELSE(const wchar_t *, int) shmid;
 
 #define IS_SIDELINE (shmid != 0)
 
-#define BUFFER_SIZE_BYTES(buf)      sizeof(buf)
-#define BUFFER_SIZE_ELEMENTS(buf)   (BUFFER_SIZE_BYTES(buf) / sizeof(buf[0]))
-#define BUFFER_LAST_ELEMENT(buf)    buf[BUFFER_SIZE_ELEMENTS(buf) - 1]
-#define NULL_TERMINATE_BUFFER(buf)  BUFFER_LAST_ELEMENT(buf) = 0
+#define BUFFER_SIZE_BYTES(buf) sizeof(buf)
+#define BUFFER_SIZE_ELEMENTS(buf) (BUFFER_SIZE_BYTES(buf) / sizeof(buf[0]))
+#define BUFFER_LAST_ELEMENT(buf) buf[BUFFER_SIZE_ELEMENTS(buf) - 1]
+#define NULL_TERMINATE_BUFFER(buf) BUFFER_LAST_ELEMENT(buf) = 0
 
 /* We assume that the DWORD64 type used by dbghelp for module base addresses
  * is fine to be truncated to a 32-bit void* for 32-bit code
@@ -131,9 +132,9 @@ drsym_init(IF_WINDOWS_ELSE(const wchar_t *, int) shmid_in)
          */
     } else {
         hashtable_init_ex(&modtable, MODTABLE_HASH_BITS, HASH_STRING_NOCASE,
-                          true/*strdup*/, false/*!synch: using symbol_lock*/,
+                          true /*strdup*/, false /*!synch: using symbol_lock*/,
                           modtable_entry_free, NULL, NULL);
-        
+
         SymSetOptions(SYMOPT_LOAD_LINES | SymGetOptions());
         if (!SymInitialize(GetCurrentProcess(), NULL, FALSE)) {
             NOTIFY("SymInitialize error %d\n", GetLastError());
@@ -162,36 +163,24 @@ drsym_exit(void)
 static void
 query_available(HANDLE proc, DWORD64 base)
 {
-    IMAGEHLP_MODULE64 info; 
-    memset(&info, 0, sizeof(info)); 
-    info.SizeOfStruct = sizeof(info); 
+    IMAGEHLP_MODULE64 info;
+    memset(&info, 0, sizeof(info));
+    info.SizeOfStruct = sizeof(info);
     if (SymGetModuleInfo64(GetCurrentProcess(), base, &info)) {
-        switch(info.SymType) {
-        case SymNone: 
-            NOTIFY("No symbols found\n");
-            break; 
-        case SymExport: 
-            NOTIFY("Only export symbols found\n"); 
-            break; 
-        case SymPdb: 
-            NOTIFY("Loaded pdb symbols from %s\n", info.LoadedPdbName);
-            break;
-        case SymDeferred: 
-            NOTIFY("Symbol load deferred\n");
-            break; 
-        case SymCoff: 
-        case SymCv: 
-        case SymSym: 
-        case SymVirtual: 
-        case SymDia: 
-            NOTIFY("Symbols in image file loaded\n"); 
-            break; 
-        default: 
-            NOTIFY("Symbols in unknown format.\n");
-            break; 
+        switch (info.SymType) {
+        case SymNone: NOTIFY("No symbols found\n"); break;
+        case SymExport: NOTIFY("Only export symbols found\n"); break;
+        case SymPdb: NOTIFY("Loaded pdb symbols from %s\n", info.LoadedPdbName); break;
+        case SymDeferred: NOTIFY("Symbol load deferred\n"); break;
+        case SymCoff:
+        case SymCv:
+        case SymSym:
+        case SymVirtual:
+        case SymDia: NOTIFY("Symbols in image file loaded\n"); break;
+        default: NOTIFY("Symbols in unknown format.\n"); break;
         }
-        
-        /* could print out info.ImageName and info.LoadedImageName 
+
+        /* could print out info.ImageName and info.LoadedImageName
          * and whether info.LineNumbers
          * and warn if info.PdbUnmatched or info.DbgUnmatched
          */
@@ -210,8 +199,8 @@ load_module(HANDLE proc, const char *path)
      */
     if (!stri_eq(ext, ".exe")) {
         /* Any base will do, but we need the size */
-        HANDLE f = CreateFile(path, GENERIC_READ, FILE_SHARE_READ, 
-                              NULL, OPEN_EXISTING, 0, NULL);
+        HANDLE f =
+            CreateFile(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
         if (f == INVALID_HANDLE_VALUE)
             return 0;
         base = next_load;
@@ -219,7 +208,7 @@ load_module(HANDLE proc, const char *path)
         CloseHandle(f);
         if (size == INVALID_FILE_SIZE)
             return 0;
-        next_load += ALIGN_FORWARD(size, 64*1024);
+        next_load += ALIGN_FORWARD(size, 64 * 1024);
     } else {
         /* Can pass 0 to SymLoadModule64 */
         base = 0;
@@ -227,7 +216,7 @@ load_module(HANDLE proc, const char *path)
     }
 
     base = SymLoadModule64(GetCurrentProcess(), NULL, (char *)path, NULL, base,
-                           (DWORD)size/*should check trunc*/);
+                           (DWORD)size /*should check trunc*/);
     if (base == 0) {
         /* FIXME PR 463897: for !single_target, we should handle load
          * failure by trying a different address, informed by some
@@ -255,7 +244,7 @@ unload_module(HANDLE proc, DWORD64 base)
 static DWORD64
 lookup_or_load(const char *modpath)
 {
-    DWORD64 base = (DWORD64) hashtable_lookup(&modtable, (void *)modpath);
+    DWORD64 base = (DWORD64)hashtable_lookup(&modtable, (void *)modpath);
     if (base == 0) {
         base = load_module(GetCurrentProcess(), modpath);
         if (base != 0) {
@@ -270,9 +259,9 @@ static drsym_error_t
 drsym_lookup_address_local(const char *modpath, size_t modoffs, drsym_info_t *out INOUT)
 {
     DWORD64 base;
-    char buf[sizeof(SYMBOL_INFO) +
-             MAX_SYM_NAME*sizeof(TCHAR) - 1/*1 char already in Name[1] in struct*/];
-    PSYMBOL_INFO info = (PSYMBOL_INFO) buf;
+    char buf[sizeof(SYMBOL_INFO) + MAX_SYM_NAME * sizeof(TCHAR) -
+             1 /*1 char already in Name[1] in struct*/];
+    PSYMBOL_INFO info = (PSYMBOL_INFO)buf;
     DWORD64 disp;
     IMAGEHLP_LINE64 line;
     DWORD line_disp;
@@ -282,7 +271,7 @@ drsym_lookup_address_local(const char *modpath, size_t modoffs, drsym_info_t *ou
     /* If we add fields in the future we would dispatch on out->struct_size */
     if (out->struct_size != sizeof(*out))
         return DRSYM_ERROR_INVALID_SIZE;
-    
+
     dr_mutex_lock(symbol_lock);
     base = lookup_or_load(modpath);
     if (base == 0) {
@@ -293,14 +282,14 @@ drsym_lookup_address_local(const char *modpath, size_t modoffs, drsym_info_t *ou
     info->SizeOfStruct = sizeof(SYMBOL_INFO);
     info->MaxNameLen = MAX_SYM_NAME;
     if (SymFromAddr(GetCurrentProcess(), base + modoffs, &disp, info)) {
-        NOTIFY("Symbol 0x%I64x => %s+0x%x (0x%I64x-0x%I64x)\n", base+modoffs, info->Name,
-               disp, info->Address, info->Address + info->Size);
-        out->start_offs = (size_t) (info->Address - base);
-        out->end_offs = (size_t) ((info->Address + info->Size) - base);
+        NOTIFY("Symbol 0x%I64x => %s+0x%x (0x%I64x-0x%I64x)\n", base + modoffs,
+               info->Name, disp, info->Address, info->Address + info->Size);
+        out->start_offs = (size_t)(info->Address - base);
+        out->end_offs = (size_t)((info->Address + info->Size) - base);
         strncpy(out->name, info->Name, out->name_size);
         out->name[out->name_size - 1] = '\0';
         /* Should we return an error when name gets truncated? */
-        out->name_available_size = info->NameLen*sizeof(char);
+        out->name_available_size = info->NameLen * sizeof(char);
     } else {
         NOTIFY("SymFromAddr error %d\n", GetLastError());
         dr_mutex_unlock(symbol_lock);
@@ -327,13 +316,13 @@ static drsym_error_t
 drsym_lookup_symbol_local(const char *modpath, const char *symbol, size_t *modoffs OUT)
 {
     DWORD64 base;
-    char buf[sizeof(SYMBOL_INFO) +
-             MAX_SYM_NAME*sizeof(TCHAR) - 1/*1 char already in Name[1] in struct*/];
-    PSYMBOL_INFO info = (PSYMBOL_INFO) buf;
+    char buf[sizeof(SYMBOL_INFO) + MAX_SYM_NAME * sizeof(TCHAR) -
+             1 /*1 char already in Name[1] in struct*/];
+    PSYMBOL_INFO info = (PSYMBOL_INFO)buf;
 
     if (modoffs == NULL)
         return DRSYM_ERROR_INVALID_PARAMETER;
-    
+
     dr_mutex_lock(symbol_lock);
     base = lookup_or_load(modpath);
     if (base == 0) {
@@ -348,7 +337,7 @@ drsym_lookup_symbol_local(const char *modpath, const char *symbol, size_t *modof
     info->MaxNameLen = MAX_SYM_NAME;
     if (SymFromName(GetCurrentProcess(), (char *)symbol, info)) {
         NOTIFY("0x%I64x\n", info->Address);
-        *modoffs = (size_t) (info->Address - base);
+        *modoffs = (size_t)(info->Address - base);
     } else {
         NOTIFY("SymFromName error %d %s\n", GetLastError(), symbol);
         dr_mutex_unlock(symbol_lock);
@@ -365,15 +354,16 @@ typedef struct _enum_info_t {
 } enum_info_t;
 
 static BOOL CALLBACK
-enum_cb(PSYMBOL_INFO pSymInfo, ULONG SymbolSize, PVOID Context) 
+enum_cb(PSYMBOL_INFO pSymInfo, ULONG SymbolSize, PVOID Context)
 {
-    enum_info_t *info = (enum_info_t *) Context;
-    return (*info->cb)(pSymInfo->Name, (size_t) (pSymInfo->Address - info->base),
+    enum_info_t *info = (enum_info_t *)Context;
+    return (*info->cb)(pSymInfo->Name, (size_t)(pSymInfo->Address - info->base),
                        info->data);
 }
 
 static drsym_error_t
-drsym_enumerate_symbols_local(const char *modpath, drsym_enumerate_cb callback, void *data)
+drsym_enumerate_symbols_local(const char *modpath, drsym_enumerate_cb callback,
+                              void *data)
 {
     DWORD64 base;
     drsym_error_t res = DRSYM_SUCCESS;
@@ -386,7 +376,7 @@ drsym_enumerate_symbols_local(const char *modpath, drsym_enumerate_cb callback, 
         info.cb = callback;
         info.data = data;
         info.base = base;
-        if (!SymEnumSymbols(GetCurrentProcess(), base, NULL, enum_cb, (PVOID) &info)) {
+        if (!SymEnumSymbols(GetCurrentProcess(), base, NULL, enum_cb, (PVOID)&info)) {
             NOTIFY("SymEnumSymbols error %d\n", GetLastError());
             res = DRSYM_ERROR_SYMBOL_NOT_FOUND;
         }
@@ -452,7 +442,7 @@ drsym_write_to_console(const char *fmt, ...)
 {
     bool res = true;
     /* mirroring DR's MAX_LOG_LEN */
-# define MAX_MSG_LEN 768
+#define MAX_MSG_LEN 768
     char msg[MAX_MSG_LEN];
     va_list ap;
     uint written;
@@ -468,9 +458,8 @@ drsym_write_to_console(const char *fmt, ...)
      * kernel32!WriteFile, which will call WriteConsole for us.
      */
     res = res &&
-        WriteFile(GetStdHandle(STD_ERROR_HANDLE),
-                  msg, (DWORD) strlen(msg), (LPDWORD) &written, NULL);
+        WriteFile(GetStdHandle(STD_ERROR_HANDLE), msg, (DWORD)strlen(msg),
+                  (LPDWORD)&written, NULL);
     va_end(ap);
     return res;
 }
-

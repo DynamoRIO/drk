@@ -30,7 +30,7 @@
  * Description:
  *     Perform optimization on the instrumentation.
  *
- * Author: 
+ * Author:
  *     Qin Zhao
  *
  */
@@ -38,17 +38,10 @@
 #ifndef _OPTIMIZE_H_
 #define _OPTIMIZE_H_ 1
 
-
-void 
-optimize_cfg_aflags(void          *drcontext, 
-                    umbra_info_t   *umbra_info,
-                    ilist_info_t  *ilist_info,
+void
+optimize_cfg_aflags(void *drcontext, umbra_info_t *umbra_info, ilist_info_t *ilist_info,
                     basic_block_t *bb);
-void 
-optimize_trace(void          *drcontext, 
-               umbra_info_t   *umbra_info,
-               void          *tag,
-               instrlist_t *ilist);
-
+void
+optimize_trace(void *drcontext, umbra_info_t *umbra_info, void *tag, instrlist_t *ilist);
 
 #endif // _OPTIMIZE_H_

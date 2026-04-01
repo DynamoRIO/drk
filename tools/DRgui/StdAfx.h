@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -39,7 +39,8 @@
 //      are changed infrequently
 //
 
-#define _WIN32_WINNT 0x0400 //_WIN32_WINNT_NT4 /* ==0x0400; NTDDI_VERSION is set from this */
+#define _WIN32_WINNT \
+    0x0400 //_WIN32_WINNT_NT4 /* ==0x0400; NTDDI_VERSION is set from this */
 
 // use _s secure versions
 #define _CRT_SECURE_CPP_OVERLOAD_STANDARD_NAMES 1
@@ -49,23 +50,23 @@
 #define _CRT_SECURE_NO_WARNINGS 1
 
 #if !defined(AFX_STDAFX_H__E6657A4C_7B90_457B_A64A_935DB0D375FE__INCLUDED_)
-#define AFX_STDAFX_H__E6657A4C_7B90_457B_A64A_935DB0D375FE__INCLUDED_
+#    define AFX_STDAFX_H__E6657A4C_7B90_457B_A64A_935DB0D375FE__INCLUDED_
 
-#if _MSC_VER > 1000
-#pragma once
-#endif // _MSC_VER > 1000
+#    if _MSC_VER > 1000
+#        pragma once
+#    endif // _MSC_VER > 1000
 
-#define VC_EXTRALEAN		// Exclude rarely-used stuff from Windows headers
+#    define VC_EXTRALEAN // Exclude rarely-used stuff from Windows headers
 
-#include <afxwin.h>         // MFC core and standard components
-#include <afxext.h>         // MFC extensions
-#include <afxdtctl.h>		// MFC support for Internet Explorer 4 Common Controls
-#ifndef _AFX_NO_AFXCMN_SUPPORT
-#include <afxcmn.h>			// MFC support for Windows Common Controls
-#endif // _AFX_NO_AFXCMN_SUPPORT
-
+#    include <afxwin.h>   // MFC core and standard components
+#    include <afxext.h>   // MFC extensions
+#    include <afxdtctl.h> // MFC support for Internet Explorer 4 Common Controls
+#    ifndef _AFX_NO_AFXCMN_SUPPORT
+#        include <afxcmn.h> // MFC support for Windows Common Controls
+#    endif                  // _AFX_NO_AFXCMN_SUPPORT
 
 //{{AFX_INSERT_LOCATION}}
-// Microsoft Visual C++ will insert additional declarations immediately before the previous line.
+// Microsoft Visual C++ will insert additional declarations immediately before the
+// previous line.
 
 #endif // !defined(AFX_STDAFX_H__E6657A4C_7B90_457B_A64A_935DB0D375FE__INCLUDED_)

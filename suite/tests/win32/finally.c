@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -33,30 +33,28 @@
 #include <windows.h>
 #include <stdio.h>
 #include <setjmp.h>
-jmp_buf mark;              /* Address for long jump to jump to */
+jmp_buf mark; /* Address for long jump to jump to */
 
 #ifdef USE_DYNAMO
-#include "dynamorio.h"
+#    include "dynamorio.h"
 #endif
 
 void
-finally_proc() 
+finally_proc()
 {
     __try {
-	__try {
-	    printf("This should be printed\n");
-	    __leave;
-	    printf("This should NOT be printed\n");
-	}
-	__finally {
-	    printf("Inside first finally\n");
-	}
-	printf("At statement after 1st try-finally\n");
-    }
-    __finally {
-	printf("Inside second finally\n");
-	longjmp(mark, 1);
-	printf("This should NOT be printed\n");
+        __try {
+            printf("This should be printed\n");
+            __leave;
+            printf("This should NOT be printed\n");
+        } __finally {
+            printf("Inside first finally\n");
+        }
+        printf("At statement after 1st try-finally\n");
+    } __finally {
+        printf("Inside second finally\n");
+        longjmp(mark, 1);
+        printf("This should NOT be printed\n");
     }
 }
 
@@ -71,16 +69,15 @@ main()
 #endif
 
     __try {
-	jmpret = setjmp(mark);
-	if (jmpret == 0)
-	    finally_proc();
-	else
-	    printf("done with longjmp\n");
+        jmpret = setjmp(mark);
+        if (jmpret == 0)
+            finally_proc();
+        else
+            printf("done with longjmp\n");
+    } __finally {
+        printf("In final finally\n");
     }
-    __finally {
-	printf("In final finally\n");
-    }
-	
+
 #ifdef USE_DYNAMO
     dynamorio_app_stop();
     dynamorio_app_exit();

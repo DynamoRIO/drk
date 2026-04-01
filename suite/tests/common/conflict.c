@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -35,37 +35,39 @@
 #include <math.h>
 
 #ifdef USE_DYNAMO
-#include "dynamorio.h"
+#    include "dynamorio.h"
 #endif
 
 #define ITERS 1500000
 
 static int a[ITERS];
 
-void arch_init()
+void
+arch_init()
 {
     printf("in conflict's arch init\n");
 }
 
-int main()
+int
+main()
 {
     double res = 0.;
-    int i,j;
+    int i, j;
 #ifdef USE_DYNAMO
     int rc = dynamorio_app_init();
     assert(rc == 0);
     dynamorio_app_start();
 #endif
     arch_init();
-  
-    for (i=0; i<ITERS; i++) {
-	if (i % 2 == 0) {
-	    res += cos(1./(double)(i+1));
-	} else {
-	    res += sin(1./(double)(i+1));
-	}
-	j = (i << 4) / (i | 0x38);
-	a[i] += j;
+
+    for (i = 0; i < ITERS; i++) {
+        if (i % 2 == 0) {
+            res += cos(1. / (double)(i + 1));
+        } else {
+            res += sin(1. / (double)(i + 1));
+        }
+        j = (i << 4) / (i | 0x38);
+        a[i] += j;
     }
     printf("%f\n", res);
 

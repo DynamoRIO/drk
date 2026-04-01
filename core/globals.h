@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -51,21 +51,27 @@
  * But if they add new non-subset flags in the future we'd need dynamic dispatch,
  * as earlier Windows versions give access denied on unknown flags!
  */
-#define _WIN32_WINNT _WIN32_WINNT_NT4 /* ==0x0400; NTDDI_VERSION is set from this */
+#    define _WIN32_WINNT _WIN32_WINNT_NT4 /* ==0x0400; NTDDI_VERSION is set from this */
 
-#  define WIN32_LEAN_AND_MEAN
+#    define WIN32_LEAN_AND_MEAN
 /* Exclude rarely-used stuff from Windows headers */
 
 /* Case 1167 - bumping up warning level to 4 - work in progress FIXME: */
-#pragma warning( disable : 4054) //from function pointer 'void (__cdecl *)(void )' to data pointer 'unsigned char *'
-#pragma warning( disable : 4100) //'envp' : unreferenced formal parameter
-#pragma warning( disable : 4127) //conditional expression is constant (majority of warnings - 2078)
-#pragma warning( disable : 4189) //'start_pc' : local variable is initialized but not referenced
-#pragma warning( disable : 4204) //nonstandard extension used : non-constant aggregate initializer
-#pragma warning( disable : 4210) //nonstandard extension used : function given file scope
-#pragma warning( disable : 4505) //unreferenced local function has been removed
-#pragma warning( disable : 4702) //unreachable code (should be disabled DEBUG=0, e.g. for INTERNAL_OPTION test)
-#pragma warning( disable : 4324) // structure was padded due to __declspec(align())
+#    pragma warning(disable : 4054) // from function pointer 'void (__cdecl *)(void )' to
+                                    // data pointer 'unsigned char *'
+#    pragma warning(disable : 4100) //'envp' : unreferenced formal parameter
+#    pragma warning(disable : 4127) // conditional expression is constant (majority of
+                                    // warnings - 2078)
+#    pragma warning( \
+        disable : 4189) //'start_pc' : local variable is initialized but not referenced
+#    pragma warning(disable : 4204) // nonstandard extension used : non-constant aggregate
+                                    // initializer
+#    pragma warning( \
+        disable : 4210) // nonstandard extension used : function given file scope
+#    pragma warning(disable : 4505) // unreferenced local function has been removed
+#    pragma warning(disable : 4702) // unreachable code (should be disabled DEBUG=0, e.g.
+                                    // for INTERNAL_OPTION test)
+#    pragma warning(disable : 4324) // structure was padded due to __declspec(align())
 
 /**************************************************/
 /* warnings on compiling with VC 8.0, all on VC or PlatformSDK header files */
@@ -73,12 +79,13 @@
 /* shows up in buildtools/VC/8.0/dist/VC/include/vadefs.h
  * supposed to include identifier in the pop pragma and they don't
  */
-#pragma warning( disable : 4159) // #pragma pack has popped previously pushed identifier
+#    pragma warning( \
+        disable : 4159) // #pragma pack has popped previously pushed identifier
 
 /* FIXME case 191729: this is coming from our own code.  We could
  * switch to the _s versions when on Windows.
  */
-#pragma warning( disable : 4996) //'sscanf' was declared deprecated
+#    pragma warning(disable : 4996) //'sscanf' was declared deprecated
 
 /**************************************************/
 
@@ -102,29 +109,29 @@
  */
 #endif /* CLIENT_INTERFACE */
 
-#  ifdef WINDOWS
+#ifdef WINDOWS
 #    define DYNAMORIO_EXPORT __declspec(dllexport)
-#  elif defined(USE_VISIBILITY_ATTRIBUTES)
+#elif defined(USE_VISIBILITY_ATTRIBUTES)
 /* PR 262804: we use "protected" instead of "default" to ensure our
  * own uses won't be preempted.  Note that for DR_APP_API in
  * lib/dr_app.h we get a link error trying to use "protected": but we
  * don't use dr_app_* internally anyway, so leaving as default.
  */
-#    define DYNAMORIO_EXPORT __attribute__ ((visibility ("protected")))
-#  else
+#    define DYNAMORIO_EXPORT __attribute__((visibility("protected")))
+#else
 /* visibility attribute not available in gcc < 3.3 (we use linker script) */
-#    define DYNAMORIO_EXPORT 
-#  endif
+#    define DYNAMORIO_EXPORT
+#endif
 
 #ifdef DYNAMORIO_IR_EXPORTS
-#  define DR_API DYNAMORIO_EXPORT
+#    define DR_API DYNAMORIO_EXPORT
 #else
-#  define DR_API 
+#    define DR_API
 #endif
 #ifdef UNSUPPORTED_API
-#  define DR_UNS_API DR_API
+#    define DR_UNS_API DR_API
 #else
-#  define DR_UNS_API /* nothing */
+#    define DR_UNS_API /* nothing */
 #endif
 
 #define INLINE_ONCE inline
@@ -137,7 +144,7 @@
  */
 
 #ifdef WINDOWS
-#include <windows.h>
+#    include <windows.h>
 typedef unsigned long ulong;
 typedef unsigned short ushort;
 /* We can't put this in globals_shared.h b/c it needs windows.h and
@@ -149,18 +156,18 @@ typedef unsigned short ushort;
  * we hide the distinction behind the file_t type
  */
 typedef HANDLE file_t;
-#define INVALID_FILE INVALID_HANDLE_VALUE
-#define STDOUT (file_t)get_stdout_handle()
-#define STDERR (file_t)get_stderr_handle()
-#define STDIN  (file_t)get_stdin_handle()
-#define DIRSEP '\\'
-#define ALT_DIRSEP '/'
+#    define INVALID_FILE INVALID_HANDLE_VALUE
+#    define STDOUT (file_t) get_stdout_handle()
+#    define STDERR (file_t) get_stderr_handle()
+#    define STDIN (file_t) get_stdin_handle()
+#    define DIRSEP '\\'
+#    define ALT_DIRSEP '/'
 
 #else /* LINUX */
 /* uint, ushort, and ulong are in types.h */
 // #include "types_wrapper.h" /* for wait */
-#define DIRSEP '/'
-#define ALT_DIRSEP DIRSEP
+#    define DIRSEP '/'
+#    define ALT_DIRSEP DIRSEP
 #endif
 
 /* FIXME: what is range of thread_id_t on linux and on win32?
@@ -175,59 +182,59 @@ typedef HANDLE file_t;
 #define INVALID_THREAD_ID IF_LINUX_KERNEL_ELSE(-1, 0)
 
 typedef unsigned char uchar;
-typedef byte * cache_pc;  /* fragment cache pc */
+typedef byte *cache_pc; /* fragment cache pc */
 
 #define SUCCESS 0
 #define FAILURE 1
 
 /* macros to make conditional compilation look prettier */
 #ifdef DGC_DIAGNOSTICS
-# define _IF_DGCDIAG(x) , x
-# define IF_DGCDIAG_ELSE(x, y) x
+#    define _IF_DGCDIAG(x) , x
+#    define IF_DGCDIAG_ELSE(x, y) x
 #else
-# define _IF_DGCDIAG(x)
-# define IF_DGCDIAG_ELSE(x, y) y
+#    define _IF_DGCDIAG(x)
+#    define IF_DGCDIAG_ELSE(x, y) y
 #endif
 
 /* make sure defines are consistent */
 #ifndef X86
-#error Must define X86, no other platforms are supported
+#    error Must define X86, no other platforms are supported
 #endif
 
 #if defined(PAPI) && defined(WINDOWS)
-# error PAPI does not work on WINDOWS
+#    error PAPI does not work on WINDOWS
 #endif
 
 #if defined(DCONTEXT_IN_EDI) && !defined(STEAL_REGISTER)
-# error Must steal register to keep dcontext in edi
+#    error Must steal register to keep dcontext in edi
 #endif
 
 #if defined(SIDELINE_COUNT_STUDY)
-# if !defined(PROFILE_LINKCOUNT) || !defined(SIDELINE)
-#  error SIDELINE_COUNT_STUDY requires PROFILE_LINKCOUNT and defined(SIDELINE)
-# endif
+#    if !defined(PROFILE_LINKCOUNT) || !defined(SIDELINE)
+#        error SIDELINE_COUNT_STUDY requires PROFILE_LINKCOUNT and defined(SIDELINE)
+#    endif
 #endif
 
 #ifdef NATIVE_RETURN
-# ifndef CUSTOM_EXIT_STUBS
-#  error NATIVE_RETURN requires CUSTOM_EXIT_STUBS
-# endif
+#    ifndef CUSTOM_EXIT_STUBS
+#        error NATIVE_RETURN requires CUSTOM_EXIT_STUBS
+#    endif
 /* NOTE NATIVE_RETURN requires -unsafe_ignore_eflags */
 #endif
 
 #ifdef DGC_DIAGNOSTICS
-# ifndef PROGRAM_SHEPHERDING
-#  error DGC_DIAGNOSTICS requires PROGRAM_SHEPHERDING
-# endif
-# ifndef DEBUG
-#  error DGC_DIAGNOSTICS requires DEBUG
-# endif
+#    ifndef PROGRAM_SHEPHERDING
+#        error DGC_DIAGNOSTICS requires PROGRAM_SHEPHERDING
+#    endif
+#    ifndef DEBUG
+#        error DGC_DIAGNOSTICS requires DEBUG
+#    endif
 #endif
 
 #ifndef PROGRAM_SHEPHERDING
-# ifdef SIMULATE_ATTACK
-#  error SIMULATE_ATTACK requires PROGRAM_SHEPHERDING
-# endif
+#    ifdef SIMULATE_ATTACK
+#        error SIMULATE_ATTACK requires PROGRAM_SHEPHERDING
+#    endif
 #endif
 
 /* in buildmark.c */
@@ -265,7 +272,7 @@ typedef struct _module_data_t module_data_t;
 /* DR_API EXPORT BEGIN */
 
 /**
- * Structure written by dr_get_time() to specify the current time. 
+ * Structure written by dr_get_time() to specify the current time.
  */
 typedef struct {
     uint year;         /**< */
@@ -283,7 +290,7 @@ typedef struct {
 struct _rct_module_table_t;
 typedef struct _rct_module_table_t rct_module_table_t;
 
-typedef enum { 
+typedef enum {
     RCT_RAC = 0,
     RCT_RCT,
     RCT_NUM_TYPES,
@@ -291,17 +298,17 @@ typedef enum {
 #endif
 
 typedef struct _thread_record_t {
-    thread_id_t id;   /* thread id */
+    thread_id_t id; /* thread id */
 #ifdef WINDOWS
-    HANDLE handle;    /* win32 thread handle */
+    HANDLE handle; /* win32 thread handle */
 #else
     process_id_t pid; /* thread group id */
     bool execve;      /* exiting due to execve (i#237/PR 498284) */
 #endif
-    uint num;         /* creation ordinal */
+    uint num;                  /* creation ordinal */
     bool under_dynamo_control; /* used for deciding whether to intercept events */
-    dcontext_t *dcontext; /* allows other threads to see this thread's context */
-    struct _thread_record_t * next;
+    dcontext_t *dcontext;      /* allows other threads to see this thread's context */
+    struct _thread_record_t *next;
 } thread_record_t;
 
 /* we don't include dr_api.h, that's for external use, we only need _app
@@ -309,18 +316,18 @@ typedef struct _thread_record_t {
  */
 #ifdef DR_APP_EXPORTS
 /* we only export app interface if DR_APP_EXPORTS is defined */
-# include "dr_app.h"
+#    include "dr_app.h"
 /* a few always-exported routines are part of the app interface */
-# undef DYNAMORIO_EXPORT
-# define DYNAMORIO_EXPORT DR_APP_API
+#    undef DYNAMORIO_EXPORT
+#    define DYNAMORIO_EXPORT DR_APP_API
 #endif
 
 #ifdef PROFILE_LINKCOUNT
-#ifndef LINKCOUNT_64_BITS
+#    ifndef LINKCOUNT_64_BITS
 typedef uint linkcount_type_t;
-#else
+#    else
 typedef uint64 linkcount_type_t;
-#endif
+#    endif
 #endif
 
 #include "heap.h"
@@ -347,28 +354,28 @@ typedef struct _client_to_do_list_t {
 typedef struct _client_flush_req_t {
     app_pc start;
     size_t size;
-    uint   flush_id; /* client supplied identifier for this flush */
+    uint flush_id; /* client supplied identifier for this flush */
     void (*flush_callback)(int);
     struct _client_flush_req_t *next;
 } client_flush_req_t;
 
 /* for -thin_client we don't allocate client_data currently, also client_data could be
  * NULL during thread startup or teardown (i.e. mutex_wait_contended_lock() usage) */
-#define IS_CLIENT_THREAD(dcontext) \
-    ((dcontext) != NULL && (dcontext)->client_data != NULL && \
-     (dcontext)->client_data->is_client_thread)
+#    define IS_CLIENT_THREAD(dcontext)                            \
+        ((dcontext) != NULL && (dcontext)->client_data != NULL && \
+         (dcontext)->client_data->is_client_thread)
 
 /* Client interface-specific data for dcontexts */
 typedef struct _client_data_t {
     /* field for use by user via exported API */
-    void *         user_field;
-    client_todo_list_t * to_do;
+    void *user_field;
+    client_todo_list_t *to_do;
     client_flush_req_t *flush_list;
-# ifdef CLIENT_SIDELINE
-    mutex_t            sideline_mutex;
-# endif
+#    ifdef CLIENT_SIDELINE
+    mutex_t sideline_mutex;
+#    endif
     /* fields for doing release and debug build checks against erroneous API usage */
-    module_data_t      *no_delete_mod_data;
+    module_data_t *no_delete_mod_data;
 
     /* Client-owned threads, such as a client nudge thread, require special
      * synchronization support. is_client_thread means that the thread is currently
@@ -385,26 +392,26 @@ typedef struct _client_data_t {
      * to finish etc. Applies to generated code and other libraries called by the client
      * lib as well.
      */
-    bool           is_client_thread; /* NOTE - use IS_CLIENT_THREAD() */
-    bool           client_thread_safe_for_synch;
-    bool           suspendable; /* suspend w/ synchall: PR 609569 */
-    bool           left_unsuspended; /* not suspended by synchall: PR 609569 */
-    uint           mutex_count; /* mutex nesting: for PR 558463 */
-    void           *client_grab_mutex;
-# ifdef DEBUG
-    bool           is_translating;
-# endif
+    bool is_client_thread; /* NOTE - use IS_CLIENT_THREAD() */
+    bool client_thread_safe_for_synch;
+    bool suspendable;      /* suspend w/ synchall: PR 609569 */
+    bool left_unsuspended; /* not suspended by synchall: PR 609569 */
+    uint mutex_count;      /* mutex nesting: for PR 558463 */
+    void *client_grab_mutex;
+#    ifdef DEBUG
+    bool is_translating;
+#    endif
 
     /* flags for asserts on linux and for getting param base right on windows */
-    bool           in_pre_syscall;
-    bool           in_post_syscall;
+    bool in_pre_syscall;
+    bool in_post_syscall;
     /* flag for dr_syscall_invoke_another() */
-    bool           invoke_another_syscall;
+    bool invoke_another_syscall;
     /* flag for dr_get_mcontext (i#117/PR 395156) */
-    bool           mcontext_in_dcontext;
+    bool mcontext_in_dcontext;
 } client_data_t;
 #else
-# define IS_CLIENT_THREAD(dcontext) false
+#    define IS_CLIENT_THREAD(dcontext) false
 #endif /* CLIENT_INTERFACE */
 
 #ifdef LINUX
@@ -419,24 +426,24 @@ typedef struct _pending_nudge_t {
 #define DYNAMORIO_STACK_SIZE dynamo_options.stack_size
 
 /* global flags */
-extern bool automatic_startup;   /* ignore start/stop api, run entire program */
-extern bool control_all_threads; /* ok for "weird" things to happen -- not all
-                                    threads are under our control */
-extern bool dynamo_heap_initialized;  /* has dynamo_heap been initialized? */
-extern bool dynamo_initialized;  /* has dynamo been initialized? */
-extern bool dynamo_exited;       /* has dynamo exited? */
+extern bool automatic_startup;         /* ignore start/stop api, run entire program */
+extern bool control_all_threads;       /* ok for "weird" things to happen -- not all
+                                          threads are under our control */
+extern bool dynamo_heap_initialized;   /* has dynamo_heap been initialized? */
+extern bool dynamo_initialized;        /* has dynamo been initialized? */
+extern bool dynamo_exited;             /* has dynamo exited? */
 extern bool dynamo_exited_and_cleaned; /* has dynamo component cleanup started? */
 #ifdef DEBUG
 extern bool dynamo_exited_log_and_stats; /* are stats and logfile shut down? */
 #endif
-extern bool dynamo_resetting;    /* in middle of global reset? */
+extern bool dynamo_resetting;           /* in middle of global reset? */
 extern bool dynamo_all_threads_synched; /* are all other threads suspended safely? */
 
 #if defined(CLIENT_INTERFACE) || defined(STANDALONE_UNIT_TEST)
-extern bool standalone_library;  /* used as standalone library */
+extern bool standalone_library; /* used as standalone library */
 #endif
 #ifdef LINUX
-extern bool post_execve;         /* have we performed an execve? */
+extern bool post_execve; /* have we performed an execve? */
 #endif
 
 /* global instance of statistics struct */
@@ -446,13 +453,13 @@ extern dr_statistics_t *stats;
 extern file_t main_logfile;
 
 /* initial stack so we don't have to use app's */
-extern byte *  initstack;
-extern mutex_t   initstack_mutex;
-extern byte *  initstack_app_xsp;
+extern byte *initstack;
+extern mutex_t initstack_mutex;
+extern byte *initstack_app_xsp;
 
 #if defined(WINDOWS) && defined(STACK_GUARD_PAGE)
 /* PR203701: separate stack for error reporting when the dstack is exhausted */
-extern byte *  exception_stack;
+extern byte *exception_stack;
 #endif
 
 /* keeps track of how many threads are in cleanup_and_terminate so that we know
@@ -460,26 +467,29 @@ extern byte *  exception_stack;
  * the all_threads list */
 extern int exiting_thread_count;
 
-bool is_on_initstack(byte *esp);
+bool
+is_on_initstack(byte *esp);
 
-bool is_on_dstack(dcontext_t *dcontext, byte *esp);
-bool is_currently_on_dstack(dcontext_t *dcontext);
+bool
+is_on_dstack(dcontext_t *dcontext, byte *esp);
+bool
+is_currently_on_dstack(dcontext_t *dcontext);
 
 #ifdef WINDOWS
-extern bool    dr_early_injected;
-extern int     dr_early_injected_location;
-extern bool    dr_injected_primary_thread;
-extern bool    dr_injected_secondary_thread;
-extern bool    dr_late_injected_primary_thread;
+extern bool dr_early_injected;
+extern int dr_early_injected_location;
+extern bool dr_injected_primary_thread;
+extern bool dr_injected_secondary_thread;
+extern bool dr_late_injected_primary_thread;
 
 #endif
 #ifdef RETURN_AFTER_CALL
-extern bool    dr_preinjected;
+extern bool dr_preinjected;
 #endif
 #ifdef DR_APP_EXPORTS
 /* flags to indicate when DR is being initialized / exited using the API */
-extern bool    dr_api_entry;
-extern bool    dr_api_exit;
+extern bool dr_api_entry;
+extern bool dr_api_exit;
 #endif
 
 /* in dynamo.c */
@@ -489,76 +499,111 @@ extern bool    dr_api_exit;
 #define ALL_THREADS_HASH_BITS 9
 extern thread_record_t **all_threads;
 extern mutex_t all_threads_lock;
-DYNAMORIO_EXPORT int dynamorio_app_init(void);
-int dynamorio_app_exit(void);
+DYNAMORIO_EXPORT int
+dynamorio_app_init(void);
+int
+dynamorio_app_exit(void);
 #if defined(CLIENT_INTERFACE) || defined(STANDALONE_UNIT_TEST)
-dcontext_t * standalone_init(void);
-void standalone_exit(void);
+dcontext_t *
+standalone_init(void);
+void
+standalone_exit(void);
 #endif
-thread_record_t * thread_lookup(thread_id_t tid);
-void add_thread(IF_WINDOWS_ELSE_NP(HANDLE hthread, process_id_t pid),
-                thread_id_t tid, bool under_dynamo_control, dcontext_t *dcontext);
-bool remove_thread(IF_WINDOWS_(HANDLE hthread) thread_id_t tid);
-uint get_thread_num(thread_id_t tid);
-int get_num_threads(void);
-bool is_last_app_thread(void);
-void get_list_of_threads(thread_record_t ***list, int *num);
-bool is_thread_known(thread_id_t tid);
+thread_record_t *
+thread_lookup(thread_id_t tid);
+void
+add_thread(IF_WINDOWS_ELSE_NP(HANDLE hthread, process_id_t pid), thread_id_t tid,
+           bool under_dynamo_control, dcontext_t *dcontext);
+bool
+remove_thread(IF_WINDOWS_(HANDLE hthread) thread_id_t tid);
+uint
+get_thread_num(thread_id_t tid);
+int
+get_num_threads(void);
+bool
+is_last_app_thread(void);
+void
+get_list_of_threads(thread_record_t ***list, int *num);
+bool
+is_thread_known(thread_id_t tid);
 #ifdef LINUX
-void get_list_of_threads_ex(thread_record_t ***list, int *num, bool include_execve);
-void mark_thread_execve(thread_record_t *tr, bool execve);
+void
+get_list_of_threads_ex(thread_record_t ***list, int *num, bool include_execve);
+void
+mark_thread_execve(thread_record_t *tr, bool execve);
 #endif
-bool is_thread_initialized(void);
-int dynamo_thread_init(byte *dstack_in, dr_mcontext_t *mc
-                       _IF_CLIENT_INTERFACE(bool client_thread));
-int dynamo_thread_exit(void);
-void dynamo_thread_stack_free_and_exit(byte *stack);
-int dynamo_other_thread_exit(thread_record_t *tr
-                             _IF_WINDOWS(bool detach_stacked_callbacks));
-void dynamo_thread_under_dynamo(dcontext_t *dcontext);
-void dynamo_thread_not_under_dynamo(dcontext_t *dcontext);
+bool
+is_thread_initialized(void);
+int
+dynamo_thread_init(byte *dstack_in,
+                   dr_mcontext_t *mc _IF_CLIENT_INTERFACE(bool client_thread));
+int
+dynamo_thread_exit(void);
+void
+dynamo_thread_stack_free_and_exit(byte *stack);
+int
+dynamo_other_thread_exit(thread_record_t *tr _IF_WINDOWS(bool detach_stacked_callbacks));
+void
+dynamo_thread_under_dynamo(dcontext_t *dcontext);
+void
+dynamo_thread_not_under_dynamo(dcontext_t *dcontext);
 /* used for synch to prevent thread creation/deletion in critical periods */
 extern mutex_t thread_initexit_lock;
-dcontext_t * create_new_dynamo_context(bool initial, byte *dstack_in);
-void initialize_dynamo_context(dcontext_t *dcontext);
-dcontext_t * create_callback_dcontext(dcontext_t *old_dcontext);
-int dynamo_nullcalls_exit(void);
-int dynamo_process_exit(void);
+dcontext_t *
+create_new_dynamo_context(bool initial, byte *dstack_in);
+void
+initialize_dynamo_context(dcontext_t *dcontext);
+dcontext_t *
+create_callback_dcontext(dcontext_t *old_dcontext);
+int
+dynamo_nullcalls_exit(void);
+int
+dynamo_process_exit(void);
 #ifdef LINUX
-void dynamorio_fork_init(dcontext_t *dcontext);
+void
+dynamorio_fork_init(dcontext_t *dcontext);
 #endif
-dr_statistics_t * get_dr_stats(void);
+dr_statistics_t *
+get_dr_stats(void);
 
 /* functions needed by detach */
 int dynamo_shared_exit(IF_WINDOWS_ELSE_NP(bool detach_stacked_callbacks, void));
 /* perform exit tasks that require full thread data structs */
-void dynamo_process_exit_with_thread_info(void);
+void
+dynamo_process_exit_with_thread_info(void);
 
 /* enter/exit DR hooks */
-void entering_dynamorio(void);
-void exiting_dynamorio(void);
+void
+entering_dynamorio(void);
+void
+exiting_dynamorio(void);
 
-void handle_system_call(dcontext_t *dcontext);
+void
+handle_system_call(dcontext_t *dcontext);
 
 /* self-protection */
-void protect_data_section(uint sec, bool writable);
+void
+protect_data_section(uint sec, bool writable);
 #ifdef DEBUG
-const char *get_data_section_name(app_pc pc);
-bool check_should_be_protected(uint sec);
-# ifdef WINDOWS
-bool data_sections_enclose_region(app_pc start, app_pc end);
-# endif
+const char *
+get_data_section_name(app_pc pc);
+bool
+check_should_be_protected(uint sec);
+#    ifdef WINDOWS
+bool
+data_sections_enclose_region(app_pc start, app_pc end);
+#    endif
 #endif /* DEBUG */
 
 /* all the locks used to protect shared data structures during multi-operation
- * sequences, exported so that micro-operations can assert that one is held 
+ * sequences, exported so that micro-operations can assert that one is held
  */
 extern mutex_t bb_building_lock;
 extern recursive_lock_t change_linking_lock;
 
 /* where the current app thread's control is */
 typedef enum {
-    WHERE_APP=0, 
+    WHERE_APP = 0,
     WHERE_INTERP,
     WHERE_DISPATCH,
     WHERE_MONITOR,
@@ -578,13 +623,10 @@ typedef enum {
     WHERE_LAST
 } where_am_i_t;
 
-/* make args easier to read for protection change calls 
+/* make args easier to read for protection change calls
  * since only two possibilities not using new type
  */
-enum {
-    READONLY=false, 
-    WRITABLE=true
-};
+enum { READONLY = false, WRITABLE = true };
 
 /* To handle TRY/EXCEPT/FINALLY setjmp */
 typedef struct try_except_context_t {
@@ -598,24 +640,24 @@ typedef struct try_except_context_t {
 } try_except_context_t;
 
 typedef struct {
-    /* WARNING: if you change the offsets of any of these fields, 
-     * you must also change the offsets in <arch>/<arch.s> 
+    /* WARNING: if you change the offsets of any of these fields,
+     * you must also change the offsets in <arch>/<arch.s>
      */
-    dr_mcontext_t mcontext;        /* real machine context (in arch_exports.h) */
+    dr_mcontext_t mcontext; /* real machine context (in arch_exports.h) */
 #ifdef LINUX
-    int            errno;           /* errno used for app and dynamo */
+    int errno; /* errno used for app and dynamo */
 #endif
-    bool at_syscall;                /* for shared deletion syscalls_synch_flush,
-                                     * as well as syscalls handled from dispatch,
-                                     * and for reset to identify when at syscalls
-                                     */
+    bool at_syscall; /* for shared deletion syscalls_synch_flush,
+                      * as well as syscalls handled from dispatch,
+                      * and for reset to identify when at syscalls
+                      */
 #ifdef X64
     /* For Windows, 4 bytes of padding to fill out the 4-byte at_syscall,
      * since dr_mcontext_t is 8-byte aligned */
 #endif
 } unprotected_context_t;
 
-/* dynamo-specific context associated with each active app thread 
+/* dynamo-specific context associated with each active app thread
  * N.B.: make sure to update these routines as necessary if
  * you add or remove fields:
  *   create_new_dynamo_context
@@ -632,7 +674,7 @@ struct _dcontext_t {
      */
 
     /* WARNING: if you change the offsets of any of these fields, up through
-     * ignore_enterexit, you must also change the offsets in <arch>/<arch.s> 
+     * ignore_enterexit, you must also change the offsets in <arch>/<arch.s>
      */
 
     /* if SELFPROT_DCONTEXT, must split dcontext into unprotected and
@@ -641,7 +683,7 @@ struct _dcontext_t {
      * we waste sizeof(unprotected_context_t) bytes to provide runtime flexibility:
      */
     union {
-        /* we use separate_upcontext if 
+        /* we use separate_upcontext if
          *    (TEST(SELFPROT_DCONTEXT, dynamo_options.protect_mask))
          * else we use the inlined upcontext
          */
@@ -652,48 +694,48 @@ struct _dcontext_t {
      * a self-ptr (to inlined upcontext) or if we separate upcontext it points there.
      */
     unprotected_context_t *upcontext_ptr;
-    
+
     /* The next application pc to execute.
      * Also used to store the cache pc to execute when entering the code cache,
      * and set to the sentinel value BACK_TO_NATIVE_AFTER_SYSCALL for native_exec.
      * FIXME: change to a union?
      */
-    app_pc         next_tag;
+    app_pc next_tag;
 
-    linkstub_t *     last_exit;       /* last exit from cache */
-    byte *         dstack;          /* thread-private dynamo stack */
+    linkstub_t *last_exit; /* last exit from cache */
+    byte *dstack;          /* thread-private dynamo stack */
 
     /* These are expected to retain their values across an entire native execution.
      * We assume that callbacks and native_exec executions are properly nested, and
      * we don't share these across callbacks, using the original value on returning.
      */
-    app_pc         native_exec_retval; /* native_exec return address */
-    app_pc         native_exec_retloc; /* native_exec return address app stack location */
+    app_pc native_exec_retval; /* native_exec return address */
+    app_pc native_exec_retloc; /* native_exec return address app stack location */
 
 #ifdef RETURN_STACK
-    byte *         rstack;          /* bottom of return stack */
-    byte *         top_of_rstack;   /* top of return stack */
+    byte *rstack;        /* bottom of return stack */
+    byte *top_of_rstack; /* top of return stack */
 #endif
-    int            app_errno;       /* storage for app's errno while in dynamo */
-    bool           is_exiting;      /* flag for exiting thread */
+    int app_errno;   /* storage for app's errno while in dynamo */
+    bool is_exiting; /* flag for exiting thread */
 #ifdef WINDOWS
-# ifdef CLIENT_INTERFACE
+#    ifdef CLIENT_INTERFACE
     /* i#249: TEB field isolation */
-    void *         app_fls_data;
-    void *         priv_fls_data;
-    void *         app_nt_rpc;
-    void *         priv_nt_rpc;
+    void *app_fls_data;
+    void *priv_fls_data;
+    void *app_nt_rpc;
+    void *priv_nt_rpc;
     /* we need this to restore ptrs for other threads on detach */
-    byte *         teb_base;
-# endif
+    byte *teb_base;
+#    endif
     /* storage for an extra app value around sysenter system calls for the
      * case 5441 Sygate interoperability hack */
     /* FIXME - this needs to be moved into the upcontext as is written to
      * in cache by ignore/shared_syscall, ramifications? */
-    app_pc         sysenter_storage;
+    app_pc sysenter_storage;
 
     /* used to avoid enter/exit hooks for certain system calls (see case 4942) */
-    bool           ignore_enterexit;
+    bool ignore_enterexit;
 #endif
 
     /* Coarse-grain cache exits require extra state storage as they do not
@@ -712,35 +754,35 @@ struct _dcontext_t {
     /* FIXME: now that we initialize a new thread's dcontext right away, and
      * a new callback's as well, we should be able to get rid of this
      */
-    bool           initialized;     /* has this context been used yet? */
-    thread_id_t      owning_thread;
+    bool initialized; /* has this context been used yet? */
+    thread_id_t owning_thread;
 #ifndef LINUX_KERNEL
-#ifdef LINUX
-    process_id_t     owning_process; /* handle shared address space w/o shared pid */
+#    ifdef LINUX
+    process_id_t owning_process; /* handle shared address space w/o shared pid */
+#    endif
 #endif
-#endif
-    thread_record_t   *thread_record;  /* so don't have to do a thread_lookup */
-    where_am_i_t       whereami;        /* where control is at the moment */
-    void *         allocated_start; /* used for cache alignment */
-    fragment_t *     last_fragment;   /* cached value of linkstub_fragment(last_exit) */
+    thread_record_t *thread_record; /* so don't have to do a thread_lookup */
+    where_am_i_t whereami;          /* where control is at the moment */
+    void *allocated_start;          /* used for cache alignment */
+    fragment_t *last_fragment;      /* cached value of linkstub_fragment(last_exit) */
 
-    int            sys_num;         /* used for post_system_call */
+    int sys_num; /* used for post_system_call */
 #ifdef WINDOWS
-    reg_t *        sys_param_base;  /* used for post_system_call */
+    reg_t *sys_param_base; /* used for post_system_call */
 #endif
 #if defined(LINUX) || defined(X64)
-    reg_t          sys_param0;      /* used for post_system_call */
-    reg_t          sys_param1;      /* used for post_system_call */
-    reg_t          sys_param2;      /* used for post_system_call */
-    reg_t          sys_param3;      /* used for post_system_call */
+    reg_t sys_param0; /* used for post_system_call */
+    reg_t sys_param1; /* used for post_system_call */
+    reg_t sys_param2; /* used for post_system_call */
+    reg_t sys_param3; /* used for post_system_call */
 #endif
 #ifdef LINUX
-    reg_t          sys_param4;      /* used for post_system_call i#173 */
-    bool           sys_was_int;     /* was the last system call via do_int_syscall? */
-    bool           sys_xbp;         /* PR 313715: store orig xbp */
-# ifdef DEBUG
-    bool           mprot_multi_areas; /* PR 410921: mprotect of 2 or more vmareas? */
-# endif
+    reg_t sys_param4; /* used for post_system_call i#173 */
+    bool sys_was_int; /* was the last system call via do_int_syscall? */
+    bool sys_xbp;     /* PR 313715: store orig xbp */
+#    ifdef DEBUG
+    bool mprot_multi_areas; /* PR 410921: mprotect of 2 or more vmareas? */
+#    endif
 #endif
 
 #ifdef X64
@@ -749,58 +791,58 @@ struct _dcontext_t {
      * decode/encode 32-bit from 64-bit dynamorio.dll (we don't support the
      * other way around: PR 236203).
      */
-    bool           x86_mode;
+    bool x86_mode;
 #endif
 
     /* to make things more modular these are void*: */
-    void *         link_field;
-    void *         monitor_field;
-    void *         fcache_field;
-    void *         fragment_field;
-    void *         heap_field;
-    void *         vm_areas_field;
-    void *         os_field;
-    void *         synch_field;
+    void *link_field;
+    void *monitor_field;
+    void *fcache_field;
+    void *fragment_field;
+    void *heap_field;
+    void *vm_areas_field;
+    void *os_field;
+    void *synch_field;
 #ifdef LINUX
-    void *         signal_field;
-    void *         pcprofile_field;
-    bool           signals_pending;
+    void *signal_field;
+    void *pcprofile_field;
+    bool signals_pending;
 #endif
-    void *         private_code;          /* various thread-private routines */
+    void *private_code; /* various thread-private routines */
 
 #ifdef TRACE_HEAD_CACHE_INCR
-    cache_pc       trace_head_pc; /* HACK to jmp to trace head w/o a prefix */
+    cache_pc trace_head_pc; /* HACK to jmp to trace head w/o a prefix */
 #endif
 
 #ifdef WINDOWS
     /* these fields used for "stack" of contexts for callbacks */
-# ifdef DCONTEXT_IN_EDI
+#    ifdef DCONTEXT_IN_EDI
     dcontext_t *next_saved;
-# endif
+#    endif
     dcontext_t *prev_unused;
     /* need to be able to tell which dcontexts in callback stack are valid */
-    bool           valid;
+    bool valid;
     /* special slot used to deal with callback returns, where we want to
      * restore state of prior guy on callback stack, yet need current state
      * to restore native state prior to callback return interrupt/syscall.
      * Also used as temp next_tag slot for fcache_enter_indirect and cb ret.
      */
-    reg_t          nonswapped_scratch;
+    reg_t nonswapped_scratch;
 #endif
 
     /* next_tag holds the do_syscall entry point, so we need another
      * slot to hold asynch targets for APCs to know next target and
      * for NtContinue and sigreturn to set next target
      */
-    app_pc         asynch_target;
+    app_pc asynch_target;
 
     /* must store post-intercepted-syscall target to allow using normal
      * dispatch() for native_exec syscalls
      */
-    app_pc         native_exec_postsyscall;
+    app_pc native_exec_postsyscall;
 
 #ifdef PROGRAM_SHEPHERDING
-    bool           alloc_no_reserve; /* to implement executable_if_alloc policy */
+    bool alloc_no_reserve; /* to implement executable_if_alloc policy */
 #endif
 
 #ifdef CUSTOM_TRACES_RET_REMOVAL
@@ -809,42 +851,42 @@ struct _dcontext_t {
     int call_depth;
 #endif
 #ifdef NATIVE_RETURN
-# ifdef NATIVE_RETURN_CALLDEPTH
-    uint           call_depth;
-# endif
-    cache_pc       last_retaddr; /* used by fixup_last_cti */
-    int            num_calls_in_trace;
+#    ifdef NATIVE_RETURN_CALLDEPTH
+    uint call_depth;
+#    endif
+    cache_pc last_retaddr; /* used by fixup_last_cti */
+    int num_calls_in_trace;
 #endif
 
 #ifdef CHECK_RETURNS_SSE2
-    int            call_depth;
-    void *         call_stack;
+    int call_depth;
+    void *call_stack;
 #endif
 
 #ifdef DEBUG
-    file_t                        logfile;
-    thread_local_statistics_t *     thread_stats;
-    bool                        expect_last_syscall_to_fail;
+    file_t logfile;
+    thread_local_statistics_t *thread_stats;
+    bool expect_last_syscall_to_fail;
     /* HACK to avoid recursion on pclookup for target invoking disassembly
      * during decode_fragment() for a coarse target
      */
-    bool                        in_opnd_disassemble;
+    bool in_opnd_disassemble;
 #endif /* DEBUG */
 #ifdef DEADLOCK_AVOIDANCE
-    thread_locks_t *               thread_owned_locks;
+    thread_locks_t *thread_owned_locks;
 #endif
 #ifdef KSTATS
-    thread_kstats_t *              thread_kstats;
+    thread_kstats_t *thread_kstats;
 #endif
 
 #ifdef PROFILE_RDTSC
-    uint64         cache_enter_time;
-    uint64         start_time;     /* records start time for profiling */
-    fragment_t *     prev_fragment;
+    uint64 cache_enter_time;
+    uint64 start_time; /* records start time for profiling */
+    fragment_t *prev_fragment;
     /* top ten times spent in cache */
-    uint64         cache_frag_count; /* num frag execs in single cache period */
-    uint64         cache_time[10];   /* top ten times spent in cache */
-    uint64         cache_count[10];  /* top ten cache_frag_counts */
+    uint64 cache_frag_count; /* num frag execs in single cache period */
+    uint64 cache_time[10];   /* top ten times spent in cache */
+    uint64 cache_count[10];  /* top ten cache_frag_counts */
 #endif
 
 #ifdef CLIENT_INTERFACE
@@ -860,21 +902,21 @@ struct _dcontext_t {
      * for example, during a callback. A longer-term fix may be to move it to
      * a context-private non-shared monitor struct.
      */
-    bool           trace_sysenter_exit;
+    bool trace_sysenter_exit;
 
     /* DR sets this field to indicate that it's forging an exception that
      * may appear to originate in DR but should be passed on to the app. */
-    app_pc         forged_exception_addr;
+    app_pc forged_exception_addr;
 #ifdef HOT_PATCHING_INTERFACE
     /* Fix for case 5367. */
-    bool           nudge_thread;    /* True only if this is a nudge thread. */
-    dr_jmp_buf_t   hotp_excpt_state;    /* To handle hot patch exceptions. */
+    bool nudge_thread;             /* True only if this is a nudge thread. */
+    dr_jmp_buf_t hotp_excpt_state; /* To handle hot patch exceptions. */
 #endif
     try_except_context_t *try_except_state; /* for TRY/EXCEPT/FINALLY */
-    bool unwinding_exception;   /* NYI support for TRY/FINALLY - 
-                                 * marks exception until an EXCEPT handles */
-    
-#ifdef WINDOWS                    
+    bool unwinding_exception;               /* NYI support for TRY/FINALLY -
+                                             * marks exception until an EXCEPT handles */
+
+#ifdef WINDOWS
     /* for ASLR_SHARED_CONTENT, note per callback, not per thread to
      * track properties of a syscall or a syscall pair.  Even we don't
      * expect to get APCs or callbacks while processing normal DLLs
@@ -891,11 +933,11 @@ struct _dcontext_t {
      * attacker leveraging our own detach routines and the like.  FIXME - if
      * the attacker is able to specify the start address for a newly created
      * thread then they can fake this. */
-    void           *nudge_target;
+    void *nudge_target;
 
     /* If free_app_stack is set, we free the application stack during thread exit
      * cleanup.  Used for nudge threads. */
-    bool           free_app_stack;
+    bool free_app_stack;
 #endif /* WINDOWS */
 
     /* we keep an absolute address pointer to our tls state so that we
@@ -906,8 +948,8 @@ struct _dcontext_t {
 #ifdef WINDOWS
     /* case 8721: saving the win32 start address so we can print it in the
      * ldmp.  An alternative solution is to call NtQueryInformationThread
-     * with ThreadQuerySetWin32StartAddress at dump time.  According to 
-     * Nebbet, however, a thread calling ZwReplyWaitReplyPort or 
+     * with ThreadQuerySetWin32StartAddress at dump time.  According to
+     * Nebbet, however, a thread calling ZwReplyWaitReplyPort or
      * ZwReplyWaitRecievePort will clobber the start address.
      */
     app_pc win32_start_addr;
@@ -920,25 +962,25 @@ struct _dcontext_t {
     pending_nudge_t *nudge_pending;
     /* frag we unlinked to expedite nudge delivery */
     fragment_t *interrupted_for_nudge;
-# ifndef LINUX_KERNEL
-#  ifdef DEBUG
+#    ifndef LINUX_KERNEL
+#        ifdef DEBUG
     /* i#238/PR 499179: check that libc errno hasn't changed */
     int libc_errno;
-#  endif
-# endif
+#        endif
+#    endif
 #endif
     /* The last fragment dispatch entered. Useful for debugging. */
     fragment_t *current_fragment;
     /* Holds the address of the next application instruction to execute. Unlike
      * next_tag, this is not overwritten with a code cache address. */
-    app_pc         next_app_tag;
+    app_pc next_app_tag;
     bool emulating_interrupt_return;
 };
 
 /* sentinel value for dcontext_t* used to indicate
- * "global rather than a particular thread" 
+ * "global rather than a particular thread"
  */
-#define GLOBAL_DCONTEXT  ((dcontext_t *)PTR_UINT_MINUS_1)
+#define GLOBAL_DCONTEXT ((dcontext_t *)PTR_UINT_MINUS_1)
 
 /* FIXME: why do we need to force the inline for this simple function? */
 static INLINE_FORCED dr_mcontext_t *
@@ -950,44 +992,41 @@ get_mcontext(dcontext_t *dcontext)
         return &(dcontext->upcontext.upcontext.mcontext);
 }
 
-/* A number of routines (dump_mbi*, dump_mcontext, dump_callstack, 
+/* A number of routines (dump_mbi*, dump_mcontext, dump_callstack,
  * print_modules) have an argument on whether to dump in an xml friendly format
  * (for xml diagnostics files). We use these defines for readability. */
-enum {
-    DUMP_XML=true,
-    DUMP_NOT_XML=false
-};
+enum { DUMP_XML = true, DUMP_NOT_XML = false };
 
 /* Code cleanliness rules */
 #ifdef WINDOWS
-#  define snprintf   _snprintf
-#  define snwprintf  _snwprintf
-#  define vsnprintf  _vsnprintf
-#  define strcasecmp _stricmp
-#  define strncasecmp _strnicmp
-#  define wcscasecmp _wcsicmp
+#    define snprintf _snprintf
+#    define snwprintf _snwprintf
+#    define vsnprintf _vsnprintf
+#    define strcasecmp _stricmp
+#    define strncasecmp _strnicmp
+#    define wcscasecmp _wcsicmp
 #endif
 
 #if !defined(NOT_DYNAMORIO_CORE_PROPER) && !defined(NOT_DYNAMORIO_CORE)
 //#  define printf   printf_forbidden_function
-#  define sprintf  sprintf_forbidden_function
-#  define swprintf swprintf_forbidden_function
-#  define vsprintf vsprintf_forbidden_function
-#  define __try    __try_forbidden_construct /* see case 4461 */
+#    define sprintf sprintf_forbidden_function
+#    define swprintf swprintf_forbidden_function
+#    define vsprintf vsprintf_forbidden_function
+#    define __try __try_forbidden_construct /* see case 4461 */
 
 /* libc independence */
-#  define mprotect     mprotect_forbidden_function
-#  define mmap         mmap_forbidden_function
-#  define munmap       munmap_forbidden_function
-#  define getppid      getppid_forbidden_function
-#  define sched_yield  sched_yield_forbidden_function
-#  define dup          dup_forbidden_function
-#  define sigaltstack  sigaltstack_forbidden_function
-#  define setitimer    setitimer_forbidden_function
-#  define _exit        _exit_forbidden_function
-#  define gettimeofday gettimeofday_forbidden_function
-#  define time         time_forbidden_function
-#  define modify_ldt   modify_ldt_forbidden_function
+#    define mprotect mprotect_forbidden_function
+#    define mmap mmap_forbidden_function
+#    define munmap munmap_forbidden_function
+#    define getppid getppid_forbidden_function
+#    define sched_yield sched_yield_forbidden_function
+#    define dup dup_forbidden_function
+#    define sigaltstack sigaltstack_forbidden_function
+#    define setitimer setitimer_forbidden_function
+#    define _exit _exit_forbidden_function
+#    define gettimeofday gettimeofday_forbidden_function
+#    define time time_forbidden_function
+#    define modify_ldt modify_ldt_forbidden_function
 #endif
 
 #endif /* _GLOBALS_H_ */

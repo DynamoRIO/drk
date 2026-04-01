@@ -30,7 +30,7 @@
  * Description:
  *     Manage shadow memory allocation and free.
  *
- * Author: 
+ * Author:
  *     Qin Zhao
  *
  */
@@ -47,37 +47,30 @@ shadow_init(void);
 void
 shadow_exit(void);
 
-void 
+void
 shadow_thread_init(void *drcontext, umbra_info_t *info);
 
-void 
+void
 shadow_thread_exit(void *drcontext, umbra_info_t *info);
 
 void
-shadow_maps_free_update(void *drcontext, 
-                        umbra_info_t *info,
-                        byte *addr);
+shadow_maps_free_update(void *drcontext, umbra_info_t *info, byte *addr);
 
 void
-shadow_maps_alloc_update(void *drcontext,
-                         umbra_info_t *info,
-                         byte *addr,
-                         size_t size);
+shadow_maps_alloc_update(void *drcontext, umbra_info_t *info, byte *addr, size_t size);
 
 void
 shadow_memory_map_lookup(void);
 
-void 
+void
 shadow_pre_syscall(void *drcontext, umbra_info_t *info, int sysnum);
 
-void 
+void
 shadow_post_syscall(void *drcontext, umbra_info_t *info, int sysnum);
 
 void
-shadow_module_load(void *drcontext, 
-                   umbra_info_t *umbra_info,
-                   const module_data_t *module_info, 
-                   bool loaded);
+shadow_module_load(void *drcontext, umbra_info_t *umbra_info,
+                   const module_data_t *module_info, bool loaded);
 
 void
 shadow_module_unload(void *drcontext, umbra_info_t *umbra_info,
@@ -90,8 +83,8 @@ bool
 compute_shd_memory_addr(void *app_addr, void *shd_addr[MAX_NUM_SHADOWS]);
 
 void
-compute_shd_memory_addr_ex(memory_map_t *map,
-                           void *app_addr, void *shd_addr[MAX_NUM_SHADOWS]);
+compute_shd_memory_addr_ex(memory_map_t *map, void *app_addr,
+                           void *shd_addr[MAX_NUM_SHADOWS]);
 
 memory_map_t *
 memory_map_app_lookup(memory_map_t *map, void *start);
@@ -121,15 +114,10 @@ void
 shadow_kernel_exit(void);
 #elif defined(LINUX)
 dr_signal_action_t
-shadow_signal(void         *drcontext, 
-              umbra_info_t *umbra_info, 
-              dr_siginfo_t *siginfo);
+shadow_signal(void *drcontext, umbra_info_t *umbra_info, dr_siginfo_t *siginfo);
 #else
 bool
-shadow_exception(void           *drcontext, 
-                 umbra_info_t   *umbra_info, 
-                 dr_exception_t *excpt);
+shadow_exception(void *drcontext, umbra_info_t *umbra_info, dr_exception_t *excpt);
 #endif /* LINUX */
 
-#endif  /* _SHADOW_H_ */
-
+#endif /* _SHADOW_H_ */

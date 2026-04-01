@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -35,17 +35,17 @@
 #define MINSERT instrlist_meta_preinsert
 
 #ifdef WINDOWS
-# define ASSERT(x)                                        \
-  if (!(x)) {                                             \
-    dr_messagebox("ASSERT failed on line %d", __LINE__);  \
-    dr_abort();                                           \
-  }
+#    define ASSERT(x)                                            \
+        if (!(x)) {                                              \
+            dr_messagebox("ASSERT failed on line %d", __LINE__); \
+            dr_abort();                                          \
+        }
 #else /* LINUX */
-# define ASSERT(x)                                            \
-  if (!(x)) {                                                 \
-    dr_fprintf(STDERR, "ASSERT failed on line %d", __LINE__); \
-    dr_abort();                                               \
-  }
+#    define ASSERT(x)                                                 \
+        if (!(x)) {                                                   \
+            dr_fprintf(STDERR, "ASSERT failed on line %d", __LINE__); \
+            dr_abort();                                               \
+        }
 #endif
 
 #ifdef X64
@@ -56,17 +56,17 @@ static reg_t buf[] = { 0xcafebabe, 0xfeedadad, 0xeeeeeeee, 0xbadcabee };
 static void
 foo(reg_t a1, reg_t a2, reg_t a3, reg_t a4, reg_t a5, reg_t a6, reg_t a7, reg_t a8)
 {
-    dr_fprintf(STDERR, "foo "PFX" "PFX" "PFX" "PFX"\n    "PFX" "PFX" "PFX" "PFX"\n",
-               a1, 
-               /* printing addr of buf would be non-deterministic */
-               IF_X64_ELSE((a2 == (reg_t) buf) ? 1 : -1, a2),
-               a3, a4, a5, a6, a7, a8);
+    dr_fprintf(
+        STDERR,
+        "foo " PFX " " PFX " " PFX " " PFX "\n    " PFX " " PFX " " PFX " " PFX "\n", a1,
+        /* printing addr of buf would be non-deterministic */
+        IF_X64_ELSE((a2 == (reg_t)buf) ? 1 : -1, a2), a3, a4, a5, a6, a7, a8);
 }
 
 static void
 bar(reg_t a1, reg_t a2)
 {
-    dr_fprintf(STDERR, "bar "PFX" "PFX"\n", a1, a2);
+    dr_fprintf(STDERR, "bar " PFX " " PFX "\n", a1, a2);
 }
 
 static void
@@ -75,15 +75,15 @@ save_test()
     int i;
     void *drcontext = dr_get_current_drcontext();
     dr_fprintf(STDERR, "verifying values\n");
-    if (*(((reg_t *)dr_get_tls_field(drcontext))+2) != 1) {
+    if (*(((reg_t *)dr_get_tls_field(drcontext)) + 2) != 1) {
         dr_fprintf(STDERR, "Write to client tls from cache failed, got %d, expected %d\n",
-                   *(((reg_t *)dr_get_tls_field(drcontext))+2), 1);
+                   *(((reg_t *)dr_get_tls_field(drcontext)) + 2), 1);
     }
     for (i = SPILL_SLOT_1; i <= SPILL_SLOT_MAX; i++) {
         reg_t value = dr_read_saved_reg(drcontext, i);
         if (value != i + 1 - SPILL_SLOT_1) {
-            dr_fprintf(STDERR, "slot %d value %d doesn't match expected value %d\n",
-                       i, value, i + 1 - SPILL_SLOT_1);
+            dr_fprintf(STDERR, "slot %d value %d doesn't match expected value %d\n", i,
+                       value, i + 1 - SPILL_SLOT_1);
         }
         if (i % 2 == 0) {
             /* set every other reg */
@@ -108,14 +108,13 @@ restore_state_event(void *drcontext, void *tag, dr_mcontext_t *mcontext,
 }
 
 static dr_emit_flags_t
-bb_event(void *drcontext, void* tag, instrlist_t *bb, bool for_trace, bool translating)
+bb_event(void *drcontext, void *tag, instrlist_t *bb, bool for_trace, bool translating)
 {
     instr_t *instr, *next_instr, *next_next_instr;
     bool modified = false;
-    
-# define PRE(bb, i) \
-    instrlist_preinsert(bb, instr, INSTR_XL8(i, dr_fragment_app_pc(tag)))
-# define PREM(bb, i) \
+
+#define PRE(bb, i) instrlist_preinsert(bb, instr, INSTR_XL8(i, dr_fragment_app_pc(tag)))
+#define PREM(bb, i) \
     instrlist_meta_preinsert(bb, instr, INSTR_XL8(i, dr_fragment_app_pc(tag)))
 
     /* Look for 3 nops to indicate handler is set up */
@@ -127,8 +126,7 @@ bb_event(void *drcontext, void* tag, instrlist_t *bb, bool for_trace, bool trans
         else
             next_next_instr = NULL;
 
-        if (instr_is_nop(instr) && 
-            next_instr != NULL && instr_is_nop(next_instr) && 
+        if (instr_is_nop(instr) && next_instr != NULL && instr_is_nop(next_instr) &&
             next_next_instr != NULL && instr_is_call_direct(next_next_instr)) {
 
             ASSERT(tag_of_interest == NULL || tag_of_interest == tag);
@@ -140,14 +138,14 @@ bb_event(void *drcontext, void* tag, instrlist_t *bb, bool for_trace, bool trans
             if (post_crash == 0) {
                 /* Test crash in 1st clean call arg */
                 dr_fprintf(STDERR, "inserting clean call crash code 1\n");
-                dr_insert_clean_call(drcontext, bb, instrlist_first(bb), (void*) foo,
+                dr_insert_clean_call(drcontext, bb, instrlist_first(bb), (void *)foo,
                                      false /* don't save fp state */, 1,
                                      OPND_CREATE_ABSMEM(NULL, OPSZ_4));
                 post_crash++;
             } else if (post_crash == 1) {
                 /* Test crash in 2nd clean call arg */
                 dr_fprintf(STDERR, "inserting clean call crash code 2\n");
-                dr_insert_clean_call(drcontext, bb, instrlist_first(bb), (void*) foo,
+                dr_insert_clean_call(drcontext, bb, instrlist_first(bb), (void *)foo,
                                      false /* don't save fp state */, 2,
                                      OPND_CREATE_INT32(0),
                                      OPND_CREATE_ABSMEM(NULL, OPSZ_4));
@@ -156,31 +154,32 @@ bb_event(void *drcontext, void* tag, instrlist_t *bb, bool for_trace, bool trans
                 /* PR 307242: test xsp args */
                 reg_id_t scratch;
 #ifdef X64
-# ifdef WINDOWS
+#    ifdef WINDOWS
                 scratch = REG_XCX;
-# else
+#    else
                 scratch = REG_XDI;
-# endif
+#    endif
 #else
                 scratch = REG_XAX;
 #endif
 
                 dr_fprintf(STDERR, "inserting xsp arg testing\n");
                 /* See notes below: we crash after, so can clobber regs */
-                PRE(bb, INSTR_CREATE_mov_imm(drcontext, opnd_create_reg(scratch),
-                                             OPND_CREATE_INT32(sizeof(reg_t))));
-                PRE(bb, INSTR_CREATE_push_imm(drcontext,
-                                              OPND_CREATE_INT32((int)0xbcbcaba0)));
-                PRE(bb, INSTR_CREATE_push_imm(drcontext,
-                                              OPND_CREATE_INT32((int)0xbcbcaba1)));
-                dr_insert_clean_call(drcontext, bb, instr, (void*) bar,
-                                     false /* don't save fp state */, 2,
-                                     OPND_CREATE_MEM32(REG_XSP, 0),
-                                     /* test conflicting w/ scratch reg */
-                                     opnd_create_base_disp(REG_XSP, scratch, 1,
-                                                           0, OPSZ_PTR));
-                PRE(bb, INSTR_CREATE_mov_ld(drcontext, opnd_create_reg(REG_XAX),
-                                            OPND_CREATE_ABSMEM(NULL, OPSZ_PTR)));
+                PRE(bb,
+                    INSTR_CREATE_mov_imm(drcontext, opnd_create_reg(scratch),
+                                         OPND_CREATE_INT32(sizeof(reg_t))));
+                PRE(bb,
+                    INSTR_CREATE_push_imm(drcontext, OPND_CREATE_INT32((int)0xbcbcaba0)));
+                PRE(bb,
+                    INSTR_CREATE_push_imm(drcontext, OPND_CREATE_INT32((int)0xbcbcaba1)));
+                dr_insert_clean_call(
+                    drcontext, bb, instr, (void *)bar, false /* don't save fp state */, 2,
+                    OPND_CREATE_MEM32(REG_XSP, 0),
+                    /* test conflicting w/ scratch reg */
+                    opnd_create_base_disp(REG_XSP, scratch, 1, 0, OPSZ_PTR));
+                PRE(bb,
+                    INSTR_CREATE_mov_ld(drcontext, opnd_create_reg(REG_XAX),
+                                        OPND_CREATE_ABSMEM(NULL, OPSZ_PTR)));
                 post_crash++;
             } else if (post_crash == 3) {
 #ifdef X86_64
@@ -195,39 +194,41 @@ bb_event(void *drcontext, void* tag, instrlist_t *bb, bool for_trace, bool trans
                 /* We do not translate the regs back */
 
                 /* We arrange to have our base-disps all be small offsets off buf */
-                PRE(bb, INSTR_CREATE_mov_imm(drcontext, opnd_create_reg(REG_RDX),
-                                             OPND_CREATE_INT32(sizeof(reg_t))));
-                PRE(bb, INSTR_CREATE_mov_imm(drcontext, opnd_create_reg(REG_RCX),
-                                             OPND_CREATE_INTPTR(buf)));
-                PRE(bb, INSTR_CREATE_mov_imm(drcontext, opnd_create_reg(REG_R8),
-                                             OPND_CREATE_INT32(-42)));
-                PRE(bb, INSTR_CREATE_mov_imm(drcontext, opnd_create_reg(REG_R9),
-                                             OPND_CREATE_INT32((int)0xdeadbeef)));
-                PRE(bb, INSTR_CREATE_mov_imm(drcontext, opnd_create_reg(REG_RAX),
-                                             OPND_CREATE_INT32(2*sizeof(reg_t))));
-                PRE(bb, INSTR_CREATE_mov_imm(drcontext, opnd_create_reg(REG_RBP),
-                                             OPND_CREATE_INT32(3*sizeof(reg_t))));
-                dr_insert_clean_call(drcontext, bb, instr, (void*) foo,
-                                     false /* don't save fp state */, 8,
-                                     /* Pick registers used by both Windows and Linux */
-                                     opnd_create_reg(REG_RDX),
-                                     opnd_create_reg(REG_RCX),
-                                     opnd_create_reg(REG_R9),
-                                     opnd_create_reg(REG_R8),
-                                     OPND_CREATE_MEM32(REG_RCX, 0),
-                                     /* test having only index register conflict */
-                                     opnd_create_base_disp(REG_RBP, REG_RCX, 1,
-                                                           0, OPSZ_PTR),
-                                     /* test OPSZ_4, and using register modified
-                                      * by clean call setup (rax) */
-                                     opnd_create_base_disp(REG_RAX, REG_RCX, 1,
-                                                           0, OPSZ_4),
-                                     /* test having both base and index conflict */
-                                     opnd_create_base_disp(REG_RDX, REG_RCX, 1,
-                                                           0, OPSZ_PTR));
+                PRE(bb,
+                    INSTR_CREATE_mov_imm(drcontext, opnd_create_reg(REG_RDX),
+                                         OPND_CREATE_INT32(sizeof(reg_t))));
+                PRE(bb,
+                    INSTR_CREATE_mov_imm(drcontext, opnd_create_reg(REG_RCX),
+                                         OPND_CREATE_INTPTR(buf)));
+                PRE(bb,
+                    INSTR_CREATE_mov_imm(drcontext, opnd_create_reg(REG_R8),
+                                         OPND_CREATE_INT32(-42)));
+                PRE(bb,
+                    INSTR_CREATE_mov_imm(drcontext, opnd_create_reg(REG_R9),
+                                         OPND_CREATE_INT32((int)0xdeadbeef)));
+                PRE(bb,
+                    INSTR_CREATE_mov_imm(drcontext, opnd_create_reg(REG_RAX),
+                                         OPND_CREATE_INT32(2 * sizeof(reg_t))));
+                PRE(bb,
+                    INSTR_CREATE_mov_imm(drcontext, opnd_create_reg(REG_RBP),
+                                         OPND_CREATE_INT32(3 * sizeof(reg_t))));
+                dr_insert_clean_call(
+                    drcontext, bb, instr, (void *)foo, false /* don't save fp state */, 8,
+                    /* Pick registers used by both Windows and Linux */
+                    opnd_create_reg(REG_RDX), opnd_create_reg(REG_RCX),
+                    opnd_create_reg(REG_R9), opnd_create_reg(REG_R8),
+                    OPND_CREATE_MEM32(REG_RCX, 0),
+                    /* test having only index register conflict */
+                    opnd_create_base_disp(REG_RBP, REG_RCX, 1, 0, OPSZ_PTR),
+                    /* test OPSZ_4, and using register modified
+                     * by clean call setup (rax) */
+                    opnd_create_base_disp(REG_RAX, REG_RCX, 1, 0, OPSZ_4),
+                    /* test having both base and index conflict */
+                    opnd_create_base_disp(REG_RDX, REG_RCX, 1, 0, OPSZ_PTR));
 #endif
-                PRE(bb, INSTR_CREATE_mov_ld(drcontext, opnd_create_reg(REG_XAX),
-                                            OPND_CREATE_ABSMEM(NULL, OPSZ_PTR)));
+                PRE(bb,
+                    INSTR_CREATE_mov_ld(drcontext, opnd_create_reg(REG_XAX),
+                                        OPND_CREATE_ABSMEM(NULL, OPSZ_PTR)));
                 post_crash++;
             } else {
                 /* Test register saving and restoring and access to saved registers
@@ -242,24 +243,31 @@ bb_event(void *drcontext, void* tag, instrlist_t *bb, bool for_trace, bool trans
                  * to client's tls. */
                 dr_save_reg(drcontext, bb, instr, REG_XBX, SPILL_SLOT_1);
                 dr_insert_read_tls_field(drcontext, bb, instr, REG_XBX);
-                PREM(bb, INSTR_CREATE_mov_st
-                     (drcontext, opnd_create_base_disp(REG_XBX, REG_NULL, 0,
-                                                       0 * sizeof(reg_t), OPSZ_PTR),
-                      opnd_create_reg(REG_XAX)));
+                PREM(bb,
+                     INSTR_CREATE_mov_st(drcontext,
+                                         opnd_create_base_disp(REG_XBX, REG_NULL, 0,
+                                                               0 * sizeof(reg_t),
+                                                               OPSZ_PTR),
+                                         opnd_create_reg(REG_XAX)));
                 dr_save_arith_flags(drcontext, bb, instr, SPILL_SLOT_2);
-                PREM(bb, INSTR_CREATE_mov_st
-                     (drcontext, opnd_create_base_disp(REG_XBX, REG_NULL, 0,
-                                                       1 * sizeof(reg_t), OPSZ_PTR),
-                      opnd_create_reg(REG_XAX)));
-                PREM(bb, INSTR_CREATE_mov_imm(drcontext, opnd_create_reg(REG_XAX),
-                                             OPND_CREATE_INT32(1)));
+                PREM(bb,
+                     INSTR_CREATE_mov_st(drcontext,
+                                         opnd_create_base_disp(REG_XBX, REG_NULL, 0,
+                                                               1 * sizeof(reg_t),
+                                                               OPSZ_PTR),
+                                         opnd_create_reg(REG_XAX)));
+                PREM(bb,
+                     INSTR_CREATE_mov_imm(drcontext, opnd_create_reg(REG_XAX),
+                                          OPND_CREATE_INT32(1)));
                 /* test tls writing */
-                PREM(bb, INSTR_CREATE_mov_st
-                     (drcontext, opnd_create_base_disp(REG_XBX, REG_NULL, 0,
-                                                       2 * sizeof(reg_t), OPSZ_PTR),
-                      opnd_create_reg(REG_XAX)));
+                PREM(bb,
+                     INSTR_CREATE_mov_st(drcontext,
+                                         opnd_create_base_disp(REG_XBX, REG_NULL, 0,
+                                                               2 * sizeof(reg_t),
+                                                               OPSZ_PTR),
+                                         opnd_create_reg(REG_XAX)));
                 dr_restore_reg(drcontext, bb, instr, REG_XBX, SPILL_SLOT_1);
-                
+
                 /* now test the slots */
                 /* xax is our tls + 0, flags is our tls + sizeof(reg_t) */
                 for (i = SPILL_SLOT_1; i <= SPILL_SLOT_MAX; i++) {
@@ -271,41 +279,44 @@ bb_event(void *drcontext, void* tag, instrlist_t *bb, bool for_trace, bool trans
                 for (i = SPILL_SLOT_1; i <= SPILL_SLOT_MAX; i++) {
                     /* test using opnd */
                     if (i < dr_max_opnd_accessible_spill_slot()) {
-                        PREM(bb, INSTR_CREATE_cmp
-                             (drcontext, dr_reg_spill_slot_opnd(drcontext, i),
-                              (i % 2 == 0) ?
-                              OPND_CREATE_INT8(100 - i) :
-                              OPND_CREATE_INT8(i + 1 - SPILL_SLOT_1)));
-                        PREM(bb, INSTR_CREATE_jcc
-                             (drcontext, OP_jne, opnd_create_instr(fault)));
+                        PREM(bb,
+                             INSTR_CREATE_cmp(
+                                 drcontext, dr_reg_spill_slot_opnd(drcontext, i),
+                                 (i % 2 == 0) ? OPND_CREATE_INT8(100 - i)
+                                              : OPND_CREATE_INT8(i + 1 - SPILL_SLOT_1)));
+                        PREM(bb,
+                             INSTR_CREATE_jcc(drcontext, OP_jne,
+                                              opnd_create_instr(fault)));
                     }
                     /* test using restore routine */
                     dr_restore_reg(drcontext, bb, instr, REG_XAX, i);
-                    PREM(bb, INSTR_CREATE_cmp
-                         (drcontext, opnd_create_reg(REG_XAX),
-                          (i % 2 == 0) ?
-                          OPND_CREATE_INT8(100 - i) :
-                          OPND_CREATE_INT8(i + 1 - SPILL_SLOT_1)));
-                    PREM(bb, INSTR_CREATE_jcc
-                         (drcontext, OP_jne, opnd_create_instr(fault)));
+                    PREM(bb,
+                         INSTR_CREATE_cmp(drcontext, opnd_create_reg(REG_XAX),
+                                          (i % 2 == 0)
+                                              ? OPND_CREATE_INT8(100 - i)
+                                              : OPND_CREATE_INT8(i + 1 - SPILL_SLOT_1)));
+                    PREM(bb,
+                         INSTR_CREATE_jcc(drcontext, OP_jne, opnd_create_instr(fault)));
                 }
-                PREM(bb, INSTR_CREATE_jmp_short
-                     (drcontext, opnd_create_instr(post_fault)));
+                PREM(bb,
+                     INSTR_CREATE_jmp_short(drcontext, opnd_create_instr(post_fault)));
                 PRE(bb, fault); /* pre not prem since we want this to be an app fault */
                 PREM(bb, post_fault);
 
                 /* Now juggle xax and flags back from client tls */
                 dr_save_reg(drcontext, bb, instr, REG_XBX, SPILL_SLOT_1);
                 dr_insert_read_tls_field(drcontext, bb, instr, REG_XBX);
-                PREM(bb, INSTR_CREATE_mov_ld
-                     (drcontext, opnd_create_reg(REG_XAX),
-                      opnd_create_base_disp(REG_XBX, REG_NULL, 0,
-                                            1 * sizeof(reg_t), OPSZ_PTR)));
+                PREM(bb,
+                     INSTR_CREATE_mov_ld(drcontext, opnd_create_reg(REG_XAX),
+                                         opnd_create_base_disp(REG_XBX, REG_NULL, 0,
+                                                               1 * sizeof(reg_t),
+                                                               OPSZ_PTR)));
                 dr_restore_arith_flags(drcontext, bb, instr, SPILL_SLOT_MAX);
-                PREM(bb, INSTR_CREATE_mov_ld
-                     (drcontext, opnd_create_reg(REG_XAX),
-                      opnd_create_base_disp(REG_XBX, REG_NULL, 0,
-                                            0 * sizeof(reg_t), OPSZ_PTR)));
+                PREM(bb,
+                     INSTR_CREATE_mov_ld(drcontext, opnd_create_reg(REG_XAX),
+                                         opnd_create_base_disp(REG_XBX, REG_NULL, 0,
+                                                               0 * sizeof(reg_t),
+                                                               OPSZ_PTR)));
                 dr_restore_reg(drcontext, bb, instr, REG_XBX, SPILL_SLOT_1);
 
 #if VERBOSE /* for debugging */

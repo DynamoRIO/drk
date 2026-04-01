@@ -3,7 +3,7 @@
 
 #include <linux/module.h>
 
-typedef ssize_t	(*dr_stat_show_t)(int cpu, char *buf);
+typedef ssize_t (*dr_stat_show_t)(int cpu, char *buf);
 
 typedef struct dr_stat_attr {
     struct attribute attr;
@@ -23,12 +23,12 @@ typedef struct {
 } dr_stats_t;
 
 int
-dr_stats_init(dr_stats_t* stats);
+dr_stats_init(dr_stats_t *stats);
 
 /* Can only be called during module initilization routines. */
 int
-dr_cpu_stat_alloc(dr_stats_t *stats, const char* name,
-                  dr_stat_show_t show, struct module *module);
+dr_cpu_stat_alloc(dr_stats_t *stats, const char *name, dr_stat_show_t show,
+                  struct module *module);
 
 void
 dr_stats_free(dr_stats_t *stat);

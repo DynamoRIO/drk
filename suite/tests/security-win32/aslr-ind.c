@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -31,7 +31,8 @@
  */
 
 /* aslr-ind.c */
-/* FIXME: should make this process start itself so that can test with early injection enabled */
+/* FIXME: should make this process start itself so that can test with early injection
+ * enabled */
 
 #include <windows.h>
 #include "tools.h"
@@ -39,40 +40,36 @@
 // #define VERBOSE
 typedef int (*fiptr)(void);
 
-fiptr
-__declspec(dllexport)
-giveme_target(int arg);
+fiptr __declspec(dllexport) giveme_target(int arg);
 
 fiptr go_where;
 
-void*
-get_module_preferred_base(void* module_base)
+void *
+get_module_preferred_base(void *module_base)
 {
     IMAGE_DOS_HEADER *dos;
     IMAGE_NT_HEADERS *nt;
-    dos = (IMAGE_DOS_HEADER *) module_base;
-    nt = (IMAGE_NT_HEADERS *) (((ptr_uint_t)dos) + dos->e_lfanew);
-    return (void*)nt->OptionalHeader.ImageBase;
+    dos = (IMAGE_DOS_HEADER *)module_base;
+    nt = (IMAGE_NT_HEADERS *)(((ptr_uint_t)dos) + dos->e_lfanew);
+    return (void *)nt->OptionalHeader.ImageBase;
 }
 
-void
-__declspec(dllimport)
-precious(void);
+void __declspec(dllimport) precious(void);
 
 /* from retexisting.c */
 int
 ring(int num)
 {
     print("looking at ring\n");
-    *(int*) (&num - 1) = (int)&precious;
+    *(int *)(&num - 1) = (int)&precious;
     return num;
 }
 
 int
 main(int argc)
 {
-    char* base;
-    void* hmod = GetModuleHandle("security-win32.aslr-ind.dll.dll");
+    char *base;
+    void *hmod = GetModuleHandle("security-win32.aslr-ind.dll.dll");
 
     INIT();
     USE_USER32();
@@ -87,14 +84,14 @@ main(int argc)
     print("%d\n", (*go_where)());
 
     base = get_module_preferred_base(hmod);
-    if (base == hmod) 
+    if (base == hmod)
         print("at base, no ASLR\n");
     else {
         print("targeting original base\n");
-        go_where = (fiptr) ((char*)go_where + (base - (char *)hmod));
+        go_where = (fiptr)((char *)go_where + (base - (char *)hmod));
     }
 
-    /* in wrong address space, but a good entry!  
+    /* in wrong address space, but a good entry!
      * FIXME: we may want
      * to flag that explicitly - could be an FP!
      */
@@ -110,7 +107,7 @@ main(int argc)
     /*     0012fb25 */
     /* FIXME: should go over jmp as well */
     go_where = (fiptr)((char *)go_where + 5);
-    
+
     __try {
         print("%d\n", go_where());
         print("*** invalid indirect call allowed!\n");

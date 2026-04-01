@@ -6,7 +6,7 @@
 
 typedef enum {
     SEGMENT_GRANULARITY_NOT_SCALED = 0,
-    SEGMENT_GRANULARITY_SCALED     = 1,
+    SEGMENT_GRANULARITY_SCALED = 1,
 } segment_granularity_t;
 
 typedef enum {
@@ -16,31 +16,31 @@ typedef enum {
 
 typedef enum {
     SEGMENT_SYSTEM = 0,
-    SEGMENT_USER = 1,  
+    SEGMENT_USER = 1,
 } descriptor_sbit_t;
 
 typedef enum {
     SEGMENT_NOT_PRESENT = 0,
     SEGMNET_PRESENT = 1,
 } descriptor_present_t;
- 
+
 typedef enum {
-    SYSTEM_TYPE_ILLEGAL_0      = 0x0,
-    SYSTEM_TYPE_ILLEGAL_1      = 0x1,
-    SYSTEM_TYPE_LDT            = 0x2,
-    SYSTEM_TYPE_ILLEGAL_2      = 0x3,
-    SYSTEM_TYPE_ILLEGAL_3      = 0x4,
-    SYSTEM_TYPE_ILLEGAL_4      = 0x5,
-    SYSTEM_TYPE_ILLEGAL_5      = 0x6,
-    SYSTEM_TYPE_ILLEGAL_6      = 0x7,
-    SYSTEM_TYPE_ILLEGAL_7      = 0x8,
-    SYSTEM_TYPE_AVAIL_TSS      = 0x9,
-    SYSTEM_TYPE_ILLEGAL_8      = 0xA,
-    SYSTEM_TYPE_BUSY_TSS       = 0xB,
-    SYSTEM_TYPE_CALL_GATE      = 0xC,
-    SYSTEM_TYPE_ILLEGAL_9      = 0xD,
+    SYSTEM_TYPE_ILLEGAL_0 = 0x0,
+    SYSTEM_TYPE_ILLEGAL_1 = 0x1,
+    SYSTEM_TYPE_LDT = 0x2,
+    SYSTEM_TYPE_ILLEGAL_2 = 0x3,
+    SYSTEM_TYPE_ILLEGAL_3 = 0x4,
+    SYSTEM_TYPE_ILLEGAL_4 = 0x5,
+    SYSTEM_TYPE_ILLEGAL_5 = 0x6,
+    SYSTEM_TYPE_ILLEGAL_6 = 0x7,
+    SYSTEM_TYPE_ILLEGAL_7 = 0x8,
+    SYSTEM_TYPE_AVAIL_TSS = 0x9,
+    SYSTEM_TYPE_ILLEGAL_8 = 0xA,
+    SYSTEM_TYPE_BUSY_TSS = 0xB,
+    SYSTEM_TYPE_CALL_GATE = 0xC,
+    SYSTEM_TYPE_ILLEGAL_9 = 0xD,
     SYSTEM_TYPE_INTERRUPT_GATE = 0xE,
-    SYSTEM_TYPE_TRAP_GATE      = 0xF,
+    SYSTEM_TYPE_TRAP_GATE = 0xF,
 } system_descriptor_type_t;
 
 typedef enum {
@@ -56,9 +56,9 @@ typedef enum {
 typedef struct {
     union {
         struct {
-          uint32 requestor_privilige_level : 2;
-          table_indicator_t table_indicator : 1;
-          uint32 index : 13;
+            uint32 requestor_privilige_level : 2;
+            table_indicator_t table_indicator : 1;
+            uint32 index : 13;
         } __attribute__((__packed__));
         struct {
             unsigned short selector;
@@ -68,21 +68,20 @@ typedef struct {
 ASSERT_TYPE_SIZE(2, segment_selector_t);
 
 static inline void
-segment_selector_decode(int selector, segment_selector_t* output)
+segment_selector_decode(int selector, segment_selector_t *output)
 {
     output->requestor_privilige_level = selector & 0x3;
     output->table_indicator = (selector & 0x4) >> 2;
     output->index = (selector & 0xfff8) >> 3;
 }
 
-#define SEGMENT_SELECTOR_ACCESSOR(selector_reg) \
-static inline unsigned short \
-get_##selector_reg(void) \
-{\
-    unsigned short result; \
-    asm volatile("movw %%" #selector_reg ", %0" : "=m" (result)); \
-    return result; \
-}
+#define SEGMENT_SELECTOR_ACCESSOR(selector_reg)                      \
+    static inline unsigned short get_##selector_reg(void)            \
+    {                                                                \
+        unsigned short result;                                       \
+        asm volatile("movw %%" #selector_reg ", %0" : "=m"(result)); \
+        return result;                                               \
+    }
 
 SEGMENT_SELECTOR_ACCESSOR(cs)
 SEGMENT_SELECTOR_ACCESSOR(ds)
@@ -105,7 +104,7 @@ typedef struct {
         byte nonsystem_access : 8;
     };
     byte limit_high : 4;
-    byte available: 1;
+    byte available : 1;
     /* Only valid for CODE_SEGMENT */
     code_segment_mode_t code_mode : 1;
     /* Only valid for CODE_SEGMENT & DATA_SEGMENT */
@@ -124,13 +123,13 @@ typedef struct {
     system_descriptor_type_t system_type : 4;
     byte access : 4;
     ushort target_offset_middle : 16;
-} __attribute__ ((packed)) gate_descriptor_t;
+} __attribute__((packed)) gate_descriptor_t;
 ASSERT_TYPE_SIZE(8, gate_descriptor_t);
 
 typedef struct {
     uint32 higher_addr;
     uint32 reserved;
-} __attribute__ ((packed)) system_descriptor_extra_t;
+} __attribute__((packed)) system_descriptor_extra_t;
 ASSERT_TYPE_SIZE(8, system_descriptor_extra_t);
 
 typedef struct {
@@ -139,7 +138,7 @@ typedef struct {
     byte dpl : 2;
     descriptor_present_t present : 1;
     ushort unused3 : 16;
-} __attribute__ ((packed)) generic_descriptor_t;
+} __attribute__((packed)) generic_descriptor_t;
 ASSERT_TYPE_SIZE(8, generic_descriptor_t);
 
 typedef union {
@@ -158,7 +157,7 @@ typedef enum {
     NOT_PRESENT_DESCRIPTOR,
 } descriptor_class_t;
 
-static inline descriptor_class_t 
+static inline descriptor_class_t
 get_descriptor_kind(descriptor_t *desc)
 {
     if (!desc->generic.present) {
@@ -167,13 +166,11 @@ get_descriptor_kind(descriptor_t *desc)
         switch (desc->segment.system_type) {
         case SYSTEM_TYPE_CALL_GATE:
         case SYSTEM_TYPE_INTERRUPT_GATE:
-        case SYSTEM_TYPE_TRAP_GATE:
-            return GATE_DESCRIPTOR;
-        default:
-            return SYSTEM_SEGMENT_DESCRIPTOR;
+        case SYSTEM_TYPE_TRAP_GATE: return GATE_DESCRIPTOR;
+        default: return SYSTEM_SEGMENT_DESCRIPTOR;
         }
     } else {
-        const uint64 uninterpreted = *((uint64*) desc);
+        const uint64 uninterpreted = *((uint64 *)desc);
         const uint64 CODE_BIT = 1L << (31 + 12);
         if ((CODE_BIT & uninterpreted) != 0) {
             return CODE_SEGMENT_DESCRIPTOR;
@@ -183,15 +180,13 @@ get_descriptor_kind(descriptor_t *desc)
     }
 }
 
-static inline bool 
+static inline bool
 is_system_desciptor(descriptor_t *desc)
 {
     switch (get_descriptor_kind(desc)) {
     case SYSTEM_SEGMENT_DESCRIPTOR:
-    case GATE_DESCRIPTOR:
-        return true;
-    default:
-        return false;
+    case GATE_DESCRIPTOR: return true;
+    default: return false;
     }
 }
 
@@ -202,74 +197,70 @@ typedef struct {
 
 typedef struct {
     ushort limit;
-    descriptor_t* base;
+    descriptor_t *base;
 } __attribute__((__packed__)) system_table_register_t;
 ASSERT_TYPE_SIZE(10, system_table_register_t);
 
 static inline void
-get_idtr(system_table_register_t* output)
+get_idtr(system_table_register_t *output)
 {
-    asm volatile ("sidt %0" : "=m" (*output));
+    asm volatile("sidt %0" : "=m"(*output));
 }
 
 static inline void
-set_idtr(system_table_register_t* input)
+set_idtr(system_table_register_t *input)
 {
-    asm volatile ("lidt %0" : : "m" (*input));
+    asm volatile("lidt %0" : : "m"(*input));
 }
 
 static inline void
-get_gdtr(system_table_register_t* output)
+get_gdtr(system_table_register_t *output)
 {
-    asm volatile ("sgdt %0" : "=m" (*output));
+    asm volatile("sgdt %0" : "=m"(*output));
 }
 
 static inline void
-get_ldt_selector(segment_selector_t* output)
+get_ldt_selector(segment_selector_t *output)
 {
-    asm volatile ("sldt %0" : "=m" (*output));
+    asm volatile("sldt %0" : "=m"(*output));
 }
 
 static inline void
 get_segment(descriptor_t *desc, segment_t *seg)
 {
-    seg->limit = ((uint64) desc->segment.limit_low) |
-                   (((uint64) desc->segment.limit_high) << 16);
+    seg->limit =
+        ((uint64)desc->segment.limit_low) | (((uint64)desc->segment.limit_high) << 16);
     if (desc->segment.granularity == SEGMENT_GRANULARITY_SCALED) {
         /* Scale by 4kb */
         seg->limit *= 4096;
     }
 
-    seg->base = (byte*) (((uint64) desc->segment.base_low) |
-                         (((uint64) desc->segment.base_middle) << 16) |
-                         (((uint64) desc->segment.base_high) << 24));
+    seg->base = (byte *)(((uint64)desc->segment.base_low) |
+                         (((uint64)desc->segment.base_middle) << 16) |
+                         (((uint64)desc->segment.base_high) << 24));
     if (get_descriptor_kind(desc) == SYSTEM_SEGMENT_DESCRIPTOR) {
-        seg->base = (byte*) ((uint64) seg->base |
-                             ((uint64) (desc + 1)->extra.higher_addr) << 32);
+        seg->base =
+            (byte *)((uint64)seg->base | ((uint64)(desc + 1)->extra.higher_addr) << 32);
     }
 }
 
-static inline byte* 
+static inline byte *
 get_gate_target_offset(gate_descriptor_t *gate)
 {
-    system_descriptor_extra_t *extra =
-        (system_descriptor_extra_t*) (gate + 1);
-    uint64 low = (uint64) gate->target_offset_low;
-    uint64 middle = (uint64) gate->target_offset_middle;
-    uint64 high = (uint64) extra->higher_addr;
-    return (byte*) (low | (middle << 16) | (high << 32));
+    system_descriptor_extra_t *extra = (system_descriptor_extra_t *)(gate + 1);
+    uint64 low = (uint64)gate->target_offset_low;
+    uint64 middle = (uint64)gate->target_offset_middle;
+    uint64 high = (uint64)extra->higher_addr;
+    return (byte *)(low | (middle << 16) | (high << 32));
 }
 
 static inline void
 set_gate_target_offset(gate_descriptor_t *gate, byte *offset)
 {
-    system_descriptor_extra_t *extra =
-        (system_descriptor_extra_t*) (gate + 1);
-    gate->target_offset_low = (ushort) (uint64) offset;
-    gate->target_offset_middle = (ushort) (((uint64) offset) >> 16);
-    extra->higher_addr = (uint32) (((uint64) offset) >> 32);
-
+    system_descriptor_extra_t *extra = (system_descriptor_extra_t *)(gate + 1);
+    gate->target_offset_low = (ushort)(uint64)offset;
+    gate->target_offset_middle = (ushort)(((uint64)offset) >> 16);
+    extra->higher_addr = (uint32)(((uint64)offset) >> 32);
 }
-
 
 #endif

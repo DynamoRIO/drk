@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -61,17 +61,17 @@ struct _instr_list_t {
 
 DR_API
 /** Returns an initialized instrlist_t allocated on the thread-local heap. */
-instrlist_t*
+instrlist_t *
 instrlist_create(dcontext_t *dcontext);
 
 DR_API
 /** Initializes \p ilist. */
-void 
+void
 instrlist_init(instrlist_t *ilist);
 
 DR_API
 /** Deallocates the thread-local heap storage for \p ilist. */
-void 
+void
 instrlist_destroy(dcontext_t *dcontext, instrlist_t *ilist);
 
 DR_API
@@ -85,7 +85,7 @@ void
 instrlist_clear_and_destroy(dcontext_t *dcontext, instrlist_t *ilist);
 
 DR_API
-/** 
+/**
  * All future instructions inserted into \p ilist that do not have raw bits
  * will have instr_set_translation() called with \p pc as the target.
  * This is a convenience routine to make it easy to have the same
@@ -110,27 +110,26 @@ instrlist_get_our_mangling(instrlist_t *ilist);
 
 DR_API
 /** Returns the first instr_t in \p ilist. */
-instr_t*
+instr_t *
 instrlist_first(instrlist_t *ilist);
 
 DR_API
 /** Returns the last instr_t in \p ilist. */
-instr_t*
+instr_t *
 instrlist_last(instrlist_t *ilist);
 
 DR_API
 /** Adds \p instr to the end of \p ilist. */
-void 
+void
 instrlist_append(instrlist_t *ilist, instr_t *instr);
 
 DR_API
 /** Adds \p instr to the front of \p ilist. */
-void 
+void
 instrlist_prepend(instrlist_t *ilist, instr_t *instr);
 
-
 DR_API
-/** 
+/**
  * Allocates a new instrlist_t and for each instr_t in \p old allocates
  * a new instr_t using instr_clone to produce a complete copy of \p old.
  * Each operand that is opnd_is_instr() has its target updated
@@ -138,16 +137,15 @@ DR_API
  * (this routine assumes that all such targets are contained within \p old,
  * and may fault otherwise).
  */
-instrlist_t*
+instrlist_t *
 instrlist_clone(dcontext_t *dcontext, instrlist_t *old);
-
 
 /* Adds every instr_t in prependee to the front of ilist (maintaining
  * the original order).
  * Then calls instrlist_destroy on prependee.
  * FIXME: get rid of this?
  */
-void 
+void
 instrlist_prepend_instrlist(dcontext_t *dcontext, instrlist_t *ilist,
                             instrlist_t *prependee);
 
@@ -156,33 +154,33 @@ instrlist_prepend_instrlist(dcontext_t *dcontext, instrlist_t *ilist,
  * Then calls instrlist_destroy on appendee.
  * FIXME: get rid of this?
  */
-void 
+void
 instrlist_append_instrlist(dcontext_t *dcontext, instrlist_t *ilist,
                            instrlist_t *appendee);
 
 /* instrlist_t functions focusing on a paricular instr_t
- * For insert_before and insert_after, if the instr is NULL, either 
+ * For insert_before and insert_after, if the instr is NULL, either
  * instrlist_append or instrlist_prepend will be called
  */
 
 DR_API
 /** Inserts \p instr into \p ilist prior to \p where. */
-void   
+void
 instrlist_preinsert(instrlist_t *ilist, instr_t *where, instr_t *instr);
 
 DR_API
 /** Inserts \p instr into \p ilist after \p where. */
-void   
+void
 instrlist_postinsert(instrlist_t *ilist, instr_t *where, instr_t *instr);
 
 DR_API
 /** Replaces \p oldinst with \p newinst in \p ilist (does not destroy \p oldinst). */
-instr_t*
+instr_t *
 instrlist_replace(instrlist_t *ilist, instr_t *oldinst, instr_t *newinst);
 
 DR_API
 /** Removes (does not destroy) \p instr from \p ilist. */
-void   
+void
 instrlist_remove(instrlist_t *ilist, instr_t *instr);
 
 DR_API

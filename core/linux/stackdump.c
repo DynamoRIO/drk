@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -35,7 +35,7 @@
 
 /*
  * stackdump.c - support for dumping stack trace of DynamoRIO
- * 
+ *
  * based on code from David Spuler and idea from Castor Fu
  * basic idea:
  *   fork off a process which core dumps then run a debugger on it.
@@ -57,16 +57,16 @@
 #include "../globals.h"
 #include "os_private.h"
 
-/* use backtrace feature of glibc 
+/* use backtrace feature of glibc
  * only gives symbol names, and sometimes misses them
  */
-void glibc_stackdump(int fd)
+void
+glibc_stackdump(int fd)
 {
     void *rets[128];
     int depth = backtrace(rets, 128);
     backtrace_symbols_fd(rets, depth, fd);
 }
-
 
 #define DEBUGGER "gdb"
 /* add -q to suppress gdb copyright notice */
@@ -83,13 +83,13 @@ void glibc_stackdump(int fd)
  */
 #define BATCH_MODE 0
 #if BATCH_MODE
-#define DEBUGGER_COMMAND "where\nquit\n"
+#    define DEBUGGER_COMMAND "where\nquit\n"
 #else
 /* FIXME: want to have some <enter>s to handle multi-page,
  * but don't want to repeat where cmd, so I use pwd, which is
  * useful.  Hopefully two pages is enough.
  */
-#define DEBUGGER_COMMAND "where\npwd\nquit\n"
+#    define DEBUGGER_COMMAND "where\npwd\nquit\n"
 #endif
 
 pid_t
@@ -105,7 +105,7 @@ fork_syscall()
     /* FIXME: SYS_fork on dereksha is creating a child whose pid is
      * same as parent but has a different tid, and the abort() to dump
      * core kills the parent process -- looks just like a separate
-     * thread, not a separate process!  
+     * thread, not a separate process!
      *
      * When I use glibc fork() I get the proper behavior.
      * glibc 2.3.3 fork() calls clone() with flags = 0x01200011
@@ -121,12 +121,14 @@ fork_syscall()
      * Once figure it out, need to have dynamic check for threading version to know
      * what to do.
      */
-# if 0
+#    if 0
     /* from /usr/include/bits/sched.h ifdef __USE_MISC: */
-#   define CLONE_CHILD_CLEARTID 0x00200000 /* Register exit futex and memory
-                                            * location to clear.  */
-#   define CLONE_CHILD_SETTID 0x01000000   /* Store TID in userlevel buffer in
-                                            * the child.  */
+#        define CLONE_CHILD_CLEARTID                     \
+            0x00200000 /* Register exit futex and memory \
+                        * location to clear.  */
+#        define CLONE_CHILD_SETTID                         \
+            0x01000000 /* Store TID in userlevel buffer in \
+                        * the child.  */
     /* i386/fork.c pass a 5th arg, &THREAD_SELF->tid, is it needed for SETTID? */
     static uint tid; 
     return dynamorio_syscall(SYS_clone, 4/* 5 */,
@@ -134,10 +136,10 @@ fork_syscall()
                               * something! */
                              CLONE_CHILD_SETTID | CLONE_CHILD_CLEARTID | SIGCHLD,
                              0, NULL, NULL /*, &tid*/);
-# else
+#    else
     /* my workaround for now: just use libc -- binaries won't be back-compatible though */
     return fork();
-# endif
+#    endif
 #else
     return dynamorio_syscall(SYS_fork, 0);
 #endif
@@ -163,7 +165,8 @@ pthreads_linked()
 */
 /*-----------------------------------------------------------------------*/
 
-void stackdump()
+void
+stackdump()
 {
     int pid, core_pid;
     /* get name now -- will be same for children */
@@ -175,12 +178,12 @@ void stackdump()
     SYSLOG_INTERNAL_WARNING("stackdump: glibc backtrace:");
     glibc_stackdump(STDERR);
 #ifdef DEBUG
-    glibc_stackdump(main_logfile);  /* hostd closes stderr, so print a copy. */
+    glibc_stackdump(main_logfile); /* hostd closes stderr, so print a copy. */
 #endif
 
 #ifdef VMX86_SERVER
     if (os_in_vmkernel_userworld()) {
-       return;                     /* no local gdb, no multithreaded fork */
+        return; /* no local gdb, no multithreaded fork */
     }
 #endif
 
@@ -203,13 +206,13 @@ void stackdump()
         /* FIXME: on later linuxes signal seems to be propagated to parent,
          * so even if get a core dump, it's of the parent and nobody's alive
          * to call gdb!
-         */        
+         */
         if (!pthreads_linked()) {
             /* no pthreads */
             abort();
         } else {
             /* pthreads has issues with abort(), this works but
-             * no core is dumped: 
+             * no core is dumped:
              */
             if (!set_default_signal_action(SIGABRT)) {
                 SYSLOG_INTERNAL_ERROR("ERROR in setting handler");
@@ -221,8 +224,7 @@ void stackdump()
         SYSLOG_INTERNAL_ERROR("about to exit process %d", get_process_id());
 #endif
         exit_process_syscall(0);
-    }
-    else if (pid == -1) {
+    } else if (pid == -1) {
         SYSLOG_INTERNAL_ERROR("ERROR: could not fork to dump core");
         exit_process_syscall(1);
     }
@@ -244,9 +246,9 @@ void stackdump()
     if (pid == 0) { /* child */
         file_t fp;
         int fd;
-    
+
         /* Open a temporary file for the input: the "where" command */
-        fp = os_open(tmp_name, OS_OPEN_REQUIRE_NEW|OS_OPEN_WRITE);
+        fp = os_open(tmp_name, OS_OPEN_REQUIRE_NEW | OS_OPEN_WRITE);
         os_write(fp, DEBUGGER_COMMAND, strlen(DEBUGGER_COMMAND));
         os_close(fp);
 
@@ -258,13 +260,13 @@ void stackdump()
 #if !BATCH_MODE
         /* Redirect stdin from the temporary file */
         close_syscall(0); /* close stdin */
-        dup_syscall(fd); /* replace file descriptor 0 with reference to temp file */
+        dup_syscall(fd);  /* replace file descriptor 0 with reference to temp file */
 #endif
         close_syscall(fd); /* close the other reference to temporary file */
 
         /* Find the core file */
         strncpy(core_name, CORE_NAME, 127);
-        core_name[127]  = '\0'; /* if max no null */
+        core_name[127] = '\0'; /* if max no null */
         fd = open_syscall(core_name, O_RDONLY, 0);
         if (fd < 0) {
             snprintf(core_name, 128, "%s.%d", CORE_NAME, core_pid);
@@ -277,32 +279,30 @@ void stackdump()
         }
         close_syscall(fd);
 
-        /* avoid running the debugger under us! 
+        /* avoid running the debugger under us!
          * FIXME: just remove our libraries, instead of entire env var?
          */
         setenv("LD_PRELOAD", "", true);
 
         SYSLOG_INTERNAL_ERROR("-------------------------------------------");
         SYSLOG_INTERNAL_ERROR("stackdump: --- now running the debugger ---");
-        SYSLOG_INTERNAL_ERROR("%s %s %s %s",
-                              DEBUGGER, QUIET_MODE, exec_name, core_name);
+        SYSLOG_INTERNAL_ERROR("%s %s %s %s", DEBUGGER, QUIET_MODE, exec_name, core_name);
         SYSLOG_INTERNAL_ERROR("-------------------------------------------");
 #if BATCH_MODE
-        execlp(DEBUGGER, DEBUGGER, QUIET_MODE, "-x", tmp_name, "-batch",
-               exec_name, core_name, NULL);
+        execlp(DEBUGGER, DEBUGGER, QUIET_MODE, "-x", tmp_name, "-batch", exec_name,
+               core_name, NULL);
 #else
         execlp(DEBUGGER, DEBUGGER, QUIET_MODE, exec_name, core_name, NULL);
 #endif
         SYSLOG_INTERNAL_ERROR("ERROR: execlp failed for debugger");
         exit_process_syscall(1);
-    }
-    else if (pid == -1) {
+    } else if (pid == -1) {
         SYSLOG_INTERNAL_ERROR("ERROR: could not fork to run debugger");
         exit_process_syscall(1);
     }
     /* Parent continues */
     /* while(wait(NULL)>0) waits for all children, and could hang, so: */
-    while(wait_syscall(NULL) != pid) {
+    while (wait_syscall(NULL) != pid) {
         /* empty loop */
     }
 
