@@ -80,8 +80,6 @@ def main():
         print(f"extern void *{function};")
         print(f"EXPORT_SYMBOL_GPL({function});")
 
-    # cpp -DX86_64 -DLINUX -DLINUX_KERNEL
-
 
 if __name__ == "__main__":
     main()
