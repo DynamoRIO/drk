@@ -2,10 +2,6 @@
 # REQUIRED - The kernel being instrumented.
 KERNELDIR ?= /lib/modules/$(shell uname -r)/build
 
-# OPTIONAL - If you're running DRK on kernel running in a KVM VM, this is the
-# KVM host's kernel. See HYPERCALL_DEBUGGING in configure.h.
-HOST_KERNELDIR ?= /lib/modules/$(shell uname -r)/build
-
 API_INCLUDE_DIR ?= lib/include
 
 .PHONY: default
@@ -23,17 +19,13 @@ DR_INCLUDE_FLAGS := -DDR_REG_ENUM_COMPATIBILITY -DX86_64 -DLINUX -DLINUX_KERNEL\
 MODULES_MAKE =-C $(KERNELDIR) M=$(DR_CORE_DIR)/kernel_linux/modules\
 			  DR_CORE_DIR=$(DR_CORE_DIR) DR_INCLUDE_FLAGS="$(DR_INCLUDE_FLAGS)"
 
-HOST_MODULES_MAKE=-C $(HOST_KERNELDIR) M=$(DR_CORE_DIR)/kernel_linux/host_modules\
-			      DR_CORE_DIR=$(DR_CORE_DIR) DR_INCLUDE_FLAGS="$(DR_INCLUDE_FLAGS)"
-
 ASM_FILES= $(shell find . -name '*.asm' | sed 's/\.asm/.S/g')
 
+# TODO i#11: re-enable scons to build utility programs and tests
 # default: exports.c api_headers scons $(ASM_FILES)
 default: exports.c api_headers $(ASM_FILES)
-#	cp kernel_linux/host_modules/Module.symvers.in kernel_linux/host_modules/Module.symvers
 	cp kernel_linux/modules/Module.symvers.in kernel_linux/modules/Module.symvers
 	$(MAKE) $(MODULES_MAKE) KBUILD_MODPOST_WARN=1 modules
-#	$(MAKE) $(HOST_MODULES_MAKE) modules
 
 scons:
 	scons -j10
@@ -60,7 +52,7 @@ $(API_INCLUDE_DIR): $(shell find . -name '*.h' | grep -v $(API_INCLUDE_DIR) | gr
 
 clean:
 	$(MAKE) $(MODULES_MAKE) clean
-#	$(MAKE) $(HOST_MODULES_MAKE) clean
+# TODO i#11: Re-enable scons to build utility programs and tests
 #	scons -c
 	rm -f $$(find . -name '*.S')
 	rm -f $$(find . -name '*.o')
