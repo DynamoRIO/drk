@@ -42,7 +42,9 @@
 extern "C" {
 #endif
 
-#if ${ DEBUG }
+/* clang-format off */
+#if ${DEBUG}
+/* clang-format on */
 #    define DEBUG
 #endif
 
@@ -99,9 +101,11 @@ dr_init(client_id_t client_id);
 
 /* Version checking */
 /* This equals major*100 + minor */
-DR_EXPORT LINK_ONCE int _USES_DR_VERSION_ = $ { VERSION_NUMBER_INTEGER };
+/* clang-format off */
+DR_EXPORT LINK_ONCE int _USES_DR_VERSION_ = ${VERSION_NUMBER_INTEGER};
 #else
-LINK_ONCE int _USES_DR_VERSION_ = $ { VERSION_NUMBER_INTEGER };
+LINK_ONCE int _USES_DR_VERSION_ = ${VERSION_NUMBER_INTEGER};
+/* clang-format on */
 #endif
 
 #ifdef __cplusplus
