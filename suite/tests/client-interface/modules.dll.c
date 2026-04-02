@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -32,7 +32,8 @@
 
 #include "dr_api.h"
 
-bool string_match(const char *str1, const char *str2)
+bool
+string_match(const char *str1, const char *str2)
 {
     if (str1 == NULL || str2 == NULL)
         return false;
@@ -47,8 +48,8 @@ bool string_match(const char *str1, const char *str2)
     return false;
 }
 
-static
-void module_load_event(void *dcontext, const module_data_t *data, bool loaded)
+static void
+module_load_event(void *dcontext, const module_data_t *data, bool loaded)
 {
     /* It's easier to simply print all module loads and unloads, but
      * it appears that loading a module like advapi32.dll causes
@@ -59,26 +60,29 @@ void module_load_event(void *dcontext, const module_data_t *data, bool loaded)
      */
     /* Test i#138 */
     if (data->full_path == NULL || data->full_path[0] == '\0')
-        dr_fprintf(STDERR, "ERROR: full_path empty for %s\n", dr_module_preferred_name(data));
+        dr_fprintf(STDERR, "ERROR: full_path empty for %s\n",
+                   dr_module_preferred_name(data));
     /* We do not expect \\server-style paths for this test */
     else if (data->full_path[0] == '\\' || data->full_path[1] != ':')
-        dr_fprintf(STDERR, "ERROR: full_path is not in DOS format: %s\n", data->full_path);
+        dr_fprintf(STDERR, "ERROR: full_path is not in DOS format: %s\n",
+                   data->full_path);
     if (string_match(data->names.module_name, "ADVAPI32.dll"))
         dr_fprintf(STDERR, "LOADED MODULE: %s\n", data->names.module_name);
 }
 
-static
-void module_unload_event(void *dcontext, const module_data_t *data)
+static void
+module_unload_event(void *dcontext, const module_data_t *data)
 {
     if (string_match(data->names.module_name, "ADVAPI32.dll"))
         dr_fprintf(STDERR, "UNLOADED MODULE: %s\n", data->names.module_name);
 }
 
 DR_EXPORT
-void dr_init(client_id_t id)
+void
+dr_init(client_id_t id)
 {
     dr_register_module_load_event(module_load_event);
-    dr_register_module_unload_event(module_unload_event);    
+    dr_register_module_unload_event(module_unload_event);
 }
 
 /* TODO - add more module interface tests. */

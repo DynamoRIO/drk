@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -34,14 +34,14 @@
 #include <windows.h>
 
 #ifdef USE_DYNAMO
-#include "dynamorio.h"
+#    include "dynamorio.h"
 #endif
 
 DWORD control;
 DWORD transfer_addr;
 
 static DWORD WINAPI
-ThreadProc1(LPVOID parm) 
+ThreadProc1(LPVOID parm)
 {
     print("starting thread...\n");
 
@@ -73,7 +73,7 @@ transferProc()
     print("&next_instr recorded\n");
     return;
 
- transferout:
+transferout:
     print("control has been redirected.\n");
     return;
 }
@@ -93,13 +93,13 @@ setregproc(LPVOID parm)
     return 0;
 }
 
-int 
-main(void) 
+int
+main(void)
 {
     HANDLE ht;
     DWORD tid;
     CONTEXT tc;
-    
+
 #ifdef USE_DYNAMO
     dynamorio_app_init();
     dynamorio_app_start();
@@ -115,7 +115,7 @@ main(void)
 
     while (control == 0)
         ; /* wait for thread to set control */
- 
+
     SuspendThread(ht);
     print("thread suspended.\n");
 
@@ -127,14 +127,14 @@ main(void)
 
     ResumeThread(ht);
     WaitForSingleObject(ht, INFINITE);
-    
+
     /* all over again for CONTEXT_INTEGER */
     control = 0;
     ht = CreateThread(NULL, 0, &setregproc, NULL, 0, &tid);
 
     while (control == 0)
         ; /* wait for thread to set control */
- 
+
     SuspendThread(ht);
     print("thread suspended.\n");
 

@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -40,21 +40,23 @@
 #include <signal.h>
 
 #ifdef WINDOWS
-# define DISPLAY_STRING(msg) dr_messagebox(msg)
-# define ATOMIC_INC(var) _InterlockedIncrement((volatile LONG *)(&(var)))
+#    define DISPLAY_STRING(msg) dr_messagebox(msg)
+#    define ATOMIC_INC(var) _InterlockedIncrement((volatile LONG *)(&(var)))
 #else
-# define DISPLAY_STRING(msg) dr_printf("%s\n", msg);
-# define ATOMIC_INC(var) __asm__ __volatile__("lock incl %0" : "=m" (var) : : "memory")
+#    define DISPLAY_STRING(msg) dr_printf("%s\n", msg);
+#    define ATOMIC_INC(var) __asm__ __volatile__("lock incl %0" : "=m"(var) : : "memory")
 #endif
 
 static int num_signals;
 
-static void event_exit(void);
+static void
+event_exit(void);
 #ifdef LINUX
-static dr_signal_action_t event_signal(void *drcontext, dr_siginfo_t *info);
+static dr_signal_action_t
+event_signal(void *drcontext, dr_siginfo_t *info);
 #endif
 
-DR_EXPORT void 
+DR_EXPORT void
 dr_init(client_id_t id)
 {
 #ifdef LINUX
@@ -63,11 +65,11 @@ dr_init(client_id_t id)
     dr_register_exit_event(event_exit);
 #ifdef SHOW_RESULTS
     if (dr_is_notify_on())
-	dr_fprintf(STDERR, "Client signal is running\n");
+        dr_fprintf(STDERR, "Client signal is running\n");
 #endif
 }
 
-static void 
+static void
 event_exit(void)
 {
 #ifdef SHOW_RESULTS
@@ -76,17 +78,17 @@ event_exit(void)
     /* Note that using %f with dr_printf or dr_fprintf on Windows will print
      * garbage as they use ntdll._vsnprintf, so we must use dr_snprintf.
      */
-    len = dr_snprintf(msg, sizeof(msg)/sizeof(msg[0]),
-                      "<Number of signals seen: %d>", num_signals);
+    len = dr_snprintf(msg, sizeof(msg) / sizeof(msg[0]), "<Number of signals seen: %d>",
+                      num_signals);
     DR_ASSERT(len > 0);
-    msg[sizeof(msg)/sizeof(msg[0])-1] = '\0';
+    msg[sizeof(msg) / sizeof(msg[0]) - 1] = '\0';
     DISPLAY_STRING(msg);
 #endif /* SHOW_RESULTS */
 }
 
 #ifdef LINUX
-static
-dr_signal_action_t event_signal(void *drcontext, dr_siginfo_t *info)
+static dr_signal_action_t
+event_signal(void *drcontext, dr_siginfo_t *info)
 {
     ATOMIC_INC(num_signals);
 

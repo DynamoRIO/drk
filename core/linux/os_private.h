@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -38,21 +38,21 @@
 #ifndef _OS_PRIVATE_H_
 #define _OS_PRIVATE_H_ 1
 
-#include <signal.h> /* for stack_t */
-#include "module.h" /* for os_module_data_t */
+#include <signal.h>   /* for stack_t */
+#include "module.h"   /* for os_module_data_t */
 #include <sys/time.h> /* struct itimerval */
 
 /* for inline asm */
 #ifdef X64
-# define ASM_XAX "rax"
-# define ASM_XDX "rdx"
-# define ASM_XBP "rbp"
-# define ASM_XSP "rsp"
+#    define ASM_XAX "rax"
+#    define ASM_XDX "rdx"
+#    define ASM_XBP "rbp"
+#    define ASM_XSP "rsp"
 #else
-# define ASM_XAX "eax"
-# define ASM_XDX "edx"
-# define ASM_XBP "ebp"
-# define ASM_XSP "esp"
+#    define ASM_XAX "eax"
+#    define ASM_XDX "edx"
+#    define ASM_XBP "ebp"
+#    define ASM_XSP "esp"
 #endif
 
 /* PR 212090: the signal we use to suspend threads */
@@ -67,7 +67,7 @@ typedef struct _os_thread_data_t {
     app_pc stack_top;
 
 #ifdef RETURN_AFTER_CALL
-    app_pc stack_bottom_pc;     /* return target in the loader at program startup */
+    app_pc stack_bottom_pc; /* return target in the loader at program startup */
 #endif
 
     /* PR 2120990: for thread suspension */
@@ -80,7 +80,7 @@ typedef struct _os_thread_data_t {
     mutex_t suspend_lock;
     int suspend_count;
     /* We would use event_t's here except we can't use mutexes in
-     * our signal handler 
+     * our signal handler
      */
     bool suspended;
     bool wakeup;
@@ -99,26 +99,34 @@ typedef struct _os_thread_data_t {
 struct _kernel_sigaction_t;
 typedef struct _kernel_sigaction_t kernel_sigaction_t;
 
-void signal_init(void);
-void signal_exit(void);
-void signal_thread_init(dcontext_t *dcontext);
-void signal_thread_exit(dcontext_t *dcontext);
-void handle_clone(dcontext_t *dcontext, uint flags);
-bool handle_sigaction(dcontext_t *dcontext, int sig,
-                      const kernel_sigaction_t *act, 
+void
+signal_init(void);
+void
+signal_exit(void);
+void
+signal_thread_init(dcontext_t *dcontext);
+void
+signal_thread_exit(dcontext_t *dcontext);
+void
+handle_clone(dcontext_t *dcontext, uint flags);
+bool
+handle_sigaction(dcontext_t *dcontext, int sig, const kernel_sigaction_t *act,
+                 kernel_sigaction_t *oact, size_t sigsetsize);
+void
+handle_post_sigaction(dcontext_t *dcontext, int sig, const kernel_sigaction_t *act,
                       kernel_sigaction_t *oact, size_t sigsetsize);
-void handle_post_sigaction(dcontext_t *dcontext, int sig,
-                           const kernel_sigaction_t *act, 
-                           kernel_sigaction_t *oact, size_t sigsetsize);
-bool handle_sigreturn(dcontext_t *dcontext, bool rt);
-bool handle_sigaltstack(dcontext_t *dcontext, const stack_t *stack,
-                        stack_t *old_stack);
-void handle_sigprocmask(dcontext_t *dcontext, int how, kernel_sigset_t *set,
+bool
+handle_sigreturn(dcontext_t *dcontext, bool rt);
+bool
+handle_sigaltstack(dcontext_t *dcontext, const stack_t *stack, stack_t *old_stack);
+void
+handle_sigprocmask(dcontext_t *dcontext, int how, kernel_sigset_t *set,
+                   kernel_sigset_t *oset, size_t sigsetsize);
+void
+handle_post_sigprocmask(dcontext_t *dcontext, int how, kernel_sigset_t *set,
                         kernel_sigset_t *oset, size_t sigsetsize);
-void handle_post_sigprocmask(dcontext_t *dcontext, int how, kernel_sigset_t *set,
-                             kernel_sigset_t *oset, size_t sigsetsize);
-void handle_sigsuspend(dcontext_t *dcontext, kernel_sigset_t *set,
-                       size_t sigsetsize);
+void
+handle_sigsuspend(dcontext_t *dcontext, kernel_sigset_t *set, size_t sigsetsize);
 void
 sigcontext_to_mcontext(dr_mcontext_t *mc, struct sigcontext *sc);
 
@@ -128,21 +136,21 @@ mcontext_to_sigcontext(struct sigcontext *sc, dr_mcontext_t *mc);
 bool
 set_default_signal_action(int sig);
 
-void start_itimer(dcontext_t *dcontext);
-void stop_itimer(dcontext_t *dcontext);
+void
+start_itimer(dcontext_t *dcontext);
+void
+stop_itimer(dcontext_t *dcontext);
 
 /* handle app itimer syscalls */
 void
-handle_pre_setitimer(dcontext_t *dcontext,
-                     int which, const struct itimerval *new_timer,
+handle_pre_setitimer(dcontext_t *dcontext, int which, const struct itimerval *new_timer,
                      struct itimerval *prev_timer);
 void
-handle_post_setitimer(dcontext_t *dcontext, bool success,
-                      int which, const struct itimerval *new_timer,
-                      struct itimerval *prev_timer);
+handle_post_setitimer(dcontext_t *dcontext, bool success, int which,
+                      const struct itimerval *new_timer, struct itimerval *prev_timer);
 void
-handle_post_getitimer(dcontext_t *dcontext, bool success,
-                      int which, struct itimerval *cur_timer);
+handle_post_getitimer(dcontext_t *dcontext, bool success, int which,
+                      struct itimerval *cur_timer);
 
 /* not exported beyond linux/ unlike rest of clone record routines */
 void
@@ -150,32 +158,37 @@ set_clone_record_fields(void *record, reg_t app_thread_xsp, app_pc continuation_
                         uint clone_sysnum, uint clone_flags);
 
 /* in pcprofile.c */
-void pcprofile_thread_init(dcontext_t *dcontext, bool shared_itimer, void *parent_info);
-void pcprofile_fork_init(dcontext_t *dcontext);
+void
+pcprofile_thread_init(dcontext_t *dcontext, bool shared_itimer, void *parent_info);
+void
+pcprofile_fork_init(dcontext_t *dcontext);
 
 /* in module.c */
-bool is_elf_so_header(app_pc base, size_t size);
-bool module_walk_program_headers(app_pc base, size_t view_size, bool at_map,
-                                 app_pc *out_base, app_pc *out_end, char **out_soname,
-                                 os_module_data_t *out_data);
+bool
+is_elf_so_header(app_pc base, size_t size);
+bool
+module_walk_program_headers(app_pc base, size_t view_size, bool at_map, app_pc *out_base,
+                            app_pc *out_end, char **out_soname,
+                            os_module_data_t *out_data);
 
-uint module_num_program_headers(app_pc base);
+uint
+module_num_program_headers(app_pc base);
 
-app_pc module_vaddr_from_prog_header(app_pc prog_header, uint num_segments,
-                                     OUT app_pc *mod_end);
+app_pc
+module_vaddr_from_prog_header(app_pc prog_header, uint num_segments, OUT app_pc *mod_end);
 
-bool module_read_program_header(app_pc base,
-                                uint segment_num,
-                                OUT app_pc *segment_base,
-                                OUT app_pc *segment_end,
-                                OUT uint *segment_prot,
-                                OUT size_t *segment_align);
+bool
+module_read_program_header(app_pc base, uint segment_num, OUT app_pc *segment_base,
+                           OUT app_pc *segment_end, OUT uint *segment_prot,
+                           OUT size_t *segment_align);
 
-void os_request_live_coredump(const char *msg);
-bool file_is_elf64(file_t f);
+void
+os_request_live_coredump(const char *msg);
+bool
+file_is_elf64(file_t f);
 
 #ifdef VMX86_SERVER
-#  include "vmkuw.h"
+#    include "vmkuw.h"
 #endif
 
 #endif /* _OS_PRIVATE_H_ */

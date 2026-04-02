@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -42,18 +42,22 @@
 
 #include "dr_api.h"
 #ifdef SHOW_SYMBOLS
-# include "drsyms.h"
+#    include "drsyms.h"
 #endif
 
-static void event_exit(void);
-static void event_thread_init(void *drcontext);
-static void event_thread_exit(void *drcontext);
-static dr_emit_flags_t event_basic_block(void *drcontext, void *tag, instrlist_t *bb,
-                                         bool for_trace, bool translating);
+static void
+event_exit(void);
+static void
+event_thread_init(void *drcontext);
+static void
+event_thread_exit(void *drcontext);
+static dr_emit_flags_t
+event_basic_block(void *drcontext, void *tag, instrlist_t *bb, bool for_trace,
+                  bool translating);
 
 static client_id_t my_id;
 
-DR_EXPORT void 
+DR_EXPORT void
 dr_init(client_id_t id)
 {
     my_id = id;
@@ -86,9 +90,9 @@ event_exit(void)
 }
 
 #ifdef WINDOWS
-# define IF_WINDOWS(x) x
+#    define IF_WINDOWS(x) x
 #else
-# define IF_WINDOWS(x) /* nothing */
+#    define IF_WINDOWS(x) /* nothing */
 #endif
 
 static void
@@ -103,35 +107,34 @@ event_thread_init(void *drcontext)
      * the same directory as our library. We could also pass
      * in a path and retrieve with dr_get_options().
      */
-    len = dr_snprintf(logname, sizeof(logname)/sizeof(logname[0]),
-                      "%s", dr_get_client_path(my_id));
+    len = dr_snprintf(logname, sizeof(logname) / sizeof(logname[0]), "%s",
+                      dr_get_client_path(my_id));
     DR_ASSERT(len > 0);
-    for (dirsep = logname + len; *dirsep != '/' IF_WINDOWS(&& *dirsep != '\\'); dirsep--)
+    for (dirsep = logname + len; *dirsep != '/' IF_WINDOWS(&&*dirsep != '\\'); dirsep--)
         DR_ASSERT(dirsep > logname);
     len = dr_snprintf(dirsep + 1,
-                      (sizeof(logname) - (dirsep - logname))/sizeof(logname[0]),
+                      (sizeof(logname) - (dirsep - logname)) / sizeof(logname[0]),
                       "instrcalls.%d.log", dr_get_thread_id(drcontext));
     DR_ASSERT(len > 0);
-    logname[sizeof(logname)/sizeof(logname[0])-1] = '\0';
+    logname[sizeof(logname) / sizeof(logname[0]) - 1] = '\0';
     f = dr_open_file(logname, DR_FILE_WRITE_OVERWRITE);
     DR_ASSERT(f != INVALID_FILE);
 
     /* store it in the slot provided in the drcontext */
     dr_set_tls_field(drcontext, (void *)(ptr_uint_t)f);
-    dr_log(drcontext, LOG_ALL, 1, 
-           "instrcalls: log for thread %d is instrcalls.%03d\n",
+    dr_log(drcontext, LOG_ALL, 1, "instrcalls: log for thread %d is instrcalls.%03d\n",
            dr_get_thread_id(drcontext), dr_get_thread_id(drcontext));
 }
 
 static void
 event_thread_exit(void *drcontext)
 {
-    file_t f = (file_t)(ptr_uint_t) dr_get_tls_field(drcontext);
+    file_t f = (file_t)(ptr_uint_t)dr_get_tls_field(drcontext);
     dr_close_file(f);
 }
 
 #ifdef SHOW_SYMBOLS
-# define MAX_SYM_RESULT 256
+#    define MAX_SYM_RESULT 256
 static void
 print_address(file_t f, app_pc addr, const char *prefix)
 {
@@ -141,10 +144,10 @@ print_address(file_t f, app_pc addr, const char *prefix)
     module_data_t *data;
     data = dr_lookup_module(addr);
     if (data == NULL) {
-        dr_fprintf(f, "%s "PFX" ? ??:0\n", prefix, addr);
+        dr_fprintf(f, "%s " PFX " ? ??:0\n", prefix, addr);
         return;
     }
-    sym = (drsym_info_t *) sbuf;
+    sym = (drsym_info_t *)sbuf;
     sym->struct_size = sizeof(*sym);
     sym->name_size = MAX_SYM_RESULT;
     symres = drsym_lookup_address(data->full_path, addr - data->start, sym);
@@ -152,16 +155,16 @@ print_address(file_t f, app_pc addr, const char *prefix)
         const char *modname = dr_module_preferred_name(data);
         if (modname == NULL)
             modname = "<noname>";
-        dr_fprintf(f, "%s "PFX" %s!%s+"PIFX, prefix, addr,
-                   modname, sym->name, addr - data->start - sym->start_offs);
+        dr_fprintf(f, "%s " PFX " %s!%s+" PIFX, prefix, addr, modname, sym->name,
+                   addr - data->start - sym->start_offs);
         if (symres == DRSYM_ERROR_LINE_NOT_AVAILABLE) {
             dr_fprintf(f, " ??:0\n");
         } else {
-            dr_fprintf(f, " %s:%"UINT64_FORMAT_CODE"+"PIFX"\n",
-                       sym->file, sym->line, sym->line_offs);
+            dr_fprintf(f, " %s:%" UINT64_FORMAT_CODE "+" PIFX "\n", sym->file, sym->line,
+                       sym->line_offs);
         }
     } else
-        dr_fprintf(f, "%s "PFX" ? ??:0\n", prefix, addr);
+        dr_fprintf(f, "%s " PFX " ? ??:0\n", prefix, addr);
     dr_free_module_data(data);
 }
 #endif
@@ -169,53 +172,53 @@ print_address(file_t f, app_pc addr, const char *prefix)
 static void
 at_call(app_pc instr_addr, app_pc target_addr)
 {
-    file_t f = (file_t)(ptr_uint_t) dr_get_tls_field(dr_get_current_drcontext());
+    file_t f = (file_t)(ptr_uint_t)dr_get_tls_field(dr_get_current_drcontext());
     dr_mcontext_t mc;
     dr_get_mcontext(dr_get_current_drcontext(), &mc, NULL);
 #ifdef SHOW_SYMBOLS
     print_address(f, instr_addr, "CALL @ ");
     print_address(f, target_addr, "\t to ");
-    dr_fprintf(f, "\tTOS is "PFX"\n", mc.xsp);
+    dr_fprintf(f, "\tTOS is " PFX "\n", mc.xsp);
 #else
-    dr_fprintf(f, "CALL @ "PFX" to "PFX", TOS is "PFX"\n",
-               instr_addr, target_addr, mc.xsp);
+    dr_fprintf(f, "CALL @ " PFX " to " PFX ", TOS is " PFX "\n", instr_addr, target_addr,
+               mc.xsp);
 #endif
 }
 
 static void
 at_call_ind(app_pc instr_addr, app_pc target_addr)
 {
-    file_t f = (file_t)(ptr_uint_t) dr_get_tls_field(dr_get_current_drcontext());
+    file_t f = (file_t)(ptr_uint_t)dr_get_tls_field(dr_get_current_drcontext());
 #ifdef SHOW_SYMBOLS
     print_address(f, instr_addr, "CALL INDIRECT @ ");
     print_address(f, target_addr, "\t to ");
 #else
-    dr_fprintf(f, "CALL INDIRECT @ "PFX" to "PFX"\n", instr_addr, target_addr);
+    dr_fprintf(f, "CALL INDIRECT @ " PFX " to " PFX "\n", instr_addr, target_addr);
 #endif
 }
 
 static void
 at_return(app_pc instr_addr, app_pc target_addr)
 {
-    file_t f = (file_t)(ptr_uint_t) dr_get_tls_field(dr_get_current_drcontext());
+    file_t f = (file_t)(ptr_uint_t)dr_get_tls_field(dr_get_current_drcontext());
 #ifdef SHOW_SYMBOLS
     print_address(f, instr_addr, "RETURN @ ");
     print_address(f, target_addr, "\t to ");
 #else
-    dr_fprintf(f, "RETURN @ "PFX" to "PFX"\n", instr_addr, target_addr);
+    dr_fprintf(f, "RETURN @ " PFX " to " PFX "\n", instr_addr, target_addr);
 #endif
 }
 
-static dr_emit_flags_t 
-event_basic_block(void *drcontext, void *tag, instrlist_t *bb,
-                  bool for_trace, bool translating)
+static dr_emit_flags_t
+event_basic_block(void *drcontext, void *tag, instrlist_t *bb, bool for_trace,
+                  bool translating)
 {
     instr_t *instr, *next_instr;
 #ifdef VERBOSE
-    dr_printf("in dr_basic_block(tag="PFX")\n", tag);
-# if VERBOSE_VERBOSE
+    dr_printf("in dr_basic_block(tag=" PFX ")\n", tag);
+#    if VERBOSE_VERBOSE
     instrlist_disassemble(drcontext, tag, bb, STDOUT);
-# endif
+#    endif
 #endif
     for (instr = instrlist_first(bb); instr != NULL; instr = next_instr) {
         next_instr = instr_get_next(instr);

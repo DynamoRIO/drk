@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -38,7 +38,7 @@
 #define _COPY_DLG_H_
 
 #if _MSC_VER > 1000
-#pragma once
+#    pragma once
 #endif // _MSC_VER > 1000
 
 class CWizardSheet;
@@ -46,17 +46,17 @@ class CWizardSheet;
 /////////////////////////////////////////////////////////////////////////////
 // CCopyDlg dialog
 
-class CCopyDlg : public CPropertyPage
-{
+class CCopyDlg : public CPropertyPage {
     DECLARE_DYNCREATE(CCopyDlg)
 
-// Construction
+    // Construction
 public:
-    BOOL OnInitDialog();
+    BOOL
+    OnInitDialog();
     CCopyDlg();
     ~CCopyDlg();
 
-// Dialog Data
+    // Dialog Data
     //{{AFX_DATA(CCopyDlg)
     enum { IDD = IDD_COPY };
     CEdit m_TargetEdit;
@@ -65,35 +65,44 @@ public:
     CString m_Target;
     //}}AFX_DATA
 
-
-// Overrides
+    // Overrides
     // ClassWizard generate virtual function overrides
     //{{AFX_VIRTUAL(CCopyDlg)
 public:
-    virtual BOOL OnSetActive();
-    virtual LRESULT OnWizardNext();
+    virtual BOOL
+    OnSetActive();
+    virtual LRESULT
+    OnWizardNext();
+
 protected:
-    virtual void DoDataExchange(CDataExchange* pDX);    // DDX/DDV support
+    virtual void
+    DoDataExchange(CDataExchange *pDX); // DDX/DDV support
     //}}AFX_VIRTUAL
 
-// Implementation
+    // Implementation
 protected:
-    BOOL SetEnvironmentVars();
-    BOOL AddToStartMenu();
-    BOOL InitializeRegistry();
-    BOOL CopyFiles();
+    BOOL
+    SetEnvironmentVars();
+    BOOL
+    AddToStartMenu();
+    BOOL
+    InitializeRegistry();
+    BOOL
+    CopyFiles();
     // Generated message map functions
     //{{AFX_MSG(CCopyDlg)
-    afx_msg void OnBrowse();
+    afx_msg void
+    OnBrowse();
     //}}AFX_MSG
     DECLARE_MESSAGE_MAP()
-        
+
     TCHAR m_DefaultDir[MAX_PATH];
     TCHAR m_StartMenu[MAX_PATH];
     TCHAR m_CWD[MAX_PATH];
 };
 
 //{{AFX_INSERT_LOCATION}}
-// Microsoft Developer Studio will insert additional declarations immediately before the previous line.
+// Microsoft Developer Studio will insert additional declarations immediately before the
+// previous line.
 
 #endif // _COPY_DLG_H_

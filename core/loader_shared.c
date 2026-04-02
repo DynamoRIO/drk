@@ -6,18 +6,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -35,7 +35,7 @@
  *
  * original case: i#157
  */
-/* XXX: Very interesting thing, 
+/* XXX: Very interesting thing,
  * the compiler reports error of translation unit is empty
  * when using #ifdef WINDOWS
  */
@@ -50,25 +50,22 @@
 
 /* ok to be in .data w/ no sentinel head node b/c never empties out
  * .ntdll always there for Windows, so no need to unprot.
- * XXX: Does it hold for Linux? 
- * It seems no library is must in Linux, even the loader. 
+ * XXX: Does it hold for Linux?
+ * It seems no library is must in Linux, even the loader.
  * Maybe the linux-gate or we just create a fake one?
  */
-static privmod_t *modlist; 
-
+static privmod_t *modlist;
 
 /* Recursive library load could happen:
- * Linux:   when load dependent library 
+ * Linux:   when load dependent library
  * Windows: redirect_* can be invoked from private libray
  *          entry points.
  */
-DECLARE_CXTSWPROT_VAR(recursive_lock_t privload_lock,
-                      INIT_RECURSIVE_LOCK(privload_lock));
+DECLARE_CXTSWPROT_VAR(recursive_lock_t privload_lock, INIT_RECURSIVE_LOCK(privload_lock));
 /* Protected by privload_lock */
-#ifdef DEBUG
+#    ifdef DEBUG
 DECLARE_NEVERPROT_VAR(static uint privload_recurse_cnt, 0);
-#endif
-
+#    endif
 
 /* These are only written during init so ok to be in .data */
 static privmod_t privmod_static[PRIVMOD_STATIC_NUM];
@@ -104,36 +101,34 @@ loader_init(void)
     uint i;
     privmod_t *mod;
 
-    /* os specific loader initialization prologue before finalize the load, 
+    /* os specific loader initialization prologue before finalize the load,
      * will also acquire privload_lock.
      */
     os_loader_init_prologue();
 
     ASSERT_OWN_RECURSIVE_LOCK(true, &privload_lock);
     VMVECTOR_ALLOC_VECTOR(modlist_areas, GLOBAL_DCONTEXT,
-                          VECTOR_SHARED | VECTOR_NEVER_MERGE
-                          /* protected by privload_lock */
-                          | VECTOR_NO_LOCK,
+                          VECTOR_SHARED |
+                              VECTOR_NEVER_MERGE
+                              /* protected by privload_lock */
+                              | VECTOR_NO_LOCK,
                           modlist_areas);
     /* Process client libs we loaded early but did not finalize */
     for (i = 0; i < privmod_static_idx; i++) {
         /* Transfer to real list so we can do normal processing */
-        mod = privload_insert(NULL,
-                              privmod_static[i].base,
-                              privmod_static[i].size,
+        mod = privload_insert(NULL, privmod_static[i].base, privmod_static[i].size,
                               privmod_static[i].name);
-        LOG(GLOBAL, LOG_LOADER, 1, "%s: processing imports for %s\n",
-            __FUNCTION__, mod->name);
+        LOG(GLOBAL, LOG_LOADER, 1, "%s: processing imports for %s\n", __FUNCTION__,
+            mod->name);
         if (!privload_load_finalize(mod)) {
             CLIENT_ASSERT(false, "failure to process imports of client library");
-#ifdef CLIENT_INTERFACE
-            SYSLOG(SYSLOG_ERROR, CLIENT_LIBRARY_UNLOADABLE, 3, 
-                   get_application_name(), get_application_pid(),
-                   "unable to process imports of client library");
-#endif
+#    ifdef CLIENT_INTERFACE
+            SYSLOG(SYSLOG_ERROR, CLIENT_LIBRARY_UNLOADABLE, 3, get_application_name(),
+                   get_application_pid(), "unable to process imports of client library");
+#    endif
         }
     }
-    /* os specific loader initialization epilogue after finalize the load, 
+    /* os specific loader initialization epilogue after finalize the load,
      * will release privload_lock.
      */
     os_loader_init_epilogue();
@@ -203,7 +198,7 @@ loader_thread_exit(dcontext_t *dcontext)
     if (privload_has_thread_entry()) {
         acquire_recursive_lock(&privload_lock);
         /* Walk forward and call independent libs last */
-         for (mod = modlist; mod != NULL; mod = mod->next) {
+        for (mod = modlist; mod != NULL; mod = mod->next) {
             if (!mod->externally_loaded)
                 privload_call_entry(mod, DLL_THREAD_EXIT);
         }
@@ -226,7 +221,7 @@ load_private_library(const char *filename)
     acquire_recursive_lock(&privload_lock);
 
     privmod = privload_lookup(filename);
-    /* XXX: If the private lib has been loaded, shall we increase the counter 
+    /* XXX: If the private lib has been loaded, shall we increase the counter
      * or report error?
      */
     if (privmod == NULL) {
@@ -256,9 +251,8 @@ unload_private_library(app_pc modbase)
 bool
 in_private_library(app_pc pc)
 {
-    return vmvector_overlap(modlist_areas, pc, pc+1);
+    return vmvector_overlap(modlist_areas, pc, pc + 1);
 }
-
 
 /* Lookup the private loaded library by name */
 privmod_t *
@@ -384,8 +378,7 @@ privload_load(const char *filename, privmod_t *dependent)
         const char *end = double_strrchr(filename, DIRSEP, ALT_DIRSEP);
         if (end != NULL &&
             end - filename < BUFFER_SIZE_ELEMENTS(search_paths[search_paths_idx])) {
-            snprintf(search_paths[search_paths_idx], end - filename, "%s",
-                     filename);
+            snprintf(search_paths[search_paths_idx], end - filename, "%s", filename);
             NULL_TERMINATE_BUFFER(search_paths[search_paths_idx]);
         } else
             ASSERT_NOT_REACHED(); /* should never have client lib path so big */
@@ -413,10 +406,10 @@ privload_unload(privmod_t *privmod)
     ASSERT(privload_modlist_initialized());
     ASSERT(privmod->ref_count > 0);
     privmod->ref_count--;
-    LOG(GLOBAL, LOG_LOADER, 2, "%s: %s refcount => %d\n", __FUNCTION__,
-        privmod->name, privmod->ref_count);
+    LOG(GLOBAL, LOG_LOADER, 2, "%s: %s refcount => %d\n", __FUNCTION__, privmod->name,
+        privmod->ref_count);
     if (privmod->ref_count == 0) {
-        LOG(GLOBAL, LOG_LOADER, 1, "%s: unloading %s @ "PFX"\n", __FUNCTION__,
+        LOG(GLOBAL, LOG_LOADER, 1, "%s: unloading %s @ " PFX "\n", __FUNCTION__,
             privmod->name, privmod->base);
         if (privmod->prev == NULL) {
             ASSERT(!DATASEC_PROTECTED(DATASEC_RARELY_PROT));
@@ -441,12 +434,12 @@ privload_unload(privmod_t *privmod)
     return false;
 }
 
-#ifdef X64
-# define LIB_SUBDIR "lib64"
-#else
-# define LIB_SUBDIR "lib32"
-#endif
-#define EXT_SUBDIR "ext"
+#    ifdef X64
+#        define LIB_SUBDIR "lib64"
+#    else
+#        define LIB_SUBDIR "lib32"
+#    endif
+#    define EXT_SUBDIR "ext"
 void
 privload_add_drext_path(void)
 {
@@ -461,15 +454,14 @@ privload_add_drext_path(void)
      */
     path = get_dynamorio_library_path();
     mid = strstr(path, LIB_SUBDIR);
-    if (mid != NULL && 
-        search_paths_idx < SEARCH_PATHS_NUM && 
-        (strlen(path)+strlen(EXT_SUBDIR)+1/*sep*/) <
-        BUFFER_SIZE_ELEMENTS(search_paths[search_paths_idx])) {
+    if (mid != NULL && search_paths_idx < SEARCH_PATHS_NUM &&
+        (strlen(path) + strlen(EXT_SUBDIR) + 1 /*sep*/) <
+            BUFFER_SIZE_ELEMENTS(search_paths[search_paths_idx])) {
         char *s = search_paths[search_paths_idx];
         snprintf(s, mid - path, "%s", path);
         s += (mid - path);
-        snprintf(s, strlen(EXT_SUBDIR)+1/*sep*/, "%s%c", EXT_SUBDIR, DIRSEP);
-        s += strlen(EXT_SUBDIR)+1/*sep*/;
+        snprintf(s, strlen(EXT_SUBDIR) + 1 /*sep*/, "%s%c", EXT_SUBDIR, DIRSEP);
+        s += strlen(EXT_SUBDIR) + 1 /*sep*/;
         end = double_strrchr(path, DIRSEP, ALT_DIRSEP);
         if (end != NULL && search_paths_idx < SEARCH_PATHS_NUM) {
             snprintf(s, end - mid, "%s", mid);
@@ -480,7 +472,6 @@ privload_add_drext_path(void)
         }
     }
 }
-
 
 /* most uses should call privload_load() instead
  * if it fails, unloads
@@ -497,13 +488,13 @@ privload_load_finalize(privmod_t *privmod)
     privload_redirect_setup(privmod);
 
     if (!privload_process_imports(privmod)) {
-        LOG(GLOBAL, LOG_LOADER, 1, "%s: failed to process imports %s\n",
-            __FUNCTION__, privmod->name);
+        LOG(GLOBAL, LOG_LOADER, 1, "%s: failed to process imports %s\n", __FUNCTION__,
+            privmod->name);
         privload_unload(privmod);
         return false;
     }
 
-    /* FIXME: not supporting TLS today in Windows: 
+    /* FIXME: not supporting TLS today in Windows:
      * covered by i#233, but we don't expect to see it for dlls, only exes
      */
 
@@ -513,8 +504,8 @@ privload_load_finalize(privmod_t *privmod)
         return false;
     }
 
-    LOG(GLOBAL, LOG_LOADER, 1, "%s: loaded %s @ "PFX"\n", __FUNCTION__,
-        privmod->name, privmod->base);
+    LOG(GLOBAL, LOG_LOADER, 1, "%s: loaded %s @ " PFX "\n", __FUNCTION__, privmod->name,
+        privmod->base);
     return true;
 }
 

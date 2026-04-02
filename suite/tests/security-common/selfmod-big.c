@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -37,7 +37,7 @@
 #include "tools.h"
 
 #ifdef USE_DYNAMO
-# include "dynamorio.h"
+#    include "dynamorio.h"
 #endif
 
 static uint big[1024];
@@ -57,18 +57,18 @@ foo(int iters)
     asm("  call next_inst_prot");
     asm("next_inst_prot:");
     asm("  popl  %%edx" : : : "edx");
-    asm("  pushl %0" : : "i" (ALLOW_READ|ALLOW_WRITE|ALLOW_EXEC));
+    asm("  pushl %0" : : "i"(ALLOW_READ | ALLOW_WRITE | ALLOW_EXEC));
     /* protect_mem will expand size to page.  If go too far (even
      * PAGE_SIZE here) will evict later code from executable_areas
      * that won't come back and will get double violations (case
      * 7940).
      */
-    asm("  pushl %0" : : "i" (1));
+    asm("  pushl %0" : : "i"(1));
     asm("  pushl %edx");
     asm("  call protect_mem");
     asm("  addl  $12, %%esp" : : : "esp");
 
-    asm("  movl %0, %%ecx" : : "r" (iters) : "ecx");
+    asm("  movl %0, %%ecx" : : "r"(iters) : "ecx");
     asm("  call next_inst");
     asm("next_inst:");
     asm("  pop %edx");
@@ -76,14 +76,14 @@ foo(int iters)
      *                 3 == mov ecx into target
      *                 1 == opcode of target movl
      */
-    asm("  movl %ecx, 0x5(%edx)"); /* the modifying store */
+    asm("  movl %ecx, 0x5(%edx)");  /* the modifying store */
     asm("  movl $0x12345678,%eax"); /* this instr's immed gets overwritten */
 
-        /* now we have as many write instrs as necessary to cause a too-big
-         * selfmod fragment.  xref case 7893.
-         */
-    asm("  movl %0, %%ecx" : : "r" (iters) : "ecx");
-    asm("  movl %0, %%edx" : : "g" (big));
+    /* now we have as many write instrs as necessary to cause a too-big
+     * selfmod fragment.  xref case 7893.
+     */
+    asm("  movl %0, %%ecx" : : "r"(iters) : "ecx");
+    asm("  movl %0, %%edx" : : "g"(big));
     asm("  movl %ecx, 0(%edx)");
     asm("  movl %ecx, 1(%edx)");
     asm("  movl %ecx, 2(%edx)");
@@ -991,7 +991,7 @@ foo(int iters)
     asm("  inc  %ecx");
     asm("  cmpl $0x0,%eax");
     asm("  jnz repeata");
-    asm("  movl %%ecx, %0" : "=r" (total));
+    asm("  movl %%ecx, %0" : "=r"(total));
 #else
     __asm {
         call next_inst_prot
@@ -1007,10 +1007,10 @@ foo(int iters)
         call next_inst
       next_inst:
         pop  edx
-    /* add to retaddr: 1 == pop
-     *                 3 == mov ecx into target
-     *                 1 == opcode of target movl
-     */
+            /* add to retaddr: 1 == pop
+             *                 3 == mov ecx into target
+             *                 1 == opcode of target movl
+             */
         mov  dword ptr [edx + 0x5], ecx /* the modifying store */
         mov  eax,0x12345678 /* this instr's immed gets overwritten */
 

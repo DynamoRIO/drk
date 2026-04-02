@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -33,7 +33,7 @@
 #include "dr_api.h"
 #include <string.h>
 
-/* Tests instrumenting system calls.  Also tests module_iterator interface and 
+/* Tests instrumenting system calls.  Also tests module_iterator interface and
  * dr_get_proc_address(). */
 
 #define MINSERT instrlist_meta_preinsert
@@ -49,30 +49,26 @@ at_syscall()
         dr_mcontext_t mcontext;
         void *drcontext = dr_get_current_drcontext();
         dr_get_mcontext(drcontext, &mcontext, NULL);
-        dr_fprintf(STDERR, PFX"\n", mcontext.xax);
+        dr_fprintf(STDERR, PFX "\n", mcontext.xax);
     }
 }
 
 static dr_emit_flags_t
-bb_event(void* drcontext, void *tag, instrlist_t *bb, bool for_trace, bool translating)
+bb_event(void *drcontext, void *tag, instrlist_t *bb, bool for_trace, bool translating)
 {
     app_pc pc = dr_fragment_app_pc(tag);
 
     if (pc == start_pc) {
         dr_fprintf(STDERR, "starting syscall monitoring\n");
         monitoring = true;
-    }
-    else if (pc == stop_pc) {
+    } else if (pc == stop_pc) {
         dr_fprintf(STDERR, "stopping syscall monitoring\n");
         monitoring = false;
-    }
-    else {
-        instr_t* instr;
-        instr_t* next_instr;
+    } else {
+        instr_t *instr;
+        instr_t *next_instr;
 
-        for (instr = instrlist_first(bb);
-             instr != NULL;
-             instr = next_instr) {
+        for (instr = instrlist_first(bb); instr != NULL; instr = next_instr) {
 
             next_instr = instr_get_next(instr);
 
@@ -86,9 +82,9 @@ bb_event(void* drcontext, void *tag, instrlist_t *bb, bool for_trace, bool trans
 }
 
 #ifdef WINDOWS
-# define TEST_NAME "client.syscall.exe"
+#    define TEST_NAME "client.syscall.exe"
 #else
-# define TEST_NAME "client.syscall"
+#    define TEST_NAME "client.syscall"
 #endif
 
 DR_EXPORT void

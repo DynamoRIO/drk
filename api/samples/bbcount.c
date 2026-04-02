@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -42,12 +42,12 @@
 #include "dr_api.h"
 
 #ifdef WINDOWS
-# define DISPLAY_STRING(msg) dr_messagebox(msg)
+#    define DISPLAY_STRING(msg) dr_messagebox(msg)
 #else
-# define DISPLAY_STRING(msg) dr_printf("%s\n", msg);
+#    define DISPLAY_STRING(msg) dr_printf("%s\n", msg);
 #endif
 
-#define NULL_TERMINATE(buf) buf[(sizeof(buf)/sizeof(buf[0])) - 1] = '\0'
+#define NULL_TERMINATE(buf) buf[(sizeof(buf) / sizeof(buf[0])) - 1] = '\0'
 
 #define TESTALL(mask, var) (((mask) & (var)) == (mask))
 #define TESTANY(mask, var) (((mask) & (var)) != 0)
@@ -68,11 +68,13 @@ static int bbs_eflags_saved;
 static int bbs_no_eflags_saved;
 #endif
 
-static void event_exit(void);
-static dr_emit_flags_t event_basic_block(void *drcontext, void *tag, instrlist_t *bb,
-                                         bool for_trace, bool translating);
+static void
+event_exit(void);
+static dr_emit_flags_t
+event_basic_block(void *drcontext, void *tag, instrlist_t *bb, bool for_trace,
+                  bool translating);
 
-DR_EXPORT void 
+DR_EXPORT void
 dr_init(client_id_t id)
 {
     /* register events */
@@ -88,13 +90,13 @@ dr_init(client_id_t id)
 #endif
 }
 
-static void 
+static void
 event_exit(void)
 {
 #ifdef SHOW_RESULTS
     char msg[512];
     int len;
-    len = dr_snprintf(msg, sizeof(msg)/sizeof(msg[0]),
+    len = dr_snprintf(msg, sizeof(msg) / sizeof(msg[0]),
                       "Instrumentation results:\n"
                       "%10d basic block executions\n"
                       "%10d basic blocks needed flag saving\n"
@@ -107,17 +109,17 @@ event_exit(void)
 }
 
 static dr_emit_flags_t
-event_basic_block(void *drcontext, void *tag, instrlist_t *bb,
-                  bool for_trace, bool translating)
+event_basic_block(void *drcontext, void *tag, instrlist_t *bb, bool for_trace,
+                  bool translating)
 {
     instr_t *instr, *first = instrlist_first(bb);
     uint flags;
-    
+
 #ifdef VERBOSE
-    dr_printf("in dynamorio_basic_block(tag="PFX")\n", tag);
-# ifdef VERBOSE_VERBOSE
+    dr_printf("in dynamorio_basic_block(tag=" PFX ")\n", tag);
+#    ifdef VERBOSE_VERBOSE
     instrlist_disassemble(drcontext, tag, bb, STDOUT);
-# endif
+#    endif
 #endif
 
     /* Our inc can go anywhere, so find a spot where flags are dead. */
@@ -130,23 +132,22 @@ event_basic_block(void *drcontext, void *tag, instrlist_t *bb,
 
     if (instr == NULL)
         dr_save_arith_flags(drcontext, bb, first, SPILL_SLOT_1);
-    /* Increment the global counter using the lock prefix to make it atomic
-     * across threads.
-     */
+        /* Increment the global counter using the lock prefix to make it atomic
+         * across threads.
+         */
 #ifdef RACY_INC
-    instrlist_meta_preinsert
-        (bb, (instr == NULL) ? first : instr,
-         INSTR_CREATE_inc(drcontext, OPND_CREATE_ABSMEM
-                          ((byte *)&global_count, OPSZ_4)));
+    instrlist_meta_preinsert(
+        bb, (instr == NULL) ? first : instr,
+        INSTR_CREATE_inc(drcontext, OPND_CREATE_ABSMEM((byte *)&global_count, OPSZ_4)));
 #else
-    instrlist_meta_preinsert
-        (bb, (instr == NULL) ? first : instr,
-         LOCK(INSTR_CREATE_inc(drcontext, OPND_CREATE_ABSMEM
-                               ((byte *)&global_count, OPSZ_4))));
+    instrlist_meta_preinsert(
+        bb, (instr == NULL) ? first : instr,
+        LOCK(INSTR_CREATE_inc(drcontext,
+                              OPND_CREATE_ABSMEM((byte *)&global_count, OPSZ_4))));
 #endif
     if (instr == NULL)
         dr_restore_arith_flags(drcontext, bb, first, SPILL_SLOT_1);
-    
+
 #ifdef SHOW_RESULTS
     if (instr == NULL)
         bbs_eflags_saved++;
@@ -155,7 +156,7 @@ event_basic_block(void *drcontext, void *tag, instrlist_t *bb,
 #endif
 
 #if defined(VERBOSE) && defined(VERBOSE_VERBOSE)
-    dr_printf("Finished instrumenting dynamorio_basic_block(tag="PFX")\n", tag);
+    dr_printf("Finished instrumenting dynamorio_basic_block(tag=" PFX ")\n", tag);
     instrlist_disassemble(drcontext, tag, bb, STDOUT);
 #endif
     return DR_EMIT_DEFAULT;

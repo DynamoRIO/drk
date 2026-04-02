@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -47,31 +47,31 @@
 #include "string_wrapper.h" /* for strstr */
 
 #ifdef CLIENT_INTERFACE
-# include "emit.h"
-# include "arch.h"
-# include "instrument.h"
+#    include "emit.h"
+#    include "arch.h"
+#    include "instrument.h"
 #endif
 
 #ifdef DGC_DIAGNOSTICS
-# include "instr.h"
-# include "disassemble.h"
+#    include "instr.h"
+#    include "disassemble.h"
 #endif
 
 #ifdef RCT_IND_BRANCH
-#  include "rct.h"
+#    include "rct.h"
 #endif
 
 #ifdef X64
-# include "instr.h"
-# include "decode.h" /* get_x86_mode */
+#    include "instr.h"
+#    include "decode.h" /* get_x86_mode */
 #endif
 
 #ifdef VMX86_SERVER
-# include "vmkuw.h"
+#    include "vmkuw.h"
 #endif
 
 #ifdef LINUX_KERNEL
-# include "kernel_interface.h"
+#    include "kernel_interface.h"
 #endif
 
 /* forward declarations */
@@ -115,24 +115,27 @@ handle_callback_return(dcontext_t *dcontext);
 static inline void
 found_client_sysenter(void)
 {
-    CLIENT_ASSERT(false, "Is your client invoking raw system calls via vdso sysenter? "
+    CLIENT_ASSERT(false,
+                  "Is your client invoking raw system calls via vdso sysenter? "
                   "While such behavior is not recommended and can create problems, "
                   "it may work with the -sysenter_is_int80 runtime option.");
 }
 #endif
 
 #ifdef LINUX_KERNEL
-# define ASSERT_SANE_DISPATCH_TARGET(pc) do {\
-    ASSERT(!is_in_dynamo_dll((pc)));\
-    ASSERT(!is_dynamo_address((pc)));\
-    ASSERT(is_kernel_code((pc)));\
-} while (0)
+#    define ASSERT_SANE_DISPATCH_TARGET(pc)   \
+        do {                                  \
+            ASSERT(!is_in_dynamo_dll((pc)));  \
+            ASSERT(!is_dynamo_address((pc))); \
+            ASSERT(is_kernel_code((pc)));     \
+        } while (0)
 #else
-# define ASSERT_SANE_DISPATCH_TARGET(pc) do {\
-    ASSERT(!is_in_dynamo_dll((pc)));\
-    ASSERT(!is_dynamo_address((pc)));\
-    ASSERT(is_user_address((pc)));\
-} while (0)
+#    define ASSERT_SANE_DISPATCH_TARGET(pc)   \
+        do {                                  \
+            ASSERT(!is_in_dynamo_dll((pc)));  \
+            ASSERT(!is_dynamo_address((pc))); \
+            ASSERT(is_user_address((pc)));    \
+        } while (0)
 #endif
 
 #ifdef LINUX_KERNEL
@@ -158,22 +161,22 @@ dispatch(dcontext_t *dcontext)
 #ifdef HAVE_TLS
     ASSERT(dcontext == get_thread_private_dcontext());
 #else
-# ifdef LINUX
-    /* CAUTION: for !HAVE_TLS, upon a fork, the child's 
-     * get_thread_private_dcontext() will return NULL because its thread 
-     * id is different and tls_table hasn't been updated yet (will be 
-     * done in post_system_call()).  NULL dcontext thus returned causes 
+#    ifdef LINUX
+    /* CAUTION: for !HAVE_TLS, upon a fork, the child's
+     * get_thread_private_dcontext() will return NULL because its thread
+     * id is different and tls_table hasn't been updated yet (will be
+     * done in post_system_call()).  NULL dcontext thus returned causes
      * logging/core dumping to malfunction; kstats trigger asserts.
      */
     ASSERT(dcontext == get_thread_private_dcontext() || pid_cached != get_process_id());
-# endif
+#    endif
 #endif
     dcontext->current_fragment = NULL;
     dispatch_enter_dynamorio(dcontext);
-    LOG(THREAD, LOG_INTERP, 2, "\ndispatch: target = "PFX"\n", dcontext->next_tag);
-    ASSERT(is_dynamo_address((app_pc) dcontext));
+    LOG(THREAD, LOG_INTERP, 2, "\ndispatch: target = " PFX "\n", dcontext->next_tag);
+    ASSERT(is_dynamo_address((app_pc)dcontext));
 #ifdef DEBUG
-    if (dcontext->next_tag != (app_pc) fake_user_return_exit_target &&
+    if (dcontext->next_tag != (app_pc)fake_user_return_exit_target &&
         !is_stopping_point(dcontext, dcontext->next_tag)) {
         ASSERT_SANE_DISPATCH_TARGET(dcontext->next_tag);
     }
@@ -186,14 +189,14 @@ dispatch(dcontext_t *dcontext)
     do {
         if (is_stopping_point(dcontext, dcontext->next_tag)) {
             LOG(THREAD, LOG_INTERP, 1,
-                "\nFound DynamoRIO stopping point: thread %d returning to app @"PFX"\n",
-                get_thread_id(),  dcontext->next_tag);
+                "\nFound DynamoRIO stopping point: thread %d returning to app @" PFX "\n",
+                get_thread_id(), dcontext->next_tag);
 #ifdef LINUX_KERNEL
             if (*dcontext->next_tag == 0xcc) {
                 /* Disable interrupts so we actually get to the breakpoint
                  * before being interrupted. */
                 get_mcontext(dcontext)->xflags &= ~EFLAGS_IF;
-                exiting_for_breakpoint();        
+                exiting_for_breakpoint();
             }
 #endif
             dispatch_enter_native(dcontext);
@@ -208,16 +211,16 @@ dispatch(dcontext_t *dcontext)
 
         ASSERT_SANE_DISPATCH_TARGET(dcontext->next_tag);
 
-        /* Neither hotp_only nor thin_client should have any fragment 
+        /* Neither hotp_only nor thin_client should have any fragment
          * fcache related work to do.
          */
         ASSERT(!RUNNING_WITHOUT_CODE_CACHE());
-        targetf = fragment_lookup_fine_and_coarse(dcontext, dcontext->next_tag,
-                                                  &coarse_f, dcontext->last_exit);
+        targetf = fragment_lookup_fine_and_coarse(dcontext, dcontext->next_tag, &coarse_f,
+                                                  dcontext->last_exit);
         do {
             if (targetf != NULL) {
                 KSTART(monitor_enter);
-                /* invoke monitor to continue or start a trace 
+                /* invoke monitor to continue or start a trace
                  * may result in changing or nullifying targetf
                  */
                 targetf = monitor_cache_enter(dcontext, targetf);
@@ -236,11 +239,10 @@ dispatch(dcontext_t *dcontext)
             }
             if (targetf == NULL) {
                 SELF_PROTECT_LOCAL(dcontext, WRITABLE);
-                targetf =
-                    build_basic_block_fragment(dcontext, dcontext->next_tag,
-                                               0, true/*link*/, true/*visible*/
-                                               _IF_CLIENT(false/*!for_trace*/)
-                                               _IF_CLIENT(NULL));
+                targetf = build_basic_block_fragment(
+                    dcontext, dcontext->next_tag, 0, true /*link*/,
+                    true /*visible*/
+                    _IF_CLIENT(false /*!for_trace*/) _IF_CLIENT(NULL));
                 SELF_PROTECT_LOCAL(dcontext, READONLY);
                 if (dcontext->emulating_interrupt_return) {
                     STATS_INC(num_fragment_tails_iret);
@@ -283,7 +285,7 @@ static bool
 is_kernel_exit_point(dcontext_t *dcontext)
 {
     ASSERT(!TESTANY(LINK_IRET | LINK_SYSRET, dcontext->last_exit->flags) ||
-    		dcontext->next_tag == (app_pc) fake_user_return_exit_target);
+           dcontext->next_tag == (app_pc)fake_user_return_exit_target);
     if (TEST(LINK_IRET, dcontext->last_exit->flags)) {
         if (emulate_interrupt_return(dcontext)) {
             dcontext->emulating_interrupt_return = true;
@@ -292,25 +294,25 @@ is_kernel_exit_point(dcontext_t *dcontext)
                 dcontext->last_fragment->start_pc);
             /* TODO(peter) We could set this in build_bb_ilist rather than setting
              * fake_user_return_exit_target. */
-            ASSERT(!interrupts_enabled(dcontext));  
+            ASSERT(!interrupts_enabled(dcontext));
             /* TODO(peter): iret can generate exceptions. We should handle these.
              */
-            dcontext->next_tag = (app_pc) dr_native_iret;
+            dcontext->next_tag = (app_pc)dr_native_iret;
             return true;
-        } 
+        }
     } else if (TEST(LINK_SYSRET, dcontext->last_exit->flags)) {
         ASSERT(!DYNAMO_OPTION(optimize_sys_call_ret));
         LOG(THREAD, LOG_INTERP, 1, "dispatching native sysret from frag @ %p\n",
             dcontext->last_fragment->start_pc);
-    	/* TODO(peter) We could set this in build_bb_ilist rather than setting
-    	 * fake_user_return_exit_target. */
-        ASSERT(!interrupts_enabled(dcontext));  
+        /* TODO(peter) We could set this in build_bb_ilist rather than setting
+         * fake_user_return_exit_target. */
+        ASSERT(!interrupts_enabled(dcontext));
         /* TODO(peter): sysret can generate exceptions. We should handle these.
          */
-    	dcontext->next_tag = (app_pc) native_sysret;
-    	return true;
+        dcontext->next_tag = (app_pc)native_sysret;
+        return true;
     }
-    ASSERT(dcontext->next_tag != (app_pc) fake_user_return_exit_target);
+    ASSERT(dcontext->next_tag != (app_pc)fake_user_return_exit_target);
     return false;
 }
 #endif
@@ -325,25 +327,23 @@ is_stopping_point(dcontext_t *dcontext, app_pc pc)
           */
          dcontext->native_exec_postsyscall != NULL)
 #ifdef DR_APP_EXPORTS
-        || (!automatic_startup && 
-            (pc == (app_pc)dr_smp_exit ||
-             pc == (app_pc)dynamorio_app_exit ||
+        || (!automatic_startup &&
+            (pc == (app_pc)dr_smp_exit || pc == (app_pc)dynamorio_app_exit ||
              /* FIXME: Is this a holdover from long ago? dymamo_thread_exit
               * should not be called from the cache.
               */
-             pc == (app_pc)dynamo_thread_exit ||
-             pc == (app_pc)dr_app_stop))
+             pc == (app_pc)dynamo_thread_exit || pc == (app_pc)dr_app_stop))
 #endif
 #ifdef LINUX_KERNEL
-        ||   (is_kernel_code(pc) && *pc == 0xcc) /* int3 opcode */
+        || (is_kernel_code(pc) && *pc == 0xcc) /* int3 opcode */
 #endif
 
 #ifdef WINDOWS
-        /* we go all the way to NtTerminateThread/NtTerminateProcess */
+    /* we go all the way to NtTerminateThread/NtTerminateProcess */
 #else /* LINUX */
-        /* we go all the way to SYS_exit or SYS_{,t,tg}kill(SIGABRT) */
+    /* we go all the way to SYS_exit or SYS_{,t,tg}kill(SIGABRT) */
 #endif
-        )
+    )
         return true;
 
     return false;
@@ -353,28 +353,29 @@ static void
 dispatch_enter_fcache_stats(dcontext_t *dcontext, fragment_t *targetf)
 {
 #ifdef DEBUG
-# ifdef DGC_DIAGNOSTICS
+#    ifdef DGC_DIAGNOSTICS
     if (TEST(FRAG_DYNGEN, targetf->flags) && !is_dyngen_vsyscall(targetf->tag)) {
         char buf[MAXIMUM_SYMBOL_LENGTH];
         bool stack = is_address_on_stack(dcontext, targetf->tag);
-        LOG(THREAD, LOG_DISPATCH, 1, "Entry into dyngen F%d("PFX"%s%s) via:", 
-            targetf->id, targetf->tag,
-            stack ? " stack":"",
-            (targetf->flags & FRAG_DYNGEN_RESTRICTED) != 0 ? " BAD":"");
+        LOG(THREAD, LOG_DISPATCH, 1,
+            "Entry into dyngen F%d(" PFX "%s%s) via:", targetf->id, targetf->tag,
+            stack ? " stack" : "",
+            (targetf->flags & FRAG_DYNGEN_RESTRICTED) != 0 ? " BAD" : "");
         if (!LINKSTUB_FAKE(dcontext->last_exit)) {
             app_pc translated_pc;
             /* can't recreate if fragment is deleted -- but should be fake then */
             ASSERT(!TEST(FRAG_WAS_DELETED, dcontext->last_fragment->flags));
-            translated_pc = recreate_app_pc(dcontext, EXIT_CTI_PC(dcontext->last_fragment,
-                                                                  dcontext->last_exit),
-                                            dcontext->last_fragment);
+            translated_pc = recreate_app_pc(
+                dcontext, EXIT_CTI_PC(dcontext->last_fragment, dcontext->last_exit),
+                dcontext->last_fragment);
             if (translated_pc != NULL) {
                 disassemble(dcontext, translated_pc, THREAD);
                 print_symbolic_address(translated_pc, buf, sizeof(buf), false);
                 LOG(THREAD, LOG_DISPATCH, 1, " %s\n", buf);
             }
             if (!stack &&
-                (strstr(buf, "user32.dll") != NULL || strstr(buf, "USER32.DLL") != NULL)) {
+                (strstr(buf, "user32.dll") != NULL ||
+                 strstr(buf, "USER32.DLL") != NULL)) {
                 /* try to find who set up user32 callback */
                 dump_mcontext_callstack(dcontext);
             }
@@ -388,46 +389,42 @@ dispatch_enter_fcache_stats(dcontext_t *dcontext, fragment_t *targetf)
         }
         if (stack) {
             /* try to understand where code is on stack */
-            LOG(THREAD, LOG_DISPATCH, 1, "cur esp="PFX" ebp="PFX"\n",
+            LOG(THREAD, LOG_DISPATCH, 1, "cur esp=" PFX " ebp=" PFX "\n",
                 get_mcontext(dcontext)->xsp, get_mcontext(dcontext)->xbp);
             dump_mcontext_callstack(dcontext);
         }
     }
-# endif
+#    endif
 
     if (stats->loglevel >= 2 && (stats->logmask & LOG_DISPATCH) != 0) {
-        /* FIXME: this should use a different mask - and get printed at level 2 when turned on */
-        DOLOG(4, LOG_DISPATCH, {
-            dump_mcontext(get_mcontext(dcontext), THREAD, DUMP_NOT_XML); });
+        /* FIXME: this should use a different mask - and get printed at level 2 when
+         * turned on */
+        DOLOG(4, LOG_DISPATCH,
+              { dump_mcontext(get_mcontext(dcontext), THREAD, DUMP_NOT_XML); });
         DOLOG(6, LOG_DISPATCH, { dump_mcontext_callstack(dcontext); });
         DOKSTATS({ DOLOG(6, LOG_DISPATCH, { kstats_dump_stack(dcontext); }); });
-# ifdef RETURN_STACK
+#    ifdef RETURN_STACK
         DOLOG(3, LOG_DISPATCH, { print_return_stack(dcontext); });
-# endif
-# ifdef NATIVE_RETURN_CALLDEPTH
-        LOG(THREAD, LOG_DISPATCH, 3, "\tCall depth is %d\n",
-            dcontext->call_depth);
-# endif
-        LOG(THREAD, LOG_DISPATCH, 2, "Entry into F%d("PFX")."PFX" %s%s", 
-            targetf->id,
-            targetf->tag,
-            FCACHE_ENTRY_PC(targetf),
+#    endif
+#    ifdef NATIVE_RETURN_CALLDEPTH
+        LOG(THREAD, LOG_DISPATCH, 3, "\tCall depth is %d\n", dcontext->call_depth);
+#    endif
+        LOG(THREAD, LOG_DISPATCH, 2, "Entry into F%d(" PFX ")." PFX " %s%s", targetf->id,
+            targetf->tag, FCACHE_ENTRY_PC(targetf),
             TEST(FRAG_COARSE_GRAIN, targetf->flags) ? "(coarse)" : "",
-            ((targetf->flags & FRAG_IS_TRACE_HEAD)!=0)? 
-            "(trace head)" : "",
-            ((targetf->flags & FRAG_IS_TRACE)!=0)? "(trace)" : "");
+            ((targetf->flags & FRAG_IS_TRACE_HEAD) != 0) ? "(trace head)" : "",
+            ((targetf->flags & FRAG_IS_TRACE) != 0) ? "(trace)" : "");
         LOG(THREAD, LOG_DISPATCH, 2, "%s",
-            TEST(FRAG_SHARED, targetf->flags) ? "(shared)":"");
-# ifdef DGC_DIAGNOSTICS
+            TEST(FRAG_SHARED, targetf->flags) ? "(shared)" : "");
+#    ifdef DGC_DIAGNOSTICS
         LOG(THREAD, LOG_DISPATCH, 2, "%s",
-            TEST(FRAG_DYNGEN, targetf->flags) ? "(dyngen)":"");
-# endif
+            TEST(FRAG_DYNGEN, targetf->flags) ? "(dyngen)" : "");
+#    endif
         LOG(THREAD, LOG_DISPATCH, 2, "\n");
 
         DOLOG(3, LOG_SYMBOLS, {
             char symbuf[MAXIMUM_SYMBOL_LENGTH];
-            print_symbolic_address(targetf->tag, 
-                                   symbuf, sizeof(symbuf), true);
+            print_symbolic_address(targetf->tag, symbuf, sizeof(symbuf), true);
             LOG(THREAD, LOG_SYMBOLS, 3, "\t%s\n", symbuf);
         });
     }
@@ -457,7 +454,7 @@ dispatch_enter_fcache(dcontext_t *dcontext, fragment_t *targetf)
     if (!enter_nolinking(dcontext, targetf, true)) {
         /* not actually entering cache, so back to couldbelinking */
         enter_couldbelinking(dcontext, NULL, true);
-        LOG(THREAD, LOG_DISPATCH, 2, "Just flushed targetf, next_tag is "PFX"\n",
+        LOG(THREAD, LOG_DISPATCH, 2, "Just flushed targetf, next_tag is " PFX "\n",
             dcontext->next_tag);
         STATS_INC(num_entrances_aborted);
         /* shared entrance cannot-tell-if-deleted -> invalidate targetf
@@ -470,7 +467,7 @@ dispatch_enter_fcache(dcontext_t *dcontext, fragment_t *targetf)
     }
 
     dispatch_enter_fcache_stats(dcontext, targetf);
-                    
+
     /* FIXME: for now we do this before the synch point to avoid complexity of
      * missing a KSTART(fcache_* for cases like NtSetContextThread where a thread
      * appears back at dispatch() from the synch point w/o ever entering the cache.
@@ -498,20 +495,20 @@ dispatch_enter_fcache(dcontext_t *dcontext, fragment_t *targetf)
     /* synch point for suspend, terminate, and detach */
     /* assumes mcontext is valid including errno but not pc (which we fix here)
      * assumes that thread is holding no locks
-     * also assumes past enter_nolinking, so could_be_linking is false 
+     * also assumes past enter_nolinking, so could_be_linking is false
      * for safety with respect to flush */
     /* a fast check before the heavy lifting */
     if (should_wait_at_safe_spot(dcontext)) {
         /* FIXME : we could put this synch point in enter_fcache but would need
-         * to use SYSCALL_PC for syscalls (see issues with that in win32/os.c) 
+         * to use SYSCALL_PC for syscalls (see issues with that in win32/os.c)
          */
         dr_mcontext_t *mcontext = get_mcontext(dcontext);
         cache_pc save_pc = mcontext->pc;
-        /* FIXME : implementation choice, we could do recreate_app_pc 
-         * (fairly expensive but this is rare) instead of using the tag 
+        /* FIXME : implementation choice, we could do recreate_app_pc
+         * (fairly expensive but this is rare) instead of using the tag
          * which is a little hacky but should always be right */
         mcontext->pc = targetf->tag;
-        /* could be targeting interception code or our dll main, would be 
+        /* could be targeting interception code or our dll main, would be
          * incorrect for GetContextThread and racy for detach, though we
          * would expect it to be very rare */
         if (!is_dynamo_address(mcontext->pc)) {
@@ -523,7 +520,7 @@ dispatch_enter_fcache(dcontext_t *dcontext, fragment_t *targetf)
              */
         } else {
             LOG(THREAD, LOG_SYNCH, 1,
-                "wait_at_safe_spot - unable to wait, targeting dr addr "PFX,
+                "wait_at_safe_spot - unable to wait, targeting dr addr " PFX,
                 mcontext->pc);
             STATS_INC(no_wait_entries);
         }
@@ -537,13 +534,13 @@ dispatch_enter_fcache(dcontext_t *dcontext, fragment_t *targetf)
      * preserve on clean calls, a perf hit.  Better to catch all libc
      * routines that need it and wrap just those.
      */
-    ASSERT(get_libc_errno() == dcontext->libc_errno ||
-           /* only when pthreads is loaded does libc switch to a per-thread
-            * errno, so our raw thread tests end up using the same errno
-            * for each thread!
-            */
-           check_filter("linux.thread;linux.clone",
-                        get_short_name(get_application_name())));
+    ASSERT(
+        get_libc_errno() == dcontext->libc_errno ||
+        /* only when pthreads is loaded does libc switch to a per-thread
+         * errno, so our raw thread tests end up using the same errno
+         * for each thread!
+         */
+        check_filter("linux.thread;linux.clone", get_short_name(get_application_name())));
 #endif
 
     IF_X64(ASSERT(get_x86_mode(dcontext) == TEST(FRAG_32_BIT, targetf->flags)));
@@ -578,7 +575,7 @@ enter_fcache(dcontext_t *dcontext, fcache_enter_func_t entry, cache_pc pc)
     ASSERT(dcontext->try_except_state == NULL);
 
     /* prepare to enter fcache */
-    LOG(THREAD, LOG_DISPATCH, 4, "fcache_enter = "PFX", target = "PFX"\n", entry, pc);
+    LOG(THREAD, LOG_DISPATCH, 4, "fcache_enter = " PFX ", target = " PFX "\n", entry, pc);
     ASSERT(is_dynamo_address(pc));
     set_fcache_target(dcontext, pc);
     ASSERT(pc != NULL);
@@ -589,7 +586,7 @@ enter_fcache(dcontext_t *dcontext, fcache_enter_func_t entry, cache_pc pc)
         dcontext->prev_fragment = NULL;
 
         /* top ten cache times */
-        dcontext->cache_frag_count = (uint64) 0;
+        dcontext->cache_frag_count = (uint64)0;
         dcontext->cache_enter_time = get_time();
     }
 #endif
@@ -605,7 +602,7 @@ dispatch_at_stopping_point(dcontext_t *dcontext)
 {
     /* start/stop interface */
     KSTOP_NOT_MATCHING(dispatch_num_exits);
-    
+
     /* if we stop in middle of tracing, thread-shared state may be messed
      * up (e.g., monitor grabs fragment lock for unlinking),
      * so abort the trace
@@ -614,25 +611,25 @@ dispatch_at_stopping_point(dcontext_t *dcontext)
         LOG(THREAD, LOG_INTERP, 1, "squashing trace-in-progress\n");
         trace_abort(dcontext);
     }
-    
+
     LOG(THREAD, LOG_INTERP, 1, "\nappstart_cleanup: found stopping point\n");
-# ifdef DEBUG
-#  ifdef DR_APP_EXPORTS
+#    ifdef DEBUG
+#        ifdef DR_APP_EXPORTS
     if (dcontext->next_tag == (app_pc)dynamo_thread_exit)
         LOG(THREAD, LOG_INTERP, 1, "\t==dynamo_thread_exit\n");
     else if (dcontext->next_tag == (app_pc)dynamorio_app_exit)
         LOG(THREAD, LOG_INTERP, 1, "\t==dynamorio_app_exit\n");
     else if (dcontext->next_tag == (app_pc)dr_app_stop) {
-#   ifdef NATIVE_RETURN_TRY_TO_PUT_APP_RETURN_PC_ON_STACK
+#            ifdef NATIVE_RETURN_TRY_TO_PUT_APP_RETURN_PC_ON_STACK
         /* FIXME: restore app ret pc before we give control back */
-        *((int *)(get_mcontext(dcontext)->xsp)) = 
-#   endif
-        LOG(THREAD, LOG_INTERP, 1, "\t==dr_app_stop\n");
+        *((int *)(get_mcontext(dcontext)->xsp)) =
+#            endif
+            LOG(THREAD, LOG_INTERP, 1, "\t==dr_app_stop\n");
     }
-#  endif
-# endif
-    
-# ifdef NATIVE_RETURN
+#        endif
+#    endif
+
+#    ifdef NATIVE_RETURN
     /* HACK: end now and avoid having to get app return pc
      * assumes single thread, entire-app run
      */
@@ -642,9 +639,9 @@ dispatch_at_stopping_point(dcontext_t *dcontext)
         dynamorio_app_exit();
         exit(0);
     }
-# else
+#    else
     dynamo_thread_not_under_dynamo(dcontext);
-# endif
+#    endif
 }
 #endif
 
@@ -653,7 +650,7 @@ dispatch_at_stopping_point(dcontext_t *dcontext)
  * control and "go native", but we do not clean up the current thread,
  * assuming we will either take control back, or the app will explicitly
  * request we clean up.
- */     
+ */
 static void
 dispatch_enter_native(dcontext_t *dcontext)
 {
@@ -666,7 +663,7 @@ dispatch_enter_native(dcontext_t *dcontext)
         /* we're simply going native again after an intercepted syscall,
          * not finalizing this thread or anything
          */
-        IF_WINDOWS(DEBUG_DECLARE(extern dcontext_t *early_inject_load_helper_dcontext;))
+        IF_WINDOWS(DEBUG_DECLARE(extern dcontext_t * early_inject_load_helper_dcontext;))
         ASSERT(DYNAMO_OPTION(native_exec_syscalls)); /* else wouldn't have intercepted */
 
         /* Assert here we have a reason for going back to native (-native_exec and
@@ -676,23 +673,22 @@ dispatch_enter_native(dcontext_t *dcontext)
         ASSERT((DYNAMO_OPTION(native_exec) && native_exec_areas != NULL &&
                 !vmvector_empty(native_exec_areas)) ||
                IF_WINDOWS((DYNAMO_OPTION(early_inject) &&
-                         early_inject_load_helper_dcontext ==
-                         get_thread_private_dcontext()) ||)
-               IF_HOTP(dcontext->nudge_thread ||)
-               RUNNING_WITHOUT_CODE_CACHE());
+                           early_inject_load_helper_dcontext ==
+                               get_thread_private_dcontext()) ||)
+                   IF_HOTP(dcontext->nudge_thread ||) RUNNING_WITHOUT_CODE_CACHE());
 
         ASSERT(dcontext->native_exec_postsyscall != NULL);
-        LOG(THREAD, LOG_ASYNCH, 1, "Returning to native "PFX" after a syscall\n",
+        LOG(THREAD, LOG_ASYNCH, 1, "Returning to native " PFX " after a syscall\n",
             dcontext->native_exec_postsyscall);
         dcontext->next_tag = dcontext->native_exec_postsyscall;
         dcontext->native_exec_postsyscall = NULL;
-        LOG(THREAD, LOG_DISPATCH, 2, "Entry into native_exec after intercepted syscall\n");
+        LOG(THREAD, LOG_DISPATCH, 2,
+            "Entry into native_exec after intercepted syscall\n");
         /* restore state as though never came out for syscall */
-        set_last_exit(dcontext, (linkstub_t *) get_native_exec_linkstub());
+        set_last_exit(dcontext, (linkstub_t *)get_native_exec_linkstub());
         KSTART(fcache_default);
         enter_nolinking(dcontext, NULL, true);
-    } 
-    else {
+    } else {
 #if defined(DR_APP_EXPORTS) || defined(LINUX)
         dispatch_at_stopping_point(dcontext);
         enter_nolinking(dcontext, NULL, false);
@@ -709,7 +705,8 @@ dispatch_enter_native(dcontext_t *dcontext)
 
 #ifdef LINUX_KERNEL
 static void
-dispatch_exit_kernel(dcontext_t *dcontext) {
+dispatch_exit_kernel(dcontext_t *dcontext)
+{
     /* Kill any trace in progress. */
     if (is_building_trace(dcontext)) {
         LOG(THREAD, LOG_INTERP, 1, "squashing trace-in-progress\n");
@@ -746,8 +743,7 @@ dispatch_enter_dynamorio(dcontext_t *dcontext)
     where_am_i_t wherewasi = dcontext->whereami;
 #ifdef LINUX
     if (!(wherewasi == WHERE_FCACHE || wherewasi == WHERE_TRAMPOLINE ||
-          wherewasi == WHERE_APP
-          IF_LINUX_KERNEL(|| wherewasi == WHERE_USERMODE))) {
+          wherewasi == WHERE_APP IF_LINUX_KERNEL(|| wherewasi == WHERE_USERMODE))) {
         /* This is probably our own syscalls hitting our own sysenter
          * hook (PR 212570), since we're not completely user library
          * independent (PR 206369).
@@ -761,13 +757,12 @@ dispatch_enter_dynamorio(dcontext_t *dcontext)
         IF_X64(ASSERT_NOT_REACHED()); /* no sysenter support on x64 */
         /* PR 356503: clients using libraries that make syscalls can end up here */
         IF_CLIENT_INTERFACE(found_client_sysenter());
-        ASSERT_BUG_NUM(206369, false &&
-                       "DR's own syscall (via user library) hit the sysenter hook");
+        ASSERT_BUG_NUM(
+            206369, false && "DR's own syscall (via user library) hit the sysenter hook");
     }
 #endif
     ASSERT(wherewasi == WHERE_FCACHE || wherewasi == WHERE_TRAMPOLINE ||
-           wherewasi == WHERE_APP
-           IF_LINUX_KERNEL(|| wherewasi == WHERE_USERMODE));
+           wherewasi == WHERE_APP IF_LINUX_KERNEL(|| wherewasi == WHERE_USERMODE));
     dcontext->whereami = WHERE_DISPATCH;
     ASSERT_LOCAL_HEAP_UNPROTECTED(dcontext);
     ASSERT(check_should_be_protected(DATASEC_RARELY_PROT));
@@ -781,9 +776,9 @@ dispatch_enter_dynamorio(dcontext_t *dcontext)
     dcontext->libc_errno = get_libc_errno();
 #endif
 
-    DOLOG(2, LOG_INTERP, { 
+    DOLOG(2, LOG_INTERP, {
         if (wherewasi == WHERE_APP) {
-            LOG(THREAD, LOG_INTERP, 2, "\ninitial dispatch: target = "PFX"\n",
+            LOG(THREAD, LOG_INTERP, 2, "\ninitial dispatch: target = " PFX "\n",
                 dcontext->next_tag);
             dump_mcontext_callstack(dcontext);
             dump_mcontext(get_mcontext(dcontext), THREAD, DUMP_NOT_XML);
@@ -807,9 +802,10 @@ dispatch_enter_dynamorio(dcontext_t *dcontext)
                 * then we re-entered through a system call or an interrupt. */
                || IS_KERNEL_ENTRY_LINKSTUB(dcontext->last_exit)
 #endif
-               );
+        );
     } else {
-        ASSERT(dcontext->last_exit != NULL); /* MUST be set, if only to a fake linkstub_t */
+        ASSERT(dcontext->last_exit !=
+               NULL); /* MUST be set, if only to a fake linkstub_t */
         /* cache last_exit's fragment */
         dcontext->last_fragment = linkstub_fragment(dcontext, dcontext->last_exit);
 
@@ -819,33 +815,30 @@ dispatch_enter_dynamorio(dcontext_t *dcontext)
          */
         if (LINKSTUB_DIRECT(dcontext->last_exit->flags)) {
             if (INTERNAL_OPTION(cbr_single_stub)) {
-                linkstub_t *nxt =
-                    linkstub_shares_next_stub(dcontext, dcontext->last_fragment,
-                                              dcontext->last_exit);
+                linkstub_t *nxt = linkstub_shares_next_stub(
+                    dcontext, dcontext->last_fragment, dcontext->last_exit);
                 if (nxt != NULL) {
                     /* must distinguish the two based on eflags */
-                    dcontext->last_exit =
-                        linkstub_cbr_disambiguate(dcontext, dcontext->last_fragment,
-                                                  dcontext->last_exit, nxt);
+                    dcontext->last_exit = linkstub_cbr_disambiguate(
+                        dcontext, dcontext->last_fragment, dcontext->last_exit, nxt);
                     ASSERT(dcontext->last_fragment ==
                            linkstub_fragment(dcontext, dcontext->last_exit));
                     STATS_INC(cbr_disambiguations);
                 }
             }
-            
-            dcontext->next_tag = EXIT_TARGET_TAG(dcontext, dcontext->last_fragment,
-                                                 dcontext->last_exit);
+
+            dcontext->next_tag =
+                EXIT_TARGET_TAG(dcontext, dcontext->last_fragment, dcontext->last_exit);
         } else if (dcontext->last_exit == get_ibl_unlinked_found_linkstub()) {
             fragment_t *ibl_target, wrapper;
             ASSERT(in_fcache(dcontext->next_tag));
-            ibl_target = fragment_pclookup(dcontext, dcontext->next_tag,
-                                           &wrapper);
+            ibl_target = fragment_pclookup(dcontext, dcontext->next_tag, &wrapper);
             ASSERT(ibl_target != NULL);
             dcontext->next_tag = ibl_target->tag;
         } else {
             /* get src info from coarse ibl exit into the right place */
             if (DYNAMO_OPTION(coarse_units) &&
-                is_ibl_sourceless_linkstub((const linkstub_t*)dcontext->last_exit))
+                is_ibl_sourceless_linkstub((const linkstub_t *)dcontext->last_exit))
                 set_coarse_ibl_exit(dcontext);
         }
 
@@ -854,9 +847,7 @@ dispatch_enter_dynamorio(dcontext_t *dcontext)
         /* Update the total measured time. This is a convenient place to do this
          * because thread_measured is at the top of the kstack.
          */
-        DOKSTATS({
-            update_lifetime_kstats(dcontext);
-        });
+        DOKSTATS({ update_lifetime_kstats(dcontext); });
     }
     KSTART(dispatch_num_exits); /* KSWITCHed next time around for a better explanation */
 
@@ -870,9 +861,10 @@ dispatch_enter_dynamorio(dcontext_t *dcontext)
          *
          */
         if (TESTANY(LINK_NI_SYSCALL_ALL, dcontext->last_exit->flags)
-            IF_CLIENT_INTERFACE(|| instrument_invoke_another_syscall(dcontext))) {
+                IF_CLIENT_INTERFACE(|| instrument_invoke_another_syscall(dcontext))) {
             handle_system_call(dcontext);
-            /* will return here if decided to skip the syscall; else, back to dispatch() */
+            /* will return here if decided to skip the syscall; else, back to dispatch()
+             */
         }
 #endif
 #ifdef WINDOWS
@@ -955,13 +947,12 @@ dispatch_exit_fcache(dcontext_t *dcontext)
     /* case 7966: no distinction of islinking-ness for hotp_only & thin_client */
     ASSERT(RUNNING_WITHOUT_CODE_CACHE() || is_couldbelinking(dcontext));
 
-#if defined(WINDOWS) && defined (CLIENT_INTERFACE)
+#if defined(WINDOWS) && defined(CLIENT_INTERFACE)
     ASSERT(!is_dynamo_address(dcontext->app_fls_data));
     ASSERT(dcontext->app_fls_data == NULL ||
            dcontext->app_fls_data != dcontext->priv_fls_data);
     ASSERT(!is_dynamo_address(dcontext->app_nt_rpc));
-    ASSERT(dcontext->app_nt_rpc == NULL ||
-           dcontext->app_nt_rpc != dcontext->priv_nt_rpc);
+    ASSERT(dcontext->app_nt_rpc == NULL || dcontext->app_nt_rpc != dcontext->priv_nt_rpc);
 #endif
 
 #ifdef NATIVE_RETURN
@@ -970,11 +961,10 @@ dispatch_exit_fcache(dcontext_t *dcontext)
          * with the code cache target as next_tag.
          * we translate that to an app pc here.
          */
-        app_pc tgt_app_pc = ret_tgt_cache_to_app(dcontext,
-                                                 (cache_pc)dcontext->next_tag);
-        LOG(THREAD, LOG_DISPATCH, 3, "next_tag is in cache: "PFX"\n",
+        app_pc tgt_app_pc = ret_tgt_cache_to_app(dcontext, (cache_pc)dcontext->next_tag);
+        LOG(THREAD, LOG_DISPATCH, 3, "next_tag is in cache: " PFX "\n",
             dcontext->next_tag);
-        LOG(THREAD, LOG_DISPATCH, 3, "next_tag "PFX" -> app ret addr "PFX"\n",
+        LOG(THREAD, LOG_DISPATCH, 3, "next_tag " PFX " -> app ret addr " PFX "\n",
             dcontext->next_tag, tgt_app_pc);
         /* set last_retaddr for fixup_last_cti, if building trace */
         dcontext->last_retaddr = dcontext->next_tag;
@@ -992,8 +982,8 @@ dispatch_exit_fcache(dcontext_t *dcontext)
         if (!LINKSTUB_FAKE(dcontext->last_exit) &&
             TEST(FRAG_IS_TRACE, dcontext->last_fragment->flags)) {
             /* FIXME: should we call this for direct exits as well, up front? */
-            src_tag = get_trace_exit_component_tag
-                (dcontext, dcontext->last_fragment, dcontext->last_exit);
+            src_tag = get_trace_exit_component_tag(dcontext, dcontext->last_fragment,
+                                                   dcontext->last_exit);
         }
 #endif
 
@@ -1002,7 +992,8 @@ dispatch_exit_fcache(dcontext_t *dcontext)
          * also double checks the findings of the indirect lookup
          * routine
          */
-        if (dynamo_options.ret_after_call && TEST(LINK_RETURN, dcontext->last_exit->flags)) {
+        if (dynamo_options.ret_after_call &&
+            TEST(LINK_RETURN, dcontext->last_exit->flags)) {
             /* ret_after_call will raise a security violation on failure */
             SELF_PROTECT_LOCAL(dcontext, WRITABLE);
             ret_after_call_check(dcontext, dcontext->next_tag, src_tag);
@@ -1015,13 +1006,12 @@ dispatch_exit_fcache(dcontext_t *dcontext)
         /* we care to detect violations only if blocking or at least
          * reporting the corresponding branch types
          */
-        if (TESTANY(OPTION_REPORT|OPTION_BLOCK, DYNAMO_OPTION(rct_ind_call)) ||
-            TESTANY(OPTION_REPORT|OPTION_BLOCK, DYNAMO_OPTION(rct_ind_jump))) {
-            if ((TEST(LINK_CALL, dcontext->last_exit->flags)
-                 && TESTANY(OPTION_REPORT|OPTION_BLOCK, DYNAMO_OPTION(rct_ind_call))) || 
-                (TEST(LINK_JMP, dcontext->last_exit->flags) 
-                 && TESTANY(OPTION_REPORT|OPTION_BLOCK, DYNAMO_OPTION(rct_ind_jump)))
-                ) {
+        if (TESTANY(OPTION_REPORT | OPTION_BLOCK, DYNAMO_OPTION(rct_ind_call)) ||
+            TESTANY(OPTION_REPORT | OPTION_BLOCK, DYNAMO_OPTION(rct_ind_jump))) {
+            if ((TEST(LINK_CALL, dcontext->last_exit->flags) &&
+                 TESTANY(OPTION_REPORT | OPTION_BLOCK, DYNAMO_OPTION(rct_ind_call))) ||
+                (TEST(LINK_JMP, dcontext->last_exit->flags) &&
+                 TESTANY(OPTION_REPORT | OPTION_BLOCK, DYNAMO_OPTION(rct_ind_jump)))) {
                 /* case 4995: current shared syscalls implementation
                  * reuses the indirect jump table and marks its
                  * fake linkstub as such.
@@ -1029,7 +1019,7 @@ dispatch_exit_fcache(dcontext_t *dcontext)
                 if (LINKSTUB_FAKE(dcontext->last_exit) /* quick check */ &&
                     IS_SHARED_SYSCALLS_LINKSTUB(dcontext->last_exit)) {
                     ASSERT(IF_WINDOWS_ELSE(DYNAMO_OPTION(shared_syscalls), false));
-                    ASSERT(TEST(LINK_JMP, dcontext->last_exit->flags)); 
+                    ASSERT(TEST(LINK_JMP, dcontext->last_exit->flags));
                 } else {
                     /* rct_ind_branch_check will raise a security violation on failure */
                     rct_ind_branch_check(dcontext, dcontext->next_tag, src_tag);
@@ -1047,7 +1037,7 @@ dispatch_exit_fcache(dcontext_t *dcontext)
          * Probably best to get bb2bb to work better and
          * not worry about optimizing DR code.
          */
-        fragment_add_ibl_target(dcontext, dcontext->next_tag, 
+        fragment_add_ibl_target(dcontext, dcontext->next_tag,
                                 extract_branchtype(dcontext->last_exit->flags));
         /* FIXME: optimize this to stay writable if we're going to
          * be building a bb as well -- no very quick check though
@@ -1055,13 +1045,13 @@ dispatch_exit_fcache(dcontext_t *dcontext)
         SELF_PROTECT_LOCAL(dcontext, READONLY);
     } /* LINKSTUB_INDIRECT */
 
-    /* ref bug 2323, we need monitor to restore last fragment now, 
+    /* ref bug 2323, we need monitor to restore last fragment now,
      * before we break out of the loop to build a new fragment
      * ASSUMPTION: all unusual cache exits (asynch events) abort the current
      * trace, so this is the only place we need to restore anything.
      * monitor_cache_enter() asserts that for us.
-     * NOTE : we wait till after the cache exit stats and logs to call 
-     * monitor_cache_exit since it might change the flags of the last 
+     * NOTE : we wait till after the cache exit stats and logs to call
+     * monitor_cache_exit since it might change the flags of the last
      * fragment and screw up the stats
      */
     monitor_cache_exit(dcontext);
@@ -1073,13 +1063,13 @@ dispatch_exit_fcache(dcontext_t *dcontext)
         if (pause_for_sideline == tid) {
             mutex_lock(&sideline_lock);
             if (pause_for_sideline == tid) {
-                LOG(THREAD, LOG_DISPATCH|LOG_THREADS|LOG_SIDELINE, 2,
+                LOG(THREAD, LOG_DISPATCH | LOG_THREADS | LOG_SIDELINE, 2,
                     "Thread %d waiting for sideline thread\n", tid);
                 signal_event(paused_for_sideline_event);
                 STATS_INC(num_wait_sideline);
                 wait_for_event(resume_from_sideline_event);
                 mutex_unlock(&sideline_lock);
-                LOG(THREAD, LOG_DISPATCH|LOG_THREADS|LOG_SIDELINE, 2,
+                LOG(THREAD, LOG_DISPATCH | LOG_THREADS | LOG_SIDELINE, 2,
                     "Thread %d resuming after sideline thread\n", tid);
                 sideline_cleanup_replacement(dcontext);
             } else
@@ -1106,8 +1096,8 @@ dispatch_exit_fcache(dcontext_t *dcontext)
 #endif
 
 #ifdef CLIENT_INTERFACE
-    /* is ok to put the lock after the null check, this is only 
-     * place they can be deleted 
+    /* is ok to put the lock after the null check, this is only
+     * place they can be deleted
      */
     if (dcontext->client_data != NULL && dcontext->client_data->to_do != NULL) {
         client_todo_list_t *todo;
@@ -1118,9 +1108,9 @@ dispatch_exit_fcache(dcontext_t *dcontext)
             USAGE_ERROR("CLIENT_INTERFACE incompatible with -shared_{bbs,traces}"
                         " at this time");
         }
-# ifdef CLIENT_SIDELINE
+#    ifdef CLIENT_SIDELINE
         mutex_lock(&(dcontext->client_data->sideline_mutex));
-# endif
+#    endif
         todo = dcontext->client_data->to_do;
         while (todo != NULL) {
             client_todo_list_t *next_todo = todo->next;
@@ -1128,12 +1118,12 @@ dispatch_exit_fcache(dcontext_t *dcontext)
             if (f != NULL) {
                 if (todo->ilist != NULL) {
                     /* doing a replacement */
-                    fragment_t * new_f;
+                    fragment_t *new_f;
                     uint orig_flags = f->flags;
                     void *vmlist = NULL;
                     DEBUG_DECLARE(bool ok;)
                     LOG(THREAD, LOG_INTERP, 3,
-                        "Going to do a client fragment replacement at "PFX"  F%d\n",
+                        "Going to do a client fragment replacement at " PFX "  F%d\n",
                         f->tag, f->id);
                     /* prevent emit from deleting f, we still need it */
                     /* FIXME: if f is shared we must hold change_linking_lock
@@ -1142,8 +1132,8 @@ dispatch_exit_fcache(dcontext_t *dcontext)
                     ASSERT(!TEST(FRAG_SHARED, f->flags));
                     f->flags |= FRAG_CANNOT_DELETE;
                     DEBUG_DECLARE(ok =)
-                        vm_area_add_to_list(dcontext, f->tag, &vmlist, orig_flags, f,
-                                            false/*no locks*/);
+                    vm_area_add_to_list(dcontext, f->tag, &vmlist, orig_flags, f,
+                                        false /*no locks*/);
                     ASSERT(ok); /* should never fail for private fragments */
                     mangle(dcontext, todo->ilist, f->flags, true, true);
                     new_f = emit_invisible_fragment(dcontext, todo->tag, todo->ilist,
@@ -1168,20 +1158,19 @@ dispatch_exit_fcache(dcontext_t *dcontext)
                          * already be unlinked and removed from the hash table.
                          */
                         actions = FRAGDEL_NO_UNLINK | FRAGDEL_NO_HTABLE;
-                    }
-                    else {
+                    } else {
                         actions = FRAGDEL_ALL;
                     }
                     fragment_delete(dcontext, f, actions);
 
                     STATS_INC(num_fragments_deleted_client);
                 } else {
-                    LOG(THREAD, LOG_INTERP, 2, "Couldn't let client delete F%d\n",
-                        f->id);
+                    LOG(THREAD, LOG_INTERP, 2, "Couldn't let client delete F%d\n", f->id);
                 }
             } else {
                 LOG(THREAD, LOG_INTERP, 2,
-                    "Failed to delete/replace fragment at tag "PFX" because was already deleted",
+                    "Failed to delete/replace fragment at tag " PFX
+                    " because was already deleted",
                     todo->tag);
             }
 
@@ -1189,9 +1178,9 @@ dispatch_exit_fcache(dcontext_t *dcontext)
             todo = next_todo;
         }
         dcontext->client_data->to_do = NULL;
-# ifdef CLIENT_SIDELINE
+#    ifdef CLIENT_SIDELINE
         mutex_unlock(&(dcontext->client_data->sideline_mutex));
-# endif
+#    endif
     }
 #endif /* CLIENT_INTERFACE */
 }
@@ -1212,50 +1201,52 @@ dispatch_exit_fcache_stats(dcontext_t *dcontext)
          * however these switches never happen. I'm putting this assertion in
          * to verify that claim.
          */
-        kstat_stack_t *ks = &dcontext->thread_kstats->stack_kstats; 
+        kstat_stack_t *ks = &dcontext->thread_kstats->stack_kstats;
         kstat_variable_t *var = ks->node[ks->depth - 1].var;
         kstat_variables_t *vars = &dcontext->thread_kstats->vars_kstats;
         ASSERT(var == &vars->fcache_default ||
-               var == &vars->fcache_trace_trace
-               IF_LINUX_KERNEL(|| var == &vars->usermode
-                               /* Happens when dr_redirect_execution is called
-                                * within a clean callee and there's a pending
-                                * interrupt. */
-                               || var == &vars->kernel_interrupt_handling
-                               || var == &vars->kernel_interrupt_fcache_enter
-                               || var == &vars->kernel_interrupt_fcache_return
-                               || var == &vars->kernel_interrupt_ibl
-                               || var == &vars->kernel_interrupt_frag_success_page_fault
-                               || var == &vars->kernel_interrupt_frag_success_other_sync
-                               || var == &vars->kernel_interrupt_frag_success_async
-                               || var == &vars->kernel_interrupt_frag_delay_dispatch
-                               || var == &vars->kernel_interrupt_frag_delay_pc
-                               || var == &vars->delaying_patched_interrupt
-                               || var == &vars->kernel_interrupt_handling
-                               || var == &vars->user_interrupt_handling));
-#ifdef LINUX_KERNEL
+               var ==
+                   &vars->fcache_trace_trace IF_LINUX_KERNEL(
+                       ||
+                       var == &vars->usermode
+                       /* Happens when dr_redirect_execution is called
+                        * within a clean callee and there's a pending
+                        * interrupt. */
+                       || var == &vars->kernel_interrupt_handling ||
+                       var == &vars->kernel_interrupt_fcache_enter ||
+                       var == &vars->kernel_interrupt_fcache_return ||
+                       var == &vars->kernel_interrupt_ibl ||
+                       var == &vars->kernel_interrupt_frag_success_page_fault ||
+                       var == &vars->kernel_interrupt_frag_success_other_sync ||
+                       var == &vars->kernel_interrupt_frag_success_async ||
+                       var == &vars->kernel_interrupt_frag_delay_dispatch ||
+                       var == &vars->kernel_interrupt_frag_delay_pc ||
+                       var == &vars->delaying_patched_interrupt ||
+                       var == &vars->kernel_interrupt_handling ||
+                       var == &vars->user_interrupt_handling));
+#    ifdef LINUX_KERNEL
         if (var == &vars->delaying_patched_interrupt) {
             ASSERT(dcontext->last_exit == get_client_linkstub());
         }
-#endif
+#    endif
     });
 #endif
 
 #ifdef PROFILE_RDTSC
     if (dynamo_options.profile_times) {
-        int i,j;
+        int i, j;
         uint64 end_time, total_time;
         profile_fragment_dispatch(dcontext);
 
         /* top ten cache times */
         end_time = get_time();
         total_time = end_time - dcontext->cache_enter_time;
-        for (i=0; i<10; i++) {
+        for (i = 0; i < 10; i++) {
             if (total_time > dcontext->cache_time[i]) {
                 /* insert */
-                for (j=9; j>i; j--) {
-                    dcontext->cache_time[j] = dcontext->cache_time[j-1];
-                    dcontext->cache_count[j] = dcontext->cache_count[j-1];
+                for (j = 9; j > i; j--) {
+                    dcontext->cache_time[j] = dcontext->cache_time[j - 1];
+                    dcontext->cache_count[j] = dcontext->cache_count[j - 1];
                 }
                 dcontext->cache_time[i] = total_time;
                 dcontext->cache_count[i] = dcontext->cache_frag_count;
@@ -1274,8 +1265,8 @@ dispatch_exit_fcache_stats(dcontext_t *dcontext)
     if (dcontext->last_exit == get_syscall_linkstub()) {
         LOG(THREAD, LOG_DISPATCH, 2, "Exit from system call\n");
         STATS_INC(num_exits_syscalls);
-# ifdef CLIENT_INTERFACE
-#  ifdef KSTATS
+#    ifdef CLIENT_INTERFACE
+#        ifdef KSTATS
         /* PR 356503: clients using libraries that make syscalls, invoked from
          * a clean call, will not trigger the whereami check below: so we
          * locate here via mismatching kstat top-of-stack.
@@ -1285,37 +1276,35 @@ dispatch_exit_fcache_stats(dcontext_t *dcontext)
                 found_client_sysenter();
             }
         });
-#  endif
-# endif
+#        endif
+#    endif
         KSTOP_NOT_PROPAGATED(syscall_fcache);
         return;
-    }
-    else if (dcontext->last_exit == get_selfmod_linkstub()) {
-        LOG(THREAD, LOG_DISPATCH, 2, "Exit from fragment that self-flushed via code mod\n");
+    } else if (dcontext->last_exit == get_selfmod_linkstub()) {
+        LOG(THREAD, LOG_DISPATCH, 2,
+            "Exit from fragment that self-flushed via code mod\n");
         STATS_INC(num_exits_code_mod_flush);
         KSWITCH_STOP_NOT_PROPAGATED(fcache_default);
         return;
-    }
-    else if (dcontext->last_exit == get_ibl_deleted_linkstub()) {
+    } else if (dcontext->last_exit == get_ibl_deleted_linkstub()) {
         LOG(THREAD, LOG_DISPATCH, 2, "Exit from fragment deleted but hit in ibl\n");
         STATS_INC(num_exits_ibl_deleted);
         KSWITCH_STOP_NOT_PROPAGATED(fcache_default);
         return;
-    }
-    else if (dcontext->last_exit == get_ibl_unlinked_found_linkstub()) {
+    } else if (dcontext->last_exit == get_ibl_unlinked_found_linkstub()) {
         LOG(THREAD, LOG_DISPATCH, 2, "Exit from interrupt in ibl hit in ibl\n");
         STATS_INC(num_exits_ibl_unlinked_found);
         KSWITCH_STOP_NOT_PROPAGATED(fcache_default);
         return;
     }
-# ifdef LINUX
+#    ifdef LINUX
     else if (dcontext->last_exit == get_sigreturn_linkstub()) {
         LOG(THREAD, LOG_DISPATCH, 2, "Exit from sigreturn, or os_forge_exception\n");
         STATS_INC(num_exits_sigreturn);
         KSTOP_NOT_MATCHING_NOT_PROPAGATED(syscall_fcache);
         return;
     }
-# else /* WINDOWS */
+#    else /* WINDOWS */
     else if (dcontext->last_exit == get_asynch_linkstub()) {
         LOG(THREAD, LOG_DISPATCH, 2, "Exit from asynch event\n");
         STATS_INC(num_exits_asynch);
@@ -1323,39 +1312,34 @@ dispatch_exit_fcache_stats(dcontext_t *dcontext)
         KSTOP_NOT_MATCHING_NOT_PROPAGATED(syscall_fcache);
         return;
     }
-# endif
+#    endif
     else if (dcontext->last_exit == get_native_exec_linkstub()) {
         LOG(THREAD, LOG_DISPATCH, 2, "Exit from native_exec execution\n");
         STATS_INC(num_exits_native_exec);
         /* may be a quite large kstat count */
         KSWITCH_STOP_NOT_PROPAGATED(native_exec_fcache);
         return;
-    }
-    else if (dcontext->last_exit == get_native_exec_syscall_linkstub()) {
+    } else if (dcontext->last_exit == get_native_exec_syscall_linkstub()) {
         LOG(THREAD, LOG_DISPATCH, 2, "Exit from native_exec syscall trampoline\n");
         STATS_INC(num_exits_native_exec_syscall);
         /* may be a quite large kstat count */
         KSWITCH_STOP_NOT_PROPAGATED(native_exec_fcache);
         return;
-    }
-    else if (dcontext->last_exit == get_reset_linkstub()) {
+    } else if (dcontext->last_exit == get_reset_linkstub()) {
         LOG(THREAD, LOG_DISPATCH, 2, "Exit due to proactive reset\n");
         STATS_INC(num_exits_reset);
         KSWITCH_STOP_NOT_PROPAGATED(fcache_default);
         return;
     }
-# ifdef WINDOWS
+#    ifdef WINDOWS
     else if (IS_SHARED_SYSCALLS_UNLINKED_LINKSTUB(dcontext->last_exit)) {
-        LOG(THREAD, LOG_DISPATCH, 2,
-            "Exit from unlinked shared syscall\n");
+        LOG(THREAD, LOG_DISPATCH, 2, "Exit from unlinked shared syscall\n");
         STATS_INC(num_unlinked_shared_syscalls_exits);
         KSWITCH_STOP_NOT_PROPAGATED(fcache_default);
         return;
-    }
-    else if (IS_SHARED_SYSCALLS_LINKSTUB(dcontext->last_exit)) {
+    } else if (IS_SHARED_SYSCALLS_LINKSTUB(dcontext->last_exit)) {
         LOG(THREAD, LOG_DISPATCH, 2, "Exit from shared syscall (%s)\n",
-            IS_SHARED_SYSCALLS_TRACE_LINKSTUB(dcontext->last_exit) ?
-            "trace" : "bb");
+            IS_SHARED_SYSCALLS_TRACE_LINKSTUB(dcontext->last_exit) ? "trace" : "bb");
         DOSTATS({
             if (IS_SHARED_SYSCALLS_TRACE_LINKSTUB(dcontext->last_exit))
                 STATS_INC(num_shared_syscalls_trace_exits);
@@ -1365,24 +1349,24 @@ dispatch_exit_fcache_stats(dcontext_t *dcontext)
         KSWITCH_STOP_NOT_PROPAGATED(fcache_default);
         return;
     }
-# endif
-# ifdef HOT_PATCHING_INTERFACE
+#    endif
+#    ifdef HOT_PATCHING_INTERFACE
     else if (dcontext->last_exit == get_hot_patch_linkstub()) {
         LOG(THREAD, LOG_DISPATCH, 2, "Exit from hot patch routine\n");
         STATS_INC(num_exits_hot_patch);
         KSWITCH_STOP_NOT_PROPAGATED(fcache_default);
         return;
     }
-# endif
-# ifdef CLIENT_INTERFACE
+#    endif
+#    ifdef CLIENT_INTERFACE
     else if (dcontext->last_exit == get_client_linkstub()) {
         LOG(THREAD, LOG_DISPATCH, 2, "Exit from client redirection\n");
         STATS_INC(num_exits_client_redirect);
         KSWITCH_STOP_NOT_PROPAGATED(fcache_default);
         return;
     }
-# endif
-#ifdef LINUX_KERNEL
+#    endif
+#    ifdef LINUX_KERNEL
     else if (dcontext->last_exit == get_syscall_entry_linkstub()) {
         LOG(THREAD, LOG_DISPATCH, 2,
             "Returning to kernel via syscall (i.e., exit from usermode)\n");
@@ -1393,21 +1377,18 @@ dispatch_exit_fcache_stats(dcontext_t *dcontext)
             KSTOP_NOT_PROPAGATED(usermode);
         }
         return;
-    }
-    else if (dcontext->last_exit == get_user_interrupt_entry_linkstub()) {
-        LOG(THREAD, LOG_DISPATCH, 2,
-            "Entry from userspace through an interrupt\n");
+    } else if (dcontext->last_exit == get_user_interrupt_entry_linkstub()) {
+        LOG(THREAD, LOG_DISPATCH, 2, "Entry from userspace through an interrupt\n");
         STATS_INC(num_exits_interrupts);
         KSTOP_NOT_PROPAGATED(user_interrupt_handling);
         return;
     } else if (dcontext->last_exit == get_kernel_interrupt_entry_linkstub()) {
-        LOG(THREAD, LOG_DISPATCH, 2,
-            "Entry from kernel through an interrupt\n");
+        LOG(THREAD, LOG_DISPATCH, 2, "Entry from kernel through an interrupt\n");
         STATS_INC(num_exits_interrupts);
         KSTOP_NOT_MATCHING_NOT_PROPAGATED(kernel_interrupt_handling);
         return;
     }
-#endif
+#    endif
 
     /* normal exits from real fragments, though the last_fragment may
      * be deleted and we are working off a copy of its important fields
@@ -1418,8 +1399,8 @@ dispatch_exit_fcache_stats(dcontext_t *dcontext)
      * we want an external agent to examine them at 0 we will want
      * to keep this...leaving for now
      */
-    next_f = fragment_lookup_fine_and_coarse(dcontext, dcontext->next_tag,
-                                             &coarse_f, dcontext->last_exit);
+    next_f = fragment_lookup_fine_and_coarse(dcontext, dcontext->next_tag, &coarse_f,
+                                             dcontext->last_exit);
     last_f = dcontext->last_fragment;
 
     DOKSTATS({
@@ -1429,19 +1410,21 @@ dispatch_exit_fcache_stats(dcontext_t *dcontext)
         KSWITCH_STOP_NOT_PROPAGATED(fcache_default);
     });
 
-    if (is_ibl_sourceless_linkstub((const linkstub_t*)dcontext->last_exit)) {
+    if (is_ibl_sourceless_linkstub((const linkstub_t *)dcontext->last_exit)) {
         if (DYNAMO_OPTION(coarse_units)) {
-            LOG(THREAD, LOG_DISPATCH, 2, "Exit from coarse ibl from tag "PFX": %s %s",
+            LOG(THREAD, LOG_DISPATCH, 2, "Exit from coarse ibl from tag " PFX ": %s %s",
                 dcontext->coarse_exit.src_tag,
                 TEST(FRAG_IS_TRACE, last_f->flags) ? "trace" : "bb",
-                TEST(LINK_RETURN, dcontext->last_exit->flags) ? "ret" :
-                TEST(LINK_CALL, dcontext->last_exit->flags) ? "call*" : "jmp*");
+                TEST(LINK_RETURN, dcontext->last_exit->flags)     ? "ret"
+                    : TEST(LINK_CALL, dcontext->last_exit->flags) ? "call*"
+                                                                  : "jmp*");
         } else {
             ASSERT(!DYNAMO_OPTION(indirect_stubs));
             LOG(THREAD, LOG_DISPATCH, 2, "Exit from sourceless ibl: %s %s",
                 TEST(FRAG_IS_TRACE, last_f->flags) ? "trace" : "bb",
-                TEST(LINK_RETURN, dcontext->last_exit->flags) ? "ret" :
-                TEST(LINK_CALL, dcontext->last_exit->flags) ? "call*" : "jmp*");
+                TEST(LINK_RETURN, dcontext->last_exit->flags)     ? "ret"
+                    : TEST(LINK_CALL, dcontext->last_exit->flags) ? "call*"
+                                                                  : "jmp*");
         }
     } else if (dcontext->last_exit == get_coarse_exit_linkstub()) {
         DOLOG(2, LOG_DISPATCH, {
@@ -1450,20 +1433,18 @@ dispatch_exit_fcache_stats(dcontext_t *dcontext)
             ASSERT(info != NULL); /* though not initialized to NULL... */
             stub = coarse_stub_lookup_by_target(dcontext, info, dcontext->next_tag);
             LOG(THREAD, LOG_DISPATCH, 2,
-                "Exit from sourceless coarse-grain fragment via stub "PFX"\n", stub);
+                "Exit from sourceless coarse-grain fragment via stub " PFX "\n", stub);
         });
         /* FIXME: this stat is not mutually exclusive of reason-for-exit stats */
         STATS_INC(num_exits_coarse);
-    }
-    else if (dcontext->last_exit == get_coarse_trace_head_exit_linkstub()) {
+    } else if (dcontext->last_exit == get_coarse_trace_head_exit_linkstub()) {
         LOG(THREAD, LOG_DISPATCH, 2,
             "Exit from sourceless coarse-grain fragment targeting trace head");
         /* FIXME: this stat is not mutually exclusive of reason-for-exit stats */
         STATS_INC(num_exits_coarse_trace_head);
     } else {
-        LOG(THREAD, LOG_DISPATCH, 2, "Exit from F%d("PFX")."PFX, 
-            last_f->id, last_f->tag, EXIT_CTI_PC(dcontext->last_fragment,
-                                                 dcontext->last_exit));
+        LOG(THREAD, LOG_DISPATCH, 2, "Exit from F%d(" PFX ")." PFX, last_f->id,
+            last_f->tag, EXIT_CTI_PC(dcontext->last_fragment, dcontext->last_exit));
     }
 
     DOSTATS({
@@ -1474,32 +1455,32 @@ dispatch_exit_fcache_stats(dcontext_t *dcontext)
     });
 
     LOG(THREAD, LOG_DISPATCH, 2, "%s",
-        TEST(FRAG_SHARED, last_f->flags) ? " (shared)":"");
-    DOLOG(2, LOG_SYMBOLS, { 
+        TEST(FRAG_SHARED, last_f->flags) ? " (shared)" : "");
+    DOLOG(2, LOG_SYMBOLS, {
         char symbuf[MAXIMUM_SYMBOL_LENGTH];
         print_symbolic_address(last_f->tag, symbuf, sizeof(symbuf), true);
         LOG(THREAD, LOG_SYMBOLS, 2, "\t%s\n", symbuf);
     });
 
-# if defined(DEBUG) && defined(DGC_DIAGNOSTICS)
+#    if defined(DEBUG) && defined(DGC_DIAGNOSTICS)
     if (TEST(FRAG_DYNGEN, last_f->flags) && !is_dyngen_vsyscall(last_f->tag)) {
         char buf[MAXIMUM_SYMBOL_LENGTH];
         bool stack = is_address_on_stack(dcontext, last_f->tag);
         app_pc translated_pc;
         print_symbolic_address(dcontext->next_tag, buf, sizeof(buf), false);
         LOG(THREAD, LOG_DISPATCH, 1,
-            "Exit from dyngen F%d("PFX"%s%s) w/ %s targeting "PFX" %s:",
-            last_f->id, last_f->tag, stack ? " stack":"",
-            (last_f->flags & FRAG_DYNGEN_RESTRICTED) != 0 ? " BAD":"",
-            LINKSTUB_DIRECT(dcontext->last_exit->flags) ? "db":"ib",
-            dcontext->next_tag, buf);
+            "Exit from dyngen F%d(" PFX "%s%s) w/ %s targeting " PFX " %s:", last_f->id,
+            last_f->tag, stack ? " stack" : "",
+            (last_f->flags & FRAG_DYNGEN_RESTRICTED) != 0 ? " BAD" : "",
+            LINKSTUB_DIRECT(dcontext->last_exit->flags) ? "db" : "ib", dcontext->next_tag,
+            buf);
         /* FIXME: risky if last fragment is deleted -- should check for that
          * here and instead just print type from last_exit, since recreate
          * may fail
          */
-        translated_pc = recreate_app_pc(dcontext, EXIT_CTI_PC(dcontext->last_fragment,
-                                                              dcontext->last_exit),
-                                        dcontext->last_fragment);
+        translated_pc = recreate_app_pc(
+            dcontext, EXIT_CTI_PC(dcontext->last_fragment, dcontext->last_exit),
+            dcontext->last_fragment);
         if (translated_pc != NULL) {
             disassemble(dcontext, translated_pc, THREAD);
             LOG(THREAD, LOG_DISPATCH, 1, "\n");
@@ -1509,15 +1490,15 @@ dispatch_exit_fcache_stats(dcontext_t *dcontext)
             disassemble_app_bb(dcontext, last_f->tag, THREAD);
         });
     }
-# endif /* defined(DEBUG) && defined(DGC_DIAGNOSTICS) */
+#    endif /* defined(DEBUG) && defined(DGC_DIAGNOSTICS) */
 
     if (LINKSTUB_INDIRECT(dcontext->last_exit->flags)) {
-#ifdef RETURN_AFTER_CALL
+#    ifdef RETURN_AFTER_CALL
         bool ok = false;
-#endif
+#    endif
         STATS_INC(num_exits_ind_total);
         if (next_f == NULL) {
-            LOG(THREAD, LOG_DISPATCH, 2, " (target "PFX" not in cache)",
+            LOG(THREAD, LOG_DISPATCH, 2, " (target " PFX " not in cache)",
                 dcontext->next_tag);
             STATS_INC(num_exits_ind_good_miss);
             KSWITCH(num_exits_ind_good_miss);
@@ -1525,13 +1506,12 @@ dispatch_exit_fcache_stats(dcontext_t *dcontext)
                    !TEST(LINK_LINKED, dcontext->last_exit->flags)) {
             LOG(THREAD, LOG_DISPATCH, 2, " (in trace-building mode)");
             STATS_INC(num_exits_ind_trace_build);
-        } else if (TEST(FRAG_WAS_DELETED, last_f->flags) ||
-                   !INTERNAL_OPTION(link_ibl)) {
+        } else if (TEST(FRAG_WAS_DELETED, last_f->flags) || !INTERNAL_OPTION(link_ibl)) {
             LOG(THREAD, LOG_DISPATCH, 2, " (src unlinked)");
             STATS_INC(num_exits_ind_src_unlinked);
         } else {
-            LOG(THREAD, LOG_DISPATCH, 2, " (target "PFX" in cache but not lookup table)",
-                dcontext->next_tag);
+            LOG(THREAD, LOG_DISPATCH, 2,
+                " (target " PFX " in cache but not lookup table)", dcontext->next_tag);
             STATS_INC(num_exits_ind_bad_miss);
 
             if (TEST(FRAG_IS_TRACE, last_f->flags)) {
@@ -1539,8 +1519,7 @@ dispatch_exit_fcache_stats(dcontext_t *dcontext)
                 if (next_f && TEST(FRAG_IS_TRACE, next_f->flags)) {
                     STATS_INC(num_exits_ind_bad_miss_trace2trace);
                     KSWITCH(num_exits_ind_bad_miss_trace2trace);
-                } else if (next_f &&
-                           !TEST(FRAG_IS_TRACE, next_f->flags)) {
+                } else if (next_f && !TEST(FRAG_IS_TRACE, next_f->flags)) {
                     if (!TEST(FRAG_IS_TRACE_HEAD, next_f->flags)) {
                         STATS_INC(num_exits_ind_bad_miss_trace2bb_nth);
                         KSWITCH(num_exits_ind_bad_miss_trace2bb_nth);
@@ -1549,14 +1528,12 @@ dispatch_exit_fcache_stats(dcontext_t *dcontext)
                         KSWITCH(num_exits_ind_bad_miss_trace2bb_th);
                     }
                 }
-            }
-            else {
+            } else {
                 STATS_INC(num_exits_ind_bad_miss_bb);
                 if (next_f && TEST(FRAG_IS_TRACE, next_f->flags)) {
                     STATS_INC(num_exits_ind_bad_miss_bb2trace);
                     KSWITCH(num_exits_ind_bad_miss_bb2trace);
-                } else if (next_f &&
-                           !TEST(FRAG_IS_TRACE, next_f->flags)) {
+                } else if (next_f && !TEST(FRAG_IS_TRACE, next_f->flags)) {
                     DOSTATS({
                         if (TEST(FRAG_IS_TRACE_HEAD, next_f->flags))
                             STATS_INC(num_exits_ind_bad_miss_bb2bb_th);
@@ -1570,10 +1547,10 @@ dispatch_exit_fcache_stats(dcontext_t *dcontext)
             if (!TEST(FRAG_IS_TRACE, last_f->flags))
                 STATS_INC(num_exits_ind_non_trace);
         });
-# ifdef RETURN_AFTER_CALL
+#    ifdef RETURN_AFTER_CALL
         /* split by ind branch type */
         if (TEST(LINK_RETURN, dcontext->last_exit->flags)) {
-            LOG(THREAD, LOG_DISPATCH, 2, " (return from "PFX" non-trace tgt "PFX")",
+            LOG(THREAD, LOG_DISPATCH, 2, " (return from " PFX " non-trace tgt " PFX ")",
                 EXIT_CTI_PC(dcontext->last_fragment, dcontext->last_exit),
                 dcontext->next_tag);
             STATS_INC(num_exits_ret);
@@ -1581,9 +1558,8 @@ dispatch_exit_fcache_stats(dcontext_t *dcontext)
                 if (TEST(FRAG_IS_TRACE, last_f->flags))
                     STATS_INC(num_exits_ret_trace);
             });
-        }
-        else if (TESTANY(LINK_CALL|LINK_JMP, dcontext->last_exit->flags)) {
-            LOG(THREAD, LOG_DISPATCH, 2, " (ind %s from "PFX" non-trace tgt "PFX")",
+        } else if (TESTANY(LINK_CALL | LINK_JMP, dcontext->last_exit->flags)) {
+            LOG(THREAD, LOG_DISPATCH, 2, " (ind %s from " PFX " non-trace tgt " PFX ")",
                 TEST(LINK_CALL, dcontext->last_exit->flags) ? "call" : "jmp",
                 EXIT_CTI_PC(dcontext->last_fragment, dcontext->last_exit),
                 dcontext->next_tag);
@@ -1596,38 +1572,38 @@ dispatch_exit_fcache_stats(dcontext_t *dcontext)
                     ASSERT_NOT_REACHED();
             });
         } else if (!ok) {
-            LOG(THREAD, LOG_DISPATCH, 2, 
-                "WARNING: unknown indirect exit from "PFX", in %s fragment "PFX,
+            LOG(THREAD, LOG_DISPATCH, 2,
+                "WARNING: unknown indirect exit from " PFX ", in %s fragment " PFX,
                 EXIT_CTI_PC(dcontext->last_fragment, dcontext->last_exit),
-                (TEST(FRAG_IS_TRACE, last_f->flags)) ? "trace" : "bb",
-                last_f);
+                (TEST(FRAG_IS_TRACE, last_f->flags)) ? "trace" : "bb", last_f);
             STATS_INC(num_exits_ind_unknown);
             ASSERT_NOT_REACHED();
         }
-# endif /* RETURN_AFTER_CALL */
+#    endif   /* RETURN_AFTER_CALL */
     } else { /* DIRECT LINK */
         ASSERT(LINKSTUB_DIRECT(dcontext->last_exit->flags) ||
                IS_COARSE_LINKSTUB(dcontext->last_exit));
 
-        if (IF_LINUX_KERNEL_ELSE(false,
-                TESTANY(LINK_NI_SYSCALL_ALL, dcontext->last_exit->flags))) {
+        if (IF_LINUX_KERNEL_ELSE(
+                false, TESTANY(LINK_NI_SYSCALL_ALL, dcontext->last_exit->flags))) {
             LOG(THREAD, LOG_DISPATCH, 2, " (block ends with syscall)");
             STATS_INC(num_exits_dir_syscall);
-            /* FIXME: it doesn't matter whether next_f exists or not we're still in a syscall  */
+            /* FIXME: it doesn't matter whether next_f exists or not we're still in a
+             * syscall  */
             KSWITCH(num_exits_dir_syscall);
         }
-# ifdef WINDOWS
+#    ifdef WINDOWS
         else if (TEST(LINK_CALLBACK_RETURN, dcontext->last_exit->flags)) {
             LOG(THREAD, LOG_DISPATCH, 2, " (block ends with callback return)");
             STATS_INC(num_exits_dir_cbret);
         }
-# endif
+#    endif
         else if (next_f == NULL) {
-            LOG(THREAD, LOG_DISPATCH, 2, " (target "PFX" not in cache)",
+            LOG(THREAD, LOG_DISPATCH, 2, " (target " PFX " not in cache)",
                 dcontext->next_tag);
             STATS_INC(num_exits_dir_miss);
             KSWITCH(num_exits_dir_miss);
-        } 
+        }
         /* for SHARED_FRAGMENTS_ENABLED(), we do not grab the change_linking_lock
          * for our is_linkable call since that leads to a lot of
          * contention (and we don't want to go to a read-write model
@@ -1636,50 +1612,44 @@ dispatch_exit_fcache_stats(dcontext_t *dcontext)
          * at all, which is ok since the state could have changed anyway
          * (see comment at end of cases below)
          */
-# ifdef DEBUG
+#    ifdef DEBUG
         else if (IS_COARSE_LINKSTUB(dcontext->last_exit)) {
             LOG(THREAD, LOG_DISPATCH, 2, " (not lazily linked yet)");
-        }
-        else if (!is_linkable(dcontext, dcontext->last_fragment,
-                              dcontext->last_exit, next_f,
-                              false/*don't own link lock*/,
-                              false/*do not change trace head state*/)) {
+        } else if (!is_linkable(dcontext, dcontext->last_fragment, dcontext->last_exit,
+                                next_f, false /*don't own link lock*/,
+                                false /*do not change trace head state*/)) {
             STATS_INC(num_exits_dir_nolink);
-            LOG(THREAD, LOG_DISPATCH, 2, " (cannot link F%d->F%d)",
-                last_f->id, next_f->id);
+            LOG(THREAD, LOG_DISPATCH, 2, " (cannot link F%d->F%d)", last_f->id,
+                next_f->id);
             if (is_building_trace(dcontext) &&
                 !TEST(LINK_LINKED, dcontext->last_exit->flags)) {
                 LOG(THREAD, LOG_DISPATCH, 2, " (in trace-building mode)");
                 STATS_INC(num_exits_dir_trace_build);
             }
-#  ifndef TRACE_HEAD_CACHE_INCR
+#        ifndef TRACE_HEAD_CACHE_INCR
             else if (TEST(FRAG_IS_TRACE_HEAD, next_f->flags)) {
-                LOG(THREAD, LOG_DISPATCH, 2, " (target F%d is trace head)",
-                    next_f->id);
+                LOG(THREAD, LOG_DISPATCH, 2, " (target F%d is trace head)", next_f->id);
                 STATS_INC(num_exits_dir_trace_head);
             }
-#  endif
+#        endif
             else if ((last_f->flags & FRAG_SHARED) != (next_f->flags & FRAG_SHARED)) {
                 LOG(THREAD, LOG_DISPATCH, 2, " (cannot link shared to private)",
                     last_f->id, next_f->id);
                 STATS_INC(num_exits_dir_nolink_sharing);
             }
-#  ifdef DGC_DIAGNOSTICS
+#        ifdef DGC_DIAGNOSTICS
             else if ((next_f->flags & FRAG_DYNGEN) != (last_f->flags & FRAG_DYNGEN)) {
-                LOG(THREAD, LOG_DISPATCH, 2, " (cannot link DGC to non-DGC)",
-                    last_f->id, next_f->id);
+                LOG(THREAD, LOG_DISPATCH, 2, " (cannot link DGC to non-DGC)", last_f->id,
+                    next_f->id);
             }
-#  endif
+#        endif
             else if (INTERNAL_OPTION(nolink)) {
                 LOG(THREAD, LOG_DISPATCH, 2, " (nolink option is on)");
-            }
-            else if (!TEST(FRAG_LINKED_OUTGOING, last_f->flags)) {
+            } else if (!TEST(FRAG_LINKED_OUTGOING, last_f->flags)) {
                 LOG(THREAD, LOG_DISPATCH, 2, " (F%d is unlinked-out)", last_f->id);
-            }
-            else if (!TEST(FRAG_LINKED_INCOMING, next_f->flags)) {
+            } else if (!TEST(FRAG_LINKED_INCOMING, next_f->flags)) {
                 LOG(THREAD, LOG_DISPATCH, 2, " (F%d is unlinked-in)", next_f->id);
-            }
-            else {
+            } else {
                 LOG(THREAD, LOG_DISPATCH, 2, " (unknown reason)");
                 /* link info could have changed after we exited cache so
                  * this is probably not a problem, not much we can do
@@ -1689,24 +1659,23 @@ dispatch_exit_fcache_stats(dcontext_t *dcontext)
                 STATS_INC(num_exits_dir_race);
             }
         }
-#  ifdef TRACE_HEAD_CACHE_INCR
+#        ifdef TRACE_HEAD_CACHE_INCR
         else if (TEST(FRAG_IS_TRACE_HEAD, next_f->flags)) {
             LOG(THREAD, LOG_DISPATCH, 2, " (trace head F%d now hot!)", next_f->id);
             STATS_INC(num_exits_dir_trace_hot);
         }
-#  endif
+#        endif
         else if (TEST(FRAG_IS_TRACE, next_f->flags) && TEST(FRAG_SHARED, last_f->flags)) {
             LOG(THREAD, LOG_DISPATCH, 2,
                 " (shared trace head shadowed by private trace F%d)", next_f->id);
             STATS_INC(num_exits_dir_nolink_sharing);
-        }
-        else if (dcontext->next_tag == last_f->tag && next_f != last_f) {
+        } else if (dcontext->next_tag == last_f->tag && next_f != last_f) {
             /* invisible emission and replacement */
             LOG(THREAD, LOG_DISPATCH, 2, " (self-loop in F%d, replaced by F%d)",
                 last_f->id, next_f->id);
             STATS_INC(num_exits_dir_self_replacement);
         }
-#  ifdef LINUX
+#        ifdef LINUX
         else if (dcontext->signals_pending) {
             /* this may not always be the reason...the interrupted fragment
              * field is modularly hidden in linux/signal.c though
@@ -1714,12 +1683,12 @@ dispatch_exit_fcache_stats(dcontext_t *dcontext)
             LOG(THREAD, LOG_DISPATCH, 2, " (interrupted by delayable signal)");
             STATS_INC(num_exits_dir_signal);
         }
-#  endif
-#  ifdef NATIVE_RETURN
+#        endif
+#        ifdef NATIVE_RETURN
         else if (TEST(FRAG_IS_TRACE_HEAD, next_f->flags)) {
             LOG(THREAD, LOG_DISPATCH, 2, " (returned to old trace head)");
         }
-#  endif
+#        endif
         else if (TEST(FRAG_COARSE_GRAIN, next_f->flags) &&
                  !TEST(FRAG_COARSE_GRAIN, last_f->flags)) {
             LOG(THREAD, LOG_DISPATCH, 2, " (fine fragment targeting coarse trace head)");
@@ -1727,10 +1696,8 @@ dispatch_exit_fcache_stats(dcontext_t *dcontext)
              * we have no way of setting that up for fine to coarse links
              */
             /* stats are done in monitor_cache_enter() */
-        }
-        else {
-            LOG(THREAD, LOG_DISPATCH, 2,
-                " (UNKNOWN DIRECT EXIT F%d."PFX"->F%d)",
+        } else {
+            LOG(THREAD, LOG_DISPATCH, 2, " (UNKNOWN DIRECT EXIT F%d." PFX "->F%d)",
                 last_f->id, EXIT_CTI_PC(dcontext->last_fragment, dcontext->last_exit),
                 next_f->id);
             /* link info could have changed after we exited cache so
@@ -1740,27 +1707,25 @@ dispatch_exit_fcache_stats(dcontext_t *dcontext)
              */
             STATS_INC(num_exits_dir_race);
         }
-# endif /* DEBUG */
+#    endif /* DEBUG */
     }
     if (dcontext->last_exit == get_deleted_linkstub(dcontext)) {
         LOG(THREAD, LOG_DISPATCH, 2, " (fragment was flushed)");
-    } 
+    }
     LOG(THREAD, LOG_DISPATCH, 2, "\n");
-    DOLOG(5, LOG_DISPATCH, {
-        dump_mcontext(get_mcontext(dcontext), THREAD, DUMP_NOT_XML); });
+    DOLOG(5, LOG_DISPATCH,
+          { dump_mcontext(get_mcontext(dcontext), THREAD, DUMP_NOT_XML); });
     DOLOG(6, LOG_DISPATCH, { dump_mcontext_callstack(dcontext); });
     DOKSTATS({ DOLOG(6, LOG_DISPATCH, { kstats_dump_stack(dcontext); }); });
-# ifdef RETURN_STACK
+#    ifdef RETURN_STACK
     if (stats->loglevel > 2 && (stats->logmask & LOG_DISPATCH) != 0)
         print_return_stack(dcontext);
-# endif
-# ifdef NATIVE_RETURN_CALLDEPTH
-    LOG(THREAD, LOG_DISPATCH, 3, "\tCall depth is %d\n",
-        dcontext->call_depth);
-# endif
+#    endif
+#    ifdef NATIVE_RETURN_CALLDEPTH
+    LOG(THREAD, LOG_DISPATCH, 3, "\tCall depth is %d\n", dcontext->call_depth);
+#    endif
 #endif /* defined(DEBUG) || defined(KSTATS) */
 }
-
 
 /***************************************************************************
  * SYSTEM CALLS
@@ -1797,9 +1762,8 @@ adjust_syscall_continuation(dcontext_t *dcontext)
 }
 #endif
 
-
 #ifndef LINUX_KERNEL
-/* used to execute a system call instruction in the code cache 
+/* used to execute a system call instruction in the code cache
  * dcontext->next_tag is store elsewhere and restored after the system call
  * for resumption of execution post-syscall
  */
@@ -1807,35 +1771,35 @@ void
 handle_system_call(dcontext_t *dcontext)
 {
     fcache_enter_func_t fcache_enter = get_fcache_enter_private_routine(dcontext);
-    app_pc do_syscall = (app_pc) get_do_syscall_entry(dcontext);
-#ifdef CLIENT_INTERFACE 
+    app_pc do_syscall = (app_pc)get_do_syscall_entry(dcontext);
+#    ifdef CLIENT_INTERFACE
     dr_mcontext_t *mc = get_mcontext(dcontext);
     bool execute_syscall = true;
-#endif
-#ifdef WINDOWS
+#    endif
+#    ifdef WINDOWS
     /* make sure to ask about syscall before pre_syscall, which will swap new mc in! */
     bool use_prev_dcontext = is_cb_return_syscall(dcontext);
-#else
+#    else
     if (TEST(LINK_NI_SYSCALL_INT, dcontext->last_exit->flags)) {
         LOG(THREAD, LOG_SYSCALLS, 2, "Using do_int_syscall\n");
-        do_syscall = (app_pc) get_do_int_syscall_entry(dcontext);
+        do_syscall = (app_pc)get_do_int_syscall_entry(dcontext);
         /* last_exit will be for the syscall so set a flag (could alternatively
          * set up a separate exit stub but this is simpler) */
         dcontext->sys_was_int = true;
-# ifdef VMX86_SERVER
+#        ifdef VMX86_SERVER
         if (is_vmkuw_sysnum(mc->xax)) {
             /* Even w/ syscall # shift int80 => ENOSYS */
             do_syscall = get_do_vmkuw_syscall_entry(dcontext);
             LOG(THREAD, LOG_SYSCALLS, 2, "Using do_vmkuw_syscall\n");
         }
-# endif
+#        endif
     } else {
         dcontext->sys_was_int = false;
         IF_NOT_X64(IF_VMX86(ASSERT(!is_vmkuw_sysnum(mc->xax))));
     }
-#endif
+#    endif
 
-#ifdef CLIENT_INTERFACE 
+#    ifdef CLIENT_INTERFACE
     /* We invoke here rather than inside pre_syscall() primarily so we can
      * set use_prev_dcontext(), but also b/c the windows and linux uses
      * are identical.  We do want this prior to xbp-param changes for linux
@@ -1845,22 +1809,21 @@ handle_system_call(dcontext_t *dcontext)
      * assert if client changes xsp/xdx but that's fine.
      */
     /* i#202: ignore native syscalls in early_inject_init() */
-    if (IF_WINDOWS(dynamo_initialized &&)
-        !instrument_pre_syscall(dcontext, (int) mc->xax)) {
+    if (IF_WINDOWS(dynamo_initialized &&) !instrument_pre_syscall(dcontext,
+                                                                  (int)mc->xax)) {
         /* we won't execute post-syscall so we do not need to store
          * dcontext->sys_*
          */
         execute_syscall = false;
-        LOG(THREAD, LOG_SYSCALLS, 2, "skipping syscall %d on client request\n",
-            mc->xax);
+        LOG(THREAD, LOG_SYSCALLS, 2, "skipping syscall %d on client request\n", mc->xax);
     }
-# ifdef WINDOWS
+#        ifdef WINDOWS
     /* re-set in case client changed the number */
     use_prev_dcontext = is_cb_return_syscall(dcontext);
-# endif
-#endif
+#        endif
+#    endif
 
-    /* some syscalls require modifying local memory 
+    /* some syscalls require modifying local memory
      * FIXME: move this unprot down to those syscalls to avoid unprot-prot-unprot-prot
      * with the new clean dstack design -- though w/ shared_syscalls perhaps most
      * syscalls coming through here will need this
@@ -1871,10 +1834,10 @@ handle_system_call(dcontext_t *dcontext)
 
     LOG(THREAD, LOG_SYSCALLS, 2,
         "Entry into do_syscall to execute a non-ignorable system call\n");
-#ifdef SIDELINE
+#    ifdef SIDELINE
     /* clear cur-trace field so we don't think cur trace is still running */
     sideline_trace = NULL;
-#endif
+#    endif
 
     /* our flushing design assumes our syscall handlers are nolinking,
      * to avoid multiple-flusher deadlocks
@@ -1892,32 +1855,32 @@ handle_system_call(dcontext_t *dcontext)
      */
     dcontext->asynch_target = get_fcache_target(dcontext);
 
-#ifdef WINDOWS
+#    ifdef WINDOWS
     if (get_syscall_method() == SYSCALL_METHOD_SYSENTER) {
         /* kernel sends control directly to 0x7ffe0304 so we need
          * to mangle the return address
          */
         /* Ref case 5461 - edx will become top of stack post-syscall */
         ASSERT(get_mcontext(dcontext)->xsp == get_mcontext(dcontext)->xdx);
-#ifdef HOT_PATCHING_INTERFACE
+#        ifdef HOT_PATCHING_INTERFACE
         /* For hotp_only, vsyscall_syscall_end_pc can be NULL as dr will never
-         * interp a system call.  Also, for hotp_only, control can came here 
+         * interp a system call.  Also, for hotp_only, control can came here
          * from native only to do a syscall that was hooked.
          */
         ASSERT(!DYNAMO_OPTION(hotp_only) ||
                (DYNAMO_OPTION(hotp_only) &&
                 dcontext->next_tag == BACK_TO_NATIVE_AFTER_SYSCALL));
-#else
+#        else
         ASSERT(vsyscall_syscall_end_pc != NULL);
-#endif
+#        endif
         /* NOTE - the stack mangling must match that of intercept_nt_continue()
          * and shared_syscall as not all routines looking at the stack
          * differentiate. */
         if (dcontext->asynch_target == vsyscall_syscall_end_pc) {
-#ifdef HOT_PATCHING_INTERFACE
+#        ifdef HOT_PATCHING_INTERFACE
             /* Don't expect to be here for -hotp_only */
             ASSERT_CURIOSITY(!DYNAMO_OPTION(hotp_only));
-#endif
+#        endif
             /* currently pc is the ret after sysenter, we need it to be the return point
              * (the ret after the call to the vsyscall sysenter)
              * we do not need to keep the old asynch_target -- if we decide not to do
@@ -1927,9 +1890,9 @@ handle_system_call(dcontext_t *dcontext)
             ASSERT(dcontext->thread_record->under_dynamo_control);
         } else {
             /* else, special case like native_exec_syscall */
-            LOG(THREAD, LOG_ALL, 2, "post-sysenter target is non-vsyscall "PFX"\n",
+            LOG(THREAD, LOG_ALL, 2, "post-sysenter target is non-vsyscall " PFX "\n",
                 dcontext->asynch_target);
-            ASSERT(DYNAMO_OPTION(native_exec_syscalls) && 
+            ASSERT(DYNAMO_OPTION(native_exec_syscalls) &&
                    !dcontext->thread_record->under_dynamo_control);
         }
         /* FIXME A lack of write access to %esp will generate an exception
@@ -1953,28 +1916,27 @@ handle_system_call(dcontext_t *dcontext)
              * and send control to asynch_target (implicitly doing the
              * post_sysenter ret instr).
              */
-            dcontext->sysenter_storage = 
-                *((app_pc *)(get_mcontext(dcontext)->xsp+XSP_SZ));
+            dcontext->sysenter_storage =
+                *((app_pc *)(get_mcontext(dcontext)->xsp + XSP_SZ));
             *((app_pc *)get_mcontext(dcontext)->xsp) = sysenter_ret_address;
-            *((app_pc *)(get_mcontext(dcontext)->xsp+XSP_SZ)) =
+            *((app_pc *)(get_mcontext(dcontext)->xsp + XSP_SZ)) =
                 after_do_syscall_code(dcontext);
         } else {
-            *((app_pc *)get_mcontext(dcontext)->xsp) =
-                after_do_syscall_code(dcontext);
+            *((app_pc *)get_mcontext(dcontext)->xsp) = after_do_syscall_code(dcontext);
         }
     }
-#endif
+#    endif
 
     /* first do the pre-system-call */
     if (IF_CLIENT_INTERFACE(execute_syscall &&) pre_system_call(dcontext)) {
         /* now do the actual syscall instruction */
-#ifdef LINUX
+#    ifdef LINUX
         /* FIXME: move into some routine inside linux/?
          * if so, move #include of sys/syscall.h too
          */
         if (is_clone_thread_syscall(dcontext)) {
             /* Code for after clone is in generated code do_clone_syscall. */
-            do_syscall = (app_pc) get_do_clone_syscall_entry(dcontext);
+            do_syscall = (app_pc)get_do_clone_syscall_entry(dcontext);
         } else if (is_sigreturn_syscall(dcontext)) {
             /* HACK: sigreturn goes straight to fcache_return, which expects
              * app eax to already be in mcontext.  pre-syscall cannot do that since
@@ -1983,20 +1945,20 @@ handle_system_call(dcontext_t *dcontext)
              * with a special entry point, ends up being same sort of thing as here)
              */
             /* pre-sigreturn handler put dest eax in next_tag
-             * save it in sys_param1, which is not used already in pre/post 
+             * save it in sys_param1, which is not used already in pre/post
              */
             /* for CLIENT_INTERFACE, pre-sigreturn handler took eax after
              * client had chance to change it, so we have the proper value here.
              */
-            dcontext->sys_param1 = (reg_t) dcontext->next_tag;
+            dcontext->sys_param1 = (reg_t)dcontext->next_tag;
         }
-#else
+#    else
         if (use_prev_dcontext) {
             /* get the current, but now swapped out, dcontext */
             dcontext_t *tmp_dcontext = dcontext;
             LOG(THREAD, LOG_SYSCALLS, 1, "handling a callback return\n");
             dcontext = get_prev_swapped_dcontext(tmp_dcontext);
-            LOG(THREAD, LOG_SYSCALLS, 1, "swapped dcontext from "PFX" to "PFX"\n",
+            LOG(THREAD, LOG_SYSCALLS, 1, "swapped dcontext from " PFX " to " PFX "\n",
                 tmp_dcontext, dcontext);
             /* we have special fcache_enter that uses different dcontext,
              * FIXME: but what if syscall fails?  need to unswap dcontexts!
@@ -2007,7 +1969,7 @@ handle_system_call(dcontext_t *dcontext)
              */
             tmp_dcontext->whereami = WHERE_FCACHE;
         }
-#endif
+#    endif
 
         SELF_PROTECT_LOCAL(dcontext, READONLY);
 
@@ -2016,24 +1978,22 @@ handle_system_call(dcontext_t *dcontext)
         enter_fcache(dcontext, fcache_enter, do_syscall);
         /* will handle post processing in handle_post_system_call */
         ASSERT_NOT_REACHED();
-    }
-    else {
-#ifdef CLIENT_INTERFACE 
+    } else {
+#    ifdef CLIENT_INTERFACE
         /* give the client its post-syscall event since we won't be calling
          * post_system_call(), unless the client itself was the one who skipped.
          */
         if (execute_syscall) {
             instrument_post_syscall(dcontext, dcontext->sys_num);
         }
-#endif
-#ifdef WINDOWS
+#    endif
+#    ifdef WINDOWS
         if (get_syscall_method() == SYSCALL_METHOD_SYSENTER) {
             /* decided to skip syscall -- pop retaddr, restore sysenter storage
              * (if applicable) and set next target */
             get_mcontext(dcontext)->xsp += XSP_SZ;
             if (DYNAMO_OPTION(sygate_sysenter)) {
-                *((app_pc *)get_mcontext(dcontext)->xsp) =
-                    dcontext->sysenter_storage;
+                *((app_pc *)get_mcontext(dcontext)->xsp) = dcontext->sysenter_storage;
             }
             set_fcache_target(dcontext, dcontext->asynch_target);
         } else if (get_syscall_method() == SYSCALL_METHOD_WOW64 &&
@@ -2043,10 +2003,10 @@ handle_system_call(dcontext_t *dcontext)
              */
             get_mcontext(dcontext)->xsp -= XSP_SZ;
         }
-#else
+#    else
         adjust_syscall_continuation(dcontext);
         set_fcache_target(dcontext, dcontext->asynch_target);
-#endif
+#    endif
     }
     SELF_PROTECT_LOCAL(dcontext, READONLY);
 }
@@ -2101,14 +2061,15 @@ handle_post_system_call(dcontext_t *dcontext)
 #endif
 
     LOG(THREAD, LOG_SYSCALLS, 3, "finished handling system call\n");
-    
+
     SELF_PROTECT_LOCAL(dcontext, READONLY);
     /* caller will go back to couldbelinking status */
 }
 
 #ifdef WINDOWS
 /* in callback.c */
-extern void callback_start_return(int app_errno, dr_mcontext_t *mc);
+extern void
+callback_start_return(int app_errno, dr_mcontext_t *mc);
 /* used to execute an int 2b instruction in code cache */
 static void
 handle_callback_return(dcontext_t *dcontext)
@@ -2135,9 +2096,9 @@ handle_callback_return(dcontext_t *dcontext)
      */
 
     /* make sure set the next_tag of prev_dcontext, not dcontext! */
-    set_fcache_target(prev_dcontext, (app_pc) get_do_callback_return_entry(prev_dcontext));
+    set_fcache_target(prev_dcontext, (app_pc)get_do_callback_return_entry(prev_dcontext));
     DOLOG(4, LOG_ASYNCH, {
-        LOG(THREAD, LOG_ASYNCH, 3, "passing prev dcontext "PFX", next_tag "PFX":\n",
+        LOG(THREAD, LOG_ASYNCH, 3, "passing prev dcontext " PFX ", next_tag " PFX ":\n",
             prev_dcontext, prev_dcontext->next_tag);
         dump_mcontext(get_mcontext(prev_dcontext), THREAD, DUMP_NOT_XML);
     });
@@ -2145,7 +2106,7 @@ handle_callback_return(dcontext_t *dcontext)
      * that indirects through the dcontext passed to it (so ignores the switch-to
      * dcontext that callback_start_return swapped into the main dcontext)
      */
-    KSTART(syscall_fcache);     /* continue the interrupted syscall handling */
+    KSTART(syscall_fcache); /* continue the interrupted syscall handling */
     (*fcache_enter)(prev_dcontext);
     /* callback return does not return to here! */
     DOLOG(1, LOG_ASYNCH, {
@@ -2156,14 +2117,14 @@ handle_callback_return(dcontext_t *dcontext)
 }
 #endif /* WINDOWS */
 
-/* used to execute a system call instruction in code cache 
+/* used to execute a system call instruction in code cache
  * not expected to return
  * caller must set up mcontext with proper system call number and arguments
  */
 void
 issue_last_system_call_from_app(dcontext_t *dcontext)
 {
-    LOG(THREAD, LOG_SYSCALLS, 2, "issue_last_system_call_from_app("PIFX")\n",
+    LOG(THREAD, LOG_SYSCALLS, 2, "issue_last_system_call_from_app(" PIFX ")\n",
         get_mcontext(dcontext)->xax);
 
     /* it's up to the caller to let go of the bb building lock if it was held
@@ -2174,7 +2135,7 @@ issue_last_system_call_from_app(dcontext_t *dcontext)
         enter_nolinking(dcontext, NULL, true);
     KSTART(syscall_fcache); /* stopped in dispatch_exit_fcache_stats */
     enter_fcache(dcontext, get_fcache_enter_private_routine(dcontext),
-                 (app_pc) get_global_do_syscall_entry());
+                 (app_pc)get_global_do_syscall_entry());
     ASSERT_NOT_REACHED();
 }
 
@@ -2195,10 +2156,10 @@ transfer_to_dispatch(dcontext_t *dcontext, int app_errno, dr_mcontext_t *mc)
 #if defined(WINDOWS) && defined(CLIENT_INTERFACE)
     /* i#249: swap PEB pointers */
     if (INTERNAL_OPTION(private_peb) && should_swap_peb_pointer())
-        swap_peb_pointer(dcontext, true/*to priv*/);
+        swap_peb_pointer(dcontext, true /*to priv*/);
 #endif
     LOG(THREAD, LOG_ASYNCH, 2,
-        "transfer_to_dispatch: pc=0x%08x, xsp="PFX", initstack=%d\n",
+        "transfer_to_dispatch: pc=0x%08x, xsp=" PFX ", initstack=%d\n",
         dcontext->next_tag, mc->xsp, using_initstack);
 
     /* next, want to switch to dstack, and if using initstack, free mutex.
@@ -2208,7 +2169,6 @@ transfer_to_dispatch(dcontext_t *dcontext, int app_errno, dr_mcontext_t *mc)
      * options.
      */
     call_switch_stack(dcontext, dcontext->dstack, dispatch, using_initstack,
-                      false/*do not return on error*/);
+                      false /*do not return on error*/);
     ASSERT_NOT_REACHED();
 }
-

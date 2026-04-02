@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -50,27 +50,27 @@
 
 static uint bfd_symcount, nonnull_symcount;
 static asymbol **bfd_syms = NULL;
-static bfd *infile = (bfd *) NULL;
+static bfd *infile = (bfd *)NULL;
 
 static int
-compare_symbols (const void *ap, const void *bp)
+compare_symbols(const void *ap, const void *bp)
 {
-    const asymbol *a = *(const asymbol **) ap;
-    const asymbol *b = *(const asymbol **) bp;
-    
+    const asymbol *a = *(const asymbol **)ap;
+    const asymbol *b = *(const asymbol **)bp;
+
     /* check for null pointers -- these are discarded syms   */
     /* they end up at the end of the sort                    */
     if (a == NULL)
         return 1;
     if (b == NULL)
         return -1;
-    
+
     if (bfd_asymbol_value(a) > bfd_asymbol_value(b))
         return 1;
     if (bfd_asymbol_value(a) < bfd_asymbol_value(b))
         return -1;
-    
-    return strcmp (a->name, b->name);
+
+    return strcmp(a->name, b->name);
 }
 
 /* sort the symbol table by section and by offset from the start of the section */
@@ -78,18 +78,16 @@ static void
 sort_symtab()
 {
     long i;
-    
-    qsort (bfd_syms, bfd_symcount, sizeof (asymbol *), compare_symbols);
-    
+
+    qsort(bfd_syms, bfd_symcount, sizeof(asymbol *), compare_symbols);
+
     if (stats->loglevel > 2) {
         LOG(GLOBAL, LOG_ALL, 3, "\n\nSYMBOL TABLE\n");
         for (i = 0; i < bfd_symcount; i++) {
             if (bfd_syms[i]) {
-                LOG(GLOBAL, LOG_ALL, 3, "[%5d] "PFX" 0x%x %5s %s\n", i,
-                        bfd_asymbol_value(bfd_syms[i]),
-                        bfd_syms[i]->flags,
-                        bfd_syms[i]->section->name,
-                        bfd_syms[i]->name);
+                LOG(GLOBAL, LOG_ALL, 3, "[%5d] " PFX " 0x%x %5s %s\n", i,
+                    bfd_asymbol_value(bfd_syms[i]), bfd_syms[i]->flags,
+                    bfd_syms[i]->section->name, bfd_syms[i]->name);
             } else {
                 LOG(GLOBAL, LOG_ALL, 3, "(null symbol)\n");
             }
@@ -103,10 +101,10 @@ lookup_symbol_address(ptr_uint_t addr)
 {
     uint low_idx, high_idx, middle_idx;
     uint middle_addr;
-    
+
     /* the idea is to use a binary search on the sorted symbols table */
     /* the table is sorted by sections and addresses                  */
-    
+
     low_idx = 0;
     high_idx = nonnull_symcount;
 
@@ -115,12 +113,12 @@ lookup_symbol_address(ptr_uint_t addr)
         middle_idx = low_idx + ((high_idx - low_idx) >> 1);
         if (middle_idx == low_idx)
             break;
-        
+
         /* we need real addresses so use bfd macros for the value here */
         /* basically it's the symbols' value + their sections' vma     */
-        
-        middle_addr = bfd_asymbol_value (bfd_syms[middle_idx]);
-        
+
+        middle_addr = bfd_asymbol_value(bfd_syms[middle_idx]);
+
         if (middle_addr > addr)
             high_idx = middle_idx;
         else if (middle_addr < addr)
@@ -144,7 +142,7 @@ prepare_symtab()
             /* FIXME: the BSF_FUNCTION flag is only for ELF
              * other ideas: remove all non-text-section symbols
              */
-            if (! (bfd_syms[i]->flags & BSF_FUNCTION) ) {
+            if (!(bfd_syms[i]->flags & BSF_FUNCTION)) {
                 /* remove from table by marking as null */
                 bfd_syms[i] = NULL;
                 nonnull_symcount--;
@@ -156,31 +154,31 @@ prepare_symtab()
 static asymbol **
 get_symtab(bfd *abfd)
 {
-    asymbol **sy = (asymbol **) NULL;
+    asymbol **sy = (asymbol **)NULL;
     long storage;
-    
-    if (!(bfd_get_file_flags (abfd) & HAS_SYMS)) {
-        print_file(STDERR, "No symbols in \"%s\".\n", bfd_get_filename (abfd));
+
+    if (!(bfd_get_file_flags(abfd) & HAS_SYMS)) {
+        print_file(STDERR, "No symbols in \"%s\".\n", bfd_get_filename(abfd));
         bfd_symcount = 0;
         return NULL;
     }
-    
-    storage = bfd_get_symtab_upper_bound (abfd);
+
+    storage = bfd_get_symtab_upper_bound(abfd);
     if (storage < 0) {
         print_file(STDERR, "BFD fatal error bfd_get_symtab_upper_bound\n");
         return NULL;
     }
-    
+
     if (storage) {
-        sy = (asymbol **) xmalloc (storage);
+        sy = (asymbol **)xmalloc(storage);
     }
-    bfd_symcount = bfd_canonicalize_symtab (abfd, sy);
+    bfd_symcount = bfd_canonicalize_symtab(abfd, sy);
     if (bfd_symcount < 0) {
         print_file(STDERR, "BFD fatal error bfd_canonicalize_symtab\n");
         return NULL;
     }
     if (bfd_symcount == 0)
-        print_file(STDERR, "%s: No symbols\n", bfd_get_filename (abfd));
+        print_file(STDERR, "%s: No symbols\n", bfd_get_filename(abfd));
     return sy;
 }
 
@@ -214,8 +212,7 @@ symtab_init()
         }
         if (infile)
             bfd_close(infile);
-        USAGE_ERROR("-profexecname \"%s\" : error getting symbol table", 
-                    filein);
+        USAGE_ERROR("-profexecname \"%s\" : error getting symbol table", filein);
         return false;
     }
 
@@ -232,7 +229,7 @@ symtab_exit()
 }
 
 const char *
-symtab_lookup_pc(void * pc)
+symtab_lookup_pc(void *pc)
 {
     int idx = lookup_symbol_address((ptr_uint_t)pc);
     if (bfd_syms[idx] == NULL)

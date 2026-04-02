@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -35,24 +35,24 @@
 #include "nudge.h"
 
 #ifdef WINDOWS
-# include "ntdll.h" /* for create_thread(), nt_free_virtual_memory() */
-# include "os_exports.h" /* for detach_helper(), get_stack_bounds() */
+#    include "ntdll.h"      /* for create_thread(), nt_free_virtual_memory() */
+#    include "os_exports.h" /* for detach_helper(), get_stack_bounds() */
 #else
-# include "string_wrapper.h"
-# include "syscall.h"
+#    include "string_wrapper.h"
+#    include "syscall.h"
 #endif /* WINDOWS */
 
 #ifdef HOT_PATCHING_INTERFACE
-# include "hotpatch.h" /* for hotp_nudge_update() */
+#    include "hotpatch.h" /* for hotp_nudge_update() */
 #endif
 #ifdef PROCESS_CONTROL
-# include "moduledb.h" /* for process_control() */
+#    include "moduledb.h" /* for process_control() */
 #endif
 
-#include "fragment.h" /* needed for perscache.h */
+#include "fragment.h"  /* needed for perscache.h */
 #include "perscache.h" /* for coarse_units_freeze_all() */
 #ifdef CLIENT_INTERFACE
-# include "instrument.h" /* for instrement_nudge() */
+#    include "instrument.h" /* for instrement_nudge() */
 #endif
 #include "fcache.h" /* for reset routines */
 
@@ -64,7 +64,7 @@ static void
 nudge_terminate_on_dstack(dcontext_t *dcontext)
 {
     ASSERT(dcontext == get_thread_private_dcontext());
-    os_terminate(dcontext, TERMINATE_THREAD|TERMINATE_CLEANUP);
+    os_terminate(dcontext, TERMINATE_THREAD | TERMINATE_CLEANUP);
     ASSERT_NOT_REACHED();
 }
 
@@ -72,16 +72,16 @@ nudge_terminate_on_dstack(dcontext_t *dcontext)
  * CAUTION: generic_nudge_target is added to global_rct_ind_targets table.  If this
  * function is renamed or cloned, update rct_known_targets_init accordingly.
  */
-void 
+void
 generic_nudge_target(nudge_arg_t *arg)
 {
     /* Fix for case 5130; volatile forces a 'call' instruction to be generated
-     * rather than 'jmp' during optimization.  FIXME: need a standardized & 
+     * rather than 'jmp' during optimization.  FIXME: need a standardized &
      * better way of stopping core from emulating itself.
      */
     volatile bool nudge_result;
 
-    /* needed to make sure dr has a specific target to lookup and avoid 
+    /* needed to make sure dr has a specific target to lookup and avoid
      * interpreting when taking over new threads; see must_not_be_inlined().
      */
     nudge_result = generic_nudge_handler(arg);
@@ -91,16 +91,15 @@ generic_nudge_target(nudge_arg_t *arg)
     os_terminate(NULL, TERMINATE_THREAD); /* just in case */
 }
 
-
 /* This is the actual nudge handler
  * Notes: This function returns a boolean mainly to fix case 5130; it is not
  *        really necessary.
  */
-bool 
+bool
 generic_nudge_handler(nudge_arg_t *arg_dont_use)
 {
     dcontext_t *dcontext = get_thread_private_dcontext();
-    nudge_arg_t safe_arg = {0};
+    nudge_arg_t safe_arg = { 0 };
     uint nudge_action_mask = 0;
 
     /* To be extra safe we use safe_read() to access the nudge argument, though once
@@ -114,7 +113,7 @@ generic_nudge_handler(nudge_arg_t *arg_dont_use)
 
     /* FIXME - would be nice to inform nudge creator if we need to nop the nudge. */
 
-    /* Fix for case 5702.  If a nudge thread comes in during process exit, 
+    /* Fix for case 5702.  If a nudge thread comes in during process exit,
      * don't process it, i.e., nop it. FIXME - this leaks the app stack and nudge arg
      * if the nudge was supposed to free them. */
     if (dynamo_exited)
@@ -157,7 +156,7 @@ generic_nudge_handler(nudge_arg_t *arg_dont_use)
 
     handle_nudge(dcontext, &safe_arg);
 
- nudge_finished:
+nudge_finished:
 
     /* Note - for supporting detach with CLIENT_INTERFACE and nudge threads we need that
      * no lock grabbing or other actions that would interfere with the detaching process
@@ -185,7 +184,7 @@ generic_nudge_handler(nudge_arg_t *arg_dont_use)
      *  On Vista we don't use NtCreateThreadEx to create the nudge threads so the kernel
      *  doesn't free the stack.
      * As such we are left with two options: free the app stack here (nudgee free) or
-     * have the nudge thread creator free the app stack (nudger free).  Going with 
+     * have the nudge thread creator free the app stack (nudger free).  Going with
      * nudgee free means we leak exit race nudge stacks whereas if we go with nudger free
      * for external nudges then we'll leak timed out nudge stacks (for internal nudges
      * we pretty much have to do nudgee free).  A nudge_arg_t flag is used to specify
@@ -218,7 +217,7 @@ generic_nudge_handler(nudge_arg_t *arg_dont_use)
                               false /* not on initstack */, false /* don't return */);
         } else {
             /* Already on dstack or nudge creator will free app stack. */
-            os_terminate(dcontext, TERMINATE_THREAD|TERMINATE_CLEANUP);
+            os_terminate(dcontext, TERMINATE_THREAD | TERMINATE_CLEANUP);
         }
     }
     ASSERT_NOT_REACHED(); /* we should never return */
@@ -231,15 +230,15 @@ generic_nudge_handler(nudge_arg_t *arg_dont_use)
 #ifdef WINDOWS
 static
 #endif
-void
-handle_nudge(dcontext_t *dcontext, nudge_arg_t *arg)
+    void
+    handle_nudge(dcontext_t *dcontext, nudge_arg_t *arg)
 {
     uint nudge_action_mask = arg->nudge_action_mask;
-    
+
     /* Future version checks would go here. */
     ASSERT_CURIOSITY(arg->version == NUDGE_ARG_CURRENT_VERSION);
 
-    /* Nudge shouldn't start with any locks held.  Do this assert after the 
+    /* Nudge shouldn't start with any locks held.  Do this assert after the
      * dynamo_exited check, other wise the locks may be deleted. */
     ASSERT_OWN_NO_LOCKS();
 
@@ -247,7 +246,7 @@ handle_nudge(dcontext_t *dcontext, nudge_arg_t *arg)
 
 #ifdef WINDOWS
     /* Linux does this in signal.c */
-    SYSLOG_INTERNAL_INFO("received nudge mask=0x%x id=0x%08x arg=0x"ZHEX64_FORMAT_STRING,
+    SYSLOG_INTERNAL_INFO("received nudge mask=0x%x id=0x%08x arg=0x" ZHEX64_FORMAT_STRING,
                          arg->nudge_action_mask, arg->client_id, arg->client_arg);
 #endif
 
@@ -261,13 +260,13 @@ handle_nudge(dcontext_t *dcontext, nudge_arg_t *arg)
 
     /* In -thin_client mode only detach and process_control nudges are allowed;
      * case 8888. */
-#define VALID_THIN_CLIENT_NUDGES (NUDGE_GENERIC(process_control)|NUDGE_GENERIC(detach))
+#define VALID_THIN_CLIENT_NUDGES (NUDGE_GENERIC(process_control) | NUDGE_GENERIC(detach))
     if (DYNAMO_OPTION(thin_client)) {
         if (TEST(VALID_THIN_CLIENT_NUDGES, nudge_action_mask)) {
-             /* If it is a valid thin client nudge, then disable all others. */
-             nudge_action_mask &= VALID_THIN_CLIENT_NUDGES;
+            /* If it is a valid thin client nudge, then disable all others. */
+            nudge_action_mask &= VALID_THIN_CLIENT_NUDGES;
         } else {
-            return;   /* invalid nudge for thin_client, so mute it */
+            return; /* invalid nudge for thin_client, so mute it */
         }
     }
 
@@ -321,11 +320,11 @@ handle_nudge(dcontext_t *dcontext, nudge_arg_t *arg)
     }
     if (TEST(NUDGE_GENERIC(freeze), nudge_action_mask)) {
         nudge_action_mask &= ~NUDGE_GENERIC(freeze);
-        coarse_units_freeze_all(true/*in-place: FIXME: separate nudge for non?*/);
+        coarse_units_freeze_all(true /*in-place: FIXME: separate nudge for non?*/);
     }
     if (TEST(NUDGE_GENERIC(persist), nudge_action_mask)) {
         nudge_action_mask &= ~NUDGE_GENERIC(persist);
-        coarse_units_freeze_all(false/*!in-place==persist*/);
+        coarse_units_freeze_all(false /*!in-place==persist*/);
     }
 #ifdef CLIENT_INTERFACE
     if (TEST(NUDGE_GENERIC(client), nudge_action_mask)) {
@@ -334,15 +333,15 @@ handle_nudge(dcontext_t *dcontext, nudge_arg_t *arg)
     }
 #endif
 #ifdef PROCESS_CONTROL
-    if (TEST(NUDGE_GENERIC(process_control), nudge_action_mask)) {  /* Case 8594 */
+    if (TEST(NUDGE_GENERIC(process_control), nudge_action_mask)) { /* Case 8594 */
         nudge_action_mask &= ~NUDGE_GENERIC(process_control);
         /* Need to synchronize because process control can be switched between
          * on (white or black list) & off.  FIXME - the nudge mask should specify this,
          * but doesn't hurt to do it again. */
         synchronize_dynamic_options();
-        if (IS_PROCESS_CONTROL_ON()) 
+        if (IS_PROCESS_CONTROL_ON())
             process_control();
-        
+
         /* If process control is enforced then control won't come back.  If
          * either -detect_mode is on or if there was nothing to enforce, control
          * comes back in which case it is safe to let remaining nudges be
@@ -351,22 +350,24 @@ handle_nudge(dcontext_t *dcontext, nudge_arg_t *arg)
 #endif
 #ifdef HOTPATCHING
     if (DYNAMO_OPTION(hot_patching) && DYNAMO_OPTION(liveshields) &&
-        TEST_ANY(NUDGE_GENERIC(policy)|NUDGE_GENERIC(mode)|NUDGE_GENERIC(lstats),
+        TEST_ANY(NUDGE_GENERIC(policy) | NUDGE_GENERIC(mode) | NUDGE_GENERIC(lstats),
                  nudge_action_mask)) {
-        hotp_nudge_update(nudge_action_mask &
-                          (NUDGE_GENERIC(policy)|NUDGE_GENERIC(mode)|NUDGE_GENERIC(lstats)));
-        nudge_action_mask &= ~(NUDGE_GENERIC(policy)|NUDGE_GENERIC(mode)|NUDGE_GENERIC(lstats));
+        hotp_nudge_update(
+            nudge_action_mask &
+            (NUDGE_GENERIC(policy) | NUDGE_GENERIC(mode) | NUDGE_GENERIC(lstats)));
+        nudge_action_mask &=
+            ~(NUDGE_GENERIC(policy) | NUDGE_GENERIC(mode) | NUDGE_GENERIC(lstats));
     }
 #endif
 #ifdef PROGRAM_SHEPHERDING
     if (TEST(NUDGE_GENERIC(violation), nudge_action_mask)) {
         nudge_action_mask &= ~NUDGE_GENERIC(violation);
         /* Use nudge mechanism to trigger a security violation at an
-         * arbitrary time. Note - is only useful for testing kill process attack 
+         * arbitrary time. Note - is only useful for testing kill process attack
          * handling as this is not an app thread (we injected it). */
         /* see bug 652 for planned improvements */
-        security_violation(dcontext, dcontext->next_tag, 
-                           ATTACK_SIM_NUDGE_VIOLATION, OPTION_BLOCK|OPTION_REPORT);
+        security_violation(dcontext, dcontext->next_tag, ATTACK_SIM_NUDGE_VIOLATION,
+                           OPTION_BLOCK | OPTION_REPORT);
     }
 #endif
     if (TEST(NUDGE_GENERIC(reset), nudge_action_mask)) {
@@ -381,7 +382,7 @@ handle_nudge(dcontext_t *dcontext, nudge_arg_t *arg)
             SYSLOG_INTERNAL_WARNING("nudge reset ignored since resets are disabled");
         }
     }
-#ifdef WINDOWS    
+#ifdef WINDOWS
     /* The detach handler is last since in the common case it doesn't return. */
     if (TEST(NUDGE_GENERIC(detach), nudge_action_mask)) {
         nudge_action_mask &= ~NUDGE_GENERIC(detach);
@@ -395,8 +396,8 @@ handle_nudge(dcontext_t *dcontext, nudge_arg_t *arg)
 void
 nudge_add_pending(dcontext_t *dcontext, nudge_arg_t *nudge_arg)
 {
-    pending_nudge_t *pending = (pending_nudge_t *)
-        heap_alloc(dcontext, sizeof(*pending) HEAPACCT(ACCT_OTHER));
+    pending_nudge_t *pending =
+        (pending_nudge_t *)heap_alloc(dcontext, sizeof(*pending) HEAPACCT(ACCT_OTHER));
     pending->arg = *nudge_arg;
     /* Simpler to prepend.  Not FIFO but should be rare to have multiple. */
     DOSTATS({
@@ -431,10 +432,9 @@ nudge_internal(uint nudge_action_mask, uint64 client_arg, client_id_t client_id)
         nudge_action_mask);
 
 #ifdef WINDOWS
-    hthread = create_thread(NT_CURRENT_PROCESS, IF_X64_ELSE(true, false),
-                            (void *)generic_nudge_target,
-                            NULL, &nudge_arg, sizeof(nudge_arg_t),
-                            15*PAGE_SIZE, 12*PAGE_SIZE, false, NULL);
+    hthread = create_thread(
+        NT_CURRENT_PROCESS, IF_X64_ELSE(true, false), (void *)generic_nudge_target, NULL,
+        &nudge_arg, sizeof(nudge_arg_t), 15 * PAGE_SIZE, 12 * PAGE_SIZE, false, NULL);
     ASSERT(hthread != INVALID_HANDLE_VALUE);
     res = close_handle(hthread);
     ASSERT(res);

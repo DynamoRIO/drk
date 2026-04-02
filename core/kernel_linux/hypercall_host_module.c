@@ -26,8 +26,9 @@ typedef struct {
     spinlock_t lock;
 } hypercall_queue_t;
 
-static inline void hypercall_queue_produce(hypercall_queue_t* queue,
-                                           queued_hypercall_t* new_tail) {
+static inline void
+hypercall_queue_produce(hypercall_queue_t *queue, queued_hypercall_t *new_tail)
+{
     unsigned long flags;
     spin_lock_irqsave(&queue->lock, flags);
     list_add_tail(&new_tail->list, &queue->head);
@@ -35,16 +36,18 @@ static inline void hypercall_queue_produce(hypercall_queue_t* queue,
     up(&queue->empty);
 }
 
-static inline queued_hypercall_t* hypercall_queue_consume(hypercall_queue_t* queue) {
-    queued_hypercall_t* result;
+static inline queued_hypercall_t *
+hypercall_queue_consume(hypercall_queue_t *queue)
+{
+    queued_hypercall_t *result;
     unsigned long flags;
     int ret;
     printk("hypercall_queue_consume\n");
     ret = down_interruptible(&queue->empty);
-    if (ret  == -EINTR) {
+    if (ret == -EINTR) {
         printk("down_interruptible was interrupted\n");
         return NULL;
-    }  else if (ret != 0) {
+    } else if (ret != 0) {
         printk("Unknown down_interruptible error\n");
         return NULL;
     }
@@ -59,30 +62,36 @@ static inline queued_hypercall_t* hypercall_queue_consume(hypercall_queue_t* que
     }
 
     // Remove the head.
-    result = list_entry(queue->head.next, queued_hypercall_t, list);    
+    result = list_entry(queue->head.next, queued_hypercall_t, list);
     list_del(&result->list);
     spin_unlock_irqrestore(&queue->lock, flags);
     return result;
 }
 
-static inline void hypercall_queue_init(hypercall_queue_t* queue) {
+static inline void
+hypercall_queue_init(hypercall_queue_t *queue)
+{
     INIT_LIST_HEAD(&queue->head);
     init_MUTEX_LOCKED(&queue->empty);
     spin_lock_init(&queue->lock);
 }
 
-static inline void hypercall_queue_free(hypercall_queue_t* queue) {
+static inline void
+hypercall_queue_free(hypercall_queue_t *queue)
+{
     /* TODO(peter): traverse the list and free everything in it. */
 }
 
 static hypercall_queue_t hypercall_queue;
 
-static int clear_queue(hypercall_queue_t* queue) {
+static int
+clear_queue(hypercall_queue_t *queue)
+{
     unsigned long flags;
     spin_lock_irqsave(&queue->lock, flags);
     while (!list_empty(&queue->head)) {
-        queued_hypercall_t* hypercall =
-            list_entry(queue->head.next, queued_hypercall_t, list);    
+        queued_hypercall_t *hypercall =
+            list_entry(queue->head.next, queued_hypercall_t, list);
         list_del(&hypercall->list);
         kfree(hypercall);
     }
@@ -90,15 +99,17 @@ static int clear_queue(hypercall_queue_t* queue) {
     return 0;
 }
 
-static int hypercall_dequeue_to_user(hypercall_t __user * user_hypercall) {
+static int
+hypercall_dequeue_to_user(hypercall_t __user *user_hypercall)
+{
     size_t failed_bytes;
-    queued_hypercall_t* queued;
-    hypercall_t* result;
-    
+    queued_hypercall_t *queued;
+    hypercall_t *result;
+
     queued = hypercall_queue_consume(&hypercall_queue);
     if (queued == NULL) {
         /* We were interrupted, so return a nop. */
-        static hypercall_nop_t nop = { {HYPERCALL_NOP, sizeof(nop)} };
+        static hypercall_nop_t nop = { { HYPERCALL_NOP, sizeof(nop) } };
         result = &nop.hypercall;
     } else {
         result = &queued->hypercall;
@@ -114,12 +125,11 @@ static int hypercall_dequeue_to_user(hypercall_t __user * user_hypercall) {
     }
 }
 
-static unsigned long handle_hypercall(struct kvm_vcpu* vcpu,
-                                      unsigned long guest_pa,
-                                      unsigned long length) {
-    queued_hypercall_t* new_tail;
+static unsigned long
+handle_hypercall(struct kvm_vcpu *vcpu, unsigned long guest_pa, unsigned long length)
+{
+    queued_hypercall_t *new_tail;
     int ret;
-
 
     printk("Hypercall guest memory: PA=%lx, Length=%lu\n", guest_pa, length);
 
@@ -129,8 +139,7 @@ static unsigned long handle_hypercall(struct kvm_vcpu* vcpu,
     }
 
     /* Subtract the size of the hypercall_t placeholder. */
-    new_tail = kmalloc(sizeof(*new_tail) - sizeof(hypercall_t) + length,
-                       GFP_ATOMIC);
+    new_tail = kmalloc(sizeof(*new_tail) - sizeof(hypercall_t) + length, GFP_ATOMIC);
     if (new_tail == NULL) {
         printk("Could not allocate a new queued_hypercall_t.");
         return -ENOMEM;
@@ -143,20 +152,17 @@ static unsigned long handle_hypercall(struct kvm_vcpu* vcpu,
         return -EINVAL;
     }
 
-    printk("Queueing a hypercall: type=%d length=%lu\n",
-        new_tail->hypercall.type, new_tail->hypercall.size);
+    printk("Queueing a hypercall: type=%d length=%lu\n", new_tail->hypercall.type,
+           new_tail->hypercall.size);
 
     hypercall_queue_produce(&hypercall_queue, new_tail);
     return 0;
 }
 
-unsigned long hypercall_handler(
-        struct kvm_vcpu* vcpu,
-        unsigned long nr,
-        unsigned long a0,
-        unsigned long a1,
-        unsigned long a2,
-        unsigned long a3) {
+unsigned long
+hypercall_handler(struct kvm_vcpu *vcpu, unsigned long nr, unsigned long a0,
+                  unsigned long a1, unsigned long a2, unsigned long a3)
+{
     return handle_hypercall(vcpu, a0, a1);
 }
 
@@ -164,19 +170,16 @@ unsigned long hypercall_handler(
 
 static int device_major;
 
-static int device_ioctl(struct inode* inode,
-                        struct file* file,
-                        unsigned int ioctl_num,
-                        unsigned long ioctl_param) {
+static int
+device_ioctl(struct inode *inode, struct file *file, unsigned int ioctl_num,
+             unsigned long ioctl_param)
+{
     void __user *argp = (void __user *)ioctl_param;
     switch (ioctl_num) {
     case HYPERCALL_IOCTL_DEQUEUE:
-        return hypercall_dequeue_to_user((hypercall_t __user *) argp);
-    case HYPERCALL_IOCTL_CLEAR:
-        return clear_queue(&hypercall_queue);
-    default:
-        printk("Uknwown ioctl number %d.\n", ioctl_num);
-        return -EINVAL;
+        return hypercall_dequeue_to_user((hypercall_t __user *)argp);
+    case HYPERCALL_IOCTL_CLEAR: return clear_queue(&hypercall_queue);
+    default: printk("Uknwown ioctl number %d.\n", ioctl_num); return -EINVAL;
     }
     return 0;
 }
@@ -189,22 +192,24 @@ static struct file_operations fops = {
     .ioctl = device_ioctl,
 };
 
-static int hypercall_host_init(void) {
+static int
+hypercall_host_init(void)
+{
     device_major = register_chrdev(0, HYPERCALL_DEVICE_NAME, &fops);
     if (device_major < 0) {
-        printk("Registering the character device failed with %d.\n",
-            device_major);
+        printk("Registering the character device failed with %d.\n", device_major);
         return device_major;
     }
-    printk("Registered device name=%s, major=%d.\n",
-        HYPERCALL_DEVICE_NAME, device_major);
+    printk("Registered device name=%s, major=%d.\n", HYPERCALL_DEVICE_NAME, device_major);
 
     hypercall_queue_init(&hypercall_queue);
     kvm_register_hypercall_callback(hypercall_handler);
     return 0;
 }
 
-static void hypercall_host_exit(void) {
+static void
+hypercall_host_exit(void)
+{
     unregister_chrdev(device_major, HYPERCALL_DEVICE_NAME);
     kvm_remove_hypercall_callback(hypercall_handler);
     hypercall_queue_free(&hypercall_queue);

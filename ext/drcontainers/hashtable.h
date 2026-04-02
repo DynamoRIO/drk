@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -52,7 +52,7 @@ typedef enum {
     /**
      * A custom key.  Hash and compare operations must be provided
      * in hashtable_init_ex().  The hash operation can return a full
-     * uint, as its result will be truncated via a mod of the 
+     * uint, as its result will be truncated via a mod of the
      * hash key bit size.  This allows for resizing the table
      * without changing the hash operation.
      */
@@ -67,8 +67,8 @@ typedef struct _hash_entry_t {
 
 /** Configuration parameters for a hashtable. */
 typedef struct _hashtable_config_t {
-    size_t size; /**< The size of the hashtable_config_t struct used */
-    bool resizable; /**< Whether the table should be resized */
+    size_t size;           /**< The size of the hashtable_config_t struct used */
+    bool resizable;        /**< Whether the table should be resized */
     uint resize_threshold; /**< Resize the table at this % full */
 } hashtable_config_t;
 
@@ -79,9 +79,9 @@ typedef struct _hashtable_t {
     void *lock;
     uint table_bits;
     bool synch;
-    void (*free_payload_func)(void*);
-    uint (*hash_key_func)(void*);
-    bool (*cmp_key_func)(void*, void*);
+    void (*free_payload_func)(void *);
+    uint (*hash_key_func)(void *);
+    bool (*cmp_key_func)(void *, void *);
     uint entries;
     hashtable_config_t config;
 } hashtable_t;
@@ -101,7 +101,7 @@ stri_eq(const char *s1, const char *s2);
  * the defaults will be used.
  */
 void
-hashtable_global_config(void *(*alloc_func)(size_t), void (*free_func)(void*, size_t),
+hashtable_global_config(void *(*alloc_func)(size_t), void (*free_func)(void *, size_t),
                         void (*assert_fail_func)(const char *));
 
 /**
@@ -137,9 +137,9 @@ hashtable_init(hashtable_t *table, uint num_bits, hash_type_t hashtype, bool str
  *   Leave it NULL if no callback is needed.
  */
 void
-hashtable_init_ex(hashtable_t *table, uint num_bits, hash_type_t hashtype,
-                  bool str_dup, bool synch, void (*free_payload_func)(void*),
-                  uint (*hash_key_func)(void*), bool (*cmp_key_func)(void*, void*));
+hashtable_init_ex(hashtable_t *table, uint num_bits, hash_type_t hashtype, bool str_dup,
+                  bool synch, void (*free_payload_func)(void *),
+                  uint (*hash_key_func)(void *), bool (*cmp_key_func)(void *, void *));
 
 /** Configures optional parameters of hashtable operation. */
 void
@@ -177,7 +177,7 @@ hashtable_remove(hashtable_t *table, void *key);
 
 /**
  * Destroys all storage for the table.  If free_payload_func was specified
- * calls it for each payload. 
+ * calls it for each payload.
  */
 void
 hashtable_delete(hashtable_t *table);

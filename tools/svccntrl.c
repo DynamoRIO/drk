@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -47,23 +47,25 @@
 WCHAR *longbuff;
 ServiceHandle foundsvc = INVALID_SERVICE_HANDLE;
 
-BOOL show_svcs_cb(ServiceHandle service, void **param)
+BOOL
+show_svcs_cb(ServiceHandle service, void **param)
 {
-    static const char *automatic="auto";
-    static const char *manual="manual";
-    static const char *disabled="disabled";
-    static const char *unknown="<unknown>";
+    static const char *automatic = "auto";
+    static const char *manual = "manual";
+    static const char *disabled = "disabled";
+    static const char *unknown = "<unknown>";
     const char *typename;
     DWORD type = get_service_start_type(service);
-    typename = (type == SERVICE_AUTO_START ? automatic : 
-                            (type == SERVICE_DEMAND_START ? manual : 
-                             (type == SERVICE_DISABLED ? disabled :
-                              unknown)));
+    typename = (type == SERVICE_AUTO_START
+                    ? automatic
+                    : (type == SERVICE_DEMAND_START
+                           ? manual
+                           : (type == SERVICE_DISABLED ? disabled : unknown)));
     printf("%S %s\n", get_service_name(service), typename);
     return TRUE;
 }
 
-BOOL 
+BOOL
 finddispname_cb(ServiceHandle svc, void **param)
 {
     if (!wcsicmp(longbuff, get_service_display_name(svc))) {
@@ -73,17 +75,19 @@ finddispname_cb(ServiceHandle svc, void **param)
     return TRUE;
 }
 
-void 
-usage() 
+void
+usage()
 {
-    fprintf(stderr,"Usage:\nsvcctrl svcname [ -auto | -manual | -restart | -disabled ] [-help] [-show] [-dep svc2] [-depreset] [-v]\n");
+    fprintf(stderr,
+            "Usage:\nsvcctrl svcname [ -auto | -manual | -restart | -disabled ] [-help] "
+            "[-show] [-dep svc2] [-depreset] [-v]\n");
     exit(1);
 }
 
 void
-help() 
+help()
 {
-    
+
     fprintf(stderr, "Options:\n");
     fprintf(stderr, " -auto\\tt\tset the service to run automatically\n");
     fprintf(stderr, " -manual\t\tset the service to manual control\n");
@@ -95,7 +99,6 @@ help()
     fprintf(stderr, " -v\t\t\tdisplay version information\n\n");
     exit(1);
 }
-
 
 ServiceHandle
 get_svc(char *buf)
@@ -113,20 +116,14 @@ get_svc(char *buf)
     return svc;
 }
 
-int 
+int
 main(int argc, char **argv)
 {
-    int res=0,
-        sauto=0,
-        sman=0,
-        sdis=0,
-        show=0,
-        depreset=0,
-        srestart=0;
+    int res = 0, sauto = 0, sman = 0, sdis = 0, show = 0, depreset = 0, srestart = 0;
     char *dep = NULL;
 
-    char *svcname=NULL;
-    int argidx=1;
+    char *svcname = NULL;
+    int argidx = 1;
     ServiceHandle svc;
     WCHAR w_buf[MAX_PATH];
 
@@ -135,50 +132,40 @@ main(int argc, char **argv)
     while (argidx < argc) {
 
         if (!strcmp(argv[argidx], "-help")) {
-  	    help();
-	}
-	else if (!strcmp(argv[argidx], "-auto")) {
-	    sauto=1;
-	}
-	else if (!strcmp(argv[argidx], "-manual")) {
-	    sman=1;
-	}
-	else if (!strcmp(argv[argidx], "-restart")) {
-	    srestart=1;
-	}
-	else if (!strcmp(argv[argidx], "-show")) {
-	    show=1;
-	}
-	else if (!strcmp(argv[argidx], "-depreset")) {
-	    depreset=1;
-	}
-	else if (!strcmp(argv[argidx], "-dep")) {
+            help();
+        } else if (!strcmp(argv[argidx], "-auto")) {
+            sauto = 1;
+        } else if (!strcmp(argv[argidx], "-manual")) {
+            sman = 1;
+        } else if (!strcmp(argv[argidx], "-restart")) {
+            srestart = 1;
+        } else if (!strcmp(argv[argidx], "-show")) {
+            show = 1;
+        } else if (!strcmp(argv[argidx], "-depreset")) {
+            depreset = 1;
+        } else if (!strcmp(argv[argidx], "-dep")) {
             if (argidx + 1 >= argc)
                 usage();
             dep = argv[++argidx];
-	}
-	else if (!strcmp(argv[argidx], "-disabled")) {
-	    sdis=1;
-	}
-	else if (!strcmp(argv[argidx], "-v")) {
+        } else if (!strcmp(argv[argidx], "-disabled")) {
+            sdis = 1;
+        } else if (!strcmp(argv[argidx], "-v")) {
 #ifdef BUILD_NUMBER
-	  printf("svccntrl.exe build %d -- %s\n", BUILD_NUMBER, __DATE__);
+            printf("svccntrl.exe build %d -- %s\n", BUILD_NUMBER, __DATE__);
 #else
-	  printf("svccntrl.exe custom build -- %s, %s\n", __DATE__, __TIME__);
+            printf("svccntrl.exe custom build -- %s, %s\n", __DATE__, __TIME__);
 #endif
-	}
-	else {
-	    fprintf(stderr, "Unknown option: %s\n", argv[argidx]);
-	    usage();
-	}
-	argidx++;
+        } else {
+            fprintf(stderr, "Unknown option: %s\n", argv[argidx]);
+            usage();
+        }
+        argidx++;
     }
 
-    if (argc < 3) 
+    if (argc < 3)
         usage();
-  
-    if ( sauto + sman + sdis + show + srestart != 1 && 
-         dep == NULL && !depreset) {
+
+    if (sauto + sman + sdis + show + srestart != 1 && dep == NULL && !depreset) {
         fprintf(stderr, "Bad combination of options.\n");
         usage();
     }
@@ -187,9 +174,8 @@ main(int argc, char **argv)
 
     if (show) {
         enumerate_services(&show_svcs_cb, NULL);
-    }
-    else {
-       
+    } else {
+
         _snwprintf(w_buf, MAX_PATH, L"%S", svcname);
 
         if (srestart) {
@@ -197,51 +183,44 @@ main(int argc, char **argv)
             if (res != ERROR_SUCCESS) {
                 fprintf(stderr, "Error %d updating the configuration\n", res);
             }
-        }
-        else if (dep) {
+        } else if (dep) {
             ServiceHandle svc2;
             svc = get_svc(svcname);
             svc2 = get_svc(dep);
-            if (svc == INVALID_SERVICE_HANDLE ||
-                svc2 == INVALID_SERVICE_HANDLE) {
+            if (svc == INVALID_SERVICE_HANDLE || svc2 == INVALID_SERVICE_HANDLE) {
                 fprintf(stderr, "Invalid services: %s, %s\n", svcname, dep);
-            }
-            else {
+            } else {
                 res = add_dependent_service(svc, svc2);
                 if (res != ERROR_SUCCESS)
                     fprintf(stderr, "Error %d setting dependencies\n", res);
             }
-        }
-        else if (depreset) {
+        } else if (depreset) {
             svc = get_svc(svcname);
             if (svc == INVALID_SERVICE_HANDLE) {
                 fprintf(stderr, "Invalid service: %s\n", svcname);
-            }
-            else {
+            } else {
                 res = reset_dependent_services(svc);
                 if (res != ERROR_SUCCESS)
                     fprintf(stderr, "Error %d resetting dependencies\n", res);
             }
-        }
-        else {
+        } else {
             svc = get_svc(svcname);
-            
+
             if (svc == INVALID_SERVICE_HANDLE) {
                 fprintf(stderr, "Invalid service: %s\n", svcname);
             } else {
-                res = set_service_start_type(svc, sauto ? SERVICE_AUTO_START :
-                                             sman ? SERVICE_DEMAND_START :
-                                             sdis ? SERVICE_DISABLED :
-                                             SERVICE_NO_CHANGE);
+                res = set_service_start_type(svc,
+                                             sauto      ? SERVICE_AUTO_START
+                                                 : sman ? SERVICE_DEMAND_START
+                                                 : sdis ? SERVICE_DISABLED
+                                                        : SERVICE_NO_CHANGE);
                 if (res != ERROR_SUCCESS)
                     fprintf(stderr, "There was an error setting the configuration\n");
             }
         }
-        
     }
 
     services_cleanup();
 
     return 0;
-
 }

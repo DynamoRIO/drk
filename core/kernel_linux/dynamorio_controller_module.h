@@ -19,7 +19,7 @@ typedef struct {
 
 #define DYNAMORIO_IOCTL_EXIT _IOW(0xFF, 1, dynamorio_exit_cmd_t *)
 
-#define DYNAMORIO_KSTATS_MAX_SIZE 4096*2LU
+#define DYNAMORIO_KSTATS_MAX_SIZE 4096 * 2LU
 
 typedef struct {
     unsigned long size;
@@ -37,7 +37,7 @@ typedef struct {
 
 #define DYNAMORIO_IOCTL_KSTATS _IOWR(0xff, 2, dynamorio_kstats_cmd_t *)
 
-#define DYNAMORIO_STATS_MAX_SIZE 100*1024LU
+#define DYNAMORIO_STATS_MAX_SIZE 100 * 1024LU
 
 typedef struct {
     /* Output. */
@@ -46,6 +46,5 @@ typedef struct {
 } dynamorio_stats_cmd_t;
 
 #define DYNAMORIO_IOCTL_STATS _IOWR(0xff, 3, dynamorio_stats_cmd_t *)
-
 
 #endif

@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -43,47 +43,48 @@
 
 #include "configure.h"
 #if defined(NOT_DYNAMORIO_CORE)
-# define ASSERT(x)
-# define ASSERT_NOT_REACHED()
-# define ASSERT_NOT_IMPLEMENTED(x)
-# define DODEBUG(x)
-# define DECLARE_NEVERPROT_VAR(var, ...) var = __VA_ARGS__;
-# define ALIGN_BACKWARD(x, alignment) (((ULONG_PTR)x) & (~((alignment)-1)))
-# define PAGE_SIZE 4096
+#    define ASSERT(x)
+#    define ASSERT_NOT_REACHED()
+#    define ASSERT_NOT_IMPLEMENTED(x)
+#    define DODEBUG(x)
+#    define DECLARE_NEVERPROT_VAR(var, ...) var = __VA_ARGS__;
+#    define ALIGN_BACKWARD(x, alignment) (((ULONG_PTR)x) & (~((alignment)-1)))
+#    define PAGE_SIZE 4096
 #else
 /* we include globals.h mainly for ASSERT, even though we're
  * used by preinject.
  * preinject just defines its own internal_error!
  */
-# include "../globals.h"
-# if !defined(NOT_DYNAMORIO_CORE_PROPER)
-#  include "os_private.h" /* for is_readable_pe_base() */
-#  include "../module_shared.h" /* for is_in_code_section() */
-# endif
+#    include "../globals.h"
+#    if !defined(NOT_DYNAMORIO_CORE_PROPER)
+#        include "os_private.h"       /* for is_readable_pe_base() */
+#        include "../module_shared.h" /* for is_in_code_section() */
+#    endif
 #endif
 
 #include "ntdll.h"
 
 /* We have to hack away things we use here that won't work for non-core */
 #if defined(NOT_DYNAMORIO_CORE_PROPER) || defined(NOT_DYNAMORIO_CORE)
-# undef strcasecmp
-# define strcasecmp _stricmp
-# define wcscasecmp _wcsicmp
-# undef TRY_EXCEPT_ALLOW_NO_DCONTEXT
-# define TRY_EXCEPT_ALLOW_NO_DCONTEXT(dc, try, except) try
-# undef ASSERT_OWN_NO_LOCKS
-# define ASSERT_OWN_NO_LOCKS() /* who cares if not the core */
-# undef ASSERT_CURIOSITY
-# define ASSERT_CURIOSITY(x) /* who cares if not the core */
+#    undef strcasecmp
+#    define strcasecmp _stricmp
+#    define wcscasecmp _wcsicmp
+#    undef TRY_EXCEPT_ALLOW_NO_DCONTEXT
+#    define TRY_EXCEPT_ALLOW_NO_DCONTEXT(dc, try, except) try
+#    undef ASSERT_OWN_NO_LOCKS
+#    define ASSERT_OWN_NO_LOCKS() /* who cares if not the core */
+#    undef ASSERT_CURIOSITY
+#    define ASSERT_CURIOSITY(x) /* who cares if not the core */
 /* since not including os_shared.h (this is impl in ntdll.c): */
-bool is_readable_without_exception(const byte *pc, size_t size);
+bool
+is_readable_without_exception(const byte *pc, size_t size);
 /* allow converting functions to and from data pointers */
-# pragma warning(disable : 4055)
-# pragma warning(disable : 4054)
-# define convert_data_to_function(func) ((generic_func_t) (func))
+#    pragma warning(disable : 4055)
+#    pragma warning(disable : 4054)
+#    define convert_data_to_function(func) ((generic_func_t)(func))
 #endif
 
-/* This routine was moved here from os.c since we need it for 
+/* This routine was moved here from os.c since we need it for
  * get_proc_address_64 (via get_module_exports_directory_*()) for preinject
  * and drmarker, neither of which link os.c.
  */
@@ -91,13 +92,13 @@ bool is_readable_without_exception(const byte *pc, size_t size);
  * from pc to pc+size-1 are readable and that reading from there won't
  * generate an exception.  this is a stronger check than
  * !not_readable() below.
- * FIXME : beware of multi-thread races, just because this returns true, 
- * doesn't mean another thread can't make the region unreadable between the 
+ * FIXME : beware of multi-thread races, just because this returns true,
+ * doesn't mean another thread can't make the region unreadable between the
  * check here and the actual read later.  See safe_read() as an alt.
  */
 /* throw-away buffer */
-DECLARE_NEVERPROT_VAR(static char is_readable_buf[4/*efficient read*/], {0});
-bool 
+DECLARE_NEVERPROT_VAR(static char is_readable_buf[4 /*efficient read*/], { 0 });
+bool
 is_readable_without_exception(const byte *pc, size_t size)
 {
     /* Case 7967: NtReadVirtualMemory is significantly faster than
@@ -106,14 +107,14 @@ is_readable_without_exception(const byte *pc, size_t size)
      * if multiple threads write into the buffer at once.  Nearly all of our
      * calls ask about areas smaller than a page.
      */
-    byte *check_pc = (byte *) ALIGN_BACKWARD(pc, PAGE_SIZE);
+    byte *check_pc = (byte *)ALIGN_BACKWARD(pc, PAGE_SIZE);
     if (size > (size_t)((byte *)POINTER_MAX - pc))
         size = (byte *)POINTER_MAX - pc;
     do {
         size_t bytes_read = 0;
 #if defined(NOT_DYNAMORIO_CORE)
         if (!ReadProcessMemory(NT_CURRENT_PROCESS, check_pc, is_readable_buf,
-                               sizeof(is_readable_buf), (SIZE_T*) &bytes_read) ||
+                               sizeof(is_readable_buf), (SIZE_T *)&bytes_read) ||
             bytes_read != sizeof(is_readable_buf))
 #else
         if (!nt_read_virtual_memory(NT_CURRENT_PROCESS, check_pc, is_readable_buf,
@@ -122,26 +123,25 @@ is_readable_without_exception(const byte *pc, size_t size)
 #endif
             return false;
         check_pc += PAGE_SIZE;
-    } while (check_pc != 0/*overflow*/ && check_pc < pc+size);
+    } while (check_pc != 0 /*overflow*/ && check_pc < pc + size);
     return true;
 }
 
 /* returns NULL if exports directory doesn't exist
  * if exports_size != NULL returns also exports section size
- * assumes base_addr is a safe is_readable_pe_base() 
+ * assumes base_addr is a safe is_readable_pe_base()
  *
  * NOTE - only verifies readability of the IMAGE_EXPORT_DIRECTORY, does not verify target
  * readability of any RVAs it contains (for that use get_module_exports_directory_check
  * or verify in the caller at usage). Xref case 9717.
  */
-static
-IMAGE_EXPORT_DIRECTORY*
+static IMAGE_EXPORT_DIRECTORY *
 get_module_exports_directory_common(app_pc base_addr,
                                     size_t *exports_size /* OPTIONAL OUT */
-                                    _IF_NOT_X64(bool ldr64))
+                                        _IF_NOT_X64(bool ldr64))
 {
-    IMAGE_DOS_HEADER *dos = (IMAGE_DOS_HEADER *) base_addr;
-    IMAGE_NT_HEADERS *nt = (IMAGE_NT_HEADERS *) (base_addr + dos->e_lfanew);
+    IMAGE_DOS_HEADER *dos = (IMAGE_DOS_HEADER *)base_addr;
+    IMAGE_NT_HEADERS *nt = (IMAGE_NT_HEADERS *)(base_addr + dos->e_lfanew);
     IMAGE_DATA_DIRECTORY *expdir;
     ASSERT(dos->e_magic == IMAGE_DOS_SIGNATURE);
     ASSERT(nt != NULL && nt->Signature == IMAGE_NT_SIGNATURE);
@@ -153,7 +153,7 @@ get_module_exports_directory_common(app_pc base_addr,
 #endif
         expdir = OPT_HDR(nt, DataDirectory) + IMAGE_DIRECTORY_ENTRY_EXPORT;
 
-    /* avoid link issues: we don't have is_readable_pe_base */
+        /* avoid link issues: we don't have is_readable_pe_base */
 #if !defined(NOT_DYNAMORIO_CORE_PROPER) && !defined(NOT_DYNAMORIO_CORE)
     /* callers should have done this in release builds */
     ASSERT(is_readable_pe_base(base_addr));
@@ -166,8 +166,8 @@ get_module_exports_directory_common(app_pc base_addr,
         ASSERT(query_virtual_memory(base_addr, &mbi, sizeof(mbi)) == sizeof(mbi));
         /* We do see MEM_MAPPED PE files: case 7947 */
         if (mbi.Type != MEM_IMAGE) {
-            LOG(THREAD_GET, LOG_SYMBOLS, 1, 
-                "get_module_exports_directory(base_addr="PFX"): !MEM_IMAGE\n",
+            LOG(THREAD_GET, LOG_SYMBOLS, 1,
+                "get_module_exports_directory(base_addr=" PFX "): !MEM_IMAGE\n",
                 base_addr);
             ASSERT_CURIOSITY(expdir == NULL || expdir->Size == 0);
         }
@@ -176,9 +176,9 @@ get_module_exports_directory_common(app_pc base_addr,
 
     /* libutil doesn't support vararg macros so can't undef-out */
 #if !defined(NOT_DYNAMORIO_CORE_PROPER) && !defined(NOT_DYNAMORIO_CORE)
-    LOG(THREAD_GET, LOG_SYMBOLS, 5, 
-        "get_module_exports_directory(base_addr="PFX", expdir="PFX")\n",
-        base_addr, expdir);
+    LOG(THREAD_GET, LOG_SYMBOLS, 5,
+        "get_module_exports_directory(base_addr=" PFX ", expdir=" PFX ")\n", base_addr,
+        expdir);
 #endif
 
     if (expdir != NULL) {
@@ -187,17 +187,17 @@ get_module_exports_directory_common(app_pc base_addr,
 
         /* libutil doesn't support vararg macros so can't undef-out */
 #if !defined(NOT_DYNAMORIO_CORE_PROPER) && !defined(NOT_DYNAMORIO_CORE)
-        LOG(THREAD_GET, LOG_SYMBOLS, 5, 
-            "get_module_exports_directory(base_addr="PFX") expdir="PFX
-            " size=%d exports_vaddr=%d\n", 
+        LOG(THREAD_GET, LOG_SYMBOLS, 5,
+            "get_module_exports_directory(base_addr=" PFX ") expdir=" PFX
+            " size=%d exports_vaddr=%d\n",
             base_addr, expdir, size, exports_vaddr);
 #endif
 
         /* not all DLLs have exports - e.g. drpreinject.dll, or
          * shdoclc.dll in notepad help */
         if (size > 0) {
-            IMAGE_EXPORT_DIRECTORY *exports = (IMAGE_EXPORT_DIRECTORY *)
-                (base_addr + exports_vaddr);
+            IMAGE_EXPORT_DIRECTORY *exports =
+                (IMAGE_EXPORT_DIRECTORY *)(base_addr + exports_vaddr);
             ASSERT_CURIOSITY(size >= sizeof(IMAGE_EXPORT_DIRECTORY));
             if (is_readable_without_exception((app_pc)exports,
                                               sizeof(IMAGE_EXPORT_DIRECTORY))) {
@@ -210,7 +210,7 @@ get_module_exports_directory_common(app_pc base_addr,
                                  EXEMPT_TEST("win32.partial_map.exe"));
             }
         }
-    } else 
+    } else
         ASSERT_CURIOSITY(false && "no exports directory");
 
     return NULL;
@@ -219,25 +219,23 @@ get_module_exports_directory_common(app_pc base_addr,
 /* Same as get_module_exports_directory except also verifies that the functions (and,
  * if check_names, ordinals and fnames) arrays are readable. NOTE - does not verify that
  * the RVA names pointed to by fnames are themselves readable strings. */
-static
-IMAGE_EXPORT_DIRECTORY*
+static IMAGE_EXPORT_DIRECTORY *
 get_module_exports_directory_check_common(app_pc base_addr,
                                           size_t *exports_size /*OPTIONAL OUT*/,
-                                          bool check_names
-                                          _IF_NOT_X64(bool ldr64))
+                                          bool check_names _IF_NOT_X64(bool ldr64))
 {
-    IMAGE_EXPORT_DIRECTORY *exports = get_module_exports_directory_common
-        (base_addr, exports_size _IF_NOT_X64(ldr64));
+    IMAGE_EXPORT_DIRECTORY *exports =
+        get_module_exports_directory_common(base_addr, exports_size _IF_NOT_X64(ldr64));
     if (exports != NULL) {
-        PULONG functions =  (PULONG) (base_addr + exports->AddressOfFunctions);
-        PUSHORT ordinals = (PUSHORT) (base_addr + exports->AddressOfNameOrdinals);
-        PULONG fnames    =  (PULONG) (base_addr + exports->AddressOfNames);
+        PULONG functions = (PULONG)(base_addr + exports->AddressOfFunctions);
+        PUSHORT ordinals = (PUSHORT)(base_addr + exports->AddressOfNameOrdinals);
+        PULONG fnames = (PULONG)(base_addr + exports->AddressOfNames);
         if (exports->NumberOfFunctions > 0) {
-            if (!is_readable_without_exception((byte *)functions,
-                                               exports->NumberOfFunctions *
-                                               sizeof(*functions))) {
-                ASSERT_CURIOSITY(false &&  "ill-formed exports directory, unreadable "
-                                 "functions array, partial map?" ||
+            if (!is_readable_without_exception(
+                    (byte *)functions, exports->NumberOfFunctions * sizeof(*functions))) {
+                ASSERT_CURIOSITY(false &&
+                                     "ill-formed exports directory, unreadable "
+                                     "functions array, partial map?" ||
                                  EXEMPT_TEST("win32.partial_map.exe"));
                 return NULL;
             }
@@ -245,12 +243,13 @@ get_module_exports_directory_check_common(app_pc base_addr,
         if (exports->NumberOfNames > 0 && check_names) {
             ASSERT_CURIOSITY(exports->NumberOfFunctions > 0 &&
                              "ill-formed exports directory");
-            if (!is_readable_without_exception((byte *)ordinals, exports->NumberOfNames *
-                                               sizeof(*ordinals)) ||
-                !is_readable_without_exception((byte *)fnames, exports->NumberOfNames *
-                                               sizeof(*fnames))) {
-                ASSERT_CURIOSITY(false &&  "ill-formed exports directory, unreadable "
-                                 "ordinal or names array, partial map?" ||
+            if (!is_readable_without_exception(
+                    (byte *)ordinals, exports->NumberOfNames * sizeof(*ordinals)) ||
+                !is_readable_without_exception(
+                    (byte *)fnames, exports->NumberOfNames * sizeof(*fnames))) {
+                ASSERT_CURIOSITY(false &&
+                                     "ill-formed exports directory, unreadable "
+                                     "ordinal or names array, partial map?" ||
                                  EXEMPT_TEST("win32.partial_map.exe"));
                 return NULL;
             }
@@ -272,7 +271,7 @@ get_module_exports_directory_check_common(app_pc base_addr,
  * NOTE - will return NULL for forwarded exports, exports pointing outside of
  * the module and for exports not in a code section (FIXME - is this the
  * behavior we want?). Name is case insensitive.
- */ 
+ */
 static generic_func_t
 get_proc_address_common(module_handle_t lib, const char *name _IF_NOT_X64(bool ldr64),
                         const char **forwarder OUT)
@@ -295,7 +294,8 @@ get_proc_address_common(module_handle_t lib, const char *name _IF_NOT_X64(bool l
     if (lib == NULL || name == NULL || name == '\0')
         return NULL;
 
-    /* avoid non-core issues: we don't have get_allocation_size or is_readable_pe_base */
+        /* avoid non-core issues: we don't have get_allocation_size or is_readable_pe_base
+         */
 #if !defined(NOT_DYNAMORIO_CORE_PROPER) && !defined(NOT_DYNAMORIO_CORE)
     /* FIXME - get_allocation_size and is_readable_pe_base are expensive
      * operations, we could put the onus on the caller to only pass in a
@@ -306,49 +306,47 @@ get_proc_address_common(module_handle_t lib, const char *name _IF_NOT_X64(bool l
     if (!is_readable_pe_base(module_base))
         return NULL;
 #else
-    module_base = (app_pc) lib;
+    module_base = (app_pc)lib;
 #endif
 
-    exports = get_module_exports_directory_check_common
-        (module_base, &exports_size, true _IF_NOT_X64(ldr64));
+    exports = get_module_exports_directory_check_common(module_base, &exports_size,
+                                                        true _IF_NOT_X64(ldr64));
     if (exports == NULL || exports_size == 0 || exports->NumberOfNames == 0 ||
         /* just extra sanity check */ exports->AddressOfNames == 0)
         return NULL;
 
-    /* avoid non-core issues: we don't have module_size */
+        /* avoid non-core issues: we don't have module_size */
 #if !defined(NOT_DYNAMORIO_CORE_PROPER) && !defined(NOT_DYNAMORIO_CORE)
     /* sanity check */
-    ASSERT(exports->AddressOfFunctions < module_size &&
-           exports->AddressOfFunctions > 0 &&
+    ASSERT(exports->AddressOfFunctions < module_size && exports->AddressOfFunctions > 0 &&
            exports->AddressOfNameOrdinals < module_size &&
-           exports->AddressOfNameOrdinals > 0 &&
-           exports->AddressOfNames < module_size &&
+           exports->AddressOfNameOrdinals > 0 && exports->AddressOfNames < module_size &&
            exports->AddressOfNames > 0);
 #endif
 
     functions = (PULONG)(module_base + exports->AddressOfFunctions);
     ordinals = (PUSHORT)(module_base + exports->AddressOfNameOrdinals);
     fnames = (PULONG)(module_base + exports->AddressOfNames);
-    
+
     /* FIXME - linear walk, if this routine becomes performance critical we
      * we should use a binary search. */
     for (i = 0; i < exports->NumberOfNames; i++) {
         char *export_name = (char *)(module_base + fnames[i]);
         bool match = false;
-        ASSERT_CURIOSITY((app_pc)export_name > module_base &&  /* sanity check */
-                         (app_pc)export_name < module_base + module_size ||
+        ASSERT_CURIOSITY((app_pc)export_name > module_base && /* sanity check */
+                             (app_pc)export_name < module_base + module_size ||
                          EXEMPT_TEST("win32.partial_map.exe"));
         /* FIXME - xref case 9717, we haven't verified that export_name string is
          * safely readable (might not be the case for improperly formed or partially
          * mapped module) and the try will only protect us if we have a thread_private
          * dcontext. Could use is_string_readable_without_exception(), but that may be
          * too much of a perf hit for the no private dcontext case. */
-        TRY_EXCEPT_ALLOW_NO_DCONTEXT(dcontext, {
-            match = (strcasecmp(name, export_name) == 0);
-        }, {
-            ASSERT_CURIOSITY_ONCE(false && "Exception during get_proc_address" ||
-                                  EXEMPT_TEST("win32.partial_map.exe"));
-        });
+        TRY_EXCEPT_ALLOW_NO_DCONTEXT(
+            dcontext, { match = (strcasecmp(name, export_name) == 0); },
+            {
+                ASSERT_CURIOSITY_ONCE(false && "Exception during get_proc_address" ||
+                                      EXEMPT_TEST("win32.partial_map.exe"));
+            });
         if (match) {
             /* we have a match */
             uint ord = ordinals[i];
@@ -362,8 +360,7 @@ get_proc_address_common(module_handle_t lib, const char *name _IF_NOT_X64(bool l
             if (func == module_base) {
                 /* entries can be 0 when no code/data is exported for that
                  * ordinal */
-                ASSERT_CURIOSITY(false &&
-                                 "get_proc_addr of name with empty export");
+                ASSERT_CURIOSITY(false && "get_proc_addr of name with empty export");
                 return NULL;
             }
             /* avoid non-core issues: we don't have module_size */
@@ -374,44 +371,42 @@ get_proc_address_common(module_handle_t lib, const char *name _IF_NOT_X64(bool l
                  * a function?  For now we return NULL. Xref case 9717, can also
                  * happen for a partial map in which case NULL is the right thing
                  * to return. */
-                ASSERT_CURIOSITY(false && "get_proc_addr export location "
-                                 "outside of module bounds" ||
-                                  EXEMPT_TEST("win32.partial_map.exe"));
+                ASSERT_CURIOSITY(false &&
+                                     "get_proc_addr export location "
+                                     "outside of module bounds" ||
+                                 EXEMPT_TEST("win32.partial_map.exe"));
                 return NULL;
             }
 #endif
-            if (func >= (app_pc)exports &&
-                func < (app_pc)exports + exports_size) {
+            if (func >= (app_pc)exports && func < (app_pc)exports + exports_size) {
                 /* FIXME - is forwarded function, should we still return it
                  * or return the target? Check - what does GetProcAddress do?
                  * For now we return NULL. Looking up the target would require
-                 * a get_module_handle call which might not be safe here. 
+                 * a get_module_handle call which might not be safe here.
                  * With current and planned usage we shouldn' be looking these
                  * up anyways. */
                 if (forwarder != NULL) {
                     /* func should point at something like "NTDLL.strlen" */
-                    *forwarder = (const char *) func;
+                    *forwarder = (const char *)func;
                     return NULL;
                 } else {
-                    ASSERT_NOT_IMPLEMENTED(false &&
-                                           "get_proc_addr export is forwarded");
+                    ASSERT_NOT_IMPLEMENTED(false && "get_proc_addr export is forwarded");
                     return NULL;
                 }
             }
             /* avoid non-core issues: we don't have is_in_code_section */
 #if !defined(NOT_DYNAMORIO_CORE_PROPER) && !defined(NOT_DYNAMORIO_CORE)
-# ifndef CLIENT_INTERFACE
+#    ifndef CLIENT_INTERFACE
             /* CLIENT_INTERFACE uses a data export for versioning (PR 250952) */
             /* FIXME - this check is also somewhat costly. */
             if (!is_in_code_section(module_base, func, NULL, NULL)) {
                 /* FIXME - export isn't in a code section. Prob. a data
                  * export?  For now we return NULL as all current users are
                  * going to call or hook the returned value. */
-                ASSERT_CURIOSITY(false &&
-                                 "get_proc_addr export not in code section");
+                ASSERT_CURIOSITY(false && "get_proc_addr export not in code section");
                 return NULL;
             }
-# endif
+#    endif
 #endif
             /* get around warnings converting app_pc to generic_func_t */
             return convert_data_to_function(func);
@@ -422,20 +417,20 @@ get_proc_address_common(module_handle_t lib, const char *name _IF_NOT_X64(bool l
     return NULL;
 }
 
-IMAGE_EXPORT_DIRECTORY*
+IMAGE_EXPORT_DIRECTORY *
 get_module_exports_directory(app_pc base_addr, size_t *exports_size /* OPTIONAL OUT */)
 {
-    return get_module_exports_directory_common
-        (base_addr, exports_size _IF_NOT_X64(false));
+    return get_module_exports_directory_common(base_addr,
+                                               exports_size _IF_NOT_X64(false));
 }
 
-IMAGE_EXPORT_DIRECTORY*
+IMAGE_EXPORT_DIRECTORY *
 get_module_exports_directory_check(app_pc base_addr,
                                    size_t *exports_size /*OPTIONAL OUT*/,
                                    bool check_names)
 {
-    return get_module_exports_directory_check_common
-        (base_addr, exports_size, check_names _IF_NOT_X64(false));
+    return get_module_exports_directory_check_common(base_addr, exports_size,
+                                                     check_names _IF_NOT_X64(false));
 }
 
 generic_func_t
@@ -468,7 +463,7 @@ get_ldr_module_by_name(wchar_t *name)
     PEB_LDR_DATA *ldr = peb->LoaderData;
     LIST_ENTRY *e, *mark;
     LDR_MODULE *mod;
-    uint traversed = 0;     /* a simple infinite loop break out */
+    uint traversed = 0; /* a simple infinite loop break out */
 
     /* Now, you'd think these would actually be in memory order, but they
      * don't seem to be for me!
@@ -476,14 +471,13 @@ get_ldr_module_by_name(wchar_t *name)
     mark = &ldr->InMemoryOrderModuleList;
 
     for (e = mark->Flink; e != mark; e = e->Flink) {
-        mod = (LDR_MODULE *) ((char *)e -
-                              offsetof(LDR_MODULE, InMemoryOrderModuleList));
+        mod = (LDR_MODULE *)((char *)e - offsetof(LDR_MODULE, InMemoryOrderModuleList));
         /* NOTE - for comparison we could use pe_name or mod->BaseDllName.
          * Our current usage is just to get user32.dll for which BaseDllName
          * is prob. better (can't rename user32, and a random dll could have
          * user32.dll as a pe_name).  If wanted to be extra certain could
          * check FullDllName for %systemroot%/system32/user32.dll as that
-         * should ensure uniqueness. 
+         * should ensure uniqueness.
          */
         ASSERT(mod->BaseDllName.Length <= mod->BaseDllName.MaximumLength &&
                mod->BaseDllName.Buffer != NULL);
@@ -525,11 +519,11 @@ typedef struct ALIGN_VAR(8) _LIST_ENTRY_64 {
 /* UNICODE_STRING_64 is in ntdll.h */
 
 /* module information filled by the loader */
-typedef struct ALIGN_VAR(8) _PEB_LDR_DATA_64 {  
+typedef struct ALIGN_VAR(8) _PEB_LDR_DATA_64 {
     ULONG Length;
     BOOLEAN Initialized;
     PVOID SsHandle;
-    uint  SsHandle_hi;
+    uint SsHandle_hi;
     LIST_ENTRY_64 InLoadOrderModuleList;
     LIST_ENTRY_64 InMemoryOrderModuleList;
     LIST_ENTRY_64 InInitializationOrderModuleList;
@@ -565,7 +559,8 @@ get_ldr_data_64(void)
     __asm {
         mov eax, dword ptr gs:X64_PEB_TIB_OFFSET
         mov peb64, eax
-    };
+    }
+    ;
     return *(PEB_LDR_DATA_64 **)(peb64 + X64_LDR_PEB_OFFSET);
 }
 
@@ -583,7 +578,7 @@ get_module_handle_64(wchar_t *name)
     PEB_LDR_DATA_64 *ldr = get_ldr_data_64();
     LIST_ENTRY_64 *e, *mark;
     LDR_MODULE_64 *mod;
-    uint traversed = 0;     /* a simple infinite loop break out */
+    uint traversed = 0; /* a simple infinite loop break out */
 
     /* Now, you'd think these would actually be in memory order, but they
      * don't seem to be for me!
@@ -591,19 +586,19 @@ get_module_handle_64(wchar_t *name)
     mark = &ldr->InMemoryOrderModuleList;
 
     for (e = mark->Flink; e != mark; e = e->Flink) {
-        mod = (LDR_MODULE_64 *) ((char *)e -
-                              offsetof(LDR_MODULE_64, InMemoryOrderModuleList));
+        mod = (LDR_MODULE_64 *)((char *)e -
+                                offsetof(LDR_MODULE_64, InMemoryOrderModuleList));
         /* NOTE - for comparison we could use pe_name or mod->BaseDllName.
          * Our current usage is just to get user32.dll for which BaseDllName
          * is prob. better (can't rename user32, and a random dll could have
          * user32.dll as a pe_name).  If wanted to be extra certain could
          * check FullDllName for %systemroot%/system32/user32.dll as that
-         * should ensure uniqueness. 
+         * should ensure uniqueness.
          */
         ASSERT(mod->BaseDllName.Length <= mod->BaseDllName.MaximumLength &&
                mod->BaseDllName.Buffer != NULL);
         if (wcscasecmp(name, mod->BaseDllName.Buffer) == 0) {
-            return (HANDLE) mod->BaseAddress;
+            return (HANDLE)mod->BaseAddress;
         }
 
         if (traversed++ > MAX_MODULE_LIST_INFINITE_LOOP_THRESHOLD) {
@@ -622,9 +617,8 @@ get_module_handle_64(wchar_t *name)
 void *
 get_proc_address_64(HANDLE lib, const char *name)
 {
-    return (void *) get_proc_address_common(lib, name _IF_NOT_X64(true), NULL);
+    return (void *)get_proc_address_common(lib, name _IF_NOT_X64(true), NULL);
 }
 
 #endif /* !X64 */
 /****************************************************************************/
-

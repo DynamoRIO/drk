@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -42,9 +42,9 @@
 #define VERBOSE 1
 
 #ifdef WINDOWS
-# define DISPLAY_STRING(msg) dr_messagebox(msg)
+#    define DISPLAY_STRING(msg) dr_messagebox(msg)
 #else
-# define DISPLAY_STRING(msg) dr_printf("%s\n", msg);
+#    define DISPLAY_STRING(msg) dr_printf("%s\n", msg);
 #endif
 
 /****************************************************************************/
@@ -56,12 +56,15 @@ static int num_complete_inlines;
 
 static void *htable_mutex; /* for multithread support */
 
-static void event_exit(void);
-static dr_emit_flags_t event_basic_block(void *drcontext, void *tag, instrlist_t *bb,
-                                         bool for_trace, bool translating);
-static void event_fragment_deleted(void *drcontext, void *tag);
+static void
+event_exit(void);
+static dr_emit_flags_t
+event_basic_block(void *drcontext, void *tag, instrlist_t *bb, bool for_trace,
+                  bool translating);
+static void
+event_fragment_deleted(void *drcontext, void *tag);
 static dr_custom_trace_action_t
-query_end_trace(void *drcontext, void * trace_tag, void *next_tag);
+query_end_trace(void *drcontext, void *trace_tag, void *next_tag);
 
 /****************************************************************************/
 /* hashtable so we know if a particular tag is for a call trace or a
@@ -83,22 +86,22 @@ typedef struct _trace_head_entry_t {
 static trace_head_entry_t **htable;
 
 /* max call-trace size */
-#define INLINE_SIZE_LIMIT (4*1024)
+#define INLINE_SIZE_LIMIT (4 * 1024)
 
 /* no instruction alignment -> use the lsb! */
-#define HASH_MASK(num_bits) ((~0U)>>(32-(num_bits)))
+#define HASH_MASK(num_bits) ((~0U) >> (32 - (num_bits)))
 #define HASH_FUNC_BITS(val, num_bits) ((val) & (HASH_MASK(num_bits)))
 #define HASH_FUNC(val, mask) ((val) & (mask))
 #define HASHTABLE_SIZE(num_bits) (1U << (num_bits))
 
 #define HASH_BITS 13
-#define TABLE_SIZE HASHTABLE_SIZE(HASH_BITS) * sizeof(trace_head_entry_t*)
+#define TABLE_SIZE HASHTABLE_SIZE(HASH_BITS) * sizeof(trace_head_entry_t *)
 
 /* if drcontext == NULL uses global memory */
 static trace_head_entry_t **
 htable_create(void *drcontext)
 {
-    trace_head_entry_t **table = (trace_head_entry_t**) dr_global_alloc(TABLE_SIZE);
+    trace_head_entry_t **table = (trace_head_entry_t **)dr_global_alloc(TABLE_SIZE);
     /* assume during process init so no lock needed */
     memset(table, 0, TABLE_SIZE);
     return table;
@@ -112,13 +115,13 @@ htable_free(void *drcontext, trace_head_entry_t **table)
     int i;
     /* clean up memory */
     for (i = 0; i < HASHTABLE_SIZE(HASH_BITS); i++) {
-	trace_head_entry_t *e = table[i];
-	while (e) {
-	    trace_head_entry_t *nexte = e->next;
-	    dr_global_free(e, sizeof(trace_head_entry_t));
-	    e = nexte;
-	}
-	table[i] = NULL;
+        trace_head_entry_t *e = table[i];
+        while (e) {
+            trace_head_entry_t *nexte = e->next;
+            dr_global_free(e, sizeof(trace_head_entry_t));
+            e = nexte;
+        }
+        table[i] = NULL;
     }
     dr_global_free(table, TABLE_SIZE);
 }
@@ -130,7 +133,7 @@ add_trace_head_entry(void *drcontext, void *tag)
     trace_head_entry_t **table = htable;
     trace_head_entry_t *e;
     uint hindex;
-    e = (trace_head_entry_t *) dr_global_alloc(sizeof(trace_head_entry_t));
+    e = (trace_head_entry_t *)dr_global_alloc(sizeof(trace_head_entry_t));
     e->tag = tag;
     e->end_next = 0;
     e->size = 0;
@@ -156,8 +159,8 @@ lookup_trace_head_entry(void *drcontext, void *tag)
     /* we assume we're masking away top 32 bits for 64-bit, so cast here */
     hindex = HASH_FUNC_BITS((uint)(ptr_uint_t)tag, HASH_BITS);
     for (e = table[hindex]; e; e = e->next) {
-	if (e->tag == tag)
-	    return e;
+        if (e->tag == tag)
+            return e;
     }
     return NULL;
 }
@@ -175,27 +178,27 @@ remove_trace_head_entry(void *drcontext, void *tag)
     /* we assume we're masking away top 32 bits for 64-bit, so cast here */
     hindex = HASH_FUNC_BITS((uint)(ptr_uint_t)tag, HASH_BITS);
     for (prev = NULL, e = table[hindex]; e; prev = e, e = e->next) {
-	if (e->tag == tag) {
-	    if (prev)
-		prev->next = e->next;
-	    else
-		table[hindex] = e->next;
-	    dr_global_free(e, sizeof(trace_head_entry_t));
-	    return true;
-	}
+        if (e->tag == tag) {
+            if (prev)
+                prev->next = e->next;
+            else
+                table[hindex] = e->next;
+            dr_global_free(e, sizeof(trace_head_entry_t));
+            return true;
+        }
     }
     return false;
 }
 
 /****************************************************************************/
 
-DR_EXPORT void 
+DR_EXPORT void
 dr_init(client_id_t id)
 {
     htable_mutex = dr_mutex_create();
 
     /* global HASH_BITS-bit addressed hash table */
-    htable = htable_create(NULL/*global*/);
+    htable = htable_create(NULL /*global*/);
 
     dr_register_exit_event(event_exit);
     dr_register_bb_event(event_basic_block);
@@ -207,59 +210,60 @@ dr_init(client_id_t id)
 #ifdef SHOW_RESULTS
     /* also give notification to stderr */
     if (dr_is_notify_on())
-	dr_fprintf(STDERR, "Client inline is running\n");
+        dr_fprintf(STDERR, "Client inline is running\n");
     num_complete_inlines = 0;
 #endif
 }
 
-static void 
+static void
 event_exit(void)
 {
 #ifdef SHOW_RESULTS
     /* display the results */
     char msg[512];
-    int len = dr_snprintf(msg, sizeof(msg)/sizeof(msg[0]),
-                       "Inlining results:\n"
-                       "  Number of complete inlines: %d\n", num_complete_inlines);
+    int len = dr_snprintf(msg, sizeof(msg) / sizeof(msg[0]),
+                          "Inlining results:\n"
+                          "  Number of complete inlines: %d\n",
+                          num_complete_inlines);
     DR_ASSERT(len > 0);
-    msg[sizeof(msg)/sizeof(msg[0])-1] = '\0';
+    msg[sizeof(msg) / sizeof(msg[0]) - 1] = '\0';
     DISPLAY_STRING(msg);
 #endif
-    htable_free(NULL/*global*/, htable);
+    htable_free(NULL /*global*/, htable);
     dr_mutex_destroy(htable_mutex);
 }
 
 /****************************************************************************/
 /* the work itself */
 
-static dr_emit_flags_t 
-event_basic_block(void *drcontext, void *tag, instrlist_t *bb,
-                  bool for_trace, bool translating)
+static dr_emit_flags_t
+event_basic_block(void *drcontext, void *tag, instrlist_t *bb, bool for_trace,
+                  bool translating)
 {
     instr_t *instr;
     trace_head_entry_t *e = NULL;
     if (translating)
         return DR_EMIT_DEFAULT;
     for (instr = instrlist_first(bb); instr != NULL; instr = instr_get_next(instr)) {
-	/* blocks containing calls are trace heads */
-	if (instr_is_call(instr)) {
-	    dr_mark_trace_head(drcontext, tag);
-            dr_mutex_lock(htable_mutex);
-	    e = add_trace_head_entry(NULL, tag);
-	    e->is_trace_head = true;
-            dr_mutex_unlock(htable_mutex);
-#ifdef VERBOSE
-	    dr_log(drcontext, LOG_ALL, 3,
-		   "inline: marking bb "PFX" as trace head\n", tag);
-#endif
-	    /* doesn't matter what's in rest of bb */
-	    return DR_EMIT_DEFAULT;
-	} else if (instr_is_return(instr)) {
+        /* blocks containing calls are trace heads */
+        if (instr_is_call(instr)) {
+            dr_mark_trace_head(drcontext, tag);
             dr_mutex_lock(htable_mutex);
             e = add_trace_head_entry(NULL, tag);
-	    e->has_ret = true;
+            e->is_trace_head = true;
             dr_mutex_unlock(htable_mutex);
-	}
+#ifdef VERBOSE
+            dr_log(drcontext, LOG_ALL, 3, "inline: marking bb " PFX " as trace head\n",
+                   tag);
+#endif
+            /* doesn't matter what's in rest of bb */
+            return DR_EMIT_DEFAULT;
+        } else if (instr_is_return(instr)) {
+            dr_mutex_lock(htable_mutex);
+            e = add_trace_head_entry(NULL, tag);
+            e->has_ret = true;
+            dr_mutex_unlock(htable_mutex);
+        }
     }
     return DR_EMIT_DEFAULT;
 }
@@ -293,69 +297,66 @@ query_end_trace(void *drcontext, void *trace_tag, void *next_tag)
     dr_mutex_lock(htable_mutex);
     e = lookup_trace_head_entry(NULL, trace_tag);
     if (e == NULL || !e->is_trace_head) {
-	e = lookup_trace_head_entry(NULL, next_tag);
-	if (e == NULL || !e->is_trace_head) {
+        e = lookup_trace_head_entry(NULL, next_tag);
+        if (e == NULL || !e->is_trace_head) {
             dr_mutex_unlock(htable_mutex);
-	    return CUSTOM_TRACE_DR_DECIDES;
+            return CUSTOM_TRACE_DR_DECIDES;
         } else {
-	    /* we've found a call, end this trace now so it won't keep going and
-	     * end up never entering the call trace
-	     */
+            /* we've found a call, end this trace now so it won't keep going and
+             * end up never entering the call trace
+             */
 #ifdef VERBOSE
-	    dr_log(drcontext, LOG_ALL, 3,
-		   "inline: ending trace "PFX" before block "PFX" containing call\n",
-		   trace_tag, next_tag);
+            dr_log(drcontext, LOG_ALL, 3,
+                   "inline: ending trace " PFX " before block " PFX " containing call\n",
+                   trace_tag, next_tag);
 #endif
             dr_mutex_unlock(htable_mutex);
-	    return CUSTOM_TRACE_END_NOW;
-	}
+            return CUSTOM_TRACE_END_NOW;
+        }
     } else if (e->end_next > 0) {
-	e->end_next--;
-	if (e->end_next == 0) {
+        e->end_next--;
+        if (e->end_next == 0) {
 #ifdef VERBOSE
-	    dr_log(drcontext, LOG_ALL, 3,
-		   "inline: ending trace "PFX" before "PFX"\n",
-		   trace_tag, next_tag);
+            dr_log(drcontext, LOG_ALL, 3, "inline: ending trace " PFX " before " PFX "\n",
+                   trace_tag, next_tag);
 #endif
 #ifdef SHOW_RESULTS
-	    num_complete_inlines++;
+            num_complete_inlines++;
 #endif
             dr_mutex_unlock(htable_mutex);
-	    return CUSTOM_TRACE_END_NOW;
-	}
+            return CUSTOM_TRACE_END_NOW;
+        }
     } else {
-	trace_head_entry_t *nxte = lookup_trace_head_entry(NULL, next_tag);
-	uint size = dr_fragment_size(drcontext, next_tag);
-	e->size += size;
-	if (e->size > INLINE_SIZE_LIMIT) {
+        trace_head_entry_t *nxte = lookup_trace_head_entry(NULL, next_tag);
+        uint size = dr_fragment_size(drcontext, next_tag);
+        e->size += size;
+        if (e->size > INLINE_SIZE_LIMIT) {
 #ifdef VERBOSE
-	    dr_log(drcontext, LOG_ALL, 3,
-		   "inline: ending trace "PFX" before "PFX" because reached size limit\n",
-		   trace_tag, next_tag);
+            dr_log(drcontext, LOG_ALL, 3,
+                   "inline: ending trace " PFX " before " PFX
+                   " because reached size limit\n",
+                   trace_tag, next_tag);
 #endif
             dr_mutex_unlock(htable_mutex);
-	    return CUSTOM_TRACE_END_NOW;
-	}
-	if (nxte != NULL && nxte->has_ret && !nxte->is_trace_head) {
-	    /* end trace after NEXT block */
-	    e->end_next = 2;
+            return CUSTOM_TRACE_END_NOW;
+        }
+        if (nxte != NULL && nxte->has_ret && !nxte->is_trace_head) {
+            /* end trace after NEXT block */
+            e->end_next = 2;
 #ifdef VERBOSE
-	    dr_log(drcontext, LOG_ALL, 3,
-		   "inline: going to be ending trace "PFX" after "PFX"\n",
-		   trace_tag, next_tag);
+            dr_log(drcontext, LOG_ALL, 3,
+                   "inline: going to be ending trace " PFX " after " PFX "\n", trace_tag,
+                   next_tag);
 #endif
-            dr_mutex_unlock(htable_mutex);	
+            dr_mutex_unlock(htable_mutex);
             return CUSTOM_TRACE_CONTINUE;
-	}
+        }
     }
     /* do not end trace */
 #ifdef VERBOSE
-    dr_log(drcontext, LOG_ALL, 3,
-	   "inline: NOT ending trace "PFX" after "PFX"\n", trace_tag, next_tag);
+    dr_log(drcontext, LOG_ALL, 3, "inline: NOT ending trace " PFX " after " PFX "\n",
+           trace_tag, next_tag);
 #endif
     dr_mutex_unlock(htable_mutex);
     return CUSTOM_TRACE_CONTINUE;
 }
-
-
-

@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -31,7 +31,8 @@
  */
 
 /* Build with:
- * gcc -o pthreads pthreads.c -lpthread -D_REENTRANT -I../lib -L../lib -ldynamo -ldl -lbfd -liberty
+ * gcc -o pthreads pthreads.c -lpthread -D_REENTRANT -I../lib -L../lib -ldynamo -ldl -lbfd
+ * -liberty
  */
 
 #include <stdio.h>
@@ -39,7 +40,7 @@
 #include <pthread.h>
 
 #ifdef USE_DYNAMO
-#include "dynamorio.h"
+#    include "dynamorio.h"
 #endif
 
 volatile double pi = 0.0;  /* Approximation to pi (shared) */
@@ -49,7 +50,7 @@ volatile double intervals; /* How many intervals? */
 void *
 process(void *arg)
 {
-    char *id = (char *) arg;
+    char *id = (char *)arg;
     register double width, localsum;
     register int i;
     register int iproc;
@@ -57,16 +58,16 @@ process(void *arg)
 #if VERBOSE
     fprintf(stderr, "\tthread %s starting\n", id);
 #endif
-    iproc = (*((char *) arg) - '0');
+    iproc = (*((char *)arg) - '0');
 
     /* Set width */
     width = 1.0 / intervals;
 
     /* Do the local computations */
     localsum = 0;
-    for (i=iproc; i<intervals; i+=2) {
-	register double x = (i + 0.5) * width;
-	localsum += 4.0 / (1.0 + x * x);
+    for (i = iproc; i < intervals; i += 2) {
+        register double x = (i + 0.5) * width;
+        localsum += 4.0 / (1.0 + x * x);
     }
     localsum *= width;
 
@@ -78,14 +79,14 @@ process(void *arg)
 #if VERBOSE
     fprintf(stderr, "\tthread %s exiting\n", id);
 #endif
-    return(NULL);
+    return (NULL);
 }
 
 int
 main(int argc, char **argv)
 {
     pthread_t thread0, thread1;
-    void * retval;
+    void *retval;
 
 #ifdef USE_DYNAMO
     dynamorio_app_init();
@@ -108,16 +109,15 @@ main(int argc, char **argv)
 
     /* Make the two threads */
     if (pthread_create(&thread0, NULL, process, "0") ||
-	pthread_create(&thread1, NULL, process, "1")) {
-	fprintf(stderr, "%s: cannot make thread\n", argv[0]);
-	exit(1);
+        pthread_create(&thread1, NULL, process, "1")) {
+        fprintf(stderr, "%s: cannot make thread\n", argv[0]);
+        exit(1);
     }
-    
+
     /* Join (collapse) the two threads */
-    if (pthread_join(thread0, &retval) ||
-	pthread_join(thread1, &retval)) {
-	fprintf(stderr, "%s: thread join failed\n", argv[0]);
-	exit(1);
+    if (pthread_join(thread0, &retval) || pthread_join(thread1, &retval)) {
+        fprintf(stderr, "%s: thread join failed\n", argv[0]);
+        exit(1);
     }
 
     /* Print the result */

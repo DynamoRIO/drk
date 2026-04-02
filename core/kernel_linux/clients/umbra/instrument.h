@@ -28,9 +28,9 @@
  *     Instrumentor -- instrument.h
  *
  * Description:
- *     Perform instrumentation for umbra  
+ *     Perform instrumentation for umbra
  *
- * Author: 
+ * Author:
  *     Qin Zhao
  */
 
@@ -45,61 +45,48 @@
 #include "utils.h"
 #include "analyzer.h"
 
-
 void
 instrument_thread_init(void *drcontext, umbra_info_t *info);
 
 void
 instrument_thread_exit(void *drcontext, umbra_info_t *info);
 
-void 
-instrument_basic_block(void *drcontext, 
-                       umbra_info_t *info,
-                       basic_block_t *bb,
-                       instrlist_t *ilist,
-                       bool  for_trace);
-
-
-
-
-
-
+void
+instrument_basic_block(void *drcontext, umbra_info_t *info, basic_block_t *bb,
+                       instrlist_t *ilist, bool for_trace);
 
 /*
  * Runtime function
  */
-void 
+void
 umbra_at_jmp_ind(void *drcontext, umbra_info_t *info, basic_block_t *src_bb,
-                app_pc src_pc,   app_pc target);
+                 app_pc src_pc, app_pc target);
 
 void
 umbra_at_call_ind(void *drcontext, umbra_info_t *info, basic_block_t *src_bb,
-                 app_pc src_pc,  app_pc target);
+                  app_pc src_pc, app_pc target);
 
 void
-umbra_at_ret(void *drcontext, umbra_info_t *info, basic_block_t *src_bb,
-            app_pc src_pc,   app_pc target);
-
+umbra_at_ret(void *drcontext, umbra_info_t *info, basic_block_t *src_bb, app_pc src_pc,
+             app_pc target);
 
 void
 umbra_breakpoint(void);
 
-
 /*
  * Instrumentation related function
  */
-void 
+void
 instrument_init(void);
 
-void 
+void
 instrument_exit(void);
 
-void 
+void
 instrument_thread_init(void *drcontext, umbra_info_t *info);
 
-void 
+void
 instrument_thread_exit(void *drcontext, umbra_info_t *info);
-
 
 bool
 instr_to_be_replaced(instr_t *instr);
@@ -109,7 +96,6 @@ dr_save_aflags_from_eax(void *, umbra_info_t *, instrlist_t *, instr_t *);
 
 void
 dr_restore_aflags_to_eax(void *, umbra_info_t *, instrlist_t *, instr_t *where);
-
 
 #ifdef LINUX_KERNEL
 bool

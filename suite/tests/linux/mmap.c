@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -37,7 +37,7 @@
 #include "tools.h"
 
 #ifdef USE_DYNAMO
-#include "dynamorio.h"
+#    include "dynamorio.h"
 #endif
 
 int
@@ -53,25 +53,23 @@ main()
     dynamorio_app_init();
     dynamorio_app_start();
 #endif
-    print("Calling mmap(0, "PFX", "PFX", "PFX", "PFX", 0)\n",
-	   size, PROT_EXEC|PROT_READ|PROT_WRITE,
-	   MAP_ANON|MAP_PRIVATE, -1);
-    p = mmap(0, size, PROT_EXEC|PROT_READ|PROT_WRITE,
-		   MAP_ANON|MAP_PRIVATE, -1, 0);
+    print("Calling mmap(0, " PFX ", " PFX ", " PFX ", " PFX ", 0)\n", size,
+          PROT_EXEC | PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1);
+    p = mmap(0, size, PROT_EXEC | PROT_READ | PROT_WRITE, MAP_ANON | MAP_PRIVATE, -1, 0);
     if (p == MAP_FAILED) {
-	print("mmap ERROR "PFX"\n", p);
-	return 1;
+        print("mmap ERROR " PFX "\n", p);
+        return 1;
     }
 #if VERBOSE
-    print("mmap returned "PFX"\n", p);
+    print("mmap returned " PFX "\n", p);
 #endif
     p = (void *)mremap(p, size, newsize, 0);
-    if ((ptr_int_t) p == -1) {
-	print("mremap ERROR "PFX"\n", p);
-	return 1;
+    if ((ptr_int_t)p == -1) {
+        print("mremap ERROR " PFX "\n", p);
+        return 1;
     }
 #if VERBOSE
-    print("mremap returned "PFX"\n", p);
+    print("mremap returned " PFX "\n", p);
 #endif
     munmap(p, newsize);
 #ifdef USE_DYNAMO

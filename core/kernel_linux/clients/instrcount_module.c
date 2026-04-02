@@ -20,9 +20,9 @@ always_include(instr_t *instr)
 }
 
 instr_counter_t instr_counters[] = {
-    {always_include, "total"},
-    {instr_is_stringop, "stringop"},
-    {instr_is_stringop_loop, "stringop_loop"},
+    { always_include, "total" },
+    { instr_is_stringop, "stringop" },
+    { instr_is_stringop_loop, "stringop_loop" },
 };
 
 #define NUM_INSTR_COUNTERS (sizeof(instr_counters) / sizeof(instr_counters[0]))
@@ -36,16 +36,16 @@ typedef struct {
 
 /* For easy access from stat reporting and error reporting code. They can't use
  * dr_get_current_drcontext b/c they run in the kernel context. */
-DEFINE_PER_CPU(instr_count_tls_t*, instr_count_tls);
+DEFINE_PER_CPU(instr_count_tls_t *, instr_count_tls);
 
-static instr_count_tls_t*
+static instr_count_tls_t *
 get_instr_count_tls(void)
 {
     return __get_cpu_var(instr_count_tls);
 }
 
 static void
-set_instr_count_tls(instr_count_tls_t* tls)
+set_instr_count_tls(instr_count_tls_t *tls)
 {
     /* GIANT HACK! Use Linux's per_cpu variable for instrcount TLS because DR
      * only provides TLS for a single client
@@ -58,8 +58,7 @@ set_instr_count_tls(instr_count_tls_t* tls)
 static void
 thread_init_event(void *drcontext)
 {
-    instr_count_tls_t *tls = dr_thread_alloc(drcontext,
-                                             sizeof(instr_count_tls_t));
+    instr_count_tls_t *tls = dr_thread_alloc(drcontext, sizeof(instr_count_tls_t));
     memset(tls, 0, sizeof(instr_count_tls_t));
     set_instr_count_tls(tls);
 }
@@ -72,8 +71,8 @@ thread_exit_event(void *drcontext)
 }
 
 static dr_emit_flags_t
-bb_event(void *drcontext, void *tag, instrlist_t *bb, bool for_trace,
-         bool translating) {
+bb_event(void *drcontext, void *tag, instrlist_t *bb, bool for_trace, bool translating)
+{
     bool any_counters = false;
     uint64 instr_count[NUM_INSTR_COUNTERS];
     instr_t *instr;
@@ -84,7 +83,7 @@ bb_event(void *drcontext, void *tag, instrlist_t *bb, bool for_trace,
     bool eflags_saved = true;
 
     for (instr = first; instr != NULL; instr = instr_get_next(instr)) {
-        /* Since it doesn't matter where we insert, look for a place 
+        /* Since it doesn't matter where we insert, look for a place
            where the eflags are dead. */
         uint flags = instr_get_arith_flags(instr);
         if (TESTALL(EFLAGS_WRITE_6, flags) && !TESTANY(EFLAGS_READ_6, flags)) {
@@ -125,9 +124,9 @@ bb_event(void *drcontext, void *tag, instrlist_t *bb, bool for_trace,
         if (instr_count[i] == 0) {
             continue;
         }
-        instrlist_meta_preinsert(bb, where,
-            INSTR_CREATE_add(drcontext,
-                             OPND_CREATE_ABSMEM((byte *) count, OPSZ_8),
+        instrlist_meta_preinsert(
+            bb, where,
+            INSTR_CREATE_add(drcontext, OPND_CREATE_ABSMEM((byte *)count, OPSZ_8),
                              OPND_CREATE_INT_32OR8(instr_count[i])));
     }
     if (eflags_saved) {
@@ -165,8 +164,7 @@ show_cpu_instr_count(int cpu, char *buf, bool dynamic)
     }
     for (i = 0; i < NUM_INSTR_COUNTERS; i++) {
         buf += sprintf(buf, "%s: %lu\n", instr_counters[i].name,
-                       dynamic ? tls->dynamic_count[i] :
-                                 tls->static_count[i]);
+                       dynamic ? tls->dynamic_count[i] : tls->static_count[i]);
     }
     return buf - orig_buf;
 }
@@ -199,10 +197,12 @@ instrcount_init(void)
     if (dr_stats_init(&stats)) {
         return -ENOMEM;
     }
-#define ALLOC_STAT(name, fn) do {\
-    if (dr_cpu_stat_alloc(&stats, #name, fn, THIS_MODULE)) {\
-        goto failed;\
-    } } while (0)
+#define ALLOC_STAT(name, fn)                                     \
+    do {                                                         \
+        if (dr_cpu_stat_alloc(&stats, #name, fn, THIS_MODULE)) { \
+            goto failed;                                         \
+        }                                                        \
+    } while (0)
     ALLOC_STAT(dynamic, show_cpu_dynamic_instr_count);
     ALLOC_STAT(static, show_cpu_static_instr_count);
     ALLOC_STAT(stats, show_cpu_instr_count_stats);

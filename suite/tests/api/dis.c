@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -58,7 +58,7 @@ read_data(file_t f, void *drcontext)
     do {
         len = dr_read_file(f, sbuf, sizeof(sbuf));
         pc = sbuf;
-        while (pc < sbuf+len) {
+        while (pc < sbuf + len) {
             /* FIXME: want to cut it off instead of reading beyond for
              * end of file!  If weren't printing it out as go along could
              * mark invalid after seeing whether instr overflows.
@@ -68,13 +68,13 @@ read_data(file_t f, void *drcontext)
             dr_printf("+0x%04x  ", prev_pc - sbuf + prev_buf_len);
 #endif
             pc = disassemble_from_copy(drcontext, pc, ORIG_PC, STDOUT,
-                                       false/*don't show pc*/,
+                                       false /*don't show pc*/,
 #if VERBOSE
-                                       true/*show bytes*/
+                                       true /*show bytes*/
 #else
-                                       false/*do not show bytes*/
+                                       false /*do not show bytes*/
 #endif
-                                       );
+            );
             /* If invalid, try next byte */
             /* FIXME: udis86 is going to byte after the one that makes it
              * invalid: so if 1st byte is invalid opcode, go to 2nd;
@@ -88,7 +88,7 @@ read_data(file_t f, void *drcontext)
         prev_buf_len += sizeof(sbuf);
     } while (len == sizeof(sbuf));
 }
-    
+
 int
 main(int argc, char *argv[])
 {

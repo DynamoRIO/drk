@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -42,26 +42,26 @@
 #include <string.h> /* memset */
 
 #ifdef LINUX
-# include <syscall.h>
+#    include <syscall.h>
 #endif
 
-/* Due to differences among platforms we don't display syscall #s and args 
+/* Due to differences among platforms we don't display syscall #s and args
  * so we leave SHOW_RESULTS undefined
  */
 
 #ifdef WINDOWS
-# define DISPLAY_STRING(msg) dr_fprintf(STDERR, "%s\n", msg);
-# define ATOMIC_INC(var) _InterlockedIncrement(&var)
+#    define DISPLAY_STRING(msg) dr_fprintf(STDERR, "%s\n", msg);
+#    define ATOMIC_INC(var) _InterlockedIncrement(&var)
 #else
-# define DISPLAY_STRING(msg) dr_fprintf(STDERR, "%s\n", msg);
-# define ATOMIC_INC(var) __asm__ __volatile__("lock incl %0" : "=m" (var) : : "memory")
+#    define DISPLAY_STRING(msg) dr_fprintf(STDERR, "%s\n", msg);
+#    define ATOMIC_INC(var) __asm__ __volatile__("lock incl %0" : "=m"(var) : : "memory")
 #endif
 
 /* Some syscalls have more args, but this is the max we need for SYS_write/NtWriteFile */
 #ifdef WINDOWS
-# define SYS_MAX_ARGS 9
+#    define SYS_MAX_ARGS 9
 #else
-# define SYS_MAX_ARGS 3
+#    define SYS_MAX_ARGS 3
 #endif
 
 /* Thread-local data structure for storing system call parameters */
@@ -78,15 +78,22 @@ static int write_sysnum;
 
 static int num_syscalls;
 
-static int get_write_sysnum(void);
-static void event_exit(void);
-static void event_thread_init(void *drcontext);
-static void event_thread_exit(void *drcontext);
-static bool event_filter_syscall(void *drcontext, int sysnum);
-static bool event_pre_syscall(void *drcontext, int sysnum);
-static void event_post_syscall(void *drcontext, int sysnum);
+static int
+get_write_sysnum(void);
+static void
+event_exit(void);
+static void
+event_thread_init(void *drcontext);
+static void
+event_thread_exit(void *drcontext);
+static bool
+event_filter_syscall(void *drcontext, int sysnum);
+static bool
+event_pre_syscall(void *drcontext, int sysnum);
+static void
+event_post_syscall(void *drcontext, int sysnum);
 
-DR_EXPORT void 
+DR_EXPORT void
 dr_init(client_id_t id)
 {
     write_sysnum = get_write_sysnum();
@@ -98,11 +105,11 @@ dr_init(client_id_t id)
     dr_register_exit_event(event_exit);
 #ifdef SHOW_RESULTS
     if (dr_is_notify_on())
-	dr_fprintf(STDERR, "Client strace is running\n");
+        dr_fprintf(STDERR, "Client strace is running\n");
 #endif
 }
 
-static void 
+static void
 show_results(void)
 {
 #ifdef SHOW_RESULTS
@@ -111,15 +118,15 @@ show_results(void)
     /* Note that using %f with dr_printf or dr_fprintf on Windows will print
      * garbage as they use ntdll._vsnprintf, so we must use snprintf.
      */
-    len = snprintf(msg, sizeof(msg)/sizeof(msg[0]),
-                   "<Number of system calls seen: %d>", num_syscalls);
+    len = snprintf(msg, sizeof(msg) / sizeof(msg[0]), "<Number of system calls seen: %d>",
+                   num_syscalls);
     DR_ASSERT(len > 0);
-    msg[sizeof(msg)/sizeof(msg[0])-1] = '\0';
+    msg[sizeof(msg) / sizeof(msg[0]) - 1] = '\0';
     DISPLAY_STRING(msg);
 #endif /* SHOW_RESULTS */
 }
 
-static void 
+static void
 event_exit(void)
 {
     show_results();
@@ -129,17 +136,16 @@ static void
 event_thread_init(void *drcontext)
 {
     /* create an instance of our data structure for this thread */
-    per_thread_t *data = (per_thread_t *)
-        dr_thread_alloc(drcontext, sizeof(per_thread_t));
+    per_thread_t *data = (per_thread_t *)dr_thread_alloc(drcontext, sizeof(per_thread_t));
     memset(data, 0, sizeof(*data));
     /* store it in the slot provided in the drcontext */
     dr_set_tls_field(drcontext, data);
 }
 
-static void 
+static void
 event_thread_exit(void *drcontext)
 {
-    per_thread_t *data = (per_thread_t *) dr_get_tls_field(drcontext);
+    per_thread_t *data = (per_thread_t *)dr_get_tls_field(drcontext);
     /* clean up memory */
     dr_thread_free(drcontext, data, sizeof(per_thread_t));
 }
@@ -158,27 +164,25 @@ event_pre_syscall(void *drcontext, int sysnum)
     if (sysnum == SYS_execve) {
         /* our stats will be re-set post-execve so display now */
         show_results();
-# ifdef SHOW_RESULTS
+#    ifdef SHOW_RESULTS
         dr_fprintf(STDERR, "<---- execve ---->\n");
-# endif
+#    endif
     }
 #endif
 #ifdef SHOW_RESULTS
-    dr_fprintf(STDERR, "[%d] "PFX" "PFX" "PFX"\n",
-               sysnum, 
-               dr_syscall_get_param(drcontext, 0),
-               dr_syscall_get_param(drcontext, 1),
+    dr_fprintf(STDERR, "[%d] " PFX " " PFX " " PFX "\n", sysnum,
+               dr_syscall_get_param(drcontext, 0), dr_syscall_get_param(drcontext, 1),
                dr_syscall_get_param(drcontext, 2));
 #endif
     if (sysnum == write_sysnum) {
         /* store params for access post-syscall */
-        per_thread_t *data = (per_thread_t *) dr_get_tls_field(drcontext);
+        per_thread_t *data = (per_thread_t *)dr_get_tls_field(drcontext);
         int i;
 #ifdef WINDOWS
         /* stderr and stdout are identical in our cygwin rxvt shell so for
          * our example we suppress output starting with 'H' instead
          */
-        byte *output = (byte *) dr_syscall_get_param(drcontext, 5);
+        byte *output = (byte *)dr_syscall_get_param(drcontext, 5);
         size_t len = dr_syscall_get_param(drcontext, 6);
         byte first;
         size_t read;
@@ -195,11 +199,11 @@ event_pre_syscall(void *drcontext, int sysnum)
         for (i = 0; i < SYS_MAX_ARGS; i++)
             data->param[i] = dr_syscall_get_param(drcontext, i);
         /* suppress stderr */
-        if (dr_syscall_get_param(drcontext, 0) == (reg_t) STDERR
+        if (dr_syscall_get_param(drcontext, 0) == (reg_t)STDERR
 #ifdef WINDOWS
             && first == 'H'
 #endif
-            ) {
+        ) {
             /* pretend it succeeded */
 #ifdef LINUX
             /* return the #bytes == 3rd param */
@@ -212,10 +216,10 @@ event_pre_syscall(void *drcontext, int sysnum)
             dr_fprintf(STDERR, "  [%d] => skipped\n", sysnum);
 #endif
             return false; /* skip syscall */
-        } else if (dr_syscall_get_param(drcontext, 0) == (reg_t) STDOUT) {
+        } else if (dr_syscall_get_param(drcontext, 0) == (reg_t)STDOUT) {
             if (!data->repeat) {
                 /* redirect stdout to stderr (unless it's our repeat) */
-                dr_syscall_set_param(drcontext, 0, (reg_t) STDERR);
+                dr_syscall_set_param(drcontext, 0, (reg_t)STDERR);
             }
             /* we're going to repeat this syscall once */
             data->repeat = !data->repeat;
@@ -228,13 +232,12 @@ static void
 event_post_syscall(void *drcontext, int sysnum)
 {
 #ifdef SHOW_RESULTS
-    dr_fprintf(STDERR, "  [%d] => "PFX" ("SZFMT")\n",
-               sysnum, 
+    dr_fprintf(STDERR, "  [%d] => " PFX " (" SZFMT ")\n", sysnum,
                dr_syscall_get_result(drcontext),
                (ptr_int_t)dr_syscall_get_result(drcontext));
 #endif
     if (sysnum == write_sysnum) {
-        per_thread_t *data = (per_thread_t *) dr_get_tls_field(drcontext);
+        per_thread_t *data = (per_thread_t *)dr_get_tls_field(drcontext);
         /* we repeat a write originally to stdout that we redirected to
          * stderr: on the repeat we use stdout
          */
@@ -242,8 +245,8 @@ event_post_syscall(void *drcontext, int sysnum)
             /* repeat syscall with stdout */
             int i;
             dr_syscall_set_sysnum(drcontext, write_sysnum);
-            dr_syscall_set_param(drcontext, 0, (reg_t) STDOUT);
-            for (i = 1; i < SYS_MAX_ARGS; i++) 
+            dr_syscall_set_param(drcontext, 0, (reg_t)STDOUT);
+            for (i = 1; i < SYS_MAX_ARGS; i++)
                 dr_syscall_set_param(drcontext, i, data->param[i]);
 #ifdef WINDOWS
             if (dr_is_wow64()) {
@@ -290,7 +293,7 @@ decode_syscall_num(byte *entry)
         if (opc == OP_mov_imm && opnd_is_reg(instr_get_dst(&instr, 0)) &&
             opnd_get_reg(instr_get_dst(&instr, 0)) == REG_EAX) {
             DR_ASSERT(opnd_is_immed_int(instr_get_src(&instr, 0)));
-            num = (int) opnd_get_immed_int(instr_get_src(&instr, 0));
+            num = (int)opnd_get_immed_int(instr_get_src(&instr, 0));
             break;
         }
         /* stop at call to vsyscall or at int itself */
@@ -310,7 +313,7 @@ get_write_sysnum(void)
     byte *entry;
     module_data_t *data = dr_lookup_module_by_name("ntdll.dll");
     DR_ASSERT(data != NULL);
-    entry = (byte *) dr_get_proc_address(data->start, "NtWriteFile");
+    entry = (byte *)dr_get_proc_address(data->start, "NtWriteFile");
     DR_ASSERT(entry != NULL);
     dr_free_module_data(data);
     return decode_syscall_num(entry);

@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -40,7 +40,7 @@
 #include "tools.h"
 
 #ifdef USE_DYNAMO
-#include "dynamorio.h"
+#    include "dynamorio.h"
 #endif
 
 #define ITERS 150
@@ -48,11 +48,11 @@
 char buf[32];
 
 int WINAPI
-run_func(void * arg)
+run_func(void *arg)
 {
     char *foo = buf;
     int i;
-    for (i=0; i<ITERS; i++) {
+    for (i = 0; i < ITERS; i++) {
 #ifdef LINUX
         asm("mov  %0,%%eax" : : "r"(foo));
         asm("call *%eax");
@@ -88,9 +88,9 @@ main()
     /* we're not testing security here, just consistency, so make it kosher */
     NTFlush(buf, 1);
 
-    for (i=0; i<NUM_THREADS; i++)
+    for (i = 0; i < NUM_THREADS; i++)
         hThread[i] = _beginthreadex(NULL, 0, run_func, NULL, 0, &tid);
-    for (i=0; i<NUM_THREADS; i++)
+    for (i = 0; i < NUM_THREADS; i++)
         WaitForSingleObject((HANDLE)hThread[i], INFINITE);
 
     print("all done\n");

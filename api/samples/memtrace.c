@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -32,7 +32,7 @@
 
 /* Code Manipulation API Sample:
  * memtrace.c
- * 
+ *
  * Collects the address of every memory reference and dumps the results to a file.
  * Illustrates how to create own code cache and perform lean procedure call.
  * (1) It fills a buffer and dumps the buffer when it is full.
@@ -44,14 +44,14 @@
  * and in order to keep it simple, there are several issues of this sample
  * for real usage.
  * 1) far memory reference address:
- *    We did not calculate the real address for memory reference 
+ *    We did not calculate the real address for memory reference
  *    explicitly using a segment register (i.e. far memory reference).
  *    We can can get segment base from opnd_compute_address()
  *    and either store for use in gencode or postprocess, w/
  *    complexities of monitoring changes in segment.
- * 2) memory reference size 
+ * 2) memory reference size
  *    We did not record the memory reference size.
- *    It is easy to add size for static but a little more work 
+ *    It is easy to add size for static but a little more work
  *    for OP_enter and string ops
  * 3) stack addrs: xref issue 164
  *    We expect DR to be fixed to solve this issue.
@@ -62,66 +62,66 @@
 #include "dr_api.h"
 
 #ifdef WINDOWS
-# define DISPLAY_STRING(msg) dr_messagebox(msg)
+#    define DISPLAY_STRING(msg) dr_messagebox(msg)
 #else
-# define DISPLAY_STRING(msg) dr_printf("%s\n", msg);
+#    define DISPLAY_STRING(msg) dr_printf("%s\n", msg);
 #endif
 
-#define NULL_TERMINATE(buf) buf[(sizeof(buf)/sizeof(buf[0])) - 1] = '\0'
+#define NULL_TERMINATE(buf) buf[(sizeof(buf) / sizeof(buf[0])) - 1] = '\0'
 
-
-/* Each mem_ref_t includes the type of reference (read or write), 
+/* Each mem_ref_t includes the type of reference (read or write),
  * and the address referenced.
  */
-typedef struct _mem_ref_t{
-    bool  write;
+typedef struct _mem_ref_t {
+    bool write;
     void *addr;
 } mem_ref_t;
 
 /* Control the format of memory trace: readable or hexl */
-#define READABLE_TRACE 
+#define READABLE_TRACE
 /* Max number of mem_ref a buffer can have */
 #define MAX_NUM_MEM_REFS 8192
-/* The size of memory buffer for holding mem_refs. When it fills up, 
+/* The size of memory buffer for holding mem_refs. When it fills up,
  * we dump data from the buffer to the file.
  */
 #define MEM_BUF_SIZE (sizeof(mem_ref_t) * MAX_NUM_MEM_REFS)
 
 /* thread private log file and counter */
 typedef struct {
-    char   *buf_ptr;
-    char   *buf_base;
+    char *buf_ptr;
+    char *buf_base;
     /* buf_end holds the negative value of real address of buffer end. */
-    ptr_int_t buf_end; 
-    void   *cache;
-    file_t  log;
-    uint64  num_refs;
+    ptr_int_t buf_end;
+    void *cache;
+    file_t log;
+    uint64 num_refs;
 } per_thread_t;
 
 static client_id_t client_id;
 static app_pc code_cache;
-static void  *mutex;    /* for multithread support */
+static void *mutex;     /* for multithread support */
 static uint64 num_refs; /* keep a global memory reference count */
 
-static void event_exit(void);
-static void event_thread_init(void *drcontext);
-static void event_thread_exit(void *drcontext);
-static dr_emit_flags_t event_basic_block(void *drcontext, 
-                                         void *tag, 
-                                         instrlist_t *bb,
-                                         bool for_trace, 
-                                         bool translating);
+static void
+event_exit(void);
+static void
+event_thread_init(void *drcontext);
+static void
+event_thread_exit(void *drcontext);
+static dr_emit_flags_t
+event_basic_block(void *drcontext, void *tag, instrlist_t *bb, bool for_trace,
+                  bool translating);
 
-static void clean_call(void);
-static void code_cache_init(void);
-static void code_cache_exit(void);
-static void instrument_mem(void        *drcontext, 
-                           instrlist_t *ilist, 
-                           instr_t     *where, 
-                           int          pos, 
-                           bool         write);
+static void
+clean_call(void);
+static void
+code_cache_init(void);
+static void
+code_cache_exit(void);
+static void
+instrument_mem(void *drcontext, instrlist_t *ilist, instr_t *where, int pos, bool write);
 
-DR_EXPORT void 
+DR_EXPORT void
 dr_init(client_id_t id)
 {
     client_id = id;
@@ -140,14 +140,13 @@ dr_init(client_id_t id)
 #endif
 }
 
-
 static void
 event_exit()
 {
 #ifdef SHOW_RESULTS
     char msg[512];
     int len;
-    len = dr_snprintf(msg, sizeof(msg)/sizeof(msg[0]),
+    len = dr_snprintf(msg, sizeof(msg) / sizeof(msg[0]),
                       "Instrumentation results:\n"
                       "  saw %llu memory references\n",
                       num_refs);
@@ -160,12 +159,12 @@ event_exit()
 }
 
 #ifdef WINDOWS
-# define IF_WINDOWS(x) x
+#    define IF_WINDOWS(x) x
 #else
-# define IF_WINDOWS(x) /* nothing */
+#    define IF_WINDOWS(x) /* nothing */
 #endif
 
-static void 
+static void
 event_thread_init(void *drcontext)
 {
     char logname[MAXIMUM_PATH];
@@ -177,9 +176,9 @@ event_thread_init(void *drcontext)
     data = dr_thread_alloc(drcontext, sizeof(per_thread_t));
     dr_set_tls_field(drcontext, data);
     data->buf_base = dr_thread_alloc(drcontext, MEM_BUF_SIZE);
-    data->buf_ptr  = data->buf_base;
+    data->buf_ptr = data->buf_base;
     /* set buf_end to be negative of address of buffer end for the lea later */
-    data->buf_end  = -(ptr_int_t)(data->buf_base + MEM_BUF_SIZE);
+    data->buf_end = -(ptr_int_t)(data->buf_base + MEM_BUF_SIZE);
     data->num_refs = 0;
 
     /* We're going to dump our data to a per-thread file.
@@ -187,24 +186,21 @@ event_thread_init(void *drcontext)
      * the same directory as our library. We could also pass
      * in a path and retrieve with dr_get_options().
      */
-    len = dr_snprintf(logname, sizeof(logname)/sizeof(logname[0]),
-                      "%s", dr_get_client_path(client_id));
+    len = dr_snprintf(logname, sizeof(logname) / sizeof(logname[0]), "%s",
+                      dr_get_client_path(client_id));
     DR_ASSERT(len > 0);
-    for (dirsep = logname + len; *dirsep != '/' IF_WINDOWS(&& *dirsep != '\\'); dirsep--)
+    for (dirsep = logname + len; *dirsep != '/' IF_WINDOWS(&&*dirsep != '\\'); dirsep--)
         DR_ASSERT(dirsep > logname);
     len = dr_snprintf(dirsep + 1,
-                      (sizeof(logname) - (dirsep - logname))/sizeof(logname[0]),
+                      (sizeof(logname) - (dirsep - logname)) / sizeof(logname[0]),
                       "memtrace.%d.log", dr_get_thread_id(drcontext));
     DR_ASSERT(len > 0);
     NULL_TERMINATE(logname);
-    data->log = dr_open_file(logname, 
-                             DR_FILE_WRITE_OVERWRITE | DR_FILE_ALLOW_LARGE);
+    data->log = dr_open_file(logname, DR_FILE_WRITE_OVERWRITE | DR_FILE_ALLOW_LARGE);
     DR_ASSERT(data->log != INVALID_FILE);
-    dr_log(drcontext, LOG_ALL, 1, 
-           "memtrace: log for thread %d is memtrace.%03d\n",
+    dr_log(drcontext, LOG_ALL, 1, "memtrace: log for thread %d is memtrace.%03d\n",
            dr_get_thread_id(drcontext), dr_get_thread_id(drcontext));
 }
-
 
 static void
 event_thread_exit(void *drcontext)
@@ -221,20 +217,17 @@ event_thread_exit(void *drcontext)
     dr_thread_free(drcontext, data, sizeof(per_thread_t));
 }
 
-
-/* event_basic_block scans each basic block, and calls instrument_mem to 
+/* event_basic_block scans each basic block, and calls instrument_mem to
  * instrument every application memory references.
  */
 static dr_emit_flags_t
-event_basic_block(void *drcontext, void *tag, instrlist_t *bb,
-                  bool for_trace, bool translating)
+event_basic_block(void *drcontext, void *tag, instrlist_t *bb, bool for_trace,
+                  bool translating)
 {
     instr_t *instr;
     int i;
 
-    for (instr  = instrlist_first(bb); 
-         instr != NULL; 
-         instr  = instr_get_next(instr)) {
+    for (instr = instrlist_first(bb); instr != NULL; instr = instr_get_next(instr)) {
         if (instr_get_app_pc(instr) == NULL)
             continue;
         if (instr_reads_memory(instr)) {
@@ -255,7 +248,6 @@ event_basic_block(void *drcontext, void *tag, instrlist_t *bb,
     return DR_EMIT_DEFAULT;
 }
 
-
 /* clean_call dumps the memory reference info to the log file */
 static void
 clean_call(void)
@@ -269,42 +261,37 @@ clean_call(void)
 #endif
 
     drcontext = dr_get_current_drcontext();
-    data      = dr_get_tls_field(drcontext);
-    mem_ref   = (mem_ref_t *)data->buf_base;
-    num_refs  = (int)((mem_ref_t *)data->buf_ptr - mem_ref);
+    data = dr_get_tls_field(drcontext);
+    mem_ref = (mem_ref_t *)data->buf_base;
+    num_refs = (int)((mem_ref_t *)data->buf_ptr - mem_ref);
 
 #ifdef READABLE_TRACE
     for (i = 0; i < num_refs; i++) {
-        dr_fprintf(data->log, "%c:"PFX"\n",
-                   mem_ref->write ? 'w' : 'r', mem_ref->addr);
+        dr_fprintf(data->log, "%c:" PFX "\n", mem_ref->write ? 'w' : 'r', mem_ref->addr);
         ++mem_ref;
     }
 #else
-    dr_write_file(data->log, data->buf_base,
-                  (size_t)(data->buf_ptr - data->buf_base));
+    dr_write_file(data->log, data->buf_base, (size_t)(data->buf_ptr - data->buf_base));
 #endif
 
     memset(data->buf_base, 0, MEM_BUF_SIZE);
     data->num_refs += num_refs;
-    data->buf_ptr   = data->buf_base;
+    data->buf_ptr = data->buf_base;
 }
-
 
 static void
 code_cache_init(void)
 {
-    void         *drcontext;
+    void *drcontext;
     per_thread_t *data;
-    instrlist_t  *ilist;
-    instr_t      *where;
-    byte         *end;
+    instrlist_t *ilist;
+    instr_t *where;
+    byte *end;
 
-    drcontext  = dr_get_current_drcontext();
-    data       = dr_get_tls_field(drcontext);
-    code_cache = dr_nonheap_alloc(PAGE_SIZE, 
-                                  DR_MEMPROT_READ  |
-                                  DR_MEMPROT_WRITE |
-                                  DR_MEMPROT_EXEC);
+    drcontext = dr_get_current_drcontext();
+    data = dr_get_tls_field(drcontext);
+    code_cache =
+        dr_nonheap_alloc(PAGE_SIZE, DR_MEMPROT_READ | DR_MEMPROT_WRITE | DR_MEMPROT_EXEC);
     ilist = instrlist_create(drcontext);
     /* The lean procecure simply performs a clean call, and then jump back */
     /* jump back to the DR's code cache */
@@ -320,7 +307,6 @@ code_cache_init(void)
     dr_memory_protect(code_cache, PAGE_SIZE, DR_MEMPROT_READ | DR_MEMPROT_EXEC);
 }
 
-
 static void
 code_cache_exit(void)
 {
@@ -332,35 +318,33 @@ code_cache_exit(void)
     dr_nonheap_free(code_cache, PAGE_SIZE);
 }
 
-
 /*
  * instrument_mem is called whenever a memory reference is identified.
  * It inserts code before the memory reference to to fill the memory buffer
  * and jump to our own code cache to call the clean_call when the buffer is full.
  */
 static void
-instrument_mem(void *drcontext, instrlist_t *ilist, instr_t *where, 
-               int pos, bool write)
+instrument_mem(void *drcontext, instrlist_t *ilist, instr_t *where, int pos, bool write)
 {
     instr_t *instr, *call, *restore;
-    opnd_t   ref, opnd1, opnd2;
+    opnd_t ref, opnd1, opnd2;
     reg_id_t reg1 = REG_XBX; /* We can optimize it by picking dead reg */
     reg_id_t reg2 = REG_XCX; /* reg2 must be ECX or RCX for jecxz */
     per_thread_t *data;
-    
+
     data = dr_get_tls_field(drcontext);
 
     /* Steal the register for memory reference address *
-     * We can optimize away the unnecessary register save and restore 
-     * by analyzing the code and finding the register is dead. 
+     * We can optimize away the unnecessary register save and restore
+     * by analyzing the code and finding the register is dead.
      */
     dr_save_reg(drcontext, ilist, where, reg1, SPILL_SLOT_2);
     dr_save_reg(drcontext, ilist, where, reg2, SPILL_SLOT_3);
 
     if (write)
-       ref = instr_get_dst(where, pos);
+        ref = instr_get_dst(where, pos);
     else
-       ref = instr_get_src(where, pos);
+        ref = instr_get_src(where, pos);
     /* Using either lea or mov to load memory reference address
      * XXX: some far memory reference need special handling.
      * See notes at top of file.
@@ -368,10 +352,10 @@ instrument_mem(void *drcontext, instrlist_t *ilist, instr_t *where,
     opnd1 = opnd_create_reg(reg1);
     if (opnd_is_base_disp(ref)) {
         /* lea [ref] => reg */
-        opnd2 = ref; 
+        opnd2 = ref;
         opnd_set_size(&opnd2, OPSZ_lea);
         instr = INSTR_CREATE_lea(drcontext, opnd1, opnd2);
-    } else if(IF_X64(opnd_is_rel_addr(ref) ||) opnd_is_abs_addr(ref)) {
+    } else if (IF_X64(opnd_is_rel_addr(ref) ||) opnd_is_abs_addr(ref)) {
         /* mov addr => reg */
         opnd2 = OPND_CREATE_INTPTR(opnd_get_addr(ref));
         instr = INSTR_CREATE_mov_imm(drcontext, opnd1, opnd2);
@@ -380,12 +364,12 @@ instrument_mem(void *drcontext, instrlist_t *ilist, instr_t *where,
         DR_ASSERT_MSG(false, "Unhandled instructions");
     }
     instrlist_meta_preinsert(ilist, where, instr);
-    
+
     /* The following assembly performs the following instructions
      * buf_ptr->write = write;
      * buf_ptr->addr  = addr;
      * buf_ptr++;
-     * if (buf_ptr >= buf_end_ptr) 
+     * if (buf_ptr >= buf_end_ptr)
      *    clean_call();
      */
     dr_insert_read_tls_field(drcontext, ilist, where, reg2);
@@ -409,9 +393,7 @@ instrument_mem(void *drcontext, instrlist_t *ilist, instr_t *where,
 
     /* Increment reg value by pointer size using lea instr */
     opnd1 = opnd_create_reg(reg2);
-    opnd2 = opnd_create_base_disp(reg2, REG_NULL, 0, 
-                                  sizeof(mem_ref_t), 
-                                  OPSZ_lea);
+    opnd2 = opnd_create_base_disp(reg2, REG_NULL, 0, sizeof(mem_ref_t), OPSZ_lea);
     instr = INSTR_CREATE_lea(drcontext, opnd1, opnd2);
     instrlist_meta_preinsert(ilist, where, instr);
 
@@ -424,7 +406,7 @@ instrument_mem(void *drcontext, instrlist_t *ilist, instr_t *where,
 
     /* we use lea + jecxz trick for better performance
      * lea and jecxz won't disturb the eflags, so we won't insert
-     * code to save and restore application's eflags. 
+     * code to save and restore application's eflags.
      */
     /* lea [reg2 - buf_end] => reg2 */
     opnd1 = opnd_create_reg(reg1);
@@ -435,9 +417,9 @@ instrument_mem(void *drcontext, instrlist_t *ilist, instr_t *where,
     opnd2 = opnd_create_base_disp(reg1, reg2, 1, 0, OPSZ_lea);
     instr = INSTR_CREATE_lea(drcontext, opnd1, opnd2);
     instrlist_meta_preinsert(ilist, where, instr);
-    
+
     /* jecxz call */
-    call  = INSTR_CREATE_label(drcontext);
+    call = INSTR_CREATE_label(drcontext);
     opnd1 = opnd_create_instr(call);
     instr = INSTR_CREATE_jecxz(drcontext, opnd1);
     instrlist_meta_preinsert(ilist, where, instr);
@@ -449,8 +431,8 @@ instrument_mem(void *drcontext, instrlist_t *ilist, instr_t *where,
     instrlist_meta_preinsert(ilist, where, instr);
 
     /* clean call */
-    /* We jump to lean procedure which performs full context switch and 
-     * clean call invocation. This is to reduce the code cache size. 
+    /* We jump to lean procedure which performs full context switch and
+     * clean call invocation. This is to reduce the code cache size.
      */
     instrlist_meta_preinsert(ilist, where, call);
     /* mov restore REG_XCX */
@@ -469,4 +451,3 @@ instrument_mem(void *drcontext, instrlist_t *ilist, instr_t *where,
     dr_restore_reg(drcontext, ilist, where, reg1, SPILL_SLOT_2);
     dr_restore_reg(drcontext, ilist, where, reg2, SPILL_SLOT_3);
 }
-

@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -56,7 +56,7 @@ the syntax of the policy definition message is as follows:
 
 <dynamorio_option_line> ::== <dynamorio_option>=<string>
 
-<dynamorio_option> ::== 
+<dynamorio_option> ::==
  [ DYNAMORIO_OPTIONS |
    DYNAMORIO_AUTOINJECT |
    DYNAMORIO_RUNUNDER ]
@@ -76,8 +76,8 @@ details:
     specified by the flags. we'll provide the whitelist/blacklist.
 
 
-(2) GLOBAL_PROTECT: OPTIONAL: if this is 0, then protection is 
-    disabled (and all application blocks are optional). in normal 
+(2) GLOBAL_PROTECT: OPTIONAL: if this is 0, then protection is
+    disabled (and all application blocks are optional). in normal
     situations this will be 1. if this is not specified, then the
     current setting is kept (see also enable_protection)
 
@@ -120,40 +120,36 @@ see sample.mfp for an example policy string:
 #ifndef _DETERMINA_POLICY_H_
 #define _DETERMINA_POLICY_H_
 
-
 #include "config.h"
 
 #ifdef __cplusplus
-extern "C"
-{
+extern "C" {
 #endif
 
-#define POLICY_DEF_KEYS  \
-  MSG_FIELD(APP_NAME)  \
-  MSG_FIELD(GLOBAL)  \
-  MSG_FIELD(BEGIN_BLOCK)  \
-  MSG_FIELD(END_BLOCK)  \
-  MSG_FIELD(GLOBAL_PROTECT)  \
-  MSG_FIELD(BEGIN_MP_MODES)  \
-  MSG_FIELD(END_MP_MODES)
+#define POLICY_DEF_KEYS       \
+    MSG_FIELD(APP_NAME)       \
+    MSG_FIELD(GLOBAL)         \
+    MSG_FIELD(BEGIN_BLOCK)    \
+    MSG_FIELD(END_BLOCK)      \
+    MSG_FIELD(GLOBAL_PROTECT) \
+    MSG_FIELD(BEGIN_MP_MODES) \
+    MSG_FIELD(END_MP_MODES)
 
 typedef enum {
 #define MSG_FIELD(x) MSGKEY_##x,
     POLICY_DEF_KEYS
 #undef MSG_FIELD
-    MSGKEY_BAD_FIELD
+        MSGKEY_BAD_FIELD
 } msg_id;
 
-
 char *
-parse_policy_line(char *start, BOOL *done, msg_id *mfield,
-                  WCHAR *param, WCHAR *value, SIZE_T maxchars);
+parse_policy_line(char *start, BOOL *done, msg_id *mfield, WCHAR *param, WCHAR *value,
+                  SIZE_T maxchars);
 
 DWORD
 parse_policy(char *policy_definition,
              /* OUT */ ConfigGroup **config,
-             /* OUT */ ConfigGroup **options,
-             BOOL validating);
+             /* OUT */ ConfigGroup **options, BOOL validating);
 
 #ifdef __cplusplus
 }

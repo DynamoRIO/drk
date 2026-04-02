@@ -17,17 +17,21 @@ extern "C" {
 using namespace std;
 
 class DynamoRIODevice {
-  public:
-    DynamoRIODevice() : device_(DYNAMORIO_DEVICE_NAME, DYNAMORIO_DEVICE_PATH) {
+public:
+    DynamoRIODevice()
+        : device_(DYNAMORIO_DEVICE_NAME, DYNAMORIO_DEVICE_PATH)
+    {
     }
 
-    void Init(const string& options) {
+    void
+    Init(const string &options)
+    {
         dynamorio_init_cmd_t cmd;
         /* Add 1 for the NULL terminator. */
         if (options.size() + 1 > KERNEL_ENV_VALUE_MAX) {
             stringstream ss;
-            ss << "Options string \"" << options << "\" exceeds the " <<
-                  KERNEL_ENV_VALUE_MAX << " character limit.";
+            ss << "Options string \"" << options << "\" exceeds the "
+               << KERNEL_ENV_VALUE_MAX << " character limit.";
             throw runtime_error(ss.str());
         }
         strcpy(cmd.options, options.c_str());
@@ -38,7 +42,9 @@ class DynamoRIODevice {
         }
     }
 
-    void Exit() {
+    void
+    Exit()
+    {
         dynamorio_exit_cmd_t cmd;
         if (device_.Ioctl(DYNAMORIO_IOCTL_EXIT, &cmd) != 0) {
             throw runtime_error("DYNAMORIO_IOCTL_EXIT failed. Have you run init"
@@ -46,24 +52,30 @@ class DynamoRIODevice {
         }
     }
 
-    void GetKStats(dynamorio_kstats_cmd_t *kstats) {
+    void
+    GetKStats(dynamorio_kstats_cmd_t *kstats)
+    {
         if (device_.Ioctl(DYNAMORIO_IOCTL_KSTATS, kstats) != 0) {
             throw runtime_error("DYNAMORIO_IOCTL_KSTATS failed. Check dmesg.");
         }
     }
 
-    void GetStats(dynamorio_stats_cmd_t *stats) {
+    void
+    GetStats(dynamorio_stats_cmd_t *stats)
+    {
         if (device_.Ioctl(DYNAMORIO_IOCTL_STATS, stats) != 0) {
             throw runtime_error("DYNAMORIO_IOCTL_STATS failed. Check dmesg.");
         }
     }
 
-  private:
+private:
     LinuxDevice device_;
 };
 
-static void handle_init(int argc, char** argv) {
-    const char* options = "";
+static void
+handle_init(int argc, char **argv)
+{
+    const char *options = "";
     if (argc < 2 || argc > 3 || string(argv[1]) != "init") {
         throw runtime_error("Usage: controller init [\"options\"]");
     }
@@ -75,7 +87,9 @@ static void handle_init(int argc, char** argv) {
     device.Init(options);
 }
 
-static void handle_exit(int argc, char** argv) {
+static void
+handle_exit(int argc, char **argv)
+{
     if (argc != 2 || string(argv[1]) != "exit") {
         throw runtime_error("Usage: controller exit");
     }
@@ -83,7 +97,9 @@ static void handle_exit(int argc, char** argv) {
     device.Exit();
 }
 
-static int get_cpu_count() {
+static int
+get_cpu_count()
+{
     FILE *pipe = popen("cat /proc/cpuinfo | grep processor | wc -l", "r");
     if (!pipe) {
         throw runtime_error("get_cpu_count: popen failed.");
@@ -98,7 +114,9 @@ static int get_cpu_count() {
     return result;
 }
 
-static void handle_kstats(int argc, char** argv) {
+static void
+handle_kstats(int argc, char **argv)
+{
     if (argc != 2 || string(argv[1]) != "kstats") {
         throw runtime_error("Usage: controller kstats");
     }
@@ -106,7 +124,7 @@ static void handle_kstats(int argc, char** argv) {
     int cpu_count = get_cpu_count();
     cout << "[" << endl;
     for (int cpu = 0; cpu < cpu_count; cpu++) {
-        dynamorio_kstats_cmd_t kstats; 
+        dynamorio_kstats_cmd_t kstats;
         kstats.cpu = cpu;
         device.GetKStats(&kstats);
         dump_kstats(&kstats.buffer.data, kstats.buffer.size, cout);
@@ -117,17 +135,21 @@ static void handle_kstats(int argc, char** argv) {
     cout << "]" << endl;
 }
 
-static void handle_stats(int argc, char** argv) {
+static void
+handle_stats(int argc, char **argv)
+{
     if (argc != 2 || string(argv[1]) != "stats") {
         throw runtime_error("Usage: controller stats");
     }
     DynamoRIODevice device;
-    dynamorio_stats_cmd_t stats; 
+    dynamorio_stats_cmd_t stats;
     device.GetStats(&stats);
     dump_stats(&stats.buffer.data, stats.buffer.size, cout);
 }
 
-static void show_usage(int argc, char** argv) {
+static void
+show_usage(int argc, char **argv)
+{
     cerr << "Usage: controller <subcommand>" << endl;
     cerr << endl;
     cerr << "Available subcommands:" << endl;
@@ -136,7 +158,9 @@ static void show_usage(int argc, char** argv) {
     cerr << "   kstats - dumps kstats to the screen" << endl;
 }
 
-int main(int argc, char** argv) {
+int
+main(int argc, char **argv)
+{
     try {
         if (argc < 2) {
             show_usage(argc, argv);
@@ -157,7 +181,7 @@ int main(int argc, char** argv) {
             return EXIT_FAILURE;
         }
 
-    } catch (const runtime_error& e) {
+    } catch (const runtime_error &e) {
         cerr << e.what() << endl;
         return EXIT_FAILURE;
     }

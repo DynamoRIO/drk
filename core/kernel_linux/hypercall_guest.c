@@ -2,19 +2,19 @@
 
 #ifdef HYPERCALL_DEBUGGING
 
-#include "hypercall.h"
-#include "page_table.h"
+#    include "hypercall.h"
+#    include "page_table.h"
 /* For kvm_hypercall3 */
-#include <asm/kvm_para.h> 
+#    include <asm/kvm_para.h>
 
 bool
-hypercall_send(hypercall_t* hypercall) {
+hypercall_send(hypercall_t *hypercall)
+{
     unsigned long physical_address;
     if (hypercall->size > HYPERCALL_MAX_SIZE) {
         return false;
     }
-    if (!page_table_get_physical_address(get_l4_page_table(),
-                                         hypercall,
+    if (!page_table_get_physical_address(get_l4_page_table(), hypercall,
                                          &physical_address)) {
         return false;
     }
@@ -23,7 +23,8 @@ hypercall_send(hypercall_t* hypercall) {
 }
 
 bool
-hypercall_init(void) {
+hypercall_init(void)
+{
     bool ok;
     hypercall_init_t hypercall;
     hypercall.hypercall.type = HYPERCALL_INIT;

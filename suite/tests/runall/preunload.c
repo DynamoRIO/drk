@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -38,9 +38,9 @@
 #define PREINJECT_NAME "drpreinject.dll"
 #define PREINJECT_BASE 0x14000000
 
-#define INJECT_ALL_HIVE    HKEY_LOCAL_MACHINE
-#define INJECT_ALL_KEY     "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Windows"
-#define INJECT_ALL_SUBKEY  "AppInit_DLLs"
+#define INJECT_ALL_HIVE HKEY_LOCAL_MACHINE
+#define INJECT_ALL_KEY "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Windows"
+#define INJECT_ALL_SUBKEY "AppInit_DLLs"
 
 /* two different checks: GetModuleFileNameA and VirtualQuery */
 BOOL
@@ -50,20 +50,20 @@ ensure_no_preinject()
     char name[MAX_PATH];
     MEMORY_BASIC_INFORMATION mbi;
 
-    len = GetModuleFileNameA((HINSTANCE) PREINJECT_BASE, name,
-                             (sizeof(name)/sizeof(name[0])));
+    len = GetModuleFileNameA((HINSTANCE)PREINJECT_BASE, name,
+                             (sizeof(name) / sizeof(name[0])));
     if (len > 0) {
-        print("ERROR: found module %s at "PFX"\n", name, PREINJECT_BASE);
+        print("ERROR: found module %s at " PFX "\n", name, PREINJECT_BASE);
         return FALSE;
     }
-    
+
     len = VirtualQuery((void *)PREINJECT_BASE, &mbi, sizeof(mbi));
     if (len != sizeof(mbi)) {
-        print("ERROR: error querying "PFX"\n", PREINJECT_BASE);
+        print("ERROR: error querying " PFX "\n", PREINJECT_BASE);
         return FALSE;
     } else {
         if (mbi.State != MEM_FREE) {
-            print("ERROR: "PFX" is not MEM_FREE!\n", PREINJECT_BASE);
+            print("ERROR: " PFX " is not MEM_FREE!\n", PREINJECT_BASE);
             return FALSE;
         }
     }
@@ -78,13 +78,11 @@ load_preinject()
     char val[MAX_PATH];
     int res, len = MAX_PATH * sizeof(val[0]);
 
-    res = RegOpenKeyEx(INJECT_ALL_HIVE, INJECT_ALL_KEY, 0, 
-                       KEY_READ, &hk);
+    res = RegOpenKeyEx(INJECT_ALL_HIVE, INJECT_ALL_KEY, 0, KEY_READ, &hk);
     if (res != ERROR_SUCCESS)
         return FALSE;
 
-    res = RegQueryValueEx(hk, INJECT_ALL_SUBKEY, 0, 
-                          0, (LPBYTE) val, &len);
+    res = RegQueryValueEx(hk, INJECT_ALL_SUBKEY, 0, 0, (LPBYTE)val, &len);
     RegCloseKey(hk);
     if (res != ERROR_SUCCESS)
         return FALSE;

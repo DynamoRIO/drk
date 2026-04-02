@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -71,8 +71,7 @@ bool
 is_first_thread_in_new_process(HANDLE process_handle, CONTEXT *cxt);
 
 void
-maybe_inject_into_process(dcontext_t *dcontext, HANDLE process_handle,
-                          CONTEXT *cxt);
+maybe_inject_into_process(dcontext_t *dcontext, HANDLE process_handle, CONTEXT *cxt);
 
 bool
 translate_context(thread_record_t *trec, CONTEXT *cxt, bool restore_memory);
@@ -115,8 +114,8 @@ void
 client_thread_target(void *param);
 #endif
 
-bool os_delete_file_w(const wchar_t *file_name,
-                      file_t directory_handle);
+bool
+os_delete_file_w(const wchar_t *file_name, file_t directory_handle);
 
 /* in syscall.c *********************************************************/
 
@@ -144,20 +143,21 @@ extern const int windows_NT_sp4_syscalls[];
 /* for x64 this is the # of args */
 extern const uint syscall_argsz[];
 
-extern const char * const syscall_names[];
+extern const char *const syscall_names[];
 
 extern bool init_apc_go_native_pause;
 extern bool init_apc_go_native;
 
 #ifdef DEBUG
-void check_syscall_array_sizes(void);
+void
+check_syscall_array_sizes(void);
 #endif
 
 void
 windows_version_init(void);
 
 enum {
-#define SYSCALL(name, act, nargs, arg32, w7x64, w7, vista_sp1_x64, vista_sp1, \
+#define SYSCALL(name, act, nargs, arg32, w7x64, w7, vista_sp1_x64, vista_sp1,            \
                 vista_sp0_x64, vista_sp0, tk3, xp64, wow64, xp, tk, ntsp4, ntsp3, ntsp0) \
     SYS_##name,
 #include "syscallx.h"
@@ -165,29 +165,30 @@ enum {
     SYS_MAX,
 };
 
-/* the offset from edx of the parameters to a system call, our current 
- * (FIXME - also potentially unreliable, since really is a function of os 
- * version and processor type) check is by the system entry method, 
- * if it's int then offset is 0, if it's sysenter or syscall then offset is 8 
- * will also have it default to 0 since I think 2k uses int regardless of 
+/* the offset from edx of the parameters to a system call, our current
+ * (FIXME - also potentially unreliable, since really is a function of os
+ * version and processor type) check is by the system entry method,
+ * if it's int then offset is 0, if it's sysenter or syscall then offset is 8
+ * will also have it default to 0 since I think 2k uses int regardless of
  * proccesor type */
-/* FIXME - if we are really paranoid then we should ensure that the offset 
+/* FIXME - if we are really paranoid then we should ensure that the offset
  * holds the return values the os would expect (i.e. the ntdll wrapper return
  * address for XP/2003), also if used before we know the syscall method will
  * default to 0! */
-#define SYSCALL_PARAM_MAX_OFFSET        (2*XSP_SZ) /* offset for real arguments */
+#define SYSCALL_PARAM_MAX_OFFSET (2 * XSP_SZ) /* offset for real arguments */
 #ifdef X64
 /* retaddr, then args */
-# define SYSCALL_PARAM_OFFSET() (XSP_SZ)
+#    define SYSCALL_PARAM_OFFSET() (XSP_SZ)
 #else
 /* as done on WinXP, syscalls have extra slots before real params */
 /* edx is 4 less than on 2000, plus there's an extra call to provide
  * return address for sysenter, so we have to skip 2 slots:
  */
-# define SYSCALL_PARAM_OFFSET()                          \
-    ((get_syscall_method() == SYSCALL_METHOD_SYSCALL || \
-      get_syscall_method() == SYSCALL_METHOD_SYSENTER)  \
-     ? SYSCALL_PARAM_MAX_OFFSET : 0)
+#    define SYSCALL_PARAM_OFFSET()                          \
+        ((get_syscall_method() == SYSCALL_METHOD_SYSCALL || \
+          get_syscall_method() == SYSCALL_METHOD_SYSENTER)  \
+             ? SYSCALL_PARAM_MAX_OFFSET                     \
+             : 0)
 #endif
 
 static inline reg_t *
@@ -238,25 +239,21 @@ void
 exit_syscall_trampolines(void);
 
 bool
-os_get_file_size_by_handle(IN HANDLE file_handle,
-                           uint64 *end_of_file);
+os_get_file_size_by_handle(IN HANDLE file_handle, uint64 *end_of_file);
 bool
-os_set_file_size(IN HANDLE file_handle,
-                 uint64 end_of_file);
+os_set_file_size(IN HANDLE file_handle, uint64 end_of_file);
 
 /* use os_rename_file() for cross-platform uses */
 bool
-os_rename_file_in_directory(IN HANDLE rootdir,
-                            const wchar_t *orig_name,
-                            const wchar_t *new_name,
-                            bool replace);
+os_rename_file_in_directory(IN HANDLE rootdir, const wchar_t *orig_name,
+                            const wchar_t *new_name, bool replace);
 
 /* in callback.c ***************************************************/
 
 /* thread-shared only needs 4 pages on 32-bit but -thread_private needs 5
  * in case we hook the image entry on an early cbret
  */
-#define INTERCEPTION_CODE_SIZE IF_X64_ELSE(6*4096,5*4096)
+#define INTERCEPTION_CODE_SIZE IF_X64_ELSE(6 * 4096, 5 * 4096)
 
 void
 callback_init(void);
@@ -264,14 +261,13 @@ callback_init(void);
 void
 callback_exit(void);
 
-dr_marker_t*
+dr_marker_t *
 get_drmarker(void);
 
 #define UNDER_DYN_HACK 0xabcd
 
 byte *
-intercept_syscall_wrapper(byte **ptgt_pc /* IN/OUT */, 
-                          intercept_function_t prof_func,
+intercept_syscall_wrapper(byte **ptgt_pc /* IN/OUT */, intercept_function_t prof_func,
                           void *callee_arg, after_intercept_action_t action_after,
                           app_pc *skip_syscall_pc /* OUT */,
                           byte **orig_bytes_pc /* OUT */,
@@ -284,7 +280,7 @@ insert_trampoline(byte *tgt_pc, intercept_function_t prof_func, void *callee_arg
 void
 remove_trampoline(byte *our_pc, byte *tgt_pc);
 
-void 
+void
 remove_image_entry_trampoline(void);
 
 void
@@ -310,22 +306,21 @@ intercept_nt_setcontext(dcontext_t *dcontext, CONTEXT *cxt);
     INTERCEPT_POINT(INTERCEPT_EARLY_ASYNCH)       \
     /* syscall trampoline prior to image entry */ \
     INTERCEPT_POINT(INTERCEPT_SYSCALL)
-typedef enum {
-    INTERCEPT_ALL_POINTS
-} retakeover_point_t;
+typedef enum { INTERCEPT_ALL_POINTS } retakeover_point_t;
 #undef INTERCEPT_POINT
 
 void
 retakeover_after_native(thread_record_t *tr, retakeover_point_t where);
 
 void
-context_to_mcontext(dr_mcontext_t *mcontext, CONTEXT* cxt);
+context_to_mcontext(dr_mcontext_t *mcontext, CONTEXT *cxt);
 
 void
-mcontext_to_context(CONTEXT* cxt, dr_mcontext_t *mcontext);
+mcontext_to_context(CONTEXT *cxt, dr_mcontext_t *mcontext);
 
 #ifdef DEBUG
-void dump_context_info(CONTEXT *context, file_t file, bool all);
+void
+dump_context_info(CONTEXT *context, file_t file, bool all);
 #endif
 
 /* PR 264138: we need to preserve xmm0-5 for x64 and wow64.
@@ -345,16 +340,16 @@ void dump_context_info(CONTEXT *context, file_t file, bool all);
  */
 #define CONTEXT_XMM_FLAG IF_X64_ELSE(CONTEXT_FLOATING_POINT, CONTEXT_EXTENDED_REGISTERS)
 #define CONTEXT_PRESERVE_XMM IF_X64_ELSE(true, is_wow64_process(NT_CURRENT_PROCESS))
-#define CONTEXT_DR_STATE (CONTEXT_INTEGER | CONTEXT_CONTROL | \
-                          (CONTEXT_PRESERVE_XMM ? CONTEXT_XMM_FLAG : 0U))
+#define CONTEXT_DR_STATE \
+    (CONTEXT_INTEGER | CONTEXT_CONTROL | (CONTEXT_PRESERVE_XMM ? CONTEXT_XMM_FLAG : 0U))
 
 enum {
-      EXCEPTION_INFORMATION_READ_EXECUTE_FAULT = 0,
-      /* On non-NX capable machines Read and Execute faults are not
-       * differentiated */
-      EXCEPTION_INFORMATION_WRITE_FAULT        = 1,
-      EXCEPTION_INFORMATION_EXECUTE_FAULT      = 8, /* case 5879 */
-      /* Only on NX enabled machines Execute faults are differentiated */
+    EXCEPTION_INFORMATION_READ_EXECUTE_FAULT = 0,
+    /* On non-NX capable machines Read and Execute faults are not
+     * differentiated */
+    EXCEPTION_INFORMATION_WRITE_FAULT = 1,
+    EXCEPTION_INFORMATION_EXECUTE_FAULT = 8, /* case 5879 */
+    /* Only on NX enabled machines Execute faults are differentiated */
 };
 
 bool
@@ -370,18 +365,16 @@ void
 inject_init(void); /* must be called prior to inject_into_thread(void) */
 
 bool
-inject_into_thread(HANDLE phandle, CONTEXT *cxt, HANDLE thandle,
-                   char *dynamo_path);
+inject_into_thread(HANDLE phandle, CONTEXT *cxt, HANDLE thandle, char *dynamo_path);
 
 /* inject_location values come form the INJECT_LOCATION_* enum is os_shared.h */
 bool
-inject_into_new_process(HANDLE phandle, char *dynamo_path, bool map,
-                        uint inject_location, void *inject_address);
-
+inject_into_new_process(HANDLE phandle, char *dynamo_path, bool map, uint inject_location,
+                        void *inject_address);
 
 /* in <arch.s> (x86.asm for us) ************************************/
 
-void 
+void
 internal_dynamo_start(void);
 
 void
@@ -394,12 +387,13 @@ void
 nt_continue_dynamo_start(void);
 
 /* x86.asm custom routine used only for check_for_modified_code() */
-void call_modcode_alt_stack(dcontext_t *dcontext, EXCEPTION_RECORD *pExcptRec,
-                            CONTEXT *cxt, app_pc target, uint flags,
-                            bool using_initstack);
+void
+call_modcode_alt_stack(dcontext_t *dcontext, EXCEPTION_RECORD *pExcptRec, CONTEXT *cxt,
+                       app_pc target, uint flags, bool using_initstack);
 
 /* x86.asm routine used for injection */
-void load_dynamo(void);
+void
+load_dynamo(void);
 
 /* in eventlog.c ***************************************************/
 
@@ -411,14 +405,13 @@ eventlog_fast_exit(void);
 void
 eventlog_slow_exit(void);
 
-
 /* in module.c *****************************************************/
 
 #ifdef X64
-#ifndef __IMAGE_UNWIND_INFO
-#define __IMAGE_UNWIND_INFO
-#pragma warning(push)
-#pragma warning(disable : 4214) /* allow byte-sized bitfields */
+#    ifndef __IMAGE_UNWIND_INFO
+#        define __IMAGE_UNWIND_INFO
+#        pragma warning(push)
+#        pragma warning(disable : 4214) /* allow byte-sized bitfields */
 /* These definitions are needed to parse exception handlers to add to the RCT
  * table as part of PR 250395.  These definitions aren't found in any header
  * files.  These seem to be coming directly from internal sources.  I saw a
@@ -446,25 +439,25 @@ typedef enum _unwind_opcode_t {
 typedef union _unwind_code_t {
     struct {
         byte CodeOffset;
-        byte UnwindOp :4;
-        byte OpInfo   :4;
+        byte UnwindOp : 4;
+        byte OpInfo : 4;
     };
     USHORT FrameOffset;
 } unwind_code_t;
 
-#define UNW_FLAG_EHANDLER  0x01
-#define UNW_FLAG_UHANDLER  0x02
-#define UNW_FLAG_CHAININFO 0x04
+#        define UNW_FLAG_EHANDLER 0x01
+#        define UNW_FLAG_UHANDLER 0x02
+#        define UNW_FLAG_CHAININFO 0x04
 
 typedef struct _unwind_info_t {
-    byte Version      :3;
-    byte Flags        :5;
+    byte Version : 3;
+    byte Flags : 5;
     byte SizeOfProlog;
     byte CountOfCodes;
-    byte FrameRegister:4;
-    byte FrameOffset  :4;
+    byte FrameRegister : 4;
+    byte FrameOffset : 4;
     unwind_code_t UnwindCode[1];
-#if 0 /* variable-length tail of struct */
+#        if 0 /* variable-length tail of struct */
     /* MSDN uses "((CountOfCodes + 1) & ~1)" which is just align-forward-2,
      * used b/c the UnwindCode array must always have an even capacity */
     unwind_code_t MoreUnwindCode[ALIGN_FORWARD(CountOfCodes, 2) - 1];
@@ -473,19 +466,19 @@ typedef struct _unwind_info_t {
         OPTIONAL ULONG FunctionEntry;
     };
     OPTIONAL ULONG ExceptionData[];
-#endif
+#        endif
 } unwind_info_t;
 
 /* Address of field that's after the unwind code data */
-#define UNWIND_INFO_PTR_ADDR(info) \
-    ((void *)&(info)->UnwindCode[ALIGN_FORWARD((info)->CountOfCodes, 2)])
+#        define UNWIND_INFO_PTR_ADDR(info) \
+            ((void *)&(info)->UnwindCode[ALIGN_FORWARD((info)->CountOfCodes, 2)])
 
 /* Field that's after the unwind code data, treated as an RVA */
-#define UNWIND_INFO_PTR_RVA(info) (*(uint*)UNWIND_INFO_PTR_ADDR(info))
+#        define UNWIND_INFO_PTR_RVA(info) (*(uint *)UNWIND_INFO_PTR_ADDR(info))
 
 /* ExceptionData field (2nd one after the unwind code data) */
-#define UNWIND_INFO_DATA_ADDR(info) (((uint*)UNWIND_INFO_PTR_ADDR(info))+1)
-#define UNWIND_INFO_DATA_RVA(info) (*(((uint*)UNWIND_INFO_PTR_ADDR(info))+1))
+#        define UNWIND_INFO_DATA_ADDR(info) (((uint *)UNWIND_INFO_PTR_ADDR(info)) + 1)
+#        define UNWIND_INFO_DATA_RVA(info) (*(((uint *)UNWIND_INFO_PTR_ADDR(info)) + 1))
 
 /* ExceptionData takes this form.  It is inlined according to my observation
  * but it may instead be pointed at by an RVA.
@@ -500,11 +493,11 @@ typedef struct _scope_table_t {
     } ScopeRecord[1];
 } scope_table_t;
 
-#pragma warning(pop)
-#endif /* __IMAGE_UNWIND_INFO */
-#endif /* X64 */
+#        pragma warning(pop)
+#    endif /* __IMAGE_UNWIND_INFO */
+#endif     /* X64 */
 
-#define RVA_TO_VA(base, rva)    ((ptr_uint_t)(base) + (ptr_uint_t)(rva))
+#define RVA_TO_VA(base, rva) ((ptr_uint_t)(base) + (ptr_uint_t)(rva))
 
 bool
 is_readable_pe_base(app_pc base);
@@ -518,13 +511,13 @@ get_module_info_pe(const app_pc module_base, uint *checksum, uint *timestamp,
  * bypasses some safety checks in get_module_short_name to avoid 4
  * system calls.
  */
-char*
+char *
 get_dll_short_name(app_pc base_addr);
 
 /* Use get_module_short_name in general */
 const char *
-get_module_short_name_uncached(dcontext_t *dcontext, app_pc base, bool at_map
-                               HEAPACCT(which_heap_t which));
+get_module_short_name_uncached(dcontext_t *dcontext, app_pc base,
+                               bool at_map HEAPACCT(which_heap_t which));
 
 app_pc
 get_module_entry(app_pc module_base);
@@ -543,13 +536,13 @@ module_is_64bit(app_pc module_base);
 
 #ifdef DEBUG
 
-enum {SYMBOLS_LOGLEVEL = 1};
+enum { SYMBOLS_LOGLEVEL = 1 };
 
 int
 loaded_modules_exports(void);
 
 int
-remove_module_info(app_pc start, size_t size); 
+remove_module_info(app_pc start, size_t size);
 
 int
 add_module_info(app_pc base_addr, size_t size);
@@ -565,19 +558,16 @@ module_info_exit(void);
 bool
 module_file_relocatable(app_pc module_base);
 
-bool module_rebase(app_pc module_base, size_t module_size,
-                   ssize_t relocation_delta,
-                   bool protect_incrementally);
-bool module_dump_pe_file(HANDLE new_file,
-                         app_pc module_base, size_t module_size);
+bool
+module_rebase(app_pc module_base, size_t module_size, ssize_t relocation_delta,
+              bool protect_incrementally);
+bool
+module_dump_pe_file(HANDLE new_file, app_pc module_base, size_t module_size);
 
 bool
-module_contents_compare(app_pc original_module_base,
-                        app_pc suspect_module_base,
-                        size_t matching_module_size,
-                        bool relocated,
-                        ssize_t relocation_delta,
-                        size_t validation_section_prefix);
+module_contents_compare(app_pc original_module_base, app_pc suspect_module_base,
+                        size_t matching_module_size, bool relocated,
+                        ssize_t relocation_delta, size_t validation_section_prefix);
 
 bool
 module_make_writable(app_pc module_base, size_t module_size);
@@ -633,6 +623,6 @@ get_process_primary_SID(void);
 
 bool
 convert_NT_to_Dos_path(OUT wchar_t *buf, IN const wchar_t *fname,
-                       IN size_t buf_len/*# elements*/);
+                       IN size_t buf_len /*# elements*/);
 
 #endif /* _OS_PRIVATE_H_ */

@@ -1,7 +1,7 @@
 #ifndef __USER_UNIT_TEST
-#  include <linux/gfp.h>
-#  include <linux/mm.h>
-#  include <linux/vmalloc.h>
+#    include <linux/gfp.h>
+#    include <linux/mm.h>
+#    include <linux/vmalloc.h>
 #endif
 #include "pagepool.h"
 
@@ -12,19 +12,19 @@ typedef union _poolpage_t {
     byte bytes[PAGE_SIZE];
 } poolpage_t;
 
-static inline poolpage_t*
-page_to_poolpage(struct page* page)
+static inline poolpage_t *
+page_to_poolpage(struct page *page)
 {
-    return (poolpage_t*) page_address(page);
+    return (poolpage_t *)page_address(page);
 }
 
-static inline poolpage_t*
+static inline poolpage_t *
 pfn_to_poolpage(pfn_t pfn)
 {
     return page_to_poolpage(pfn_to_page(pfn));
 }
 
-pagepool_t*
+pagepool_t *
 pagepool_kernel_init(size_t num_pages)
 {
     pagepool_t *pool;
@@ -37,7 +37,7 @@ pagepool_kernel_init(size_t num_pages)
     }
 
     prev = &pool->next_pfn;
-    for (i = 0; ; i++) {
+    for (i = 0;; i++) {
         struct page *linux_page;
         pool->free_pages = i;
         if (i == num_pages) {
@@ -80,7 +80,7 @@ pagepool_kernel_exit(pagepool_t *pool)
 {
     DR_ASSERT(pool->num_pages == pool->free_pages);
     while (!pagepool_empty(pool)) {
-        free_page((unsigned long) pfn_to_poolpage(pagepool_alloc(pool)));
+        free_page((unsigned long)pfn_to_poolpage(pagepool_alloc(pool)));
     }
     kfree(pool);
 }

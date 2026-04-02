@@ -23,7 +23,7 @@
  * OTHER DEALINGS IN THE SOFTWARE.                                   *
  *********************************************************************/
 
-/* 
+/*
  * Utility functions
  *
  * Author:
@@ -36,93 +36,70 @@
 #include "analyzer.h"
 
 #ifdef LINUX
-# ifndef LINUX_KERNEL
-#  include <unistd.h>    /* sleep */
-# endif
+#    ifndef LINUX_KERNEL
+#        include <unistd.h> /* sleep */
+#    endif
 #else
 #endif
 
 #ifndef LINUX_KERNEL
-# include <string.h>
+#    include <string.h>
 #endif
-
 
 /* save reg before where in ilist */
 void
-umbra_save_reg(void         *drcontext,
-               umbra_info_t *info,
-               instrlist_t  *ilist,
-               instr_t      *where,
-               reg_id_t      reg)
+umbra_save_reg(void *drcontext, umbra_info_t *info, instrlist_t *ilist, instr_t *where,
+               reg_id_t reg)
 {
     int slot;
     instr_t *instr;
 
     DR_ASSERT(reg >= REG_SPILL_START && reg <= REG_SPILL_STOP);
-    slot  = reg - REG_SPILL_START;
+    slot = reg - REG_SPILL_START;
     instr = INSTR_CREATE_mov_st(drcontext,
-                                OPND_CREATE_ABSMEM(&info->spill_regs[slot],
-                                                   OPSZ_PTR),
+                                OPND_CREATE_ABSMEM(&info->spill_regs[slot], OPSZ_PTR),
                                 opnd_create_reg(reg));
     instrlist_meta_preinsert(ilist, where, instr);
 }
-    
 
 /* restore reg before where in ilist */
 void
-umbra_restore_reg(void         *drcontext,
-                  umbra_info_t *info,
-                  instrlist_t  *ilist,
-                  instr_t      *where,
-                  reg_id_t      reg)
+umbra_restore_reg(void *drcontext, umbra_info_t *info, instrlist_t *ilist, instr_t *where,
+                  reg_id_t reg)
 {
     int slot;
     instr_t *instr;
 
-    DR_ASSERT(reg >= REG_SPILL_START &&
-              reg <= REG_SPILL_STOP);
-    slot  = reg - REG_SPILL_START;
-    instr = INSTR_CREATE_mov_ld(drcontext,
-                                opnd_create_reg(reg),
-                                OPND_CREATE_ABSMEM(&info->spill_regs[slot],
-                                                   OPSZ_PTR));
+    DR_ASSERT(reg >= REG_SPILL_START && reg <= REG_SPILL_STOP);
+    slot = reg - REG_SPILL_START;
+    instr = INSTR_CREATE_mov_ld(drcontext, opnd_create_reg(reg),
+                                OPND_CREATE_ABSMEM(&info->spill_regs[slot], OPSZ_PTR));
     instrlist_meta_preinsert(ilist, where, instr);
 }
 
-
 /* save aflags from eax */
 void
-umbra_save_eax_aflags(void         *drcontext,
-                      umbra_info_t *info,
-                      instrlist_t  *ilist,
-                      instr_t      *where)
+umbra_save_eax_aflags(void *drcontext, umbra_info_t *info, instrlist_t *ilist,
+                      instr_t *where)
 {
     instr_t *instr;
 
-    instr = INSTR_CREATE_mov_st(drcontext, 
-                                OPND_CREATE_ABSMEM(&info->aflags,
-                                                   OPSZ_4),
+    instr = INSTR_CREATE_mov_st(drcontext, OPND_CREATE_ABSMEM(&info->aflags, OPSZ_4),
                                 opnd_create_reg(REG_EAX));
     instrlist_meta_preinsert(ilist, where, instr);
 }
 
-
 /* restore aflags into eax */
 void
-umbra_restore_eax_aflags(void         *drcontext,
-                         umbra_info_t *info,
-                         instrlist_t  *ilist,
-                         instr_t      *where)
+umbra_restore_eax_aflags(void *drcontext, umbra_info_t *info, instrlist_t *ilist,
+                         instr_t *where)
 {
     instr_t *instr;
 
-    instr = INSTR_CREATE_mov_ld(drcontext,
-                                opnd_create_reg(REG_EAX),
-                                OPND_CREATE_ABSMEM(&info->aflags,
-                                                   OPSZ_4)),
+    instr = INSTR_CREATE_mov_ld(drcontext, opnd_create_reg(REG_EAX),
+                                OPND_CREATE_ABSMEM(&info->aflags, OPSZ_4)),
     instrlist_meta_preinsert(ilist, where, instr);
 }
-
 
 /* Remove the rest instructions from ilist after instr (including instr) */
 void
@@ -131,54 +108,49 @@ instrlist_truncate(void *drcontext, instrlist_t *ilist, instr_t *instr)
     instr_t *next_instr;
 
     DR_ASSERT_MSG(instr != NULL, "Wrong instr to truncate!");
-    for(; instr != NULL; instr = next_instr) {
+    for (; instr != NULL; instr = next_instr) {
         next_instr = instr_get_next(instr);
         instrlist_remove(ilist, instr);
         instr_destroy(drcontext, instr);
     }
 }
 
-
 /* return if instruction */
 bool
 instr_uses_aflags(instr_t *instr)
 {
     uint aflags;
-    
+
     aflags = instr_get_arith_flags(instr);
-    if (TESTANY(EFLAGS_READ_6, aflags) || 
-        TESTANY(EFLAGS_WRITE_6, aflags))
+    if (TESTANY(EFLAGS_READ_6, aflags) || TESTANY(EFLAGS_WRITE_6, aflags))
         return true;
 
     return false;
 }
 
-
 bool
 instr_writes_to_any_aflags(instr_t *instr)
 {
     uint aflags;
-    
+
     aflags = instr_get_arith_flags(instr);
     if (TESTANY(EFLAGS_WRITE_6, aflags))
         return true;
 
-    return false;    
+    return false;
 }
-
 
 bool
 instr_writes_to_all_aflags(instr_t *instr)
 {
     uint aflags;
-    
+
     aflags = instr_get_arith_flags(instr);
     if (TESTALL(EFLAGS_WRITE_6, aflags))
         return true;
 
-    return false;   
+    return false;
 }
-
 
 bool
 ref_is_string_ref(mem_ref_t *ref)
@@ -191,7 +163,6 @@ ref_is_string_ref(mem_ref_t *ref)
     return true;
 }
 
-
 bool
 ref_is_stack_mem(basic_block_t *bb, mem_ref_t *ref)
 {
@@ -201,7 +172,6 @@ ref_is_stack_mem(basic_block_t *bb, mem_ref_t *ref)
         return true;
     return false;
 }
-
 
 bool
 ref_is_tls(opnd_t opnd)
@@ -215,26 +185,22 @@ ref_is_tls(opnd_t opnd)
     return false;
 }
 
-
 bool
 ref_is_local_var(basic_block_t *bb, mem_ref_t *ref)
 {
-    if (ref_is_stack_mem(bb, ref) &&
-        opnd_get_index(ref->opnd) != REG_NULL)
+    if (ref_is_stack_mem(bb, ref) && opnd_get_index(ref->opnd) != REG_NULL)
         return true;
-    
+
     return false;
 }
 
-
 bool
-ref_is_far_var(mem_ref_t *ref) 
+ref_is_far_var(mem_ref_t *ref)
 {
     if (opnd_is_far_base_disp(ref->opnd))
         return true;
     return false;
 }
-
 
 file_t
 umbra_open_thread_log(thread_id_t tid)
@@ -242,47 +208,43 @@ umbra_open_thread_log(thread_id_t tid)
 #ifdef LINUX_KERNEL
     return our_stdout;
 #else
-    char   name[128];
-    int    len;
+    char name[128];
+    int len;
     file_t logfile;
 
     /* XXX: Windows need a absolute path */
     name[0] = '\0';
-    len = dr_snprintf(name, sizeof(name)/sizeof(name[0]),
-                      "umbra.%s.%d.thread.log", 
+    len = dr_snprintf(name, sizeof(name) / sizeof(name[0]), "umbra.%s.%d.thread.log",
                       dr_get_application_name(), tid);
     DR_ASSERT(len > 0);
-    name[sizeof(name)/sizeof(name[0])-1] = '\0';
+    name[sizeof(name) / sizeof(name[0]) - 1] = '\0';
     logfile = dr_open_file(name, DR_FILE_READ | DR_FILE_WRITE_APPEND);
     DR_ASSERT(logfile != INVALID_FILE);
     return logfile;
 #endif
 }
 
-
-file_t 
+file_t
 umbra_open_proc_log(process_id_t pid)
 {
 #ifdef LINUX_KERNEL
     return our_stdout;
 #else
-    char   name[128];
-    int    len;
+    char name[128];
+    int len;
     file_t logfile;
 
     /* XXX: Windows need a absolute path */
     name[0] = '\0';
-    len = dr_snprintf(name, sizeof(name)/sizeof(name[0]),
-                      "umbra.%s.%d.proc.log", 
+    len = dr_snprintf(name, sizeof(name) / sizeof(name[0]), "umbra.%s.%d.proc.log",
                       dr_get_application_name(), pid);
     DR_ASSERT(len > 0);
-    name[sizeof(name)/sizeof(name[0])-1] = '\0';
+    name[sizeof(name) / sizeof(name[0]) - 1] = '\0';
     logfile = dr_open_file(name, DR_FILE_READ | DR_FILE_WRITE_APPEND);
     DR_ASSERT(logfile != INVALID_FILE);
     return logfile;
 #endif
 }
-
 
 app_pc
 umbra_align_cache_line(app_pc pc)
@@ -294,19 +256,17 @@ umbra_align_cache_line(app_pc pc)
     return new_pc;
 }
 
-
-reg_id_t 
+reg_id_t
 reg_to_32bit(reg_id_t reg)
 {
     if (reg_is_32bit(reg))
         return reg;
-    if (reg_is_64bit(reg)) 
+    if (reg_is_64bit(reg))
         return (reg + (REG_START_32 - REG_START_64));
-    
+
     DR_ASSERT(false);
     return REG_NULL;
 }
-
 
 bool
 instr_writes_to_aflags(instr_t *instr)
@@ -314,12 +274,11 @@ instr_writes_to_aflags(instr_t *instr)
     return instr_writes_to_any_aflags(instr);
 }
 
-
 bool
 instr_reads_from_aflags(instr_t *instr)
 {
     uint aflags;
-    
+
     aflags = instr_get_arith_flags(instr);
     if (TESTANY(EFLAGS_READ_6, aflags))
         return true;
@@ -331,8 +290,7 @@ instr_get_next_app_instr(instr_t *instr)
 {
     while (instr != NULL) {
         instr = instr_get_next(instr);
-        if (instr_get_app_pc(instr) != NULL && 
-            !instr_is_meta_may_fault(instr))
+        if (instr_get_app_pc(instr) != NULL && !instr_is_meta_may_fault(instr))
             return instr;
     }
     return NULL;

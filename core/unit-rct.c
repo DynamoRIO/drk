@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -33,12 +33,12 @@
 /* Copyright (c) 2004-2007 Determina Corp. */
 
 /*
- * unit-rct.c unit tests for rct.c 
+ * unit-rct.c unit tests for rct.c
  */
 
 #ifdef RCT_IND_BRANCH
 
-#include "rct.c"
+#    include "rct.c"
 
 UNIT_TEST_MAIN
 
@@ -48,12 +48,13 @@ UNIT_TEST_MAIN
  * or even better - run DR on top of the unit tests
  */
 
-#include <ctype.h>
+#    include <ctype.h>
 
 typedef int (*fconvert_t)(int c);
 typedef int (*fmult_t)(int);
 
-int foo(int a, bool lower)
+int
+foo(int a, bool lower)
 {
     fconvert_t f = toupper;
     int res;
@@ -64,36 +65,39 @@ int foo(int a, bool lower)
     return res;
 }
 
-int f2(int a)
+int
+f2(int a)
 {
-    return 2*a;
+    return 2 * a;
 }
 
-int f3(int a)
+int
+f3(int a)
 {
-    return 3*a;
+    return 3 * a;
 }
 
-int f7(int a)
+int
+f7(int a)
 {
-    return 7*a;
+    return 7 * a;
 }
 
-int 
+int
 bar(int a, fmult_t f)
 {
     int x = f2(a);
     int y = f3(a);
     int z = f(a);
-    
+
     LOG(GLOBAL, LOG_ALL, 1, "bar(%d): %d %d %d\n", x, y, z);
     return z;
 }
 
 /*  Writable yet initialized data indeed needs to be processed.*/
-fmult_t farr[2] = {f2, f7};
+fmult_t farr[2] = { f2, f7 };
 
-static void 
+static void
 test_indcalls()
 {
     EXPECT(foo('a', true), 'a');
@@ -105,9 +109,7 @@ test_indcalls()
     EXPECT(bar(7, f3), 21);
 }
 
-
-static 
-char
+static char
 test_switch_helper(char c)
 {
     switch (c) {
@@ -118,23 +120,22 @@ test_switch_helper(char c)
     }
 }
 
-static 
-void
+static void
 test_switch()
 {
-    EXPECT(test_switch_helper('a'),'j');
-    EXPECT(test_switch_helper('z'),'z');
+    EXPECT(test_switch_helper('a'), 'j');
+    EXPECT(test_switch_helper('z'), 'z');
 }
 
 /* start of real unit test */
 
-/* work on a small arrays of carefully planted values 
+/* work on a small arrays of carefully planted values
  *
  * TODO: verify end
  * of region conditions - and add this at the end of a page to verify
  * not reaching out to bad memory out of the array
  */
-static int 
+static int
 test_small_array(dcontext_t *dcontext)
 {
     /*
@@ -144,151 +145,128 @@ test_small_array(dcontext_t *dcontext)
 
     char arr[100];
 
-    arr[0]=4;
-    arr[1]=3;
-    arr[2]=2;
-    arr[3]=1;
+    arr[0] = 4;
+    arr[1] = 3;
+    arr[2] = 2;
+    arr[3] = 1;
 
-    arr[4+0]=5;
-    arr[4+1]=3;
-    arr[4+2]=2;
-    arr[4+3]=1;
+    arr[4 + 0] = 5;
+    arr[4 + 1] = 3;
+    arr[4 + 2] = 2;
+    arr[4 + 3] = 1;
 
     mutex_lock(&rct_module_lock); /* around whole sequence */
 
-    EXPECT(find_address_references(dcontext, (app_pc)arr, (app_pc)(arr+8), 
+    EXPECT(find_address_references(dcontext, (app_pc)arr, (app_pc)(arr + 8),
                                    (app_pc)0x01020304, (app_pc)0x01020304),
            0);
     /* clean up to start over */
-    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), 
-           0);
+    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), 0);
 
-    EXPECT(find_address_references(dcontext, arr, arr+8, 
-                            (app_pc)0x01020304, (app_pc)0x01020305),
+    EXPECT(find_address_references(dcontext, arr, arr + 8, (app_pc)0x01020304,
+                                   (app_pc)0x01020305),
            1);
-    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), 
-           1);
+    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), 1);
 
     /* repetition */
-    EXPECT(find_address_references(dcontext, arr, arr+8, 
-                            (app_pc)0x01020304, (app_pc)0x01020305),
+    EXPECT(find_address_references(dcontext, arr, arr + 8, (app_pc)0x01020304,
+                                   (app_pc)0x01020305),
            1);
-    EXPECT(find_address_references(dcontext, arr, arr+8, 
-                            (app_pc)0x01020304, (app_pc)0x01020305),
+    EXPECT(find_address_references(dcontext, arr, arr + 8, (app_pc)0x01020304,
+                                   (app_pc)0x01020305),
            0);
-    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), 
-           1);
-    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), 
-           0);
+    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), 1);
+    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), 0);
 
-
-    EXPECT(find_address_references(dcontext,arr, arr+8, 
-                                   (app_pc)0x01020304, (app_pc)0x01020309),
+    EXPECT(find_address_references(dcontext, arr, arr + 8, (app_pc)0x01020304,
+                                   (app_pc)0x01020309),
            2);
-    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), 
+    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), 2);
+
+    EXPECT(find_address_references(dcontext, arr, arr + 8, (app_pc)0x01020304,
+                                   (app_pc)0x01020309),
            2);
-
-
-    EXPECT(find_address_references(dcontext,arr, arr+8, 
-                                   (app_pc)0x01020304, (app_pc)0x01020309),
-           2);
-    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)0x01020304), 
+    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)0x01020304), 0);
+    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)0x01020305), 1);
+    EXPECT(invalidate_ind_branch_target_range(dcontext, (app_pc)0x01020306,
+                                              (app_pc)0x01020309),
            0);
-    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)0x01020305), 
+    EXPECT(invalidate_ind_branch_target_range(dcontext, (app_pc)0x01020305,
+                                              (app_pc)0x01020306),
            1);
-    EXPECT(invalidate_ind_branch_target_range(dcontext, (app_pc)0x01020306, (app_pc)0x01020309), 
+    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), 0);
+
+    EXPECT(find_address_references(dcontext, arr + 1, arr + 8, (app_pc)0x01020304,
+                                   (app_pc)0x01020309),
+           1);
+    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), 1);
+
+    EXPECT(find_address_references(dcontext, arr + 1, arr + 8, (app_pc)0x01020305,
+                                   (app_pc)0x01020309),
+           1);
+    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), 1);
+
+    EXPECT(find_address_references(dcontext, arr + 1, arr + 8, (app_pc)0x01020306,
+                                   (app_pc)0x01020309),
            0);
-    EXPECT(invalidate_ind_branch_target_range(dcontext, (app_pc)0x01020305, (app_pc)0x01020306), 
+    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), 0);
+
+    EXPECT(find_address_references(dcontext, arr + 4, arr + 8, (app_pc)0x01020300,
+                                   (app_pc)0x01020309),
            1);
-    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), 
-           0);
+    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), 1);
 
-
-    EXPECT(find_address_references(dcontext,arr+1, arr+8, 
-                                   (app_pc)0x01020304, (app_pc)0x01020309),
-           1);
-    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), 
-           1);
-
-
-    EXPECT(find_address_references(dcontext,arr+1, arr+8, 
-                                   (app_pc)0x01020305, (app_pc)0x01020309),
-           1);
-    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), 
-           1);
-
-
-    EXPECT(find_address_references(dcontext,arr+1, arr+8, 
-                            (app_pc)0x01020306, (app_pc)0x01020309),
-           0);
-    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), 
-           0);
-
-    EXPECT(find_address_references(dcontext,arr+4, arr+8, 
-                            (app_pc)0x01020300, (app_pc)0x01020309),
-           1);
-    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), 
-           1);
-
-    EXPECT(find_address_references(dcontext,arr+5, arr+8, 
-                            (app_pc)0x01020300, (app_pc)0x01020309),
+    EXPECT(find_address_references(dcontext, arr + 5, arr + 8, (app_pc)0x01020300,
+                                   (app_pc)0x01020309),
            0);
 
     /* unreadable */
-    EXPECT(find_address_references(dcontext, (app_pc)5, (app_pc)8, 
-                            (app_pc)0x01020300, (app_pc)0x01020309),
+    EXPECT(find_address_references(dcontext, (app_pc)5, (app_pc)8, (app_pc)0x01020300,
+                                   (app_pc)0x01020309),
            0);
 
     /* all address space for code */
-    EXPECT(find_address_references(dcontext,arr, arr+8, 
-                            (app_pc)0, (app_pc)-1),
+    EXPECT(find_address_references(dcontext, arr, arr + 8, (app_pc)0, (app_pc)-1),
            5); /* all match */
 
-    EXPECT(find_address_references(dcontext,arr, arr+8, 
-                            (app_pc)0, (app_pc)-1),
+    EXPECT(find_address_references(dcontext, arr, arr + 8, (app_pc)0, (app_pc)-1),
            0); /* all duplicates of last search */
 
-    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), 
-           5);
+    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), 5);
 
+    arr[0] = 4;
+    arr[1] = 3;
+    arr[2] = 2;
+    arr[3] = 1;
 
-    arr[0]=4;
-    arr[1]=3;
-    arr[2]=2;
-    arr[3]=1;
-
-    arr[4+0]=4;                 /* duplicate entry */
-    arr[4+1]=3;
-    arr[4+2]=2;
-    arr[4+3]=1;
+    arr[4 + 0] = 4; /* duplicate entry */
+    arr[4 + 1] = 3;
+    arr[4 + 2] = 2;
+    arr[4 + 3] = 1;
 
     /* all address space for code */
-    EXPECT(find_address_references(dcontext,arr, arr+8, 
-                            (app_pc)0, (app_pc)-1),
+    EXPECT(find_address_references(dcontext, arr, arr + 8, (app_pc)0, (app_pc)-1),
            4); /* all match but we have a duplicate */
-    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), 
-           4);
+    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), 4);
 
-    EXPECT(find_address_references(dcontext,arr, arr+8, 
-                            (app_pc)0x01020300, (app_pc)0x01020305),
+    EXPECT(find_address_references(dcontext, arr, arr + 8, (app_pc)0x01020300,
+                                   (app_pc)0x01020305),
            1); /* two matches but with a duplicate */
-    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), 
-           1);
+    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), 1);
 
-    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), 
-           0);
+    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), 0);
 
     mutex_unlock(&rct_module_lock);
 
     return 1;
-}                        
+}
 
 static void
 test_lookup_delete(dcontext_t *dcontext)
 {
 
     app_pc tag = (app_pc)0x1234567;
-    fragment_t * f = rct_ind_branch_target_lookup(dcontext, tag);
+    fragment_t *f = rct_ind_branch_target_lookup(dcontext, tag);
     EXPECT_RELATION((ptr_uint_t)f, ==, 0);
 
     mutex_lock(&rct_module_lock);
@@ -298,7 +276,7 @@ test_lookup_delete(dcontext_t *dcontext)
 
     f = rct_ind_branch_target_lookup(dcontext, tag);
     EXPECT_RELATION((ptr_uint_t)f, !=, 0);
-    rct_flush_ind_branch_target_entry(dcontext, (FutureAfterCallFragment*)f);
+    rct_flush_ind_branch_target_entry(dcontext, (FutureAfterCallFragment *)f);
     f = rct_ind_branch_target_lookup(dcontext, tag);
     EXPECT_RELATION((ptr_uint_t)f, ==, 0);
 }
@@ -311,37 +289,35 @@ test_self_direct(dcontext_t *dcontext)
     uint found;
     uint newfound;
 
-#ifdef WINDOWS
+#    ifdef WINDOWS
     /* this will get both code and data FIXME: data2data reference
      * will be the majority
      */
     size = get_allocation_size((app_pc)test_self_direct, &base_pc);
-#else
+#    else
     /* platform agnostic but only looks for current CODE section, and
      * on windows is not quite what we want - since base_pc will just
      * be just page aligned
      */
     get_memory_info((app_pc)test_self_direct, &base_pc, &size, NULL);
-#endif
+#    endif
 
     mutex_lock(&rct_module_lock);
-    found = find_address_references(dcontext, 
-                                    base_pc, base_pc+size, 
-                                    base_pc, base_pc+size);
+    found = find_address_references(dcontext, base_pc, base_pc + size, base_pc,
+                                    base_pc + size);
     mutex_unlock(&rct_module_lock);
 
     /* guesstimate */
     EXPECT_RELATION(found, >, 140);
-#ifdef WINDOWS
+#    ifdef WINDOWS
     /* FIXME: note data2data have a huge part here */
     EXPECT_RELATION(found, <, 20000);
-#else
+#    else
     EXPECT_RELATION(found, <, 1000);
-#endif
+#    endif
     EXPECT(is_address_taken(dcontext, (app_pc)f3), true);
     EXPECT(is_address_taken(dcontext, (app_pc)f2), true);
     EXPECT(is_address_taken(dcontext, (app_pc)f7), true); /* array reference only */
-
 
     /* it is pretty hard to produce the address of a static
      * (e.g. test_self) without making it address taken ;) so we just
@@ -352,10 +328,9 @@ test_self_direct(dcontext_t *dcontext)
     EXPECT(is_address_taken(dcontext, (app_pc)f7 + 1), false);
 
     mutex_lock(&rct_module_lock);
-    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), 
-           found);
-    EXPECT_RELATION(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1)
-                    , == , 0);  /* nothing missed */
+    EXPECT(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), found);
+    EXPECT_RELATION(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), ==,
+                    0); /* nothing missed */
     mutex_unlock(&rct_module_lock);
 
     /* now try manually rct_analyze_module_at_violation */
@@ -367,15 +342,14 @@ test_self_direct(dcontext_t *dcontext)
     /* FIXME: with the data2data in fact a few noisy entries show up
      * since second lookup in data may differ from original
      */
-    newfound = find_address_references(dcontext, 
-                                       base_pc, base_pc+size, 
-                                       base_pc, base_pc+size);
+    newfound = find_address_references(dcontext, base_pc, base_pc + size, base_pc,
+                                       base_pc + size);
     EXPECT_RELATION(newfound, <, 4);
-    EXPECT_RELATION(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1)
-                    , > , found + newfound - 5); /* FIXME: data references uncomparable */
+    EXPECT_RELATION(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), >,
+                    found + newfound - 5); /* FIXME: data references uncomparable */
 
-    EXPECT_RELATION(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1)
-                    , == , 0);  /* nothing missed */
+    EXPECT_RELATION(invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1), ==,
+                    0); /* nothing missed */
     mutex_unlock(&rct_module_lock);
 }
 
@@ -388,7 +362,7 @@ test_rct_ind_branch_check(void)
     fragment_t f;
 
     /* to pass args security_violation assumes present */
-    dcontext_t *dcontext = create_new_dynamo_context(true/*initial*/, NULL);
+    dcontext_t *dcontext = create_new_dynamo_context(true /*initial*/, NULL);
 
     f.tag = (app_pc)0xbeef;
     l.fragment = &f;
@@ -397,18 +371,14 @@ test_rct_ind_branch_check(void)
     dcontext->logfile = GLOBAL;
 
     /* this should auto call rct_analyze_module_at_violation((app_pc)test_self) */
-    EXPECT(rct_ind_branch_check(dcontext, (app_pc)f3), 
-           1);
-    EXPECT(rct_ind_branch_check(dcontext, (app_pc)f3), 
-           1);
+    EXPECT(rct_ind_branch_check(dcontext, (app_pc)f3), 1);
+    EXPECT(rct_ind_branch_check(dcontext, (app_pc)f3), 1);
 
     /* running in -detect_mode we should get -1 */
-    EXPECT(rct_ind_branch_check(dcontext, (app_pc)f3+1), 
-           -1);
+    EXPECT(rct_ind_branch_check(dcontext, (app_pc)f3 + 1), -1);
 
     /* not code */
-    EXPECT(rct_ind_branch_check(dcontext, (app_pc)0xbad), 
-           2);
+    EXPECT(rct_ind_branch_check(dcontext, (app_pc)0xbad), 2);
 
     /* starting over */
     mutex_lock(&rct_module_lock);
@@ -420,8 +390,8 @@ test_rct_ind_branch_check(void)
     EXPECT(rct_ind_branch_check(dcontext, (app_pc)f7), 1); /* array reference only */
 
     /* it is pretty hard to produce the address of a static
-      * (e.g. test_self) without making it address taken ;) so we just
-      * add a number to known to be good one's */
+     * (e.g. test_self) without making it address taken ;) so we just
+     * add a number to known to be good one's */
     EXPECT(rct_ind_branch_check(dcontext, (app_pc)f3 + 1), -1);
     EXPECT(rct_ind_branch_check(dcontext, (app_pc)f3 + 2), -1);
     EXPECT(rct_ind_branch_check(dcontext, (app_pc)f2 + 1), -1);
@@ -430,7 +400,7 @@ test_rct_ind_branch_check(void)
     mutex_lock(&rct_module_lock);
     found = invalidate_ind_branch_target_range(dcontext, 0, (app_pc)-1);
     mutex_unlock(&rct_module_lock);
-    
+
     EXPECT_RELATION(found, >, 140);
 }
 
@@ -450,26 +420,32 @@ test_loaddll()
  * #pragma(code_section) that is used by device drivers to mark
  * PAGEABLE code sections
  *
-*/
+ */
 
-#if TEST_MULTI_SECTIONS         /* NYI */
-#pragma code_seg(".my_code1")
-void func2() { 
+#    if TEST_MULTI_SECTIONS /* NYI */
+#        pragma code_seg(".my_code1")
+void
+func2()
+{
 }
 
-#pragma code_seg(push, r1, ".my_code2")
-void func3() { 
+#        pragma code_seg(push, r1, ".my_code2")
+void
+func3()
+{
 }
 
-#pragma code_seg(pop, r1)      /* back to my_code1 */
-void func4() {
+#        pragma code_seg(pop, r1) /* back to my_code1 */
+void
+func4()
+{
 }
-#pragma code_seg                /* back in .text */
-#endif
-
+#        pragma code_seg /* back in .text */
+#    endif
 
 static int
-unit_main(void) {
+unit_main(void)
+{
     dcontext_t *dcontext = GLOBAL_DCONTEXT;
 
     standalone_init();
@@ -477,7 +453,7 @@ unit_main(void) {
     fragment_init();
 
     /* options have to be set on the command line since after
-     * synchronization any overrides will be gone 
+     * synchronization any overrides will be gone
      */
     EXPECT(dynamo_options.detect_mode, true);
     EXPECT(dynamo_options.rct_ind_call, 11);

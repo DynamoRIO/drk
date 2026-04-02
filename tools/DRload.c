@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -40,21 +40,26 @@
  * otherwise, use -loop and then attach.
  *
  * example usage:
- *   ./cdb -g -c "ln 7004e660; ln 77f830e7; q" c:\\derek\\dr\\tools\\DRload.exe -debugbreak c:\\derek\\dr\\builds\\11087\\exports\\x86_win32_rel\\dynamorio.dll | grep '|'
+ *   ./cdb -g -c "ln 7004e660; ln 77f830e7; q" c:\\derek\\dr\\tools\\DRload.exe
+ * -debugbreak c:\\derek\\dr\\builds\\11087\\exports\\x86_win32_rel\\dynamorio.dll | grep
+ * '|'
  * =>
  *   (7004deb8)   dynamorio!shared_code+0x7a8   |  (7004edc4)   dynamorio!features
- *   (77f830c2)   ntdll!RtlIsDosDeviceName_U+0x25   |  (77faebf2)   ntdll!RtlpAllocateHeapUsageEntry
+ *   (77f830c2)   ntdll!RtlIsDosDeviceName_U+0x25   |  (77faebf2)
+ * ntdll!RtlpAllocateHeapUsageEntry
  */
 
-typedef int (*int_func_t) ();
-typedef void (*void_func_t) ();
+typedef int (*int_func_t)();
+typedef void (*void_func_t)();
 
 int
 usage(char *exec)
 {
-    fprintf(stderr, "Usage: %s [-help] [-debugbreak] [-loop] [-key] [-no_init]\n"
+    fprintf(stderr,
+            "Usage: %s [-help] [-debugbreak] [-loop] [-key] [-no_init]\n"
             "        [-call_to_offset <hex offset>] [-find_safe_offset] [-no_resolve]\n"
-            "        [-map <filename>] [-base <hex addr>] <DR/other dll path>\n", exec);
+            "        [-map <filename>] [-base <hex addr>] <DR/other dll path>\n",
+            exec);
     return 1;
 }
 
@@ -63,20 +68,27 @@ help(char *exec)
 {
     usage(exec);
     fprintf(stderr, "   -help : print this message\n");
-    fprintf(stderr, "   -debugbreak : for launching under a debugger, trigger a "
+    fprintf(stderr,
+            "   -debugbreak : for launching under a debugger, trigger a "
             "debugbreak once dll is loaded\n");
-    fprintf(stderr, "   -loop : for attaching a debugger, loop infinitely once dll is"
+    fprintf(stderr,
+            "   -loop : for attaching a debugger, loop infinitely once dll is"
             " loaded\n");
-    fprintf(stderr, "   -key : for attaching a debugger, wait for keypress once dll is"
+    fprintf(stderr,
+            "   -key : for attaching a debugger, wait for keypress once dll is"
             " loaded\n");
-    fprintf(stderr, "   -no_init : don't call dynamorio init function after dll is"
+    fprintf(stderr,
+            "   -no_init : don't call dynamorio init function after dll is"
             " loaded (use for non-dr dll)\n");
-    fprintf(stderr, "   -call_to_offset <hex offset> : once dll is loaded call this "
+    fprintf(stderr,
+            "   -call_to_offset <hex offset> : once dll is loaded call this "
             "offset to the dll base");
-    fprintf(stderr, "   -find_safe_offset : if -call_to_offset is set, finds the first"
+    fprintf(stderr,
+            "   -find_safe_offset : if -call_to_offset is set, finds the first"
             "return instr in\n      the same mem region as the supplied offset and calls"
             "it instead.");
-    fprintf(stderr, "   -no_resolve : pass DONT_RESOLVE_DLL_REFERENCES to the ldr when"
+    fprintf(stderr,
+            "   -no_resolve : pass DONT_RESOLVE_DLL_REFERENCES to the ldr when"
             " loading the dll\n      (prevents dependent dlls from being loaded)\n");
     fprintf(stderr, "   -map <filename> <hex address> : map filename at address\n");
     fprintf(stderr, "   -base <address> : maps dynamorio.dll at address\n");
@@ -92,16 +104,14 @@ map_file(const char *filename, void *addr, int image)
     PBYTE view;
     /* Must specify FILE_SHARE_READ to open if -persist_lock_file is in use */
     HANDLE file = CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, NULL,
-                              OPEN_EXISTING,
-                              FILE_ATTRIBUTE_NORMAL, NULL);
+                              OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (file == NULL) {
         int err = GetLastError();
         printf("Error %d opening %s\n", err, filename);
         return 0;
     }
     /* FIXME: to map as image also need to adjust file and mapping to be executable */
-    map = CreateFileMapping(file, NULL, image ? SEC_IMAGE : PAGE_READONLY, 
-                            0, 0, NULL);
+    map = CreateFileMapping(file, NULL, image ? SEC_IMAGE : PAGE_READONLY, 0, 0, NULL);
     if (map == NULL) {
         int err = GetLastError();
         CloseHandle(file);
@@ -139,7 +149,10 @@ main(int argc, char *argv[])
     BOOL find_safe_offset = FALSE;
 
     /* Link user32.dll for easier running under dr */
-    do { if (argc > 1000) MessageBeep(0); } while (0);
+    do {
+        if (argc > 1000)
+            MessageBeep(0);
+    } while (0);
 
     if (argc < 2)
         return usage(argv[0]);
@@ -177,9 +190,9 @@ main(int argc, char *argv[])
             void *addr = NULL;
             int len;
             arg_offs += 1;
-            if (argc - (arg_offs+1) < 1)
+            if (argc - (arg_offs + 1) < 1)
                 return usage(argv[0]);
-            len = sscanf(argv[arg_offs+1], "%08x", &addr);
+            len = sscanf(argv[arg_offs + 1], "%08x", &addr);
             if (len != 1 || addr == NULL)
                 return usage(argv[0]);
             map_file(argv[arg_offs], addr, 0 /* mapped */);
@@ -216,20 +229,17 @@ main(int argc, char *argv[])
             base = preferred_base;
         else /* assume DR dll */
             base = (void *)0x71000000;
-        VirtualAllocEx(GetCurrentProcess(), 
-                       base, 0x1000, MEM_RESERVE, PAGE_NOACCESS);
+        VirtualAllocEx(GetCurrentProcess(), base, 0x1000, MEM_RESERVE, PAGE_NOACCESS);
         if (preferred_base == NULL) {
             /* also do debug build base */
-            base = (void*)0x15000000;
-            VirtualAllocEx(GetCurrentProcess(), 
-                           base, 0x1000, MEM_RESERVE, PAGE_NOACCESS);
+            base = (void *)0x15000000;
+            VirtualAllocEx(GetCurrentProcess(), base, 0x1000, MEM_RESERVE, PAGE_NOACCESS);
         }
         base = force_base;
         /* to ensure we fill all cavities we loop through */
-        while (base > (void*)0x10000) {
-            base = (void*)((int)base - 0x10000);
-            VirtualAllocEx(GetCurrentProcess(), 
-                           base, 0x1000, MEM_RESERVE, PAGE_NOACCESS);
+        while (base > (void *)0x10000) {
+            base = (void *)((int)base - 0x10000);
+            VirtualAllocEx(GetCurrentProcess(), base, 0x1000, MEM_RESERVE, PAGE_NOACCESS);
         }
 
 #if 0
@@ -238,7 +248,6 @@ main(int argc, char *argv[])
         /* we can't really initialize */
 #endif
     }
-
 
     if (use_dont_resolve) {
         dll = LoadLibraryExA(DRpath, NULL, DONT_RESOLVE_DLL_REFERENCES);
@@ -253,8 +262,8 @@ main(int argc, char *argv[])
     }
 
     if (initialize_dr) {
-        init_func = (int_func_t) GetProcAddress(dll, "dynamorio_app_init");
-        take_over_func = (void_func_t) GetProcAddress(dll, "dynamorio_app_take_over");
+        init_func = (int_func_t)GetProcAddress(dll, "dynamorio_app_init");
+        take_over_func = (void_func_t)GetProcAddress(dll, "dynamorio_app_take_over");
         if (init_func == NULL || take_over_func == NULL) {
             printf("Error finding DR init routines\n");
             res = 1;
@@ -267,7 +276,7 @@ main(int argc, char *argv[])
     }
 
     if (call_offset != -1) {
-        unsigned char *call_location = (char *)dll+call_offset;
+        unsigned char *call_location = (char *)dll + call_offset;
         if (find_safe_offset) {
             MEMORY_BASIC_INFORMATION mbi;
             if (VirtualQuery(call_location, &mbi, sizeof(mbi)) != sizeof(mbi) ||
@@ -278,7 +287,7 @@ main(int argc, char *argv[])
                  * use other types of rets too */
                 unsigned char *test;
                 for (test = call_location;
-                     test < (char *)mbi.BaseAddress+mbi.RegionSize; test++) {
+                     test < (char *)mbi.BaseAddress + mbi.RegionSize; test++) {
                     if (*test == 0xc3 /* plain ret */) {
                         printf("Found safe call target at offset 0x%08x\n",
                                test - (char *)dll);
@@ -291,12 +300,12 @@ main(int argc, char *argv[])
                 }
             }
         }
-        printf("Calling base(0x%08x) + offset(0x%08x) = 0x%08x\n",
-               dll, call_location-(char *)dll, call_location);
-        (*(int (*) ())(call_location))();
+        printf("Calling base(0x%08x) + offset(0x%08x) = 0x%08x\n", dll,
+               call_location - (char *)dll, call_location);
+        (*(int (*)())(call_location))();
     }
 
- done:
+done:
     if (keypress) {
         printf("press any key or attach a debugger...\n");
         fflush(stdout);

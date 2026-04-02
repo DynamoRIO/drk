@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -36,7 +36,7 @@
  * stats.c - statistics related functionality
  */
 
-/* 
+/*
  * Note that timer numbers from TSC cannot fully adjust for thread
  * context switches.  We truly want a virtual time stamp counter that
  * is thread specific, yet without OS support that's not possible.  If
@@ -61,21 +61,19 @@
 #include "os_exports.h"
 #include "kernel_interface.h"
 
-#include "string_wrapper.h"  /* for memset */
+#include "string_wrapper.h" /* for memset */
 
 #ifdef KSTATS
 
-#ifdef KSTAT_UNIT_TEST 
+#    ifdef KSTAT_UNIT_TEST
 /* FIXME: add a Makefile rule for this */
 kstat_variables_t tkv;
 kstat_stack_t ks;
-#endif
+#    endif
 
 /* STATIC forward declarations */
 static void
 kstat_merge_var(kstat_variable_t *destination, kstat_variable_t *source);
-
-
 
 static void
 kstat_init_variable(kstat_variable_t *kv, const char *name)
@@ -94,25 +92,25 @@ kstats_evaluate_expressions(kstat_variables_t *kvars)
     /* sum can be recomputed at any time and target is reinitialized,
      * all chained KSTAT_SUM equations should appear in evaluation order
      */
-#define KSTAT_SUM(desc, name, var1, var2)               \
-        kstat_init_variable(&kvars->name, #name);       \
-        kstat_merge_var(&kvars->name, &kvars->var1);    \
+#    define KSTAT_SUM(desc, name, var1, var2)        \
+        kstat_init_variable(&kvars->name, #name);    \
+        kstat_merge_var(&kvars->name, &kvars->var1); \
         kstat_merge_var(&kvars->name, &kvars->var2);
-#define KSTAT_DEF(desc, name)   /* nothing to do */
-#include "kstatsx.h"    
-#undef KSTAT_SUM
-#undef KSTAT_DEF
+#    define KSTAT_DEF(desc, name) /* nothing to do */
+#    include "kstatsx.h"
+#    undef KSTAT_SUM
+#    undef KSTAT_DEF
 }
 
 /* equivalent to KSTAT_DEF for the rest of the file */
-#define KSTAT_SUM(desc, name, var1, var2) KSTAT_DEF(desc, name)
+#    define KSTAT_SUM(desc, name, var1, var2) KSTAT_DEF(desc, name)
 
 static void
 kstat_init_variables(kstat_variables_t *ks)
 {
-#define KSTAT_DEF(desc, name) kstat_init_variable(&ks->name, #name);
-#include "kstatsx.h"
-#undef KSTAT_DEF
+#    define KSTAT_DEF(desc, name) kstat_init_variable(&ks->name, #    name);
+#    include "kstatsx.h"
+#    undef KSTAT_DEF
 }
 
 /* There is no good minimum value here since a thread can get switched
@@ -122,40 +120,31 @@ kstat_init_variables(kstat_variables_t *ks)
  * these properly.  However, a millisecond is quite a lot of time and
  * we shouldn't be doing anything like that.
  */
-enum {KSTAT_OUTLIER_THRESHOLD_MS = 1}; /* 1 ms for now */
-timestamp_t kstat_ignore_context_switch; 
+enum { KSTAT_OUTLIER_THRESHOLD_MS = 1 }; /* 1 ms for now */
+timestamp_t kstat_ignore_context_switch;
 
-static timestamp_t
-kstat_frequency_per_msec;
+static timestamp_t kstat_frequency_per_msec;
 
 /* PR 312534: reduce stack usage (gcc does not combine locals) */
 static void
-kstat_print_individual(file_t outf, kstat_variable_t *kv,
-                       const char *name, const char *desc)
+kstat_print_individual(file_t outf, kstat_variable_t *kv, const char *name,
+                       const char *desc)
 {
-    print_file(outf, "%20s:"FIXED_TIMESTAMP_FORMAT" totc,"
-               "%8u num,"
-               FIXED_TIMESTAMP_FORMAT" minc,"
-               FIXED_TIMESTAMP_FORMAT" avg,"
-               FIXED_TIMESTAMP_FORMAT" maxc,"
-               FIXED_TIMESTAMP_FORMAT" self,"
-               FIXED_TIMESTAMP_FORMAT" sub,"
+    print_file(outf,
+               "%20s:" FIXED_TIMESTAMP_FORMAT " totc,"
+               "%8u num," FIXED_TIMESTAMP_FORMAT " minc," FIXED_TIMESTAMP_FORMAT
+               " avg," FIXED_TIMESTAMP_FORMAT " maxc," FIXED_TIMESTAMP_FORMAT
+               " self," FIXED_TIMESTAMP_FORMAT " sub,"
                "\n"
-               "                   "
-               FIXED_TIMESTAMP_FORMAT" ms,"
-               FIXED_TIMESTAMP_FORMAT" ms out,"
+               "                   " FIXED_TIMESTAMP_FORMAT " ms," FIXED_TIMESTAMP_FORMAT
+               " ms out,"
                "%s\n",
-               name,
-               kv->total_self + kv->total_sub,
-               kv->num_self,
+               name, kv->total_self + kv->total_sub, kv->num_self,
                (kv->min_cum == (timestamp_t)-1) ? 0 : kv->min_cum,
-               (kv->total_self + kv->total_sub) / kv->num_self,
-               kv->max_cum,
-               kv->total_self,
-               kv->total_sub,
+               (kv->total_self + kv->total_sub) / kv->num_self, kv->max_cum,
+               kv->total_self, kv->total_sub,
                (kv->total_self + kv->total_sub) / kstat_frequency_per_msec,
-               kv->total_outliers/ kstat_frequency_per_msec,
-               desc);
+               kv->total_outliers / kstat_frequency_per_msec, desc);
 }
 
 static void
@@ -164,19 +153,22 @@ kstat_report(file_t outf, kstat_variables_t *ks)
     kstats_evaluate_expressions(ks);
     /* FIXME: Outliers may make the minc number appear smaller than
      * real, should at least mark with a '*' */
-#define KSTAT_DEF(desc, name)                   \
-    if (ks->name.num_self)                      \
-        kstat_print_individual(outf, &ks->name, #name, desc);
-#include "kstatsx.h"                                          
-#undef KSTAT_DEF
+#    define KSTAT_DEF(desc, name) \
+        if (ks->name.num_self)    \
+            kstat_print_individual(outf, &ks->name, #name, desc);
+#    include "kstatsx.h"
+#    undef KSTAT_DEF
 }
 
 DECLARE_CXTSWPROT_VAR(mutex_t process_kstats_lock, INIT_LOCK_FREE(process_kstats_lock));
-DECLARE_NEVERPROT_VAR(kstat_variables_t process_kstats, {{0,}});
+DECLARE_NEVERPROT_VAR(kstat_variables_t process_kstats,
+                      { {
+                          0,
+                      } });
 DECLARE_NEVERPROT_VAR(file_t process_kstats_outfile, INVALID_FILE);
 
 /* Log files are only needed for non-debug builds. */
-#ifndef DEBUG
+#    ifndef DEBUG
 static const char *
 kstats_main_logfile_name(void)
 {
@@ -188,7 +180,7 @@ kstats_thread_logfile_name(void)
 {
     return "kstats";
 }
-#endif
+#    endif
 
 void
 kstat_init(void)
@@ -196,8 +188,8 @@ kstat_init(void)
     kstat_frequency_per_msec = get_timer_frequency();
     kstat_ignore_context_switch = KSTAT_OUTLIER_THRESHOLD_MS * kstat_frequency_per_msec;
 
-    LOG(GLOBAL, LOG_STATS, 1, "Processor speed: "UINT64_FORMAT_STRING"MHz\n", 
-        kstat_frequency_per_msec/1000);
+    LOG(GLOBAL, LOG_STATS, 1, "Processor speed: " UINT64_FORMAT_STRING "MHz\n",
+        kstat_frequency_per_msec / 1000);
 
     /* FIXME: There is no check for TSC feature and whether CR4.TSD is set
      * so we can read it at CPL 3
@@ -207,15 +199,14 @@ kstat_init(void)
         return;
 
     kstat_init_variables(&process_kstats);
-#ifdef DEBUG
+#    ifdef DEBUG
     process_kstats_outfile = GLOBAL;
-#else
+#    else
     /* Open a process-wide kstats file. open_thread_private_file() does the
      * job when passed the appropriate basename (2nd arg).
      */
-    process_kstats_outfile =
-        open_log_file(kstats_main_logfile_name(), NULL, 0);
-#endif
+    process_kstats_outfile = open_log_file(kstats_main_logfile_name(), NULL, 0);
+#    endif
 }
 
 void
@@ -231,7 +222,7 @@ kstat_exit(void)
     mutex_unlock(&process_kstats_lock);
 
     DELETE_LOCK(process_kstats_lock);
-}    
+}
 
 static void
 kstat_calibrate(void)
@@ -243,15 +234,15 @@ kstat_calibrate(void)
     kstats_calibrated = true; /* slight innocent race */
 
     /* FIXME: once we calculate the overhead of calibrate_empty we can
-     * subtract that from every self_time measurement.  
+     * subtract that from every self_time measurement.
      * FIXME: The cost of
      * overhead_nested-overhead_empty should be subtracted from each
      * subpath_time.
      */
-    for (i=0; i<10000; i++) {
+    for (i = 0; i < 10000; i++) {
         KSTART(overhead_nested);
-          KSTART(overhead_empty);
-          KSTOP_NOT_PROPAGATED(overhead_empty);
+        KSTART(overhead_empty);
+        KSTOP_NOT_PROPAGATED(overhead_empty);
         KSTOP(overhead_nested);
     }
 }
@@ -261,11 +252,12 @@ kstat_thread_init(dcontext_t *dcontext)
 {
     thread_kstats_t *new_thread_kstats;
     if (!DYNAMO_OPTION(kstats))
-        return;                 /* dcontext->thread_kstats stays NULL */
+        return; /* dcontext->thread_kstats stays NULL */
 
     /* allocated on thread heap - use global if timing initialization matters */
-    new_thread_kstats = HEAP_TYPE_ALLOC(dcontext, thread_kstats_t, ACCT_STATS, UNPROTECTED);
-    LOG(THREAD, LOG_STATS, 2, "thread_kstats="PFX" size=%d\n", new_thread_kstats, 
+    new_thread_kstats =
+        HEAP_TYPE_ALLOC(dcontext, thread_kstats_t, ACCT_STATS, UNPROTECTED);
+    LOG(THREAD, LOG_STATS, 2, "thread_kstats=" PFX " size=%d\n", new_thread_kstats,
         sizeof(thread_kstats_t));
     /* initialize any thread stats bookkeeping fields before assigning to dcontext */
     kstat_init_variables(&new_thread_kstats->vars_kstats);
@@ -273,12 +265,12 @@ kstat_thread_init(dcontext_t *dcontext)
     new_thread_kstats->stack_kstats.depth = 1;
 
     new_thread_kstats->thread_id = get_thread_id();
-#ifdef DEBUG
+#    ifdef DEBUG
     new_thread_kstats->outfile_kstats = THREAD;
-#else
+#    else
     new_thread_kstats->outfile_kstats =
         open_log_file(kstats_thread_logfile_name(), NULL, 0);
-#endif
+#    endif
     dcontext->thread_kstats = new_thread_kstats;
 
     /* need to do this in a thread after it's initialized */
@@ -297,9 +289,9 @@ kstat_merge_var(kstat_variable_t *destination, kstat_variable_t *source)
     destination->total_self += source->total_self;
     destination->total_sub += source->total_sub;
     destination->total_outliers += source->total_outliers;
-    if (destination->min_cum > source->min_cum) 
+    if (destination->min_cum > source->min_cum)
         destination->min_cum = source->min_cum;
-    if (destination->max_cum < source->max_cum) 
+    if (destination->max_cum < source->max_cum)
         destination->max_cum = source->max_cum;
 }
 
@@ -307,9 +299,10 @@ kstat_merge_var(kstat_variable_t *destination, kstat_variable_t *source)
 static void
 kstat_merge(kstat_variables_t *destinationvars, kstat_variables_t *sourcevars)
 {
-#define KSTAT_DEF(desc, name) kstat_merge_var(&destinationvars->name, &sourcevars->name);
-#include "kstatsx.h"    
-#undef KSTAT_DEF
+#    define KSTAT_DEF(desc, name) \
+        kstat_merge_var(&destinationvars->name, &sourcevars->name);
+#    include "kstatsx.h"
+#    undef KSTAT_DEF
 }
 
 void
@@ -321,16 +314,15 @@ dump_thread_kstats(dcontext_t *dcontext)
     /* add thread id's in case outfile is rerouted to process_kstats_outfile */
     print_file(dcontext->thread_kstats->outfile_kstats, "Thread %d KSTATS {\n",
                dcontext->thread_kstats->thread_id);
-    kstat_report(dcontext->thread_kstats->outfile_kstats, 
+    kstat_report(dcontext->thread_kstats->outfile_kstats,
                  &dcontext->thread_kstats->vars_kstats);
     print_file(dcontext->thread_kstats->outfile_kstats, "} KSTATS\n");
 }
 
-
 void
 update_lifetime_kstats(dcontext_t *dcontext)
 {
-#ifdef KSTATS
+#    ifdef KSTATS
     timestamp_t actual, sum;
     if (dcontext->thread_kstats == NULL)
         return;
@@ -338,19 +330,16 @@ update_lifetime_kstats(dcontext_t *dcontext)
     KSTART(thread_measured);
     RDTSC_LL(actual);
     actual -= dcontext->thread_kstats->start_time;
-# define KTIME(name) ({\
-    kstat_variable_t *var = &dcontext->thread_kstats->vars_kstats.name;\
-    var->total_self + var->total_sub + var->total_outliers;\
-    })
-    sum = KTIME(thread_measured) + 
-          KTIME(fcache_default) +
-          KTIME(fcache_trace_trace) +
-          KTIME(usermode) +
-          KTIME(delaying_patched_interrupt) +
-          KTIME(kernel_interrupt_handling) +
-          KTIME(user_interrupt_handling);
-# undef KTIME
-    /* Assert % error: 
+#        define KTIME(name)                                                         \
+            ({                                                                      \
+                kstat_variable_t *var = &dcontext->thread_kstats->vars_kstats.name; \
+                var->total_self + var->total_sub + var->total_outliers;             \
+            })
+    sum = KTIME(thread_measured) + KTIME(fcache_default) + KTIME(fcache_trace_trace) +
+        KTIME(usermode) + KTIME(delaying_patched_interrupt) +
+        KTIME(kernel_interrupt_handling) + KTIME(user_interrupt_handling);
+#        undef KTIME
+    /* Assert % error:
      *
      * First, assume actual >= sum. This is true true b/c start_time is measured
      * before thread_measured starts (in kstat_thread_init) and actual is
@@ -359,13 +348,13 @@ update_lifetime_kstats(dcontext_t *dcontext)
      * Second, check error is <= TOL / 100 (i.e., TOL is a percentage). To avoid
      * floating point, check (error * 100 < TOL). To avoid negative numbers, do
      * the following:
-     *      100 * (actual - sum) / actual <= TOL 
+     *      100 * (actual - sum) / actual <= TOL
      *           100 - 100 * sum / actual <= TOL
      *                -100 * sum / actual <= TOL - 100
      *                 100 * sum / actual >= 100 - TOL
      */
-# define TOL 2
-#if 0
+#        define TOL 2
+#        if 0
     ASSERT(TOL >= 0 && TOL <= 100);
     ASSERT(actual >= sum);
     ASSERT(100 * sum / actual >= (100 - TOL)) ;
@@ -373,12 +362,12 @@ update_lifetime_kstats(dcontext_t *dcontext)
     if (actual < sum || 100 * sum / actual < (100 - TOL)) {
         os_terminate(dcontext, 0);
     }
-#endif
-# undef TOL
-#endif
+#        endif
+#        undef TOL
+#    endif
 }
 
-#ifdef DEBUG
+#    ifdef DEBUG
 /* We don't keep the variable name, but instead we lookup by addr when necessary */
 /* Too convoluted solution but since not common case, we don't bother
  * to initialize a name for each var in kstat_init_variables() */
@@ -386,11 +375,11 @@ static char *
 kstat_var_name(dcontext_t *dcontext, kstat_variable_t *kvar)
 {
     kstat_variables_t *kvs = &dcontext->thread_kstats->vars_kstats;
-#define KSTAT_DEF(desc, name) \
-    if (kvar == &kvs->name)   \
-        return #name;
-#include "kstatsx.h"
-#undef KSTAT_DEF
+#        define KSTAT_DEF(desc, name) \
+            if (kvar == &kvs->name)   \
+                return #name;
+#        include "kstatsx.h"
+#        undef KSTAT_DEF
     ASSERT_NOT_REACHED();
     return "#ERROR#";
 }
@@ -400,14 +389,13 @@ kstats_dump_stack(dcontext_t *dcontext)
 {
     uint i;
     LOG(THREAD, 1, LOG_STATS, "Thread KSTAT stack:\n");
-    for (i = dcontext->thread_kstats->stack_kstats.depth - 1;
-         i > 0; i--) {
-        LOG(THREAD, 1, LOG_STATS, "[%d] "PIFX" %s\n",
-            i, &dcontext->thread_kstats->stack_kstats.node[i],
+    for (i = dcontext->thread_kstats->stack_kstats.depth - 1; i > 0; i--) {
+        LOG(THREAD, 1, LOG_STATS, "[%d] " PIFX " %s\n", i,
+            &dcontext->thread_kstats->stack_kstats.node[i],
             kstat_var_name(dcontext, dcontext->thread_kstats->stack_kstats.node[i].var));
     }
 }
-#endif
+#    endif
 
 void
 kstat_thread_exit(dcontext_t *dcontext)
@@ -416,7 +404,7 @@ kstat_thread_exit(dcontext_t *dcontext)
     if (old_thread_kstats == NULL)
         return;
     LOG(THREAD, LOG_ALL, 2, "kstat_thread_exit: kstats stack is:\n");
-    DOLOG(2, LOG_STATS, {kstats_dump_stack(dcontext);});
+    DOLOG(2, LOG_STATS, { kstats_dump_stack(dcontext); });
     KSTOP_DC(dcontext, thread_measured);
     ASSERT(old_thread_kstats->stack_kstats.depth == 1);
     dump_thread_kstats(dcontext);
@@ -426,12 +414,12 @@ kstat_thread_exit(dcontext_t *dcontext)
     kstat_merge(&process_kstats, &old_thread_kstats->vars_kstats);
     mutex_unlock(&process_kstats_lock);
 
-#ifdef DEBUG
+#    ifdef DEBUG
     /* for non-debug we do fast exit path and don't free local heap */
     /* no clean up needed */
     dcontext->thread_kstats = NULL; /* disable thread kstats before freeing memory */
     HEAP_TYPE_FREE(dcontext, old_thread_kstats, thread_kstats_t, ACCT_STATS, UNPROTECTED);
-#endif /* DEBUG */
+#    endif /* DEBUG */
 }
 
 #endif /* KSTATS */
@@ -465,21 +453,21 @@ kstat_test(void)
     KSTOP_NOT_PROPAGATED(wait_event);
     printf("test %d\n", __LINE__);
 
-    { 
+    {
         uint i;
-        for (i=0; i<100000; i++) {
+        for (i = 0; i < 100000; i++) {
             KSTART(bb);
             KSTOP(bb);
         }
     }
 
-    { 
-        uint i,j,k;
-        for (i=0; i<100; i++) {
+    {
+        uint i, j, k;
+        for (i = 0; i < 100; i++) {
             KSTART(iloop);
-            for (j=0; j<100; j++) {
+            for (j = 0; j < 100; j++) {
                 KSTART(jloop);
-                for (k=0; k<100000; k++)
+                for (k = 0; k < 100000; k++)
                     /* nothing */;
                 KSTOP(jloop);
             }
@@ -487,7 +475,6 @@ kstat_test(void)
             KSTOP(iloop);
         }
     }
-
 
     KSTART(syscalls);
     KSTART(wait_event);
@@ -500,13 +487,14 @@ kstat_test(void)
     printf("test %d\n", __LINE__);
     KSTOP(measured);
 }
-int main()
+int
+main()
 {
     kstat_init();
     kstat_thread_init();
 
     kstat_test();
-    
+
     kstat_thread_exit();
     kstat_exit();
 }

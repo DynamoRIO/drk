@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -38,27 +38,23 @@
 #include "simple_tests.h"
 
 /* asm routine */
-void test_eflags_pos(uint pos);
+void
+test_eflags_pos(uint pos);
 
 /*
  * eflags we care about:
  *  11 10  9  8  7  6  5  4  3  2  1  0
- *  OF DF       SF ZF    AF    PF    CF 
+ *  OF DF       SF ZF    AF    PF    CF
  */
-const char *flags[] = {
-    "CF", "", "PF", "", "AF", "", "ZF", "SF", "",  "", "DF", "OF"
-};
+const char *flags[] = { "CF", "", "PF", "", "AF", "", "ZF", "SF", "", "", "DF", "OF" };
 
-const uint eflag_pos[] = {
-    0, 2, 4, 6, 7, 10, 11
-};
-#define NUM_FLAGS (sizeof(eflag_pos)/sizeof(eflag_pos[0]))
+const uint eflag_pos[] = { 0, 2, 4, 6, 7, 10, 11 };
+#define NUM_FLAGS (sizeof(eflag_pos) / sizeof(eflag_pos[0]))
 
 void
 test_flag(uint eflags, uint pos, bool set)
 {
-    if ((set && ((eflags & (1 << pos)) == 0)) ||
-        (!set && ((eflags & (1 << pos)) != 0)))
+    if ((set && ((eflags & (1 << pos)) == 0)) || (!set && ((eflags & (1 << pos)) != 0)))
         DR_ASSERT(false);
 }
 
@@ -67,7 +63,7 @@ eflags_main(void)
 {
     uint i;
 
-    for (i=0; i<NUM_FLAGS; i++) {
+    for (i = 0; i < NUM_FLAGS; i++) {
         test_eflags_pos(eflag_pos[i]);
     }
 }

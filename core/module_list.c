@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -34,7 +34,7 @@
 #include "instrument.h"
 #include "string_wrapper.h" /* for memset */
 #ifdef WINDOWS
-# include "ntdll.h" /* for protect_virtual_memory */
+#    include "ntdll.h" /* for protect_virtual_memory */
 #endif
 
 /* Used for maintaining our module list.  Custom field points to
@@ -56,7 +56,6 @@ vm_area_vector_t *loaded_module_areas;
  */
 DECLARE_CXTSWPROT_VAR(read_write_lock_t module_data_lock,
                       INIT_READWRITE_LOCK(module_data_lock));
-
 
 /**************** module_data_lock routines *****************/
 
@@ -109,20 +108,19 @@ os_get_module_info_write_locked(void)
     return false;
 }
 
-
 /**************** module_area routines *****************/
 
 static module_area_t *
-module_area_create(app_pc base, size_t view_size, bool at_map, const char *filepath
-                   _IF_LINUX(uint64 inode))
+module_area_create(app_pc base, size_t view_size, bool at_map,
+                   const char *filepath _IF_LINUX(uint64 inode))
 {
     module_area_t *ma =
         HEAP_TYPE_ALLOC(GLOBAL_DCONTEXT, module_area_t, ACCT_VMAREAS, PROTECTED);
     memset(ma, 0, sizeof(*ma));
     ma->start = base;
     ma->end = base + view_size;
-    os_module_area_init(ma, base, view_size, at_map, filepath _IF_LINUX(inode)
-                        HEAPACCT(ACCT_VMAREAS));
+    os_module_area_init(ma, base, view_size, at_map,
+                        filepath _IF_LINUX(inode) HEAPACCT(ACCT_VMAREAS));
     return ma;
 }
 
@@ -134,16 +132,16 @@ module_area_delete(module_area_t *ma)
     HEAP_TYPE_FREE(GLOBAL_DCONTEXT, ma, module_area_t, ACCT_VMAREAS, PROTECTED);
 }
 
-
 /**************** init/exit routines *****************/
 
 void
 modules_init(void)
 {
     VMVECTOR_ALLOC_VECTOR(loaded_module_areas, GLOBAL_DCONTEXT,
-                          VECTOR_SHARED | VECTOR_NEVER_MERGE
-                          /* case 10335: we always use module_data_lock */
-                          | VECTOR_NO_LOCK,
+                          VECTOR_SHARED |
+                              VECTOR_NEVER_MERGE
+                              /* case 10335: we always use module_data_lock */
+                              | VECTOR_NO_LOCK,
                           loaded_module_areas);
     os_modules_init();
 }
@@ -160,14 +158,14 @@ modules_reset_list(void)
     vmvector_iterator_t vmvi;
     /* need to free each entry */
     os_get_module_info_write_lock();
-    /* note our iterator doesn't support remove, 
+    /* note our iterator doesn't support remove,
      * anyways we need to free all entries here */
     vmvector_iterator_start(loaded_module_areas, &vmvi);
     while (vmvector_iterator_hasnext(&vmvi)) {
         app_pc start, end;
-        module_area_t *ma = (module_area_t*)vmvector_iterator_next(&vmvi, &start, &end);
+        module_area_t *ma = (module_area_t *)vmvector_iterator_next(&vmvi, &start, &end);
         ASSERT(ma != NULL);
-#ifdef WINDOWS        
+#ifdef WINDOWS
         ASSERT(ma->start == start && ma->end == end);
 #else
         ASSERT(ma->start <= start && ma->end >= end);
@@ -199,7 +197,6 @@ modules_exit(void)
     DELETE_READWRITE_LOCK(module_data_lock);
 }
 
-
 /**************** module_list updating routines *****************/
 
 /* Can only be called from os_module_area_init() called from module_list_add(),
@@ -217,9 +214,10 @@ module_list_add_mapping(module_area_t *ma, app_pc map_start, app_pc map_end)
      */
     ASSERT(os_get_module_info_write_locked());
     vmvector_add(loaded_module_areas, map_start, map_end, ma);
-    LOG(GLOBAL, LOG_INTERP|LOG_VMAREAS, 2, "\tmodule %s segment ["PFX","PFX"] added\n",
-        (GET_MODULE_NAME(&ma->names) == NULL) ? "<no name>" :
-        GET_MODULE_NAME(&ma->names), map_start, map_end);
+    LOG(GLOBAL, LOG_INTERP | LOG_VMAREAS, 2,
+        "\tmodule %s segment [" PFX "," PFX "] added\n",
+        (GET_MODULE_NAME(&ma->names) == NULL) ? "<no name>" : GET_MODULE_NAME(&ma->names),
+        map_start, map_end);
 }
 
 /* Can only be called from os_module_area_reset() called from module_list_remove(),
@@ -230,32 +228,34 @@ module_list_remove_mapping(module_area_t *ma, app_pc map_start, app_pc map_end)
 {
     ASSERT(os_get_module_info_write_locked());
     vmvector_remove(loaded_module_areas, map_start, map_end);
-    LOG(GLOBAL, LOG_INTERP|LOG_VMAREAS, 2, "\tmodule %s segment ["PFX","PFX"] removed\n",
-        (GET_MODULE_NAME(&ma->names) == NULL) ? "<no name>" :
-        GET_MODULE_NAME(&ma->names), map_start, map_end);
+    LOG(GLOBAL, LOG_INTERP | LOG_VMAREAS, 2,
+        "\tmodule %s segment [" PFX "," PFX "] removed\n",
+        (GET_MODULE_NAME(&ma->names) == NULL) ? "<no name>" : GET_MODULE_NAME(&ma->names),
+        map_start, map_end);
 }
 
 void
-module_list_add(app_pc base, size_t view_size, bool at_map, const char *filepath
-                _IF_LINUX(uint64 inode))
+module_list_add(app_pc base, size_t view_size, bool at_map,
+                const char *filepath _IF_LINUX(uint64 inode))
 {
     ASSERT(loaded_module_areas != NULL);
-    ASSERT(!vmvector_overlap(loaded_module_areas, base, base+view_size));
+    ASSERT(!vmvector_overlap(loaded_module_areas, base, base + view_size));
     os_get_module_info_write_lock();
     /* defensively checking */
-    if (!vmvector_overlap(loaded_module_areas, base, base+view_size)) {
+    if (!vmvector_overlap(loaded_module_areas, base, base + view_size)) {
         /* module_area_create() calls os_module_area_init() which calls
          * module_list_add_mapping() to add the module's mappings to
          * the loaded_module_areas vector, to support non-contiguous
          * modules (i#160/PR 562667)
          */
         DEBUG_DECLARE(module_area_t *ma =)
-            module_area_create(base, view_size, at_map, filepath _IF_LINUX(inode));
+        module_area_create(base, view_size, at_map, filepath _IF_LINUX(inode));
         ASSERT(ma != NULL);
-        
-        LOG(GLOBAL, LOG_INTERP|LOG_VMAREAS, 1, "module %s ["PFX","PFX"] added\n",
-            (GET_MODULE_NAME(&ma->names) == NULL) ? "<no name>" :
-            GET_MODULE_NAME(&ma->names), base, base+view_size);
+
+        LOG(GLOBAL, LOG_INTERP | LOG_VMAREAS, 1, "module %s [" PFX "," PFX "] added\n",
+            (GET_MODULE_NAME(&ma->names) == NULL) ? "<no name>"
+                                                  : GET_MODULE_NAME(&ma->names),
+            base, base + view_size);
 
         /* note that while it would be natural to invoke the client module
          * load event since we have the data for it right here, the
@@ -266,7 +266,7 @@ module_list_add(app_pc base, size_t view_size, bool at_map, const char *filepath
          */
     } else {
         /* already added! */
-        /* only possible for manual NtMapViewOfSection, loader 
+        /* only possible for manual NtMapViewOfSection, loader
          * can't be doing this to us */
         ASSERT_CURIOSITY(false && "image load race");
         /* do nothing */
@@ -283,20 +283,20 @@ module_list_remove(app_pc base, size_t view_size)
     bool inform_client = false;
 #endif
     module_area_t *ma;
-    
+
     /* note that vmvector_lookup doesn't protect the custom data,
      * and we need to bracket a lookup and remove in an unlikely
      * application race (note we pre-process unmap)
      */
     ASSERT(loaded_module_areas != NULL);
     os_get_module_info_write_lock();
-    ASSERT(vmvector_overlap(loaded_module_areas, base, base+view_size));
-    ma = (module_area_t*)vmvector_lookup(loaded_module_areas, base);
+    ASSERT(vmvector_overlap(loaded_module_areas, base, base + view_size));
+    ma = (module_area_t *)vmvector_lookup(loaded_module_areas, base);
     ASSERT_CURIOSITY(ma != NULL); /* loader can't have a race */
-    
-    LOG(GLOBAL, LOG_INTERP|LOG_VMAREAS, 2, "module_list_remove %s\n",
-        (GET_MODULE_NAME(&ma->names) == NULL) ? "<no name>" :
-        GET_MODULE_NAME(&ma->names));
+
+    LOG(GLOBAL, LOG_INTERP | LOG_VMAREAS, 2, "module_list_remove %s\n",
+        (GET_MODULE_NAME(&ma->names) == NULL) ? "<no name>"
+                                              : GET_MODULE_NAME(&ma->names));
 
 #ifdef CLIENT_INTERFACE
     /* inform clients of module unloads, we copy the data now and wait to
@@ -315,7 +315,7 @@ module_list_remove(app_pc base, size_t view_size)
          */
         module_area_delete(ma);
     }
-    ASSERT(!vmvector_overlap(loaded_module_areas, base, base+view_size));
+    ASSERT(!vmvector_overlap(loaded_module_areas, base, base + view_size));
     os_get_module_info_write_unlock();
 #ifdef CLIENT_INTERFACE
     if (inform_client) {
@@ -324,7 +324,6 @@ module_list_remove(app_pc base, size_t view_size)
     }
 #endif
 }
-
 
 /**************** module flag routines *****************/
 
@@ -343,7 +342,7 @@ os_module_set_flag_value(app_pc module_base, uint flag, bool set)
         else
             ma->flags &= ~flag;
         found = true;
-    } 
+    }
     if (!own_lock)
         os_get_module_info_write_unlock();
     return found;
@@ -371,11 +370,10 @@ os_module_get_flag(app_pc module_base, uint flag)
     if (ma != NULL) {
         /* interface is for just one flag so no documentation of ANY vs ALL */
         has_flag = TESTANY(flag, ma->flags);
-    } 
+    }
     os_get_module_info_unlock();
     return has_flag;
 }
-
 
 /**************** module_area accessor routines (os shared) *****************/
 
@@ -395,7 +393,7 @@ module_overlaps(byte *pc, size_t len)
 {
     ASSERT(loaded_module_areas != NULL);
     ASSERT(os_get_module_info_locked());
-    return vmvector_overlap(loaded_module_areas, pc, pc+len);
+    return vmvector_overlap(loaded_module_areas, pc, pc + len);
 }
 
 /* Some callers want strdup, some want a passed-in buffer, and some want
@@ -437,10 +435,10 @@ bool
 os_get_module_name(const app_pc pc, /* OUT */ const char **name)
 {
     module_area_t *ma;
-    
+
     ASSERT(os_get_module_info_locked());
     ma = module_pc_lookup(pc);
-    
+
     if (ma != NULL)
         *name = GET_MODULE_NAME(&ma->names);
     else
@@ -451,7 +449,7 @@ os_get_module_name(const app_pc pc, /* OUT */ const char **name)
 const char *
 os_get_module_name_strdup(const app_pc pc HEAPACCT(which_heap_t which))
 {
-    return os_get_module_name_internal(pc, NULL, 0, false/*no truncate*/,
+    return os_get_module_name_internal(pc, NULL, 0, false /*no truncate*/,
                                        NULL HEAPACCT(which));
 }
 
@@ -463,7 +461,7 @@ size_t
 os_get_module_name_buf(const app_pc pc, char *buf, size_t buf_len)
 {
     size_t copied;
-    os_get_module_name_internal(pc, buf, buf_len, true/*truncate*/,
+    os_get_module_name_internal(pc, buf, buf_len, true /*truncate*/,
                                 &copied HEAPACCT(ACCT_OTHER));
     return copied;
 }
@@ -474,10 +472,10 @@ os_get_module_name_buf(const app_pc pc, char *buf, size_t buf_len)
  * If there is no module name, returns NULL.
  */
 const char *
-os_get_module_name_buf_strdup(const app_pc pc, char *buf, size_t buf_len
-                              HEAPACCT(which_heap_t which))
+os_get_module_name_buf_strdup(const app_pc pc, char *buf,
+                              size_t buf_len HEAPACCT(which_heap_t which))
 {
-    return os_get_module_name_internal(pc, buf, buf_len, false/*no truncate*/,
+    return os_get_module_name_internal(pc, buf, buf_len, false /*no truncate*/,
                                        NULL HEAPACCT(which));
 }
 
@@ -490,11 +488,10 @@ os_module_get_view_size(app_pc mod_base)
     ma = module_pc_lookup(mod_base);
     if (ma != NULL) {
         view_size = ma->end - ma->start;
-    } 
+    }
     os_get_module_info_unlock();
     return view_size;
 }
-
 
 /**************** module iterator routines *****************/
 
@@ -506,8 +503,8 @@ struct _module_iterator_t {
 module_iterator_t *
 module_iterator_start(void)
 {
-    module_iterator_t *mi = HEAP_TYPE_ALLOC(GLOBAL_DCONTEXT, module_iterator_t,
-                                            ACCT_OTHER, UNPROTECTED);
+    module_iterator_t *mi =
+        HEAP_TYPE_ALLOC(GLOBAL_DCONTEXT, module_iterator_t, ACCT_OTHER, UNPROTECTED);
     ASSERT(loaded_module_areas != NULL);
     /* loaded_module_areas doesn't use the vector lock */
     os_get_module_info_lock();
@@ -523,7 +520,7 @@ module_iterator_hasnext(module_iterator_t *mi)
     module_area_t *ma;
     ASSERT(os_get_module_info_locked());
     while (vmvector_iterator_hasnext(&mi->vmvi)) {
-        ma = (module_area_t *) vmvector_iterator_peek(&mi->vmvi, &start, &end);
+        ma = (module_area_t *)vmvector_iterator_peek(&mi->vmvi, &start, &end);
         /* skip non-initial segments */
         if (start != ma->start)
             vmvector_iterator_next(&mi->vmvi, NULL, NULL);
@@ -538,8 +535,7 @@ module_area_t *
 module_iterator_next(module_iterator_t *mi)
 {
     app_pc start, end;
-    module_area_t *ma = (module_area_t *)
-        vmvector_iterator_next(&mi->vmvi, &start, &end);
+    module_area_t *ma = (module_area_t *)vmvector_iterator_next(&mi->vmvi, &start, &end);
     ASSERT(os_get_module_info_locked());
     ASSERT(ma != NULL);
     ASSERT(ma->start == start && IF_WINDOWS_ELSE(ma->end == end, ma->end >= end));
@@ -561,48 +557,43 @@ module_iterator_stop(module_iterator_t *mi)
 
 /* add only the intersection of the two regions to the running MD5 sum */
 static void
-region_intersection_MD5update(struct MD5Context *ctx, 
-                              app_pc region1_start, size_t region1_len,
-                              app_pc region2_start, size_t region2_len)
+region_intersection_MD5update(struct MD5Context *ctx, app_pc region1_start,
+                              size_t region1_len, app_pc region2_start,
+                              size_t region2_len)
 {
     app_pc intersection_start;
     size_t intersection_len;
     ASSERT(ctx != NULL);
-    region_intersection(&intersection_start, &intersection_len,
-                        region1_start, region1_len, 
-                        region2_start, region2_len);
+    region_intersection(&intersection_start, &intersection_len, region1_start,
+                        region1_len, region2_start, region2_len);
     if (intersection_len != 0) {
-        LOG(GLOBAL, LOG_SYSCALLS, 2,
-            "adding to short hash region "PFX"-"PFX"\n", 
+        LOG(GLOBAL, LOG_SYSCALLS, 2, "adding to short hash region " PFX "-" PFX "\n",
             intersection_start, intersection_start + intersection_len);
         MD5Update(ctx, intersection_start, intersection_len);
     }
 }
 
 /* keeps track of both short and full digests on each region */
-static
-void
-module_calculate_digest_helper(struct MD5Context * md5_full_cxt /* OPTIONAL */, 
-                               struct MD5Context * md5_short_cxt /* OPTIONAL */,
+static void
+module_calculate_digest_helper(struct MD5Context *md5_full_cxt /* OPTIONAL */,
+                               struct MD5Context *md5_short_cxt /* OPTIONAL */,
                                app_pc region_start, size_t region_len,
                                app_pc start_header, size_t len_header,
                                app_pc start_footer, size_t len_footer)
 {
     ASSERT(md5_full_cxt != NULL || md5_short_cxt != NULL);
-    LOG(GLOBAL, LOG_VMAREAS, 2, "\t%s: segment "PFX"-"PFX"\n",
-        __FUNCTION__, region_start, region_start + region_len);
-    if (md5_full_cxt != NULL) 
+    LOG(GLOBAL, LOG_VMAREAS, 2, "\t%s: segment " PFX "-" PFX "\n", __FUNCTION__,
+        region_start, region_start + region_len);
+    if (md5_full_cxt != NULL)
         MD5Update(md5_full_cxt, region_start, region_len);
     if (md5_short_cxt == NULL)
         return;
     if (len_header != 0) {
-        region_intersection_MD5update(md5_short_cxt, 
-                                      region_start, region_len,
+        region_intersection_MD5update(md5_short_cxt, region_start, region_len,
                                       start_header, len_header);
     }
     if (len_footer != 0) {
-        region_intersection_MD5update(md5_short_cxt, 
-                                      region_start, region_len,
+        region_intersection_MD5update(md5_short_cxt, region_start, region_len,
                                       start_footer, len_footer);
     }
 }
@@ -621,23 +612,21 @@ module_calculate_digest_helper(struct MD5Context * md5_full_cxt /* OPTIONAL */,
  * caller should probably call restore_unreadable_section() afterward).
  */
 static bool
-ensure_section_readable(app_pc module_base, app_pc seg_start,
-                        size_t seg_len, uint seg_chars, OUT uint *old_prot,
-                        app_pc view_start, size_t view_len)
+ensure_section_readable(app_pc module_base, app_pc seg_start, size_t seg_len,
+                        uint seg_chars, OUT uint *old_prot, app_pc view_start,
+                        size_t view_len)
 {
     int ok;
     app_pc intersection_start;
     size_t intersection_len;
 
-    region_intersection(&intersection_start, &intersection_len,
-                        view_start, view_len, 
+    region_intersection(&intersection_start, &intersection_len, view_start, view_len,
                         seg_start, ALIGN_FORWARD(seg_len, PAGE_SIZE));
     if (intersection_len == 0)
         return true;
 
     /* on X86-32 as long as any of RWX is set the contents is readable */
-    if (TESTANY(OS_IMAGE_EXECUTE|OS_IMAGE_READ|OS_IMAGE_WRITE,
-                seg_chars)) {
+    if (TESTANY(OS_IMAGE_EXECUTE | OS_IMAGE_READ | OS_IMAGE_WRITE, seg_chars)) {
         ASSERT(is_readable_without_exception(intersection_start, intersection_len));
         return true;
     }
@@ -648,14 +637,13 @@ ensure_section_readable(app_pc module_base, app_pc seg_start,
      * NOTE: we'll leave readable, so only users of our private
      * mappings should use this function!
      */
-    SYSLOG_INTERNAL_WARNING("unreadable section @"PFX"\n", seg_start);
+    SYSLOG_INTERNAL_WARNING("unreadable section @" PFX "\n", seg_start);
 #ifdef WINDOWS
     /* Preserve COW flags */
-    ok = protect_virtual_memory(intersection_start, intersection_len,
-                                PAGE_READONLY, 
+    ok = protect_virtual_memory(intersection_start, intersection_len, PAGE_READONLY,
                                 old_prot);
     ASSERT(ok);
-    ASSERT_CURIOSITY(*old_prot == PAGE_NOACCESS || 
+    ASSERT_CURIOSITY(*old_prot == PAGE_NOACCESS ||
                      *old_prot == PAGE_WRITECOPY); /* expecting unmodifed even
                                                     * if writable */
 #else
@@ -667,9 +655,9 @@ ensure_section_readable(app_pc module_base, app_pc seg_start,
 }
 
 static bool
-restore_unreadable_section(app_pc module_base, app_pc seg_start,
-                           size_t seg_len, uint seg_chars, uint restore_prot,
-                           app_pc view_start, size_t view_len)
+restore_unreadable_section(app_pc module_base, app_pc seg_start, size_t seg_len,
+                           uint seg_chars, uint restore_prot, app_pc view_start,
+                           size_t view_len)
 {
     int ok;
     app_pc intersection_start;
@@ -678,18 +666,16 @@ restore_unreadable_section(app_pc module_base, app_pc seg_start,
     uint old_prot;
 #endif
 
-    ASSERT(!TESTANY(OS_IMAGE_EXECUTE|OS_IMAGE_READ|OS_IMAGE_WRITE, seg_chars));
+    ASSERT(!TESTANY(OS_IMAGE_EXECUTE | OS_IMAGE_READ | OS_IMAGE_WRITE, seg_chars));
 
-    region_intersection(&intersection_start, &intersection_len,
-                        view_start, view_len, 
+    region_intersection(&intersection_start, &intersection_len, view_start, view_len,
                         seg_start, ALIGN_FORWARD(seg_start + seg_len, PAGE_SIZE));
     if (intersection_len == 0)
         return true;
 
 #ifdef WINDOWS
     /* Preserve COW flags */
-    ok = protect_virtual_memory(intersection_start, intersection_len,
-                                restore_prot, 
+    ok = protect_virtual_memory(intersection_start, intersection_len, restore_prot,
                                 &old_prot);
     ASSERT(ok);
     ASSERT(old_prot == PAGE_READONLY);
@@ -718,13 +704,9 @@ restore_unreadable_section(app_pc module_base, app_pc seg_start,
  * larger than the mapped view size.
  */
 void
-module_calculate_digest(OUT module_digest_t *digest,
-                        app_pc module_base, 
-                        size_t module_size,
-                        bool full_digest,
-                        bool short_digest,
-                        uint short_digest_size,
-                        uint sec_char_include,
+module_calculate_digest(OUT module_digest_t *digest, app_pc module_base,
+                        size_t module_size, bool full_digest, bool short_digest,
+                        uint short_digest_size, uint sec_char_include,
                         uint sec_char_exclude)
 {
     struct MD5Context md5_short_cxt;
@@ -757,8 +739,7 @@ module_calculate_digest(OUT module_digest_t *digest,
     ASSERT(module_base != NULL);
     ASSERT(module_size != 0);
 
-    LOG(GLOBAL, LOG_VMAREAS, 2,
-        "module_calculate_digest: module "PFX"-"PFX"\n", 
+    LOG(GLOBAL, LOG_VMAREAS, 2, "module_calculate_digest: module " PFX "-" PFX "\n",
         module_base, module_base + module_size);
 
     if (short_digest_size == 0) {
@@ -775,14 +756,14 @@ module_calculate_digest(OUT module_digest_t *digest,
      * module_dump_pe_file(), and in fact we could avoid a second
      * traversal and associated cache pollution on producing a file if
      * we provide this functionality in module_dump_pe_file().  Of
-     * course for verification we still need this separately 
+     * course for verification we still need this separately
      */
 
     ASSERT(get_module_base(module_base) == module_base);
 
     if (short_digest)
         MD5Init(&md5_short_cxt);
-    if (full_digest) 
+    if (full_digest)
         MD5Init(&md5_full_cxt);
 
     /* first region to consider is module header.  on linux this is
@@ -798,11 +779,9 @@ module_calculate_digest(OUT module_digest_t *digest,
      * pecoff_v8 */
 
     /* at each step intersect with the possible short regions */
-    module_calculate_digest_helper(full_digest ? &md5_full_cxt : NULL,
-                                   short_digest ? &md5_short_cxt : NULL,
-                                   region_start, region_len,
-                                   header_start, header_len,
-                                   footer_start, footer_len);
+    module_calculate_digest_helper(
+        full_digest ? &md5_full_cxt : NULL, short_digest ? &md5_short_cxt : NULL,
+        region_start, region_len, header_start, header_len, footer_start, footer_len);
 
     for (i = 0; true; i++) {
         uint old_section_prot;
@@ -811,8 +790,8 @@ module_calculate_digest(OUT module_digest_t *digest,
         uint seg_chars;
 
         ASSERT(i < 1000); /* look for runaway loop */
-        if (!module_get_nth_segment(module_base, i, &region_start,
-                                    &region_end, &seg_chars))
+        if (!module_get_nth_segment(module_base, i, &region_start, &region_end,
+                                    &seg_chars))
             break;
         region_len = region_end - region_start;
 
@@ -822,15 +801,15 @@ module_calculate_digest(OUT module_digest_t *digest,
          *      0 file pointer to raw data
          */
         if (region_len == 0) {
-            LOG(GLOBAL, LOG_VMAREAS, 1, "skipping empty physical segment @"PFX"\n", 
+            LOG(GLOBAL, LOG_VMAREAS, 1, "skipping empty physical segment @" PFX "\n",
                 region_start);
-            /* note that such sections will still get 0-filled 
+            /* note that such sections will still get 0-filled
              * but we only look at raw bytes */
             continue;
         }
         if (!TESTANY(sec_char_include, seg_chars) ||
             TESTANY(sec_char_exclude, seg_chars)) {
-            LOG(GLOBAL, LOG_VMAREAS, 2, "skipping non-matching segment @"PFX"\n", 
+            LOG(GLOBAL, LOG_VMAREAS, 2, "skipping non-matching segment @" PFX "\n",
                 region_start);
             continue;
         }
@@ -838,33 +817,29 @@ module_calculate_digest(OUT module_digest_t *digest,
         /* make sure region is readable. Alternatively, we could just
          * ignore unreadable (according to characteristics) portions
          */
-        readable = ensure_section_readable(module_base, region_start, region_len,
-                                           seg_chars, &old_section_prot,
-                                           module_base, module_size);
+        readable =
+            ensure_section_readable(module_base, region_start, region_len, seg_chars,
+                                    &old_section_prot, module_base, module_size);
 
-        module_calculate_digest_helper(full_digest ? &md5_full_cxt : NULL,
-                                       short_digest ? &md5_short_cxt : NULL,
-                                       region_start, region_len,
-                                       header_start, header_len,
-                                       footer_start, footer_len);                                   
+        module_calculate_digest_helper(
+            full_digest ? &md5_full_cxt : NULL, short_digest ? &md5_short_cxt : NULL,
+            region_start, region_len, header_start, header_len, footer_start, footer_len);
         if (!readable) {
-            DEBUG_DECLARE(bool ok = )
-                restore_unreadable_section(module_base, region_start, region_len,
-                                           seg_chars, old_section_prot,
-                                           module_base, module_size);
+            DEBUG_DECLARE(bool ok =)
+            restore_unreadable_section(module_base, region_start, region_len, seg_chars,
+                                       old_section_prot, module_base, module_size);
             ASSERT(ok);
         }
     }
 
-    if (short_digest) 
+    if (short_digest)
         MD5Final(digest->short_MD5, &md5_short_cxt);
-    if (full_digest) 
+    if (full_digest)
         MD5Final(digest->full_MD5, &md5_full_cxt);
 
     DODEBUG({
-        if (full_digest && short_digest && 
-            (short_digest_size == 0 ||
-             short_digest_size * 2 > module_size)) {
+        if (full_digest && short_digest &&
+            (short_digest_size == 0 || short_digest_size * 2 > module_size)) {
             ASSERT(md5_digests_equal(digest->short_MD5, digest->full_MD5));
         }
     });

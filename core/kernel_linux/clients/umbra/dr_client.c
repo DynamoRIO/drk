@@ -30,16 +30,15 @@
  * Description:
  *     client file to register Umbra callbacks with DynamoRIO
  *
- * Author: 
+ * Author:
  *     Qin Zhao
- * 
+ *
  */
-
 
 //#include <unistd.h>       /* sleep */
 
 #ifdef LINUX_KERNEL
-# include <linux/module.h>
+#    include <linux/module.h>
 #endif
 #include "dr_api.h"
 #include "umbra.h"
@@ -48,11 +47,9 @@
 MODULE_LICENSE("Dual BSD/GPL");
 #endif
 
-
 /*---------------------------------------------------------------------*
  *            Event Functions Declaration & Implementation             *
  *---------------------------------------------------------------------*/
-
 
 static void
 event_init(client_id_t id)
@@ -61,7 +58,6 @@ event_init(client_id_t id)
     umbra_init(id);
 }
 
-
 static void
 event_exit(void)
 {
@@ -69,63 +65,41 @@ event_exit(void)
     umbra_exit();
 }
 
-
 static dr_emit_flags_t
-event_bb(void *drcontext, 
-         void *tag, 
-         instrlist_t *bb,
-         bool  for_trace, 
-         bool  translating)
+event_bb(void *drcontext, void *tag, instrlist_t *bb, bool for_trace, bool translating)
 {
-    dr_log(drcontext, LOG_ALL, 2, "bb: "PFX" %d %d\n", 
-           tag, for_trace, translating);
+    dr_log(drcontext, LOG_ALL, 2, "bb: " PFX " %d %d\n", tag, for_trace, translating);
     return umbra_basic_block(drcontext, tag, bb, for_trace, translating);
 }
 
-
 static dr_emit_flags_t
-event_trace(void *drcontext, 
-            void *tag, 
-            instrlist_t *trace,
-            bool  translating)
+event_trace(void *drcontext, void *tag, instrlist_t *trace, bool translating)
 {
-    dr_log(drcontext, LOG_ALL, 2, "trace: "PFX" %d\n", 
-           tag, translating);
+    dr_log(drcontext, LOG_ALL, 2, "trace: " PFX " %d\n", tag, translating);
     return umbra_trace(drcontext, tag, trace, translating);
 }
 
-
 static dr_custom_trace_action_t
-event_end_trace(void *drcontext, 
-                void *trace_tag, 
-                void *next_tag)
+event_end_trace(void *drcontext, void *trace_tag, void *next_tag)
 {
-    dr_log(drcontext, LOG_ALL, 2, "end_trace "PFX", "PFX"\n", 
-           trace_tag, next_tag);  
+    dr_log(drcontext, LOG_ALL, 2, "end_trace " PFX ", " PFX "\n", trace_tag, next_tag);
     return umbra_end_trace(drcontext, trace_tag, next_tag);
 }
-
 
 static void
 event_delete(void *drcontext, void *tag)
 {
-    dr_log(drcontext, LOG_ALL, 2, "delete "PFX"\n", tag);
+    dr_log(drcontext, LOG_ALL, 2, "delete " PFX "\n", tag);
     umbra_delete(drcontext, tag);
 }
 
-
 static void
-event_restore_state(void *drcontext, 
-                    void *tag, 
-                    dr_mcontext_t *mcontext,
-                    bool restore_memory, 
-                    bool app_code_consistent)
+event_restore_state(void *drcontext, void *tag, dr_mcontext_t *mcontext,
+                    bool restore_memory, bool app_code_consistent)
 {
-    dr_log(drcontext, LOG_ALL, 2, "restore_state "PFX"\n", tag);
-    umbra_restore_state(drcontext, tag, mcontext, 
-                        restore_memory, app_code_consistent);
+    dr_log(drcontext, LOG_ALL, 2, "restore_state " PFX "\n", tag);
+    umbra_restore_state(drcontext, tag, mcontext, restore_memory, app_code_consistent);
 }
-
 
 static void
 event_thread_init(void *drcontext)
@@ -134,14 +108,12 @@ event_thread_init(void *drcontext)
     umbra_thread_init(drcontext);
 }
 
-
 static void
 event_thread_exit(void *drcontext)
 {
     dr_log(drcontext, LOG_ALL, 2, "Client 'Umbra' thread exit\n");
     umbra_thread_exit(drcontext);
 }
-
 
 static void
 event_fork_init(void *drcontext)
@@ -150,45 +122,38 @@ event_fork_init(void *drcontext)
     umbra_fork_init(drcontext);
 }
 
-
 static void
-event_module_load(void *drcontext, 
-                  const module_data_t *info,
-                  bool loaded)
+event_module_load(void *drcontext, const module_data_t *info, bool loaded)
 {
-    dr_log(drcontext, LOG_ALL, 2, "Load module "PFX"\n", info);
+    dr_log(drcontext, LOG_ALL, 2, "Load module " PFX "\n", info);
     umbra_module_load(drcontext, info, loaded);
 }
-
 
 static void
 event_module_unload(void *drcontext, const module_data_t *info)
 {
-    dr_log(drcontext, LOG_ALL, 2, "Unload module: "PFX"\n", info);
+    dr_log(drcontext, LOG_ALL, 2, "Unload module: " PFX "\n", info);
     umbra_module_unload(drcontext, info);
 }
 
-
-static bool 
+static bool
 event_filter_syscall(void *drcontext, int sysnum)
 {
-    dr_log(drcontext, LOG_ALL, 2, "event_filter_syscall "PFX"\n", sysnum);
+    dr_log(drcontext, LOG_ALL, 2, "event_filter_syscall " PFX "\n", sysnum);
     return umbra_filter_syscall(drcontext, sysnum);
 }
 
-
-static bool 
+static bool
 event_pre_syscall(void *drcontext, int sysnum)
 {
-    dr_log(drcontext, LOG_ALL, 2, "event_pre_syscall "PFX"\n", sysnum);
+    dr_log(drcontext, LOG_ALL, 2, "event_pre_syscall " PFX "\n", sysnum);
     return umbra_pre_syscall(drcontext, sysnum);
 }
 
-
-static void 
+static void
 event_post_syscall(void *drcontext, int sysnum)
 {
-    dr_log(drcontext, LOG_ALL, 2, "event_post_syscall "PFX"\n", sysnum);
+    dr_log(drcontext, LOG_ALL, 2, "event_post_syscall " PFX "\n", sysnum);
     umbra_post_syscall(drcontext, sysnum);
 }
 
@@ -211,7 +176,7 @@ event_signal(void *drcontext, dr_siginfo_t *siginfo)
     return umbra_signal(drcontext, siginfo);
 }
 
-#else 
+#else
 
 static bool
 event_exception(void *dcontext, dr_exception_t *excpt)
@@ -221,7 +186,6 @@ event_exception(void *dcontext, dr_exception_t *excpt)
 }
 
 #endif /* LINUX */
-
 
 /*---------------------------------------------------------------------*
  *              Exported Top Functions Implementation                  *
@@ -235,32 +199,31 @@ dr_init(client_id_t id)
 #endif
 {
     /* register all events */
-    dr_register_exit_event          (event_exit);
-    dr_register_bb_event            (event_bb);
-    dr_register_trace_event         (event_trace);
-    dr_register_end_trace_event     (event_end_trace);
-    dr_register_delete_event        (event_delete);
-    dr_register_restore_state_event (event_restore_state);
-    dr_register_thread_init_event   (event_thread_init);
-    dr_register_thread_exit_event   (event_thread_exit);
-    dr_register_fork_init_event     (event_fork_init);
-    dr_register_module_load_event   (event_module_load);
-    dr_register_module_unload_event (event_module_unload);
+    dr_register_exit_event(event_exit);
+    dr_register_bb_event(event_bb);
+    dr_register_trace_event(event_trace);
+    dr_register_end_trace_event(event_end_trace);
+    dr_register_delete_event(event_delete);
+    dr_register_restore_state_event(event_restore_state);
+    dr_register_thread_init_event(event_thread_init);
+    dr_register_thread_exit_event(event_thread_exit);
+    dr_register_fork_init_event(event_fork_init);
+    dr_register_module_load_event(event_module_load);
+    dr_register_module_unload_event(event_module_unload);
     dr_register_filter_syscall_event(event_filter_syscall);
-    dr_register_pre_syscall_event   (event_pre_syscall);
-    dr_register_post_syscall_event  (event_post_syscall);
+    dr_register_pre_syscall_event(event_pre_syscall);
+    dr_register_post_syscall_event(event_post_syscall);
 #ifdef LINUX_KERNEL
     dr_register_interrupt_event(event_interrupt);
 #elif defined(LINUX)
-    dr_register_signal_event        (event_signal);
+    dr_register_signal_event(event_signal);
 #else
-    dr_register_exception_event     (event_exception);
+    dr_register_exception_event(event_exception);
 #endif /* LINUX */
 
     /* client-self init event */
     event_init(id);
 }
-
 
 #ifdef LINUX_KERNEL
 

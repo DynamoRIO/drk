@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -30,7 +30,7 @@
  * DAMAGE.
  */
 
-/* a test for calling NtSetContextThread on a thread at a system call 
+/* a test for calling NtSetContextThread on a thread at a system call
 
 interestingly here's what happens to the registers (not outputting since not
 machine-independent):
@@ -44,7 +44,7 @@ result:     00000102 ffffffff 0052ff88 004161db ffffffff ffffffff 0052ff88 fffff
 #include "Windows.h"
 
 #ifdef USE_DYNAMO
-#include "dynamorio.h"
+#    include "dynamorio.h"
 #endif
 
 #define VERBOSE 0
@@ -64,14 +64,13 @@ static int reg_esp;
 #define TIMER_UNITS_PER_MILLISECOND (1000 * 10) /* 100ns intervals */
 
 static DWORD WINAPI
-ThreadProc1(LPVOID parm) 
+ThreadProc1(LPVOID parm)
 {
     LARGE_INTEGER waittime;
     NTSTATUS res;
     HANDLE e;
-    GET_NTDLL(NtWaitForSingleObject, (IN HANDLE ObjectHandle, 
-                                      IN BOOLEAN Alertable, 
-                                      IN PLARGE_INTEGER TimeOut ));
+    GET_NTDLL(NtWaitForSingleObject,
+              (IN HANDLE ObjectHandle, IN BOOLEAN Alertable, IN PLARGE_INTEGER TimeOut));
     print("starting thread...\n");
 
     e = CreateEvent(NULL, FALSE, FALSE, "foo");
@@ -90,10 +89,11 @@ ThreadProc1(LPVOID parm)
         mov   reg_esp, esp
         mov   reg_ebp, ebp
     }
-    print("res is "PFMT" but shouldn't get here!!!\n", res);
+    print("res is " PFMT " but shouldn't get here!!!\n", res);
 #if VERBOSE
-    print("registers: "PFMT" "PFMT" "PFMT" "PFMT" "PFMT" "PFMT" "PFMT" "PFMT"\n",
-           reg_eax, reg_ebx, reg_ecx, reg_edx, reg_edi, reg_esi, reg_esp, reg_ebp);
+    print("registers: " PFMT " " PFMT " " PFMT " " PFMT " " PFMT " " PFMT " " PFMT
+          " " PFMT "\n",
+          reg_eax, reg_ebx, reg_ecx, reg_edx, reg_edi, reg_esi, reg_esp, reg_ebp);
 #endif
     CloseHandle(e);
 
@@ -117,7 +117,7 @@ transferProc()
     print("&next_instr recorded\n");
     return;
 
- transferout:
+transferout:
     __asm {
         mov   reg_eax, eax
         mov   reg_ebx, ebx
@@ -129,21 +129,22 @@ transferProc()
         mov   reg_ebp, ebp
     }
 #if VERBOSE
-    print("result:     "PFMT" "PFMT" "PFMT" "PFMT" "PFMT" "PFMT" "PFMT" "PFMT"\n",
-           reg_eax, reg_ebx, reg_ecx, reg_edx, reg_edi, reg_esi, reg_esp, reg_ebp);
+    print("result:     " PFMT " " PFMT " " PFMT " " PFMT " " PFMT " " PFMT " " PFMT
+          " " PFMT "\n",
+          reg_eax, reg_ebx, reg_ecx, reg_edx, reg_edi, reg_esi, reg_esp, reg_ebp);
 #endif
     print("control has been redirected.\n");
     /* don't try to restore stack across sysenter, etc. */
     ExitThread(0);
 }
 
-int 
-main(void) 
+int
+main(void)
 {
     HANDLE ht;
     DWORD tid;
     CONTEXT tc;
-    
+
 #ifdef USE_DYNAMO
     dynamorio_app_init();
     dynamorio_app_start();
@@ -159,15 +160,17 @@ main(void)
 
     while (control == 0)
         ; /* wait for thread to set control */
- 
+
     SuspendThread(ht);
     print("thread suspended.\n");
 
     tc.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
     GetThreadContext(ht, &tc);
 #if VERBOSE
-    print("suspended@: "PFMT" "PFMT" "PFMT" "PFMT" "PFMT" "PFMT" "PFMT" "PFMT"\n",
-           tc.CXT_XAX, tc.CXT_XBX, tc.CXT_XCX, tc.CXT_XDX, tc.CXT_XDI, tc.CXT_XSI, tc.CXT_XSP, tc.CXT_XBP);
+    print("suspended@: " PFMT " " PFMT " " PFMT " " PFMT " " PFMT " " PFMT " " PFMT
+          " " PFMT "\n",
+          tc.CXT_XAX, tc.CXT_XBX, tc.CXT_XCX, tc.CXT_XDX, tc.CXT_XDI, tc.CXT_XSI,
+          tc.CXT_XSP, tc.CXT_XBP);
 #endif
     tc.CXT_XIP = transfer_addr;
     tc.CXT_XAX = 0xffffffff;
@@ -178,14 +181,16 @@ main(void)
     tc.CXT_XSI = 0xffffffff;
     tc.CXT_XBP = 0xffffffff;
 #if VERBOSE
-    print("setting to: "PFMT" "PFMT" "PFMT" "PFMT" "PFMT" "PFMT" "PFMT" "PFMT"\n",
-           tc.CXT_XAX, tc.CXT_XBX, tc.CXT_XCX, tc.CXT_XDX, tc.CXT_XDI, tc.CXT_XSI, tc.CXT_XSP, tc.CXT_XBP);
+    print("setting to: " PFMT " " PFMT " " PFMT " " PFMT " " PFMT " " PFMT " " PFMT
+          " " PFMT "\n",
+          tc.CXT_XAX, tc.CXT_XBX, tc.CXT_XCX, tc.CXT_XDX, tc.CXT_XDI, tc.CXT_XSI,
+          tc.CXT_XSP, tc.CXT_XBP);
 #endif
     SetThreadContext(ht, &tc);
 
     ResumeThread(ht);
     WaitForSingleObject(ht, INFINITE);
-    
+
 #ifdef USE_DYNAMO
     dynamorio_app_stop();
     dynamorio_app_exit();

@@ -8,7 +8,7 @@ my_memset(void *dst, int c, int n)
 {
     int i;
     for (i = 0; i < n; i++) {
-        ((unsigned char*) dst)[i] = (unsigned char) c;
+        ((unsigned char *)dst)[i] = (unsigned char)c;
     }
 }
 
@@ -17,7 +17,7 @@ assert_eq(const unsigned char *dst, int c, int n)
 {
     int i;
     for (i = 0; i < n; i++) {
-        DR_ASSERT_EQ(dst[i], (unsigned char) c);
+        DR_ASSERT_EQ(dst[i], (unsigned char)c);
     }
 }
 
@@ -26,7 +26,8 @@ assert_eq(const unsigned char *dst, int c, int n)
 static unsigned char buf[N];
 
 void
-repstr_main(void) {
+repstr_main(void)
+{
     /* This test does a much better test when interrupts are enabled.
      * TODO(peter): Enable interrupts during testing.
      */

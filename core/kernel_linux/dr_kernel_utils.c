@@ -24,8 +24,7 @@ dr_stat_show(struct kobject *kobj, struct attribute *attr, char *buf)
 }
 
 static ssize_t
-dr_stat_store(struct kobject *kobj, struct attribute *attr, const char *buf,
-              size_t count)
+dr_stat_store(struct kobject *kobj, struct attribute *attr, const char *buf, size_t count)
 {
     printk("store not supported for dr_stats\n");
     /* TODO(peter): Support updating stats? */
@@ -51,8 +50,8 @@ static struct kobj_type dr_stat_ktype = {
 };
 
 int
-dr_cpu_stat_alloc(dr_stats_t *stats, const char* name,
-                  dr_stat_show_t show, struct module *module)
+dr_cpu_stat_alloc(dr_stats_t *stats, const char *name, dr_stat_show_t show,
+                  struct module *module)
 {
     int i;
     int retval;
@@ -66,8 +65,7 @@ dr_cpu_stat_alloc(dr_stats_t *stats, const char* name,
     if (retval) {
         goto error_add;
     }
-    stat->attrs = kmalloc(sizeof(dr_stat_attr_t) * num_possible_cpus(),
-                          GFP_ATOMIC);
+    stat->attrs = kmalloc(sizeof(dr_stat_attr_t) * num_possible_cpus(), GFP_ATOMIC);
     if (!stat->attrs) {
         retval = -ENOMEM;
         goto error_attrs;

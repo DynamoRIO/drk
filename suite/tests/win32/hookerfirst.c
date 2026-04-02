@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -30,7 +30,7 @@
  * DAMAGE.
  */
 
-/* hookerfirst: tests having DllMain of a statically-linked dll 
+/* hookerfirst: tests having DllMain of a statically-linked dll
  * (thus prior to the image entry point) hook ntdll.dll
  * and then unhook in main() of the executable
  *
@@ -40,8 +40,8 @@
  * case 2525
  *3) Ent hooks first
  *  We hook -- need to chain -- mangle their call
- *  Ent unhooks (dynamic off) -- need to unchain by emulating their write and then restoring
- *  they could come back -- then follow 1)
+ *  Ent unhooks (dynamic off) -- need to unchain by emulating their write and then
+ *restoring they could come back -- then follow 1)
  *
  *4) Ent hooks first
  *  We hook -- need to chain
@@ -53,15 +53,13 @@
 #include "tools.h"
 
 #ifdef USE_DYNAMO
-#include "dynamorio.h"
+#    include "dynamorio.h"
 #endif
 
 /* from hookerfirst.dll */
-__declspec(dllimport)
-hookit(int x);
+__declspec(dllimport) hookit(int x);
 
-__declspec(dllimport)
-unhookit(int x);
+__declspec(dllimport) unhookit(int x);
 
 int
 badfunc(void)
@@ -85,7 +83,8 @@ main()
      * should figure out how to trigger detach on error here.
      */
 
-    /* this is for testing with -internal_detach 0x2 -- we'd need to detach ourselves cleanly */
+    /* this is for testing with -internal_detach 0x2 -- we'd need to detach ourselves
+     * cleanly */
 
     /* ensure still checking ret-after-call
      * use a nop between push and ret to avoid VB push/ret pattern match

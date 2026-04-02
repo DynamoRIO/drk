@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -43,12 +43,12 @@
 #include "dr_api.h"
 
 #ifdef WINDOWS
-# define DISPLAY_STRING(msg) dr_messagebox(msg)
+#    define DISPLAY_STRING(msg) dr_messagebox(msg)
 #else
-# define DISPLAY_STRING(msg) dr_printf("%s\n", msg);
+#    define DISPLAY_STRING(msg) dr_printf("%s\n", msg);
 #endif
 
-#define NULL_TERMINATE(buf) buf[(sizeof(buf)/sizeof(buf[0])) - 1] = '\0'
+#define NULL_TERMINATE(buf) buf[(sizeof(buf) / sizeof(buf[0])) - 1] = '\0'
 
 /* keep separate counters for each thread, in this thread-local data
  * structure:
@@ -60,15 +60,19 @@ typedef struct {
 } per_thread_t;
 
 /* keep a global count as well */
-static per_thread_t global_count = {0};
+static per_thread_t global_count = { 0 };
 
-static void event_exit(void);
-static void event_thread_init(void *drcontext);
-static void event_thread_exit(void *drcontext);
-static dr_emit_flags_t event_basic_block(void *drcontext, void *tag, instrlist_t *bb,
-                                         bool for_trace, bool translating);
+static void
+event_exit(void);
+static void
+event_thread_init(void *drcontext);
+static void
+event_thread_exit(void *drcontext);
+static dr_emit_flags_t
+event_basic_block(void *drcontext, void *tag, instrlist_t *bb, bool for_trace,
+                  bool translating);
 
-DR_EXPORT void 
+DR_EXPORT void
 dr_init(client_id_t id)
 {
     /* register events */
@@ -92,31 +96,30 @@ display_results(per_thread_t *data, char *thread_note)
 #ifdef SHOW_RESULTS
     char msg[512];
     int len;
-    len = dr_snprintf(msg, sizeof(msg)/sizeof(msg[0]),
+    len = dr_snprintf(msg, sizeof(msg) / sizeof(msg[0]),
                       "%sInstrumentation results:\n"
                       "  saw %d direct calls\n"
                       "  saw %d indirect calls\n"
                       "  saw %d returns\n",
-                      thread_note, data->num_direct_calls,
-                      data->num_indirect_calls, data->num_returns);
+                      thread_note, data->num_direct_calls, data->num_indirect_calls,
+                      data->num_returns);
     DR_ASSERT(len > 0);
     NULL_TERMINATE(msg);
     DISPLAY_STRING(msg);
 #endif /* SHOW_RESULTS */
 }
 
-static void 
+static void
 event_exit(void)
 {
     display_results(&global_count, "");
 }
 
-static void 
+static void
 event_thread_init(void *drcontext)
 {
     /* create an instance of our data structure for this thread */
-    per_thread_t *data = (per_thread_t *)
-        dr_thread_alloc(drcontext, sizeof(per_thread_t));
+    per_thread_t *data = (per_thread_t *)dr_thread_alloc(drcontext, sizeof(per_thread_t));
     /* store it in the slot provided in the drcontext */
     dr_set_tls_field(drcontext, data);
     data->num_direct_calls = 0;
@@ -126,15 +129,15 @@ event_thread_init(void *drcontext)
            dr_get_thread_id(drcontext));
 }
 
-static void 
+static void
 event_thread_exit(void *drcontext)
 {
-    per_thread_t *data = (per_thread_t *) dr_get_tls_field(drcontext);
+    per_thread_t *data = (per_thread_t *)dr_get_tls_field(drcontext);
     char msg[512];
     int len;
 
-    len = dr_snprintf(msg, sizeof(msg)/sizeof(msg[0]),
-                      "Thread %d exited - ", dr_get_thread_id(drcontext));
+    len = dr_snprintf(msg, sizeof(msg) / sizeof(msg[0]), "Thread %d exited - ",
+                      dr_get_thread_id(drcontext));
     DR_ASSERT(len > 0);
     NULL_TERMINATE(msg);
 
@@ -162,15 +165,19 @@ insert_counter_update(void *drcontext, instrlist_t *bb, instr_t *where, int offs
      * in the exit events, but this sample is intended to illustrate inserted
      * instrumentation.
      */
-    instrlist_meta_preinsert(bb, where, LOCK(INSTR_CREATE_inc
-        (drcontext, OPND_CREATE_ABSMEM(((byte *)&global_count) + offset, OPSZ_4))));
+    instrlist_meta_preinsert(
+        bb, where,
+        LOCK(INSTR_CREATE_inc(
+            drcontext, OPND_CREATE_ABSMEM(((byte *)&global_count) + offset, OPSZ_4))));
 
     /* Increment the thread private counter. */
     if (dr_using_all_private_caches()) {
-        per_thread_t *data = (per_thread_t *) dr_get_tls_field(drcontext);
+        per_thread_t *data = (per_thread_t *)dr_get_tls_field(drcontext);
         /* private caches - we can use an absolute address */
-        instrlist_meta_preinsert(bb, where, INSTR_CREATE_inc(drcontext, 
-            OPND_CREATE_ABSMEM(((byte *)&data) + offset, OPSZ_4)));
+        instrlist_meta_preinsert(
+            bb, where,
+            INSTR_CREATE_inc(drcontext,
+                             OPND_CREATE_ABSMEM(((byte *)&data) + offset, OPSZ_4)));
     } else {
         /* shared caches - we must indirect via thread local storage */
         /* We spill xbx to use a scratch register (we could do a liveness
@@ -178,8 +185,8 @@ insert_counter_update(void *drcontext, instrlist_t *bb, instr_t *where, int offs
          * is currently holding the saved eflags. */
         dr_save_reg(drcontext, bb, where, REG_XBX, SPILL_SLOT_2);
         dr_insert_read_tls_field(drcontext, bb, where, REG_XBX);
-        instrlist_meta_preinsert(bb, where,
-            INSTR_CREATE_inc(drcontext, OPND_CREATE_MEM32(REG_XBX, offset)));
+        instrlist_meta_preinsert(
+            bb, where, INSTR_CREATE_inc(drcontext, OPND_CREATE_MEM32(REG_XBX, offset)));
         dr_restore_reg(drcontext, bb, where, REG_XBX, SPILL_SLOT_2);
     }
 
@@ -188,22 +195,22 @@ insert_counter_update(void *drcontext, instrlist_t *bb, instr_t *where, int offs
 }
 
 static dr_emit_flags_t
-event_basic_block(void *drcontext, void *tag, instrlist_t *bb,
-                  bool for_trace, bool translating)
+event_basic_block(void *drcontext, void *tag, instrlist_t *bb, bool for_trace,
+                  bool translating)
 {
     instr_t *instr, *next_instr;
-    
+
 #ifdef VERBOSE
-    dr_printf("in dynamorio_basic_block(tag="PFX")\n", tag);
-# ifdef VERBOSE_VERBOSE
+    dr_printf("in dynamorio_basic_block(tag=" PFX ")\n", tag);
+#    ifdef VERBOSE_VERBOSE
     instrlist_disassemble(drcontext, tag, bb, STDOUT);
-# endif
+#    endif
 #endif
-    
+
     for (instr = instrlist_first(bb); instr != NULL; instr = next_instr) {
         /* grab next now so we don't go over instructions we insert */
         next_instr = instr_get_next(instr);
-        
+
         /* instrument calls and returns -- ignore far calls/rets */
         if (instr_is_call_direct(instr)) {
             insert_counter_update(drcontext, bb, instr,
@@ -216,9 +223,9 @@ event_basic_block(void *drcontext, void *tag, instrlist_t *bb,
                                   offsetof(per_thread_t, num_returns));
         }
     }
-    
+
 #if defined(VERBOSE) && defined(VERBOSE_VERBOSE)
-    dr_printf("Finished instrumenting dynamorio_basic_block(tag="PFX")\n", tag);
+    dr_printf("Finished instrumenting dynamorio_basic_block(tag=" PFX ")\n", tag);
     instrlist_disassemble(drcontext, tag, bb, STDOUT);
 #endif
     return DR_EMIT_DEFAULT;

@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -39,26 +39,26 @@
 #include "tools.h"
 
 #ifdef USE_DYNAMO
-#include "dynamorio.h"
+#    include "dynamorio.h"
 #endif
 
 /* make as STRESS=1 for a performance test */
 
 #ifdef NIGHTLY_REGRESSION
 /* don't ask to compute fact or fib too high */
-# define MAX_FACT_FIB 20
-# define ITERS (2*MAX_FACT_FIB)
+#    define MAX_FACT_FIB 20
+#    define ITERS (2 * MAX_FACT_FIB)
 #else
 /* PERF or STRESS */
 /* very low computation here */
-# define MAX_FACT_FIB 8
-# define ITERS 4000
+#    define MAX_FACT_FIB 8
+#    define ITERS 4000
 #endif
 #define VERBOSE 0
 
 /* we create a 2nd thread to complicate DR cache flushing */
 int WINAPI
-run_func(void * arg)
+run_func(void *arg)
 {
     WaitForSingleObject((HANDLE)arg, INFINITE);
     return 0;
@@ -71,16 +71,11 @@ get_mem_usage()
     get_process_mem_stats(GetCurrentProcess(), &mem);
 #if VERBOSE
     print("Process Memory Statistics:\n");
-    print("\tPeak virtual size:         %6d KB\n",
-          mem.PeakVirtualSize/1024);
-    print("\tPeak working set size:     %6d KB\n",
-          mem.PeakWorkingSetSize/1024);
-    print("\tPeak paged pool usage:     %6d KB\n",
-          mem.QuotaPeakPagedPoolUsage/1024);
-    print("\tPeak non-paged pool usage: %6d KB\n",
-          mem.QuotaPeakNonPagedPoolUsage/1024);
-    print("\tPeak pagefile usage:       %6d KB\n",
-          mem.PeakPagefileUsage/1024);
+    print("\tPeak virtual size:         %6d KB\n", mem.PeakVirtualSize / 1024);
+    print("\tPeak working set size:     %6d KB\n", mem.PeakWorkingSetSize / 1024);
+    print("\tPeak paged pool usage:     %6d KB\n", mem.QuotaPeakPagedPoolUsage / 1024);
+    print("\tPeak non-paged pool usage: %6d KB\n", mem.QuotaPeakNonPagedPoolUsage / 1024);
+    print("\tPeak pagefile usage:       %6d KB\n", mem.PeakPagefileUsage / 1024);
 #endif
     return mem.PeakPagefileUsage;
 }
@@ -100,7 +95,9 @@ check_mem_usage(SIZE_T peakpage)
 
      FIXME: coarse units makes the increase larger, and traces do make
      a big difference:
-      % for i in "" "-disable_traces" "-no_coarse_units" "-no_coarse_units -disable_traces"; do useops $i; (for j in 40 60 80 100; do rundr rel win32/reload-newaddr.exe $j; done) 2>&1 | grep '^Pagefile usage increase'; done
+      % for i in "" "-disable_traces" "-no_coarse_units" "-no_coarse_units
+    -disable_traces"; do useops $i; (for j in 40 60 80 100; do rundr rel
+    win32/reload-newaddr.exe $j; done) 2>&1 | grep '^Pagefile usage increase'; done
       DYNAMORIO_OPTIONS=
       Pagefile usage increase is 68 KB
       Pagefile usage increase is 112 KB
@@ -123,22 +120,22 @@ check_mem_usage(SIZE_T peakpage)
       Pagefile usage increase is 32 KB
 
     Strangely debug build uses less memory for coarse:
-      % for i in "" "-disable_traces" "-no_coarse_units" "-no_coarse_units -disable_traces"; do useops $i; (for j in 40; do rundr dbg win32/reload-newaddr.exe $j; done) 2>&1 | grep '^Pagefile usage increase'; done
-      DYNAMORIO_OPTIONS=
-      Pagefile usage increase is 56 KB
-      DYNAMORIO_OPTIONS=-disable_traces
-      Pagefile usage increase is 40 KB
-      DYNAMORIO_OPTIONS=-no_coarse_units
-      Pagefile usage increase is 24 KB
+      % for i in "" "-disable_traces" "-no_coarse_units" "-no_coarse_units
+    -disable_traces"; do useops $i; (for j in 40; do rundr dbg win32/reload-newaddr.exe
+    $j; done) 2>&1 | grep '^Pagefile usage increase'; done DYNAMORIO_OPTIONS= Pagefile
+    usage increase is 56 KB DYNAMORIO_OPTIONS=-disable_traces Pagefile usage increase is
+    40 KB DYNAMORIO_OPTIONS=-no_coarse_units Pagefile usage increase is 24 KB
       DYNAMORIO_OPTIONS=-no_coarse_units -disable_traces
       Pagefile usage increase is 32 KB
 
      But it seems that we have to run a LOT of iters to really prove there's no leak:
-       % for i in 10 100 200 500 1000 2000; do echo $i; (norio win32/reload-newaddr.exe $i; usetree coarse; useops -no_coarse_units; rio win32/reload-newaddr.exe $i; useops -desktop; rio win32/reload-newaddr.exe $i; useops; rio win32/reload-newaddr.exe $i) 2>&1 | grep 'Peak pagefile' | sed 's/Peak pagefile usage://' | xargs | awk '{printf "native %4d; nocoarse %4d +%3d; desktop %4d +%3d; tot %4d +%3d\n", $1, $3, $3-$1, $5, $5-$1, $7, $7-$1}'; done
-      10
-      native  428; nocoarse 1588 +1160; desktop 1424 +996; tot 1516 +1088
-      100
-      native  436; nocoarse 1740 +1304; desktop 1448 +1012; tot 1712 +1276
+       % for i in 10 100 200 500 1000 2000; do echo $i; (norio win32/reload-newaddr.exe
+    $i; usetree coarse; useops -no_coarse_units; rio win32/reload-newaddr.exe $i; useops
+    -desktop; rio win32/reload-newaddr.exe $i; useops; rio win32/reload-newaddr.exe $i)
+    2>&1 | grep 'Peak pagefile' | sed 's/Peak pagefile usage://' | xargs | awk '{printf
+    "native %4d; nocoarse %4d +%3d; desktop %4d +%3d; tot %4d +%3d\n", $1, $3, $3-$1, $5,
+    $5-$1, $7, $7-$1}'; done 10 native  428; nocoarse 1588 +1160; desktop 1424 +996; tot
+    1516 +1088 100 native  436; nocoarse 1740 +1304; desktop 1448 +1012; tot 1712 +1276
       200
       native  448; nocoarse 1760 +1312; desktop 1460 +1012; tot 1756 +1308
       500
@@ -156,15 +153,15 @@ check_mem_usage(SIZE_T peakpage)
      * behavior, make vs raw being different, etc. etc. so just checking
      * for under 80KB
      */
-    if (newpeak - peakpage < 80*1024)
+    if (newpeak - peakpage < 80 * 1024)
         print("Memory check: pagefile usage increase is < 80 KB\n");
     /* detect_dangling_fcache doesn't free fcache */
-    else if (newpeak - peakpage < 120*1024)
+    else if (newpeak - peakpage < 120 * 1024)
         print("Memory check: pagefile usage increase is >= 80 KB, < 120 KB\n");
     else {
         /* give actual number here so we can see how high it is */
         print("Memory check: pagefile usage increase is %d KB >= 120 KB\n",
-              (newpeak - peakpage)/1024);
+              (newpeak - peakpage) / 1024);
     }
 }
 
@@ -180,22 +177,22 @@ doload(int iter)
         return 0;
     } else {
         /* don't ask to compute fact or fib too high */
-        BOOL (WINAPI *proc)(DWORD);
-        proc = (BOOL (WINAPI *)(DWORD))
-            GetProcAddress(lib, (LPCSTR)"import_me");
+        BOOL(WINAPI * proc)(DWORD);
+        proc = (BOOL(WINAPI *)(DWORD))GetProcAddress(lib, (LPCSTR) "import_me");
         sum += (*proc)(iter % MAX_FACT_FIB);
         FreeLibrary(lib);
         /* prevent loading at the same address again */
-        p = VirtualAlloc(lib, 4*1024, MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+        p = VirtualAlloc(lib, 4 * 1024, MEM_RESERVE, PAGE_EXECUTE_READWRITE);
         /* deliberately do not free */
 #if VERBOSE
-        print("alloced "PFX" @ last loaded slot "PFX"\n", p, lib);
+        print("alloced " PFX " @ last loaded slot " PFX "\n", p, lib);
 #endif
     }
     return sum;
 }
 
-int main(int argc, char** argv)
+int
+main(int argc, char **argv)
 {
     HANDLE event;
     uint i, res;
@@ -221,7 +218,7 @@ int main(int argc, char** argv)
     event = CreateEvent(NULL, TRUE, FALSE, NULL);
     hThread = _beginthreadex(NULL, 0, run_func, event, 0, &i);
 
-    for (i=0; i<iters/2; i++) {
+    for (i = 0; i < iters / 2; i++) {
         res = doload(i);
         if (res == 0)
             break;
@@ -230,7 +227,7 @@ int main(int argc, char** argv)
 
     peakpage = get_mem_usage();
 
-    for (i=iters/2; i<iters; i++) {
+    for (i = iters / 2; i < iters; i++) {
         res = doload(i);
         if (res == 0)
             break;

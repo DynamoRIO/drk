@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -36,7 +36,8 @@
 
 #include "share.h"
 
-int usage(char *us)
+int
+usage(char *us)
 {
     fprintf(stderr, "\
 Usage: %s\n\
@@ -47,15 +48,17 @@ balloon -p <PID> [-v <MB or KB to reserve>] [-c <MB or KB to commit>] [-f] [-t]\
         -r repeat until failure\n\
         -w wait\n\
     Note that reserved and committed memory are in separate regions.\n\
-    Defaults are -p current -v 256MB -c 0MB\n", us);
+    Defaults are -p current -v 256MB -c 0MB\n",
+            us);
     return 0;
-// To check values see $ ./DRview.exe -p 416 -showmem | tail -1 | awk {'print "virtual peak " $9'}
+    // To check values see $ ./DRview.exe -p 416 -showmem | tail -1 | awk {'print "virtual
+    // peak " $9'}
 }
 
 #ifdef X64
-enum {LAST_STATUS_VALUE_OFFSET = 0x1250};
+enum { LAST_STATUS_VALUE_OFFSET = 0x1250 };
 #else
-enum {LAST_STATUS_VALUE_OFFSET = 0xbf4}; /* on Win2000+ case 6789 */
+enum { LAST_STATUS_VALUE_OFFSET = 0xbf4 }; /* on Win2000+ case 6789 */
 #endif
 
 int
@@ -73,8 +76,8 @@ int
 main(int argc, char *argv[])
 {
     int result;
-    int vsize=256;
-    int csize=0;
+    int vsize = 256;
+    int csize = 0;
     LPVOID *pv = 0;
     LPVOID *pc = 0;
 
@@ -84,13 +87,13 @@ main(int argc, char *argv[])
     int topdown = 0;
     int protection = PAGE_NOACCESS;
 
-    int free_them = 0;          /* just probe the process, free them after you're done */
+    int free_them = 0; /* just probe the process, free them after you're done */
     int allocation_unit = 1024 * 1024; /* default in MB */
     int repeat = 0;
     int fail = 0;
     int wait = 0;
 
-    if (argc < 2) 
+    if (argc < 2)
         usage(argv[0]);
 
     while (argidx < argc) {
@@ -98,41 +101,32 @@ main(int argc, char *argv[])
         if (!strcmp(argv[argidx], "-help")) {
             usage(argv[0]);
             exit(0);
-        }
-        else if (!strcmp(argv[argidx], "-p")) {
-            pid=atoi(argv[++argidx]);
-        }
-        else if (!strcmp(argv[argidx], "-c")) {
-            csize=atoi(argv[++argidx]);
-        }
-        else if (!strcmp(argv[argidx], "-v")) {
+        } else if (!strcmp(argv[argidx], "-p")) {
+            pid = atoi(argv[++argidx]);
+        } else if (!strcmp(argv[argidx], "-c")) {
+            csize = atoi(argv[++argidx]);
+        } else if (!strcmp(argv[argidx], "-v")) {
             if (++argidx >= argc) {
                 usage(argv[0]);
                 exit(0);
             }
-            vsize=atoi(argv[argidx]);
-        }
-        else if (!strcmp(argv[argidx], "-t")) {
-            topdown=MEM_TOP_DOWN;
-        }
-        else if (!strcmp(argv[argidx], "-f")) {
-            free_them=1;
-        }
-        else if (!strcmp(argv[argidx], "-kb")) {
-            allocation_unit=1024;
-        }
-        else if (!strcmp(argv[argidx], "-w")) {
+            vsize = atoi(argv[argidx]);
+        } else if (!strcmp(argv[argidx], "-t")) {
+            topdown = MEM_TOP_DOWN;
+        } else if (!strcmp(argv[argidx], "-f")) {
+            free_them = 1;
+        } else if (!strcmp(argv[argidx], "-kb")) {
+            allocation_unit = 1024;
+        } else if (!strcmp(argv[argidx], "-w")) {
             wait = 1;
-        }
-        else if (!strcmp(argv[argidx], "-r")) {
+        } else if (!strcmp(argv[argidx], "-r")) {
             /* if last undefinitely */
             if (++argidx >= argc) {
-                repeat=1000000;
+                repeat = 1000000;
             } else {
-                repeat=atoi(argv[argidx]);
+                repeat = atoi(argv[argidx]);
             }
-        }
-        else {
+        } else {
             fprintf(stderr, "Unknown option: %s\n", argv[argidx]);
             usage(argv[0]);
             exit(0);
@@ -142,26 +136,25 @@ main(int argc, char *argv[])
 
     if (pid) {
         acquire_privileges();
-        phandle = OpenProcess(PROCESS_ALL_ACCESS,
-                              FALSE, pid);
+        phandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, pid);
         /* FIXME: we need PROCESS_VM_OPERATION access to the process */
         /* should grab permissions */
         assert(phandle);
         release_privileges();
-    } else 
+    } else
         phandle = GetCurrentProcess();
-        
+
     do {
         if (vsize) {
             int alloc = vsize * allocation_unit;
             int flags = MEM_RESERVE | topdown;
             pv = VirtualAllocEx(phandle, NULL, alloc, flags, protection);
             printf("%s 0x%08x virtual bytes == %d%s flags=0x%08x prot=0x%08x\n"
-                   "  res = %08x %d\n", 
-                   pv ? "Just reserved" : "Failed to reserve",
-                   alloc, vsize, allocation_unit == 1024 ? "KB" : "MB",
-                   flags, protection, pv ? (int)pv : get_last_status(), 
-                   pc ? "success:" : "GLE", GetLastError());
+                   "  res = %08x %d\n",
+                   pv ? "Just reserved" : "Failed to reserve", alloc, vsize,
+                   allocation_unit == 1024 ? "KB" : "MB", flags, protection,
+                   pv ? (int)pv : get_last_status(), pc ? "success:" : "GLE",
+                   GetLastError());
             if (pv == NULL)
                 fail = 1;
         }
@@ -171,15 +164,15 @@ main(int argc, char *argv[])
             int flags = MEM_RESERVE | MEM_COMMIT | topdown;
             pc = VirtualAllocEx(phandle, NULL, alloc, flags, protection);
             printf("%s 0x%08x bytes == %d%s flags=0x%08x prot=0x%08x\n"
-                   "  res = %08x, %s %x\n", 
-                   pc ? "Just committed" : "Failed to commit",
-                   alloc, csize, allocation_unit == 1024 ? "KB" : "MB",
-                   flags, protection, pc ? (int)pc : get_last_status(), 
-                   pc ? "success:" : "GLE", GetLastError());
+                   "  res = %08x, %s %x\n",
+                   pc ? "Just committed" : "Failed to commit", alloc, csize,
+                   allocation_unit == 1024 ? "KB" : "MB", flags, protection,
+                   pc ? (int)pc : get_last_status(), pc ? "success:" : "GLE",
+                   GetLastError());
             if (pc == NULL)
                 fail = 1;
         }
-        
+
         fflush(stdout);
         if (free_them) {
             if (wait) {

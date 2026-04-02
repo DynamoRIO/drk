@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -48,7 +48,7 @@
 #include "configure.h"
 #include "globals_shared.h"
 
-static const char *usage_str = 
+static const char *usage_str =
     "usage: nudgeunix [-help] [-v] [-pid <pid>] [-type <type>] [-client <ID> <arg>]\n"
     "       -help              Display this usage information\n"
     "       -v                 Display version information\n"
@@ -63,8 +63,7 @@ static const char *usage_str =
     "                          Send a nudge of type <type> to the process specified\n"
     "                          with -pid <pid>.  Type can be a numeric value or a\n"
     "                          symbolic name.  This argument can be repeated.\n"
-    "                          E.g., \"-type reset -type stats\".\n"
-;
+    "                          E.g., \"-type reset -type stats\".\n";
 static int
 usage(void)
 {
@@ -91,46 +90,46 @@ main(int argc, const char *argv[])
         if (strcmp(argv[arg_offs], "-help") == 0) {
             return usage();
         } else if (strcmp(argv[arg_offs], "-v") == 0) {
-            printf("nudgeunix version %s -- build %d\n",
-                   STRINGIFY(VERSION_NUMBER), BUILD_NUMBER);
+            printf("nudgeunix version %s -- build %d\n", STRINGIFY(VERSION_NUMBER),
+                   BUILD_NUMBER);
             exit(0);
         } else if (strcmp(argv[arg_offs], "-pid") == 0) {
-            if (argc <= arg_offs+1)
+            if (argc <= arg_offs + 1)
                 return usage();
-            target_pid = strtoul(argv[arg_offs+1], NULL, 10);
+            target_pid = strtoul(argv[arg_offs + 1], NULL, 10);
             arg_offs += 2;
         } else if (strcmp(argv[arg_offs], "-client") == 0) {
-            if (argc <= arg_offs+2)
+            if (argc <= arg_offs + 2)
                 return usage();
             action_mask |= NUDGE_GENERIC(client);
-            client_id = strtoul(argv[arg_offs+1], NULL, 16);
-            client_arg = strtoull(argv[arg_offs+2], NULL, 16);
+            client_id = strtoul(argv[arg_offs + 1], NULL, 16);
+            client_arg = strtoull(argv[arg_offs + 2], NULL, 16);
             arg_offs += 3;
         } else if (strcmp(argv[arg_offs], "-type") == 0) {
             int type_numeric;
-            if (argc <= arg_offs+1)
+            if (argc <= arg_offs + 1)
                 return usage();
-            type_numeric = strtoul(argv[arg_offs+1], NULL, 10);
+            type_numeric = strtoul(argv[arg_offs + 1], NULL, 10);
             action_mask |= type_numeric;
 
             /* compare against symbolic names */
             {
                 int found = 0;
-#define NUDGE_DEF(name, comment) \
-                if (strcmp(#name, argv[arg_offs+1]) == 0) { \
-                    found = 1; \
-                    action_mask |= NUDGE_GENERIC(name); \
-                }
+#define NUDGE_DEF(name, comment)                  \
+    if (strcmp(#name, argv[arg_offs + 1]) == 0) { \
+        found = 1;                                \
+        action_mask |= NUDGE_GENERIC(name);       \
+    }
                 NUDGE_DEFINITIONS();
 #undef NUDGE_DEF
                 if (!found && type_numeric == 0) {
-                    fprintf(stderr, "ERROR: unknown -nudge %s\n", argv[arg_offs+1]);
+                    fprintf(stderr, "ERROR: unknown -nudge %s\n", argv[arg_offs + 1]);
                     return usage();
                 }
-            }   
+            }
 
             arg_offs += 2;
-	} else
+        } else
             return usage();
     }
     if (arg_offs < argc)
@@ -140,7 +139,7 @@ main(int argc, const char *argv[])
     memset(&info, 0, sizeof(info));
     info.si_signo = NUDGESIG_SIGNUM;
     info.si_code = SI_QUEUE;
-    arg = (nudge_arg_t *) &info;
+    arg = (nudge_arg_t *)&info;
     arg->version = NUDGE_ARG_CURRENT_VERSION;
     arg->nudge_action_mask = action_mask;
     arg->flags = 0;

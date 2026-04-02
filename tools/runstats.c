@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -47,8 +47,8 @@
 #include <assert.h>
 #include <stdio.h>
 #include <sys/time.h> /* itimer */
-#include <stdlib.h> /* getenv */
-#include <string.h> /* strstr */
+#include <stdlib.h>   /* getenv */
+#include <string.h>   /* strstr */
 
 #define VERBOSE 0
 
@@ -79,28 +79,27 @@ static int silent; /* whether to print anything */
 /* /proc/self/status reader */
 
 /* these are defined in /usr/src/linux/fs/proc/array.c */
-#define STATUS_LINE_LENGTH        4096
-#define STATUS_LINE_FORMAT         "%s %d"
+#define STATUS_LINE_LENGTH 4096
+#define STATUS_LINE_FORMAT "%s %d"
 
 void
 get_mem_stats(pid_t pid)
 {
-    char proc_pid_status[64];      /* file name */
+    char proc_pid_status[64]; /* file name */
     FILE *status;
     char line[STATUS_LINE_LENGTH];
     // open file's /proc/id/status file
-    int n = snprintf(proc_pid_status, sizeof(proc_pid_status),
-                     "/proc/%d/status", pid);
-    if (n<0 || n==sizeof(proc_pid_status))
+    int n = snprintf(proc_pid_status, sizeof(proc_pid_status), "/proc/%d/status", pid);
+    if (n < 0 || n == sizeof(proc_pid_status))
         assert(0); /* paranoia */
-    status = fopen(proc_pid_status,"r");
+    status = fopen(proc_pid_status, "r");
     if (status == NULL)
         return; /* child already exited */
-    while(!feof(status)){
+    while (!feof(status)) {
         unsigned val = 0;
         char prefix[STATUS_LINE_LENGTH];
         int len;
-        if (NULL==fgets(line, sizeof(line), status))
+        if (NULL == fgets(line, sizeof(line), status))
             break;
         if (strstr(line, "VmSize") != 0) {
             len = sscanf(line, STATUS_LINE_FORMAT, prefix, &val);
@@ -175,10 +174,10 @@ signal_handler(int sig)
         fprintf(FP, "just got SIGALRM for %d  =>  ", child);
 #endif
         if (limit > 0) {
-            gettimeofday(&end, (struct timezone *) 0);
+            gettimeofday(&end, (struct timezone *)0);
 #if VERBOSE
-            fprintf(FP, "SIGALRM: comparing limit %d s vs. elapsed %d s\n",
-                    limit, end.tv_sec - start.tv_sec);
+            fprintf(FP, "SIGALRM: comparing limit %d s vs. elapsed %d s\n", limit,
+                    end.tv_sec - start.tv_sec);
 #endif
             /* for limit, ignore fractions of second */
             if (end.tv_sec - start.tv_sec > limit) {
@@ -203,7 +202,7 @@ intercept_signal(int sig, handler_t handler)
     int rc;
     struct sigaction act;
 
-    act.sa_sigaction = (handler_3_t) handler;
+    act.sa_sigaction = (handler_3_t)handler;
 #if BLOCK_IN_HANDLER
     rc = sigfillset(&act.sa_mask); /* block all signals within handler */
 #else
@@ -211,7 +210,7 @@ intercept_signal(int sig, handler_t handler)
 #endif
     assert(rc == 0);
     act.sa_flags = SA_ONSTACK;
-    
+
     /* arm the signal */
     rc = sigaction(sig, &act, NULL);
     assert(rc == 0);
@@ -221,11 +220,10 @@ intercept_signal(int sig, handler_t handler)
 
 /* some of this code is based on /usr/bin/time source code */
 void
-print_stats(struct timeval *start, struct timeval *end,
-            struct rusage *ru, int status)
+print_stats(struct timeval *start, struct timeval *end, struct rusage *ru, int status)
 {
-    unsigned long r;            /* Elapsed real milliseconds.  */
-    unsigned long v;            /* Elapsed virtual (CPU) milliseconds.  */
+    unsigned long r; /* Elapsed real milliseconds.  */
+    unsigned long v; /* Elapsed virtual (CPU) milliseconds.  */
     end->tv_sec -= start->tv_sec;
     if (end->tv_usec < start->tv_usec) {
         /* Manually carry a one from the seconds field.  */
@@ -234,55 +232,46 @@ print_stats(struct timeval *start, struct timeval *end,
     }
     end->tv_usec -= start->tv_usec;
 
-    if (WIFSTOPPED (status)) {
-        fprintf(FP, "Command stopped by signal %d\n",
-                WSTOPSIG (status));
-    } else if (WIFSIGNALED (status)) {
-        fprintf(FP, "Command terminated by signal %d\n",
-                WTERMSIG (status));
-    } else if (WIFEXITED (status) && WEXITSTATUS (status)) {
-        fprintf(FP, "Command exited with non-zero status %d\n",
-                WEXITSTATUS (status));
+    if (WIFSTOPPED(status)) {
+        fprintf(FP, "Command stopped by signal %d\n", WSTOPSIG(status));
+    } else if (WIFSIGNALED(status)) {
+        fprintf(FP, "Command terminated by signal %d\n", WTERMSIG(status));
+    } else if (WIFEXITED(status) && WEXITSTATUS(status)) {
+        fprintf(FP, "Command exited with non-zero status %d\n", WEXITSTATUS(status));
     }
 
     /* Convert all times to milliseconds.  Occasionally, one of these values
        comes out as zero.  Dividing by zero causes problems, so we first
        check the time value.  If it is zero, then we take `evasive action'
        instead of calculating a value.  */
-    
+
     r = end->tv_sec * 1000 + end->tv_usec / 1000;
-    
-    v = ru->ru_utime.tv_sec * 1000 + ru->ru_utime.TV_MSEC +
-        ru->ru_stime.tv_sec * 1000 + ru->ru_stime.TV_MSEC;
+
+    v = ru->ru_utime.tv_sec * 1000 + ru->ru_utime.TV_MSEC + ru->ru_stime.tv_sec * 1000 +
+        ru->ru_stime.TV_MSEC;
 
     /* Elapsed real (wall clock) time.  */
-    if (end->tv_sec >= 3600) {  /* One hour -> h:m:s.  */
-        fprintf(FP, "%ld:%02ld:%02ldelapsed ",
-                 end->tv_sec / 3600,
-                 (end->tv_sec % 3600) / 60,
-                 end->tv_sec % 60);
+    if (end->tv_sec >= 3600) { /* One hour -> h:m:s.  */
+        fprintf(FP, "%ld:%02ld:%02ldelapsed ", end->tv_sec / 3600,
+                (end->tv_sec % 3600) / 60, end->tv_sec % 60);
     } else {
-        fprintf(FP, "%ld:%02ld.%02ldelapsed ",  /* -> m:s.  */
-                 end->tv_sec / 60,
-                 end->tv_sec % 60,
-                 end->tv_usec / 10000);
+        fprintf(FP, "%ld:%02ld.%02ldelapsed ", /* -> m:s.  */
+                end->tv_sec / 60, end->tv_sec % 60, end->tv_usec / 10000);
     }
     /* % cpu is (total cpu time)/(elapsed time).  */
     if (r > 0)
         fprintf(FP, "%lu%%CPU ", (v * 100 / r));
     else
         fprintf(FP, "?%%CPU ");
-    fprintf(FP, "%ld.%02lduser ",
-            ru->ru_utime.tv_sec, ru->ru_utime.TV_MSEC / 10);
-    fprintf(FP, "%ld.%02ldsystem ",
-            ru->ru_stime.tv_sec, ru->ru_stime.TV_MSEC / 10);
+    fprintf(FP, "%ld.%02lduser ", ru->ru_utime.tv_sec, ru->ru_utime.TV_MSEC / 10);
+    fprintf(FP, "%ld.%02ldsystem ", ru->ru_stime.tv_sec, ru->ru_stime.TV_MSEC / 10);
     fprintf(FP, "(%ldmajor+%ldminor)pagefaults %ldswaps\n",
-            ru->ru_majflt,/* Major page faults.  */
-            ru->ru_minflt,/* Minor page faults.  */
+            ru->ru_majflt, /* Major page faults.  */
+            ru->ru_minflt, /* Minor page faults.  */
             ru->ru_nswap); /* times swapped out */
     fprintf(FP, "(%lu tot, %lu RSS, %lu data, %lu stk, %lu exe, %lu lib)k\n",
-            vmstats.VmSize, vmstats.VmRSS, vmstats.VmData,
-            vmstats.VmStk, vmstats.VmExe, vmstats.VmLib);
+            vmstats.VmSize, vmstats.VmRSS, vmstats.VmData, vmstats.VmStk, vmstats.VmExe,
+            vmstats.VmLib);
 
 #if VERBOSE
     fprintf(FP, "Memory usage:\n");
@@ -296,14 +285,18 @@ print_stats(struct timeval *start, struct timeval *end,
 #endif
 }
 
-int usage(char *us)
+int
+usage(char *us)
 {
-    fprintf(FP, "Usage: %s [-s limit_sec | -m limit_min | -h limit_hr]\n"
-                "       [-silent] [-env var value] <program> <args...>\n", us);
+    fprintf(FP,
+            "Usage: %s [-s limit_sec | -m limit_min | -h limit_hr]\n"
+            "       [-silent] [-env var value] <program> <args...>\n",
+            us);
     return 1;
 }
 
-int main(int argc, char *argv[])
+int
+main(int argc, char *argv[])
 {
     int rc;
     struct itimerval t;
@@ -315,19 +308,19 @@ int main(int argc, char *argv[])
     }
     while (argv[arg_offs][0] == '-') {
         if (strcmp(argv[arg_offs], "-s") == 0) {
-            if (argc <= arg_offs+1)
+            if (argc <= arg_offs + 1)
                 return usage(argv[0]);
-            limit = atoi(argv[arg_offs+1]);
+            limit = atoi(argv[arg_offs + 1]);
             arg_offs += 2;
         } else if (strcmp(argv[arg_offs], "-m") == 0) {
-            if (argc <= arg_offs+1)
+            if (argc <= arg_offs + 1)
                 return usage(argv[0]);
-            limit = atoi(argv[arg_offs+1])*60;
+            limit = atoi(argv[arg_offs + 1]) * 60;
             arg_offs += 2;
         } else if (strcmp(argv[arg_offs], "-h") == 0) {
-            if (argc <= arg_offs+1)
+            if (argc <= arg_offs + 1)
                 return usage(argv[0]);
-            limit = atoi(argv[arg_offs+1])*3600;
+            limit = atoi(argv[arg_offs + 1]) * 3600;
             arg_offs += 2;
         } else if (strcmp(argv[arg_offs], "-v") == 0) {
             /* just ignore -v, only here for compatibility with texec */
@@ -336,20 +329,19 @@ int main(int argc, char *argv[])
             silent = 1;
             arg_offs += 1;
         } else if (strcmp(argv[arg_offs], "-env") == 0) {
-            if (argc <= arg_offs+2)
+            if (argc <= arg_offs + 2)
                 return usage(argv[0]);
 #if VERBOSE
-            fprintf(FP, "setting env var \"%s\" to \"%s\"\n",
-                    argv[arg_offs+1], argv[arg_offs+2]);
+            fprintf(FP, "setting env var \"%s\" to \"%s\"\n", argv[arg_offs + 1],
+                    argv[arg_offs + 2]);
 #endif
-            rc = setenv(argv[arg_offs+1], argv[arg_offs+2], 1/*overwrite*/);
-            if (rc != 0 ||
-                strcmp(getenv(argv[arg_offs+1]), argv[arg_offs+2]) != 0) {
-                fprintf(FP, "error in setenv of \"%s\" to \"%s\"\n",
-                        argv[arg_offs+1], argv[arg_offs+2]);
+            rc = setenv(argv[arg_offs + 1], argv[arg_offs + 2], 1 /*overwrite*/);
+            if (rc != 0 || strcmp(getenv(argv[arg_offs + 1]), argv[arg_offs + 2]) != 0) {
+                fprintf(FP, "error in setenv of \"%s\" to \"%s\"\n", argv[arg_offs + 1],
+                        argv[arg_offs + 2]);
                 fprintf(FP, "setenv returned %d\n", rc);
-                fprintf(FP, "env var \"%s\" is now \"%s\"\n",
-                        argv[arg_offs+1], getenv(argv[arg_offs+1]));
+                fprintf(FP, "env var \"%s\" is now \"%s\"\n", argv[arg_offs + 1],
+                        getenv(argv[arg_offs + 1]));
                 exit(-1);
             }
             arg_offs += 3;
@@ -363,7 +355,7 @@ int main(int argc, char *argv[])
             return usage(argv[0]);
     }
 
-    gettimeofday(&start, (struct timezone *) 0);
+    gettimeofday(&start, (struct timezone *)0);
 
     child = fork();
     if (child < 0) {
@@ -375,8 +367,8 @@ int main(int argc, char *argv[])
 
         get_mem_stats(child);
 
-        intercept_signal(SIGALRM, (handler_t) signal_handler);
-        intercept_signal(SIGCHLD, (handler_t) signal_handler);
+        intercept_signal(SIGALRM, (handler_t)signal_handler);
+        intercept_signal(SIGCHLD, (handler_t)signal_handler);
 
         t.it_interval.tv_sec = 0;
         t.it_interval.tv_usec = 500000;
@@ -393,23 +385,23 @@ int main(int argc, char *argv[])
         do {
             result = wait3(&status, 0, &ru);
         } while (result != child);
-        gettimeofday(&end, (struct timezone *) 0);
+        gettimeofday(&end, (struct timezone *)0);
 #if VERBOSE
         fprintf(FP, "child has exited\n");
 #endif
-    
+
         /* turn off timer */
         t.it_interval.tv_usec = 0;
         t.it_value.tv_usec = 0;
         rc = setitimer(ITIMER_REAL, &t, NULL);
         assert(rc == 0);
-        
+
         if (!silent)
             print_stats(&start, &end, &ru, status);
         return (status == 0 ? 0 : 1);
     } else {
         int result;
-        result = execvp(argv[arg_offs], argv+arg_offs);
+        result = execvp(argv[arg_offs], argv + arg_offs);
         if (result < 0) {
             perror("ERROR in execvp");
             fprintf(FP, "  trying to run %s\n", argv[arg_offs]);

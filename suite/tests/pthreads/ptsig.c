@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -31,7 +31,8 @@
  */
 
 /* Build with:
- * gcc -o pthreads pthreads.c -lpthread -D_REENTRANT -I../lib -L../lib -ldynamo -ldl -lbfd -liberty
+ * gcc -o pthreads pthreads.c -lpthread -D_REENTRANT -I../lib -L../lib -ldynamo -ldl -lbfd
+ * -liberty
  */
 
 #include "tools.h"
@@ -43,7 +44,7 @@
 #include <assert.h>
 
 #ifdef USE_DYNAMO
-#include "dynamorio.h"
+#    include "dynamorio.h"
 #endif
 
 /* handler with SA_SIGINFO flag set gets three arguments: */
@@ -57,25 +58,24 @@ static void
 signal_handler(int sig, siginfo_t *siginfo, ucontext_t *ucxt)
 {
 #if VERBOSE
-    print("thread %d signal_handler: sig=%d, retaddr="PFX", fpregs="PFX"\n",
-	    getpid(), sig, *(&sig - 1), ucxt->uc_mcontext.fpregs);
+    print("thread %d signal_handler: sig=%d, retaddr=" PFX ", fpregs=" PFX "\n", getpid(),
+          sig, *(&sig - 1), ucxt->uc_mcontext.fpregs);
 #endif
 
     switch (sig) {
     case SIGUSR1: {
-	struct sigcontext *sc = (struct sigcontext *) &(ucxt->uc_mcontext);
+        struct sigcontext *sc = (struct sigcontext *)&(ucxt->uc_mcontext);
 #ifdef X64
-	void *pc = (void *) sc->rip;
+        void *pc = (void *)sc->rip;
 #else
-	void *pc = (void *) sc->eip;
+        void *pc = (void *)sc->eip;
 #endif
 #if VERBOSE
-	print("thread %d got SIGUSR1 @ "PFX"\n", getpid(), pc);
+        print("thread %d got SIGUSR1 @ " PFX "\n", getpid(), pc);
 #endif
         break;
     }
-    default:
-	assert(0);
+    default: assert(0);
     }
 }
 
@@ -94,7 +94,7 @@ intercept_signal(int sig, handler_t handler)
 #endif
     assert(rc == 0);
     act.sa_flags = SA_SIGINFO | SA_ONSTACK; /* send 3 args to handler */
-    
+
     /* arm the signal */
     rc = sigaction(sig, &act, NULL);
     assert(rc == 0);
@@ -103,7 +103,7 @@ intercept_signal(int sig, handler_t handler)
 void *
 process(void *arg)
 {
-    char *id = (char *) arg;
+    char *id = (char *)arg;
     register double width, localsum;
     register int i;
     register int iproc;
@@ -112,9 +112,9 @@ process(void *arg)
     print("thread %s starting\n", id);
 #endif
     if (((char *)arg)[0] == '1') {
-	intercept_signal(SIGUSR1, (handler_t) SIG_IGN);
+        intercept_signal(SIGUSR1, (handler_t)SIG_IGN);
 #if VERBOSE
-	print("thread %d ignoring SIGUSR1\n", getpid());
+        print("thread %d ignoring SIGUSR1\n", getpid());
 #endif
     }
 #if VERBOSE
@@ -122,16 +122,16 @@ process(void *arg)
 #endif
     kill(getpid(), SIGUSR1);
 
-    iproc = (*((char *) arg) - '0');
+    iproc = (*((char *)arg) - '0');
 
     /* Set width */
     width = 1.0 / intervals;
 
     /* Do the local computations */
     localsum = 0;
-    for (i=iproc; i<intervals; i+=2) {
-	register double x = (i + 0.5) * width;
-	localsum += 4.0 / (1.0 + x * x);
+    for (i = iproc; i < intervals; i += 2) {
+        register double x = (i + 0.5) * width;
+        localsum += 4.0 / (1.0 + x * x);
     }
     localsum *= width;
 
@@ -143,14 +143,14 @@ process(void *arg)
 #if VERBOSE
     print("thread %s exiting\n", id);
 #endif
-    return(NULL);
+    return (NULL);
 }
 
 int
 main(int argc, char **argv)
 {
     pthread_t thread0, thread1;
-    void * retval;
+    void *retval;
 
 #ifdef USE_DYNAMO
     dynamorio_app_init();
@@ -171,20 +171,19 @@ main(int argc, char **argv)
     /* Initialize the lock on pi */
     pthread_mutex_init(&pi_lock, NULL);
 
-    intercept_signal(SIGUSR1, (handler_t) signal_handler);
+    intercept_signal(SIGUSR1, (handler_t)signal_handler);
 
     /* Make the two threads */
     if (pthread_create(&thread0, NULL, process, "0") ||
-	pthread_create(&thread1, NULL, process, "1")) {
-	print("%s: cannot make thread\n", argv[0]);
-	exit(1);
+        pthread_create(&thread1, NULL, process, "1")) {
+        print("%s: cannot make thread\n", argv[0]);
+        exit(1);
     }
-    
+
     /* Join (collapse) the two threads */
-    if (pthread_join(thread0, &retval) ||
-	pthread_join(thread1, &retval)) {
-	print("%s: thread join failed\n", argv[0]);
-	exit(1);
+    if (pthread_join(thread0, &retval) || pthread_join(thread1, &retval)) {
+        print("%s: thread join failed\n", argv[0]);
+        exit(1);
     }
 
 #if VERBOSE
@@ -197,7 +196,7 @@ main(int argc, char **argv)
 
     struct timespec sleeptime;
     sleeptime.tv_sec = 0;
-    sleeptime.tv_nsec = 1000*1000*1000; /* 100ms */
+    sleeptime.tv_nsec = 1000 * 1000 * 1000; /* 100ms */
     nanosleep(&sleeptime, NULL);
 
 #ifdef USE_DYNAMO

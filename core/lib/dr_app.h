@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -40,17 +40,17 @@
 #define _DR_APP_H_ 1
 
 #ifdef WINDOWS
-#  ifdef DR_APP_EXPORTS
-#    define DR_APP_API __declspec(dllexport)
-#  else
-#    define DR_APP_API __declspec(dllimport)
-#  endif
+#    ifdef DR_APP_EXPORTS
+#        define DR_APP_API __declspec(dllexport)
+#    else
+#        define DR_APP_API __declspec(dllimport)
+#    endif
 #else /* LINUX */
-#  if defined(DR_APP_EXPORTS) && defined(USE_VISIBILITY_ATTRIBUTES)
-#    define DR_APP_API __attribute__ ((visibility ("default")))
-#  else
-#    define DR_APP_API
-#  endif
+#    if defined(DR_APP_EXPORTS) && defined(USE_VISIBILITY_ATTRIBUTES)
+#        define DR_APP_API __attribute__((visibility("default")))
+#    else
+#        define DR_APP_API
+#    endif
 #endif
 
 /****************************************************************************
@@ -62,35 +62,41 @@
  * API function, and before the application creates any threads. Returns
  * zero on success.
  */
-DR_APP_API int dr_app_setup(void);
+DR_APP_API int
+dr_app_setup(void);
 
 /**
  * Application-wide cleanup.  Prints statistics. Returns zero on success.
  */
-DR_APP_API int dr_app_cleanup(void);
+DR_APP_API int
+dr_app_cleanup(void);
 
 /**
- * Causes application to run under DR control upon return 
+ * Causes application to run under DR control upon return
  * from this call.
  */
-DR_APP_API void dr_app_start(void);
+DR_APP_API void
+dr_app_start(void);
 
 /**
- * Causes application to run directly on the machine upon return 
+ * Causes application to run directly on the machine upon return
  * from this call; no effect if application is not currently
  * running under DR control.
  */
-DR_APP_API void dr_app_stop(void);
+DR_APP_API void
+dr_app_stop(void);
 
 /**
- * Causes application to run under DR control upon return from 
- * this call.  DR never releases control. Useful for overriding 
+ * Causes application to run under DR control upon return from
+ * this call.  DR never releases control. Useful for overriding
  * dr_app_start/dr_app_stop calls in the rest of a program.
  */
-DR_APP_API void dr_app_take_over(void);
+DR_APP_API void
+dr_app_take_over(void);
 
 #ifdef LINUX_KERNEL
-DR_APP_API void dr_smp_exit(void);
+DR_APP_API void
+dr_smp_exit(void);
 #endif
 
 #endif /* _DR_APP_H_ */

@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -30,7 +30,7 @@
  * DAMAGE.
  */
 
-/* DRSyms DynamoRIO Extension 
+/* DRSyms DynamoRIO Extension
  *
  * Symbol lookup support (Issue 44).
  * Currently only supports Windows PDB symbols: no Cygwin support or Linux
@@ -96,20 +96,19 @@ typedef struct _drsym_info_t {
 } drsym_info_t;
 
 #ifdef WINDOWS
-# define IF_WINDOWS_ELSE(x,y) x
+#    define IF_WINDOWS_ELSE(x, y) x
 #else
-# define IF_WINDOWS_ELSE(x,y) y
+#    define IF_WINDOWS_ELSE(x, y) y
 #endif
 
 DR_EXPORT
 /**
  * Initialize the symbol access library.
- * 
-* @param[in] shmid Identifies the symbol server for sideline operation.
+ *
+ * @param[in] shmid Identifies the symbol server for sideline operation.
  * \note Sideline operation is not yet implemented.
  */
-drsym_error_t
-drsym_init(IF_WINDOWS_ELSE(const wchar_t *, int) shmid);
+drsym_error_t drsym_init(IF_WINDOWS_ELSE(const wchar_t *, int) shmid);
 
 DR_EXPORT
 /**
@@ -146,7 +145,7 @@ DR_EXPORT
 drsym_error_t
 drsym_lookup_symbol(const char *modpath, const char *symbol, size_t *modoffs /*OUT*/);
 
-/** 
+/**
  * Type for drsym_enumerate_symbols callback function.
  * Returns whether to continue the enumeration.
  *
@@ -187,7 +186,7 @@ DR_EXPORT
  *
  * Unfortunately there are significant limitations to this console
  * printing support:
- * 
+ *
  *  - It does not work from the exit event.  Once the application terminates
  *    its state with csrss (toward the very end of ExitProcess), no output
  *    will show up on the console.  We have no good solution here yet as exiting

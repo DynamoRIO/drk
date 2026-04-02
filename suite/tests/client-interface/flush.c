@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -31,13 +31,15 @@
  */
 
 #ifndef ASM_CODE_ONLY /* C code */
-#include <stdio.h>
+#    include <stdio.h>
 
-void marker(void); /* in asm code */
+void
+marker(void); /* in asm code */
 
 int test = 1;
 
-int main()
+int
+main()
 {
     int i = 0;
     int count = 0;
@@ -45,7 +47,7 @@ int main()
         if (test) {
             /* I can't think of a good way to do this -- I want to
              * target a specific BB in the client, so I'll use a
-             * couple of nops as markers.  
+             * couple of nops as markers.
              *
              * Given the value of 'test', this side of the conditional
              * should become part of a trace.
@@ -56,8 +58,7 @@ int main()
              * or xchg eax, eax is more typical for 2 bytes). */
             marker();
             count++;
-        }
-        else {
+        } else {
             count--;
         }
 
@@ -68,13 +69,11 @@ int main()
 }
 
 #else /* asm code *************************************************************/
-#include "asm_defines.asm"
+#    include "asm_defines.asm"
 START_FILE
-        DECLARE_FUNC(marker)
+DECLARE_FUNC(marker)
 GLOBAL_LABEL(marker:)
-        nop
-        xchg REG_XBP, REG_XBP
-        ret
-        END_FUNC(marker)
-END_FILE
+nop xchg REG_XBP,
+    REG_XBP ret
+    END_FUNC(marker) END_FILE
 #endif

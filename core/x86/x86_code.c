@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -96,8 +96,8 @@ dynamo_start(dr_mcontext_t *mc)
      * stack to account for the return address.
      */
     mcontext->xsp += XSP_SZ;
-    call_switch_stack(dcontext, dcontext->dstack, dispatch,
-                      false/*not on initstack*/, true/*return on error*/);
+    call_switch_stack(dcontext, dcontext->dstack, dispatch, false /*not on initstack*/,
+                      true /*return on error*/);
     /* In release builds, this will simply return and continue native
      * execution.  That's better than calling unexpected_return() which
      * goes into an infinite loop.
@@ -121,7 +121,7 @@ auto_setup(ptr_uint_t appstack)
     dcontext_t *dcontext;
     dr_mcontext_t *mcontext;
     byte *pappstack;
-    byte        *addr;
+    byte *addr;
 
     pappstack = (byte *)appstack;
 
@@ -141,7 +141,7 @@ auto_setup(ptr_uint_t appstack)
         return;
     }
 
-    /* For apps injected using follow_children, this is where control should be 
+    /* For apps injected using follow_children, this is where control should be
      * allowed to go native for hotp_only & thin_client.
      */
     if (RUNNING_WITHOUT_CODE_CACHE())
@@ -162,36 +162,33 @@ auto_setup(ptr_uint_t appstack)
     ASSERT(dcontext->next_tag != NULL);
 
     /* free memory */
-    addr = (byte *) *((byte **)pappstack);
-    pappstack += sizeof(byte*);
+    addr = (byte *)*((byte **)pappstack);
+    pappstack += sizeof(byte *);
     if (addr != NULL) {
-        size_t size = *((size_t*)pappstack);
+        size_t size = *((size_t *)pappstack);
         heap_error_code_t error_code;
-        /* since this is rx it was added to our exec list, remove now 
+        /* since this is rx it was added to our exec list, remove now
          * ASSUMPTION: no fragments in the region so no need to flush
          */
         /* flushing would align for us but we have to do it ourselves here */
         size_t alloc_size = ALIGN_FORWARD(size, PAGE_SIZE);
         DODEBUG({
             if (SHARED_FRAGMENTS_ENABLED())
-                ASSERT(!thread_vm_area_overlap(GLOBAL_DCONTEXT, addr, addr+alloc_size));
+                ASSERT(!thread_vm_area_overlap(GLOBAL_DCONTEXT, addr, addr + alloc_size));
         });
-        ASSERT(!thread_vm_area_overlap(dcontext, addr, addr+alloc_size));
-        remove_executable_region(addr, alloc_size, false/*do not have lock*/);
+        ASSERT(!thread_vm_area_overlap(dcontext, addr, addr + alloc_size));
+        remove_executable_region(addr, alloc_size, false /*do not have lock*/);
         os_heap_free(addr, size, &error_code);
     }
 
     /* FIXME : for transparency should we zero out the appstack where we
      * stored injection information? would be safe to do so here */
 
-    LOG(THREAD, LOG_INTERP, 1, "DynamoRIO auto start at 0x%08x\n",
-        dcontext->next_tag);
-    DOLOG(LOG_INTERP, 2, {
-        dump_mcontext(mcontext, THREAD, DUMP_NOT_XML);
-    });
+    LOG(THREAD, LOG_INTERP, 1, "DynamoRIO auto start at 0x%08x\n", dcontext->next_tag);
+    DOLOG(LOG_INTERP, 2, { dump_mcontext(mcontext, THREAD, DUMP_NOT_XML); });
 
-    call_switch_stack(dcontext, dcontext->dstack, dispatch,
-                      false/*not on initstack*/, false/*shouldn't return*/);
+    call_switch_stack(dcontext, dcontext->dstack, dispatch, false /*not on initstack*/,
+                      false /*shouldn't return*/);
     ASSERT_NOT_REACHED();
 }
 
@@ -203,8 +200,8 @@ auto_setup(ptr_uint_t appstack)
  * the pc stored in the clone_record_t * stored at mc->pc.
  * Assumes that it is called on the initstack.
  *
- * CAUTION: don't add a lot of stack variables in this routine or call a lot 
- *          of functions before get_clone_record() because get_clone_record() 
+ * CAUTION: don't add a lot of stack variables in this routine or call a lot
+ *          of functions before get_clone_record() because get_clone_record()
  *          makes assumptions about the usage of stack being less than a page.
  */
 void
@@ -222,7 +219,7 @@ new_thread_setup(dr_mcontext_t *mc)
     /* i#149/PR 403015: clone_record_t is passed via dstack. */
     crec = get_clone_record(mc->xsp);
     LOG(GLOBAL, LOG_INTERP, 1,
-        "new_thread_setup: thread %d, dstack "PFX" clone record "PFX"\n",
+        "new_thread_setup: thread %d, dstack " PFX " clone record " PFX "\n",
         get_thread_id(), get_clone_record_dstack(crec), crec);
 
     /* As we used dstack as app thread stack to pass clone record, we now need
@@ -230,28 +227,28 @@ new_thread_setup(dr_mcontext_t *mc)
      */
     mc->xsp = get_clone_record_app_xsp(crec);
     /* clear xax (was used to hold clone record) */
-    ASSERT(mc->xax == (reg_t) mc->pc);
+    ASSERT(mc->xax == (reg_t)mc->pc);
     mc->xax = 0;
     /* clear pc */
     mc->pc = 0;
 
-    rc = dynamo_thread_init(get_clone_record_dstack(crec), mc
-                            _IF_CLIENT_INTERFACE(false));
+    rc =
+        dynamo_thread_init(get_clone_record_dstack(crec), mc _IF_CLIENT_INTERFACE(false));
     ASSERT(rc != -1); /* this better be a new thread */
     dcontext = get_thread_private_dcontext();
     ASSERT(dcontext != NULL);
     /* set up sig handlers before starting itimer in thread_starting() (PR 537743)
      * but thread_starting() calls initialize_dynamo_context() so cache next_tag
      */
-    next_tag = signal_thread_inherit(dcontext, (void *) crec);
+    next_tag = signal_thread_inherit(dcontext, (void *)crec);
     ASSERT(next_tag != NULL);
     thread_starting(dcontext);
     dcontext->next_tag = next_tag;
 
     *get_mcontext(dcontext) = *mc;
 
-    call_switch_stack(dcontext, dcontext->dstack, dispatch,
-                      false/*not on initstack*/, false/*shouldn't return*/);
+    call_switch_stack(dcontext, dcontext->dstack, dispatch, false /*not on initstack*/,
+                      false /*shouldn't return*/);
     ASSERT_NOT_REACHED();
 }
 
@@ -283,24 +280,24 @@ nt_continue_setup(dr_mcontext_t *mc)
         ASSERT(DYNAMO_OPTION(shared_syscalls));
         next_pc = dcontext->next_tag;
     }
-    LOG(THREAD, LOG_ASYNCH, 2, "nt_continue_setup: target is "PFX"\n", next_pc);
+    LOG(THREAD, LOG_ASYNCH, 2, "nt_continue_setup: target is " PFX "\n", next_pc);
     initialize_dynamo_context(dcontext);
     dcontext->next_tag = next_pc;
     ASSERT(dcontext->next_tag != NULL);
-    set_last_exit(dcontext, (linkstub_t *) get_asynch_linkstub());
+    set_last_exit(dcontext, (linkstub_t *)get_asynch_linkstub());
     dcontext->whereami = WHERE_TRAMPOLINE;
 
     *get_mcontext(dcontext) = *mc;
     /* clear pc */
     get_mcontext(dcontext)->pc = 0;
-#if defined(WINDOWS) && defined(CLIENT_INTERFACE)
+#    if defined(WINDOWS) && defined(CLIENT_INTERFACE)
     /* We came straight from fcache, so swap to priv now (i#25) */
     if (INTERNAL_OPTION(private_peb) && should_swap_peb_pointer())
-        swap_peb_pointer(dcontext, true/*to priv*/);
-#endif
+        swap_peb_pointer(dcontext, true /*to priv*/);
+#    endif
 
-    call_switch_stack(dcontext, dcontext->dstack, dispatch,
-                      false/*not on initstack*/, false/*shouldn't return*/);
+    call_switch_stack(dcontext, dcontext->dstack, dispatch, false /*not on initstack*/,
+                      false /*shouldn't return*/);
     ASSERT_NOT_REACHED();
 }
 
@@ -344,11 +341,11 @@ entering_native()
         LOG(THREAD, LOG_ASYNCH, 2, "entering_native: squashing old trace\n");
         trace_abort(dcontext);
     }
-    set_last_exit(dcontext, (linkstub_t *) get_native_exec_linkstub());
+    set_last_exit(dcontext, (linkstub_t *)get_native_exec_linkstub());
     /* now we're in app! */
     dcontext->whereami = WHERE_APP;
     SYSLOG_INTERNAL_WARNING_ONCE("entered at least one module natively");
-    LOG(THREAD, LOG_ASYNCH, 1, "!!!! Entering module NATIVELY, retaddr="PFX"\n\n",
+    LOG(THREAD, LOG_ASYNCH, 1, "!!!! Entering module NATIVELY, retaddr=" PFX "\n\n",
         dcontext->native_exec_retval);
     STATS_INC(num_native_module_enter);
     EXITING_DR();
@@ -363,7 +360,7 @@ back_from_native_C(dr_mcontext_t *mc)
     ENTERING_DR();
     dcontext = get_thread_private_dcontext();
     ASSERT(dcontext != NULL);
-    LOG(THREAD, LOG_ASYNCH, 1, "\n!!!! Returned from NATIVE module to "PFX"\n",
+    LOG(THREAD, LOG_ASYNCH, 1, "\n!!!! Returned from NATIVE module to " PFX "\n",
         dcontext->native_exec_retval);
     SYSLOG_INTERNAL_WARNING_ONCE("returned from at least one native module");
     STATS_INC(num_native_module_exit);
@@ -389,8 +386,8 @@ back_from_native_C(dr_mcontext_t *mc)
     /* clear pc */
     get_mcontext(dcontext)->pc = 0;
 
-    call_switch_stack(dcontext, dcontext->dstack, dispatch,
-                      false/*not on initstack*/, false/*shouldn't return*/);
+    call_switch_stack(dcontext, dcontext->dstack, dispatch, false /*not on initstack*/,
+                      false /*shouldn't return*/);
     ASSERT_NOT_REACHED();
 }
 

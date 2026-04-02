@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -43,7 +43,7 @@
 
 /* DR_API EXPORT TOFILE dr_ir_utils.h */
 DR_API
-/** 
+/**
  * Decodes and then prints the instruction at address \p pc to file \p outfile.
  * The default is to use AT&T-style syntax, unless the \ref op_syntax_intel
  * "-syntax_intel" runtime option is specified.
@@ -54,17 +54,17 @@ byte *
 disassemble(dcontext_t *dcontext, byte *pc, file_t outfile);
 
 DR_UNS_API /* deprecated from interface */
-/**
- * Decodes and then prints the instruction at address \p pc to file \p outfile.
- * Prior to the instruction the address and raw bytes of the instruction
- * are printed.
- * The default is to use AT&T-style syntax, unless the \ref op_syntax_intel
- * "-syntax_intel" runtime option is specified.
- * Returns the address of the subsequent instruction, or a guess if the instruction
- * at \p pc is invalid.
- */
-byte *
-disassemble_with_bytes(dcontext_t *dcontext, byte *pc, file_t outfile);
+    /**
+     * Decodes and then prints the instruction at address \p pc to file \p outfile.
+     * Prior to the instruction the address and raw bytes of the instruction
+     * are printed.
+     * The default is to use AT&T-style syntax, unless the \ref op_syntax_intel
+     * "-syntax_intel" runtime option is specified.
+     * Returns the address of the subsequent instruction, or a guess if the instruction
+     * at \p pc is invalid.
+     */
+    byte *
+    disassemble_with_bytes(dcontext_t *dcontext, byte *pc, file_t outfile);
 
 DR_API
 /**
@@ -77,8 +77,8 @@ DR_API
  * at \p pc is invalid.
  */
 byte *
-disassemble_with_info(dcontext_t *dcontext, byte *pc, file_t outfile,
-                      bool show_pc, bool show_bytes);
+disassemble_with_info(dcontext_t *dcontext, byte *pc, file_t outfile, bool show_pc,
+                      bool show_bytes);
 
 DR_API
 /**
@@ -93,14 +93,13 @@ DR_API
  * \p copy_pc, or NULL if the instruction at \p copy_pc is invalid.
  */
 byte *
-disassemble_from_copy(dcontext_t *dcontext, byte *copy_pc, byte *orig_pc,
-                      file_t outfile, bool show_pc, bool show_bytes);
-
+disassemble_from_copy(dcontext_t *dcontext, byte *copy_pc, byte *orig_pc, file_t outfile,
+                      bool show_pc, bool show_bytes);
 
 /* DR_API EXPORT TOFILE dr_ir_instr.h */
 DR_API
 /**
- * Prints the instruction \p instr to file \p outfile. 
+ * Prints the instruction \p instr to file \p outfile.
  * Does not print address-size or data-size prefixes for other than
  * just-decoded instrs, and does not check that the instruction has a
  * valid encoding.  Prints each operand with leading zeros indicating
@@ -108,7 +107,7 @@ DR_API
  * The default is to use AT&T-style syntax, unless the \ref op_syntax_intel
  * "-syntax_intel" runtime option is specified.
  */
-void 
+void
 instr_disassemble(dcontext_t *dcontext, instr_t *instr, file_t outfile);
 
 /* DR_API EXPORT TOFILE dr_ir_opnd.h */
@@ -118,7 +117,7 @@ DR_API
  * The default is to use AT&T-style syntax, unless the \ref op_syntax_intel
  * "-syntax_intel" runtime option is specified.
  */
-void 
+void
 opnd_disassemble(dcontext_t *dcontext, opnd_t opnd, file_t outfile);
 
 #endif /* INTERNAL || DEBUG || CLIENT_INTERFACE */

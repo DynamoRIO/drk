@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -39,33 +39,39 @@
 typedef void (*funcptr)();
 
 #pragma code_seg(".mycode1")
-void func2() { 
+void
+func2()
+{
     print("func2\n");
 }
 
 funcptr f2 = &func2;
 
-#pragma code_seg(".my_code2")   /* 2 will be truncated - up to 8 char limit */
-void func3() { 
+#pragma code_seg(".my_code2") /* 2 will be truncated - up to 8 char limit */
+void
+func3()
+{
     print("exe calling f2\n");
     (*f2)();
     print("exe func3\n");
 }
 
-#pragma code_seg(".my_code3") 
+#pragma code_seg(".my_code3")
 /* interesting - while the PE file will have an 8 byte section limit ".my_code"
  * this section is still going to be created as different from the .my_code2
-*/
-void func4() {
+ */
+void
+func4()
+{
     print("exe func4\n");
 }
-#pragma code_seg()                /* back in .text */
+#pragma code_seg() /* back in .text */
 
 const funcptr cf = &func3;
 funcptr f = &func2;
 
 HMODULE
-myload(char* lib) 
+myload(char *lib)
 {
     HMODULE hm = LoadLibrary(lib);
     if (hm == NULL) {
@@ -73,13 +79,14 @@ myload(char* lib)
     } else {
         print("loaded %s\n", lib);
 #if VERBOSE
-        print("library is at "PFX"\n", hm);
+        print("library is at " PFX "\n", hm);
 #endif
     }
     return hm;
 }
 
-int main()
+int
+main()
 {
     HMODULE lib1;
     HMODULE lib2;

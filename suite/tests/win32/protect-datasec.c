@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -37,16 +37,16 @@
 #include "tools.h"
 
 #ifdef LINUX
-# include <unistd.h>
-# include <signal.h>
-# include <ucontext.h>
-# include <errno.h>
+#    include <unistd.h>
+#    include <signal.h>
+#    include <ucontext.h>
+#    include <errno.h>
 #endif
 
 #include <setjmp.h>
 
 #ifdef USE_DYNAMO
-# include "dynamorio.h"
+#    include "dynamorio.h"
 #endif
 
 #define VERBOSE 0
@@ -58,22 +58,18 @@
 /****************************************************************************/
 
 /* the data sections to try to write to */
-static const char * const datasec_names[] = {
-    ".data",
-    ".fspdata",
-    ".cspdata",
-    ".nspdata"
-};
-#define DATASEC_NUM (sizeof(datasec_names)/sizeof(datasec_names[0]))
+static const char *const datasec_names[] = { ".data", ".fspdata", ".cspdata",
+                                             ".nspdata" };
+#define DATASEC_NUM (sizeof(datasec_names) / sizeof(datasec_names[0]))
 
 typedef unsigned char byte;
 
 #ifdef LINUX
-# error NYI
+#    error NYI
 #else
 bool
-get_named_section_bounds(byte *module_base, const char *name,
-                         byte **start/*OUT*/, byte **end/*OUT*/)
+get_named_section_bounds(byte *module_base, const char *name, byte **start /*OUT*/,
+                         byte **end /*OUT*/)
 {
     IMAGE_DOS_HEADER *dos;
     IMAGE_NT_HEADERS *nt;
@@ -81,10 +77,10 @@ get_named_section_bounds(byte *module_base, const char *name,
     uint i;
     bool prev_sec_same_chars = false;
     assert(module_base != NULL);
-    dos = (IMAGE_DOS_HEADER *) module_base;
+    dos = (IMAGE_DOS_HEADER *)module_base;
     if (dos->e_magic != IMAGE_DOS_SIGNATURE)
         return false;
-    nt = (IMAGE_NT_HEADERS *) (((ptr_uint_t)dos) + dos->e_lfanew);
+    nt = (IMAGE_NT_HEADERS *)(((ptr_uint_t)dos) + dos->e_lfanew);
     if (nt == NULL || nt->Signature != IMAGE_NT_SIGNATURE)
         return false;
     assert(start != NULL || end != NULL);
@@ -116,7 +112,6 @@ get_DR_base()
 
 /****************************************************************************/
 
-
 jmp_buf mark;
 int where; /* 0 = normal, 1 = segfault longjmp */
 
@@ -129,21 +124,21 @@ static void
 signal_handler(int sig)
 {
     if (sig == SIGSEGV) {
-#if VERBOSE
+#    if VERBOSE
         print("Got seg fault\n");
-#endif
+#    endif
         longjmp(mark, 1);
     }
     exit(-1);
 }
 
-#define ASSERT_NOERR(rc) do {                                   \
-  if (rc) {                                                     \
-     fprintf(stderr, "%s:%d rc=%d errno=%d %s\n",               \
-             __FILE__, __LINE__,                                \
-             rc, errno, strerror(errno));                       \
-  }                                                             \
-} while (0);
+#    define ASSERT_NOERR(rc)                                                         \
+        do {                                                                         \
+            if (rc) {                                                                \
+                fprintf(stderr, "%s:%d rc=%d errno=%d %s\n", __FILE__, __LINE__, rc, \
+                        errno, strerror(errno));                                     \
+            }                                                                        \
+        } while (0);
 
 /* set up signal_handler as the handler for signal "sig" */
 static void
@@ -152,7 +147,7 @@ intercept_signal(int sig, handler_t handler)
     int rc;
     struct sigaction act;
 
-    act.sa_sigaction = (handler_3_t) handler;
+    act.sa_sigaction = (handler_3_t)handler;
     /* FIXME: due to DR bug 840 we cannot block ourself in the handler
      * since the handler does not end in a sigreturn, so we have an empty mask
      * and we use SA_NOMASK
@@ -161,7 +156,7 @@ intercept_signal(int sig, handler_t handler)
     ASSERT_NOERR(rc);
     /* FIXME: due to DR bug #654 we use SA_SIGINFO -- change it once DR works */
     act.sa_flags = SA_NOMASK | SA_SIGINFO | SA_ONSTACK;
-    
+
     /* arm the signal */
     rc = sigaction(sig, &act, NULL);
     ASSERT_NOERR(rc);
@@ -171,20 +166,20 @@ intercept_signal(int sig, handler_t handler)
 /* sort of a hack to avoid the MessageBox of the unhandled exception spoiling
  * our batch runs
  */
-# include <windows.h>
+#    include <windows.h>
 /* top-level exception handler */
 static LONG
-our_top_handler(struct _EXCEPTION_POINTERS * pExceptionInfo)
+our_top_handler(struct _EXCEPTION_POINTERS *pExceptionInfo)
 {
     if (pExceptionInfo->ExceptionRecord->ExceptionCode == EXCEPTION_ACCESS_VIOLATION) {
-#if VERBOSE
+#    if VERBOSE
         print("Got segfault\n");
-#endif
+#    endif
         longjmp(mark, 1);
     }
-# if VERBOSE
+#    if VERBOSE
     print("Exception occurred, process about to die silently\n");
-# endif
+#    endif
     return EXCEPTION_EXECUTE_HANDLER; /* => global unwind and silent death */
 }
 #endif
@@ -196,7 +191,7 @@ main()
     uint writes = 0;
     byte *DR_base;
     INIT();
-    
+
 #ifdef USE_DYNAMO
     dynamorio_app_init();
     dynamorio_app_start();
@@ -205,20 +200,20 @@ main()
 #ifdef LINUX
     intercept_signal(SIGSEGV, signal_handler);
 #else
-    SetUnhandledExceptionFilter((LPTOP_LEVEL_EXCEPTION_FILTER) our_top_handler);
+    SetUnhandledExceptionFilter((LPTOP_LEVEL_EXCEPTION_FILTER)our_top_handler);
 #endif
 
     where = setjmp(mark);
     if (where == 0) {
         DR_base = get_DR_base();
-        for (i=0; i<DATASEC_NUM; i++) {
+        for (i = 0; i < DATASEC_NUM; i++) {
             byte *start, *end, *pc;
             bool found = get_named_section_bounds(DR_base,
                                                   /*FIXME use drmarker to find*/
                                                   datasec_names[i], &start, &end);
             assert(found);
 #if VERBOSE
-            print("data section %s: "PFX"-"PFX"\n", datasec_names[i], start, end);
+            print("data section %s: " PFX "-" PFX "\n", datasec_names[i], start, end);
 #endif
             print("about to write to every page in %s\n", datasec_names[i]);
             for (pc = start; pc < end; pc += PAGE_SIZE) {
@@ -232,8 +227,7 @@ main()
                     /* if the section is protected we shouldn't get here */
                     writes++;
 #if VERBOSE
-                    print("successfully wrote to "PFX" in %s!\n",
-                          pc, datasec_names[i]);
+                    print("successfully wrote to " PFX " in %s!\n", pc, datasec_names[i]);
 #endif
                 }
             }

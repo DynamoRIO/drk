@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -61,14 +61,14 @@
 
 #define MINSERT instrlist_meta_preinsert
 
-#define ASSERT(x) \
-    do {                                                        \
-        if (!(x)) {                                             \
-            dr_printf("ASSERT failed on line %d", __LINE__);    \
-            dr_flush_file(STDOUT);                              \
-            dr_abort();                                         \
-        }                                                       \
-    } while (0)                             
+#define ASSERT(x)                                            \
+    do {                                                     \
+        if (!(x)) {                                          \
+            dr_printf("ASSERT failed on line %d", __LINE__); \
+            dr_flush_file(STDOUT);                           \
+            dr_abort();                                      \
+        }                                                    \
+    } while (0)
 
 /* We need a table to store the state of each cbr (i.e., "seen taken
  * edge", "seen fallthrough edge", or "seen both").  We'll use a
@@ -77,11 +77,7 @@
 #define HASH_TABLE_SIZE 7919
 
 /* Possible cbr states */
-typedef enum {
-    CBR_NEITHER   = 0x00,
-    CBR_TAKEN     = 0x01,
-    CBR_NOT_TAKEN = 0x10
-} cbr_state_t;
+typedef enum { CBR_NEITHER = 0x00, CBR_TAKEN = 0x01, CBR_NOT_TAKEN = 0x10 } cbr_state_t;
 
 /* Each bucket in the hash table is a list of the following elements.
  * For each cbr, we store its address and its state.
@@ -97,46 +93,44 @@ typedef struct _list_t {
     elem_t *tail;
 } list_t;
 
-
 /* We'll use one global hash table */
 typedef list_t **hash_table_t;
 hash_table_t table = NULL;
 
-static
-elem_t *new_elem(app_pc addr, cbr_state_t state)
+static elem_t *
+new_elem(app_pc addr, cbr_state_t state)
 {
     elem_t *elem = (elem_t *)dr_global_alloc(sizeof(elem_t));
     ASSERT(elem != NULL);
 
-    elem->next  = NULL;
-    elem->addr  = addr;
+    elem->next = NULL;
+    elem->addr = addr;
     elem->state = state;
 
     return elem;
 }
 
-static
-void delete_elem(elem_t *elem)
+static void
+delete_elem(elem_t *elem)
 {
     dr_global_free(elem, sizeof(elem_t));
 }
 
-static
-void append_elem(list_t *list, elem_t *elem)
+static void
+append_elem(list_t *list, elem_t *elem)
 {
     if (list->head == NULL) {
         ASSERT(list->tail == NULL);
         list->head = elem;
         list->tail = elem;
-    }
-    else {
+    } else {
         list->tail->next = elem;
         list->tail = elem;
     }
 }
 
-static
-elem_t *find_elem(list_t *list, app_pc addr)
+static elem_t *
+find_elem(list_t *list, app_pc addr)
 {
     elem_t *elem = list->head;
     while (elem != NULL) {
@@ -148,8 +142,8 @@ elem_t *find_elem(list_t *list, app_pc addr)
     return NULL;
 }
 
-static
-list_t *new_list()
+static list_t *
+new_list()
 {
     list_t *list = (list_t *)dr_global_alloc(sizeof(list_t));
     list->head = NULL;
@@ -157,8 +151,8 @@ list_t *new_list()
     return list;
 }
 
-static
-void delete_list(list_t *list)
+static void
+delete_list(list_t *list)
 {
     elem_t *iter = list->head;
     while (iter != NULL) {
@@ -170,23 +164,25 @@ void delete_list(list_t *list)
     dr_global_free(list, sizeof(list_t));
 }
 
-hash_table_t new_table()
+hash_table_t
+new_table()
 {
     int i;
-    hash_table_t table = (hash_table_t)dr_global_alloc
-        (sizeof(list_t *) * HASH_TABLE_SIZE);
+    hash_table_t table =
+        (hash_table_t)dr_global_alloc(sizeof(list_t *) * HASH_TABLE_SIZE);
 
-    for (i=0; i<HASH_TABLE_SIZE; i++) {
+    for (i = 0; i < HASH_TABLE_SIZE; i++) {
         table[i] = NULL;
     }
 
     return table;
 }
 
-void delete_table(hash_table_t table)
+void
+delete_table(hash_table_t table)
 {
     int i;
-    for (i=0; i<HASH_TABLE_SIZE; i++) {
+    for (i = 0; i < HASH_TABLE_SIZE; i++) {
         if (table[i] != NULL) {
             delete_list(table[i]);
         }
@@ -195,13 +191,14 @@ void delete_table(hash_table_t table)
     dr_global_free(table, sizeof(list_t *) * HASH_TABLE_SIZE);
 }
 
-static
-uint hash_func(app_pc addr)
+static uint
+hash_func(app_pc addr)
 {
     return ((uint)(((ptr_uint_t)addr) % HASH_TABLE_SIZE));
 }
 
-elem_t *lookup(hash_table_t table, app_pc addr)
+elem_t *
+lookup(hash_table_t table, app_pc addr)
 {
     list_t *list = table[hash_func(addr)];
     if (list != NULL)
@@ -210,7 +207,8 @@ elem_t *lookup(hash_table_t table, app_pc addr)
     return NULL;
 }
 
-void insert(hash_table_t table, app_pc addr, cbr_state_t state)
+void
+insert(hash_table_t table, app_pc addr, cbr_state_t state)
 {
     elem_t *elem = new_elem(addr, state);
 
@@ -225,17 +223,18 @@ void insert(hash_table_t table, app_pc addr, cbr_state_t state)
 }
 
 /*
- * End hash table implementation 
+ * End hash table implementation
  */
 
 /* Clean call for the 'taken' case */
-static void at_taken(app_pc src, app_pc targ)
+static void
+at_taken(app_pc src, app_pc targ)
 {
     int app_errno;
     dr_mcontext_t mcontext;
     void *drcontext = dr_get_current_drcontext();
 
-    /* 
+    /*
      * Record the fact that we've seen the taken case.
      */
     elem_t *elem = lookup(table, src);
@@ -255,13 +254,14 @@ static void at_taken(app_pc src, app_pc targ)
 }
 
 /* Clean call for the 'not taken' case */
-static void at_not_taken(app_pc src, app_pc fall)
+static void
+at_not_taken(app_pc src, app_pc fall)
 {
     int app_errno;
     dr_mcontext_t mcontext;
     void *drcontext = dr_get_current_drcontext();
 
-    /* 
+    /*
      * Record the fact that we've seen the not_taken case.
      */
     elem_t *elem = lookup(table, src);
@@ -280,12 +280,11 @@ static void at_not_taken(app_pc src, app_pc fall)
     dr_redirect_execution(&mcontext, app_errno);
 }
 
-
 static dr_emit_flags_t
 bb_event(void *drcontext, void *tag, instrlist_t *bb, bool for_trace, bool translating)
 {
     instr_t *instr, *next_instr;
-    
+
     for (instr = instrlist_first(bb); instr != NULL; instr = next_instr) {
         next_instr = instr_get_next(instr);
 
@@ -301,27 +300,26 @@ bb_event(void *drcontext, void *tag, instrlist_t *bb, bool for_trace, bool trans
             cbr_state_t state;
             bool insert_taken, insert_not_taken;
             app_pc src = instr_get_app_pc(instr);
-            
+
             /* First look up the state of this branch so we
              * know what instrumentation to insert, if any.
              */
             elem_t *elem = lookup(table, src);
-            
+
             if (elem == NULL) {
                 state = CBR_NEITHER;
                 insert(table, src, CBR_NEITHER);
-            }
-            else {
+            } else {
                 state = elem->state;
             }
-            
+
             insert_taken = (state & CBR_TAKEN) == 0;
             insert_not_taken = (state & CBR_NOT_TAKEN) == 0;
-            
+
             if (insert_taken || insert_not_taken) {
                 app_pc fall = (app_pc)decode_next_pc(drcontext, (byte *)src);
                 app_pc targ = instr_get_branch_target_pc(instr);
-                
+
                 /* Redirect the existing cbr to jump to a callout for
                  * the 'taken' case.  We'll insert a 'not-taken'
                  * callout at the fallthrough address.
@@ -337,19 +335,17 @@ bb_event(void *drcontext, void *tag, instrlist_t *bb, bool for_trace, bool trans
                     instr = instr_convert_short_meta_jmp_to_long(drcontext, bb, instr);
                 }
                 instr_set_target(instr, opnd_create_instr(label));
-                
+
                 if (insert_not_taken) {
                     /* Callout for the not-taken case.  Insert after
-                     * the cbr (i.e., 3rd argument is NULL). 
+                     * the cbr (i.e., 3rd argument is NULL).
                      */
-                    dr_insert_clean_call(drcontext, bb, NULL, 
-                                         (void*)at_not_taken,
-                                         false /* don't save fp state */, 
-                                         2 /* 2 args for at_not_taken */,
-                                         OPND_CREATE_INTPTR(src),
-                                         OPND_CREATE_INTPTR(fall));
+                    dr_insert_clean_call(
+                        drcontext, bb, NULL, (void *)at_not_taken,
+                        false /* don't save fp state */, 2 /* 2 args for at_not_taken */,
+                        OPND_CREATE_INTPTR(src), OPND_CREATE_INTPTR(fall));
                 }
-                
+
                 /* After the callout, jump to the original fallthrough
                  * address.  Note that this is an exit cti, and should
                  * not be a meta-instruction.  Therefore, we use
@@ -362,29 +358,27 @@ bb_event(void *drcontext, void *tag, instrlist_t *bb, bool for_trace, bool trans
                  * insert explicit exits from the block for Windows as
                  * well as Linux.
                  */
-                instrlist_preinsert(bb, NULL,
-                                    INSTR_XL8(INSTR_CREATE_jmp
-                                              (drcontext, opnd_create_pc(fall)), fall));
-                
+                instrlist_preinsert(
+                    bb, NULL,
+                    INSTR_XL8(INSTR_CREATE_jmp(drcontext, opnd_create_pc(fall)), fall));
+
                 /* label goes before the 'taken' callout */
                 MINSERT(bb, NULL, label);
-                
+
                 if (insert_taken) {
                     /* Callout for the taken case */
-                    dr_insert_clean_call(drcontext, bb, NULL,
-                                         (void*)at_taken,
-                                         false /* don't save fp state */,
-                                         2 /* 2 args for at_taken */,
-                                         OPND_CREATE_INTPTR(src),
-                                         OPND_CREATE_INTPTR(targ));
+                    dr_insert_clean_call(
+                        drcontext, bb, NULL, (void *)at_taken,
+                        false /* don't save fp state */, 2 /* 2 args for at_taken */,
+                        OPND_CREATE_INTPTR(src), OPND_CREATE_INTPTR(targ));
                 }
-                
+
                 /* After the callout, jump to the original target
                  * block (this should not be a meta-instruction).
                  */
-                instrlist_preinsert(bb, NULL,
-                                    INSTR_XL8(INSTR_CREATE_jmp
-                                              (drcontext, opnd_create_pc(targ)), targ));
+                instrlist_preinsert(
+                    bb, NULL,
+                    INSTR_XL8(INSTR_CREATE_jmp(drcontext, opnd_create_pc(targ)), targ));
             }
         }
     }
@@ -394,29 +388,27 @@ bb_event(void *drcontext, void *tag, instrlist_t *bb, bool for_trace, bool trans
     return DR_EMIT_STORE_TRANSLATIONS;
 }
 
-
-void dr_exit(void)
+void
+dr_exit(void)
 {
 #ifdef SHOW_RESULTS
     /* Print all the cbr's seen over the life of the process, and
      * whether we saw taken, not taken, or both.
      */
     int i;
-    for (i=0; i<HASH_TABLE_SIZE; i++) {
+    for (i = 0; i < HASH_TABLE_SIZE; i++) {
         if (table[i] != NULL) {
             elem_t *iter;
             for (iter = table[i]->head; iter != NULL; iter = iter->next) {
                 cbr_state_t state = iter->state;
 
                 if (state == CBR_TAKEN) {
-                    dr_printf(""PFX": taken\n", iter->addr);
-                }
-                else if (state == CBR_NOT_TAKEN) {
-                    dr_printf(""PFX": not taken\n", iter->addr);
-                }                
-                else {
+                    dr_printf("" PFX ": taken\n", iter->addr);
+                } else if (state == CBR_NOT_TAKEN) {
+                    dr_printf("" PFX ": not taken\n", iter->addr);
+                } else {
                     ASSERT(state == (CBR_TAKEN | CBR_NOT_TAKEN));
-                    dr_printf(""PFX": both\n", iter->addr);
+                    dr_printf("" PFX ": both\n", iter->addr);
                 }
             }
         }
@@ -426,9 +418,9 @@ void dr_exit(void)
     delete_table(table);
 }
 
-
 DR_EXPORT
-void dr_init(client_id_t id)
+void
+dr_init(client_id_t id)
 {
     table = new_table();
     dr_register_bb_event(bb_event);

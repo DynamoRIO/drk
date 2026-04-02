@@ -57,7 +57,7 @@ typedef struct {
     /* Error reports. */
     bool reporting_enabled;
     bool reset_report_count;
-    int report_count; 
+    int report_count;
     int report_read_index;
     int report_write_index;
     memcheck_report_t reports[MAX_NUM_MEMCHECK_REPORTS];
@@ -80,14 +80,14 @@ static memcheck_tls_t *mtls[100];
 
 /* For easy access from stat reporting and error reporting code. They can't use
  * dr_get_current_drcontext b/c they run in the kernel context. */
-DEFINE_PER_CPU(memcheck_tls_t*, memcheck_tls);
+DEFINE_PER_CPU(memcheck_tls_t *, memcheck_tls);
 
-#define CODE_CACHE_SIZE PAGE_SIZE*2
+#define CODE_CACHE_SIZE PAGE_SIZE * 2
 
 static inline memcheck_tls_t *
 memcheck_tls(umbra_info_t *info)
 {
-    return (memcheck_tls_t*) info->client_tls_data;
+    return (memcheck_tls_t *)info->client_tls_data;
 }
 
 static inline memcheck_tls_t *
@@ -99,24 +99,24 @@ get_memcheck_tls(void)
 /* The number of CPUs that we've called flush_cpu_slab on. We don't use a proper
  * barrier because of deadlock: smp_init in dynamo.c waits for the main CPU to
  * finish initilization (including its thread init routine) before calling the
- * other CPUs' thread init routines. 
+ * other CPUs' thread init routines.
  */
 int slab_flush_count;
 void *slab_flush_mutex;
 
 typedef enum {
-    PERMISSION_UNKNOWN                 = 0x0,  /* 0000 0000 */
-    PERMISSION_UNADDRESSABLE           = 0x1,  /* 0000 0001 */
-    PERMISSION_ADDRESSABLE             = 0x2,  /* 0000 0010 */
-    PERMISSION_DEFINED                 = 0x4,  /* 0000 0100 */
+    PERMISSION_UNKNOWN = 0x0,       /* 0000 0000 */
+    PERMISSION_UNADDRESSABLE = 0x1, /* 0000 0001 */
+    PERMISSION_ADDRESSABLE = 0x2,   /* 0000 0010 */
+    PERMISSION_DEFINED = 0x4,       /* 0000 0100 */
     /* Different variants of PERMISSION_UNADDRESSABLE. They are all true when
      * anded with PERMISSION_UNADDRESSABLE but have extra higher bits set for
      * debugging. */
-    PERMISSION_UNADDRESSABLE_INIT      = 0x9,  /* 0000 1001 */
-    PERMISSION_UNADDRESSABLE_KFREE     = 0x11, /* 0001 0001 */
+    PERMISSION_UNADDRESSABLE_INIT = 0x9,       /* 0000 1001 */
+    PERMISSION_UNADDRESSABLE_KFREE = 0x11,     /* 0001 0001 */
     PERMISSION_UNADDRESSABLE_SLAB_FREE = 0x19, /* 0001 1001 */
-    PERMISSION_UNADDRESSABLE_GET_PAGE  = 0x21, /* 0010 0001 */
-    PERMISSION_UNADDRESSABLE_EOS       = 0x29, /* 0010 1001 */
+    PERMISSION_UNADDRESSABLE_GET_PAGE = 0x21,  /* 0010 0001 */
+    PERMISSION_UNADDRESSABLE_EOS = 0x29,       /* 0010 1001 */
 } permission_t;
 
 static inline reg_t
@@ -145,8 +145,8 @@ static bool
 slub_function_on_stack(dr_mcontext_t *mc);
 
 static void
-set_shadow_permission(memory_map_t *map, void *first, void *last,
-                      permission_t permission) {
+set_shadow_permission(memory_map_t *map, void *first, void *last, permission_t permission)
+{
     void *shd_addr[MAX_NUM_SHADOWS];
     reg_t shd_size[MAX_NUM_SHADOWS];
     compute_shd_memory_addr_ex(map, first, shd_addr);
@@ -163,39 +163,38 @@ get_shadow_byte(memory_map_t *map, byte *addr)
 {
     void *shd_addr[MAX_NUM_SHADOWS];
     compute_shd_memory_addr_ex(map, addr, shd_addr);
-    return *(byte*) shd_addr[0];
+    return *(byte *)shd_addr[0];
 }
 
 static permission_t
 get_byte_permission(memory_map_t *map, byte *addr)
 {
-    return (permission_t) get_shadow_byte(map, addr);
+    return (permission_t)get_shadow_byte(map, addr);
 }
 
-typedef void (*for_each_map_callback_t)(memory_map_t *map, void *first,
-                                        void *last, void *data);
+typedef void (*for_each_map_callback_t)(memory_map_t *map, void *first, void *last,
+                                        void *data);
 
-#define FOR_EACH_MAP(start, size, map, current_last, code) \
-do {\
-    umbra_info_t *info = umbra_get_info();\
-\
-    /* Don't support wraparound. */\
-    DR_ASSERT(start + size >= start || start + size == 0);\
-    for (;;) {\
-        if (size == 0) {\
-            break;\
-        }\
-        map = memory_map_thread_lazy_add(info, start);\
-        current_last = min(start + size - 1, map->app_end - 1);\
-        code\
-        if (start + size < map->app_end ||\
-            map->app_end == 0) {\
-            break;\
-        }\
-        size -= map->app_end - start;\
-        start = map->app_end;\
-    }\
-} while(0)
+#define FOR_EACH_MAP(start, size, map, current_last, code)             \
+    do {                                                               \
+        umbra_info_t *info = umbra_get_info();                         \
+                                                                       \
+        /* Don't support wraparound. */                                \
+        DR_ASSERT(start + size >= start || start + size == 0);         \
+        for (;;) {                                                     \
+            if (size == 0) {                                           \
+                break;                                                 \
+            }                                                          \
+            map = memory_map_thread_lazy_add(info, start);             \
+            current_last = min(start + size - 1, map->app_end - 1);    \
+            code if (start + size < map->app_end || map->app_end == 0) \
+            {                                                          \
+                break;                                                 \
+            }                                                          \
+            size -= map->app_end - start;                              \
+            start = map->app_end;                                      \
+        }                                                              \
+    } while (0)
 
 static void
 set_memory_permission(void *start, size_t size, permission_t permission)
@@ -203,8 +202,7 @@ set_memory_permission(void *start, size_t size, permission_t permission)
     memory_map_t *map;
     void *last;
     FOR_EACH_MAP(start, size, map, last,
-        set_shadow_permission(map, start, last, permission);
-    );
+                 set_shadow_permission(map, start, last, permission););
 }
 
 static bool
@@ -213,8 +211,8 @@ test_shadow(void *start, size_t size, permission_t permission, bool all)
     memory_map_t *map;
     void *last;
     size_t i;
-    FOR_EACH_MAP(start, size, map, last,
-        for (i = 0; i + start <= last; i++) {
+    FOR_EACH_MAP(
+        start, size, map, last, for (i = 0; i + start <= last; i++) {
             bool match;
             permission_t byte_permission = get_byte_permission(map, start + i);
             if (permission == PERMISSION_UNKNOWN) {
@@ -226,12 +224,11 @@ test_shadow(void *start, size_t size, permission_t permission, bool all)
             if (match) {
                 if (!all) {
                     return true;
-                } 
+                }
             } else if (all) {
                 return false;
             }
-        }
-    );
+        });
     return all;
 }
 
@@ -275,23 +272,22 @@ is_memory_ok_to_alloc(void *start, size_t size)
     memory_map_t *map;
     void *last;
     size_t i;
-    FOR_EACH_MAP(start, size, map, last,
-        for (i = 0; i + start <= last; i++) {
+    FOR_EACH_MAP(
+        start, size, map, last, for (i = 0; i + start <= last; i++) {
             /* TODO(peter): Make this faster with multi-byte comparisons. */
             permission_t perm = get_byte_permission(map, start + i);
             if (TESTANY(PERMISSION_ADDRESSABLE | PERMISSION_DEFINED, perm)) {
                 return false;
             }
-            #if 0
+#    if 0
             /* When allocations are larger than SLUB_MAX_SIZE, they can be
              * returned from unknown memory as opposed to unaddressable because
              * kmalloc_large uses __get_free_pages directly. */
             if (size <= SLUB_MAX_SIZE && perm == PERMISSION_UNKNOWN) {
                 return false; 
             }
-            #endif
-        }
-    );
+#    endif
+        });
     return true;
 }
 #endif
@@ -300,13 +296,13 @@ static bool
 safe_ksize(const void *x, size_t *size)
 {
     if (ZERO_OR_NULL_PTR(x)) {
-	/* kfree(NULL or ZERO_SIZE_PTR) is a nop, however calling ksize(NULL or
+        /* kfree(NULL or ZERO_SIZE_PTR) is a nop, however calling ksize(NULL or
          * ZERO_SIZE_PTR) is an error. */
         *size = 0;
-    } else if (!virt_addr_valid((unsigned long) x)) {
+    } else if (!virt_addr_valid((unsigned long)x)) {
         /* kfree and ksize rely on virt_to_head_page(x), which requires
          * virt_addr_valid(x) via virt_to_page(x). Rather than having ksize
-         * barf, we flag an error here. 
+         * barf, we flag an error here.
          */
         *size = 0;
         printk("safe_ksize !virt_addr_valid(%p)\n", x);
@@ -336,7 +332,6 @@ set_page_permission(struct page *slab, permission_t permission)
     set_memory_permission(page_address(slab), size, permission);
 }
 
-
 /* We need to do the kfree wrapping in pre_kfree because ksize doesn't work once
  * the memory has been deallocated. */
 static inline void
@@ -353,7 +348,7 @@ pre_kfree(dr_mcontext_t *mc, const void *x)
      * TODO(peter): We could have a separate designation for redzone bytes, so
      * we could check for addressable or redzone. */
 #ifdef DEBUG
-    DR_ASSERT(is_memory_ok_to_free((void*) x, 1));
+    DR_ASSERT(is_memory_ok_to_free((void *)x, 1));
 #endif
     page = virt_to_head_page(x);
     /* For non-slab pages (i.e., large pages returned by kmalloc_large
@@ -374,7 +369,7 @@ pre_kfree(dr_mcontext_t *mc, const void *x)
 #endif
         return;
     }
-    set_memory_permission((void*) x, size, PERMISSION_UNADDRESSABLE_KFREE);
+    set_memory_permission((void *)x, size, PERMISSION_UNADDRESSABLE_KFREE);
 }
 
 static inline void
@@ -388,8 +383,7 @@ pre___kmalloc(dr_mcontext_t *mc, size_t size, gfp_t flags)
 }
 
 static void
-track_allocation(bool args_valid, void *addr, size_t size, gfp_t flags,
-                 bool has_ctor)
+track_allocation(bool args_valid, void *addr, size_t size, gfp_t flags, bool has_ctor)
 {
     size_t max_size;
     bool could_be_defined;
@@ -413,8 +407,7 @@ track_allocation(bool args_valid, void *addr, size_t size, gfp_t flags,
 #endif
     could_be_defined = TESTANY(flags, __GFP_ZERO) || !args_valid || has_ctor;
     set_memory_permission(addr, args_valid ? size : max_size,
-                          could_be_defined ? PERMISSION_DEFINED :
-                                             PERMISSION_ADDRESSABLE);
+                          could_be_defined ? PERMISSION_DEFINED : PERMISSION_ADDRESSABLE);
 }
 
 static inline void
@@ -424,13 +417,15 @@ post___kmalloc(dr_mcontext_t *mc, bool args_valid, void *ret, size_t size, gfp_t
 }
 
 static inline void
-pre___kmalloc_track_caller(dr_mcontext_t *mc, size_t size, gfp_t flags, unsigned long caller)
+pre___kmalloc_track_caller(dr_mcontext_t *mc, size_t size, gfp_t flags,
+                           unsigned long caller)
 {
     pre___kmalloc(mc, size, flags);
 }
 
 static inline void
-post___kmalloc_track_caller(dr_mcontext_t *mc, bool args_valid, void *ret, size_t size, gfp_t flags, unsigned long caller)
+post___kmalloc_track_caller(dr_mcontext_t *mc, bool args_valid, void *ret, size_t size,
+                            gfp_t flags, unsigned long caller)
 {
     post___kmalloc(mc, args_valid, ret, size, flags);
 }
@@ -442,19 +437,22 @@ pre___kmalloc_node(dr_mcontext_t *mc, size_t size, gfp_t flags, int node)
 }
 
 static inline void
-post___kmalloc_node(dr_mcontext_t *mc, bool args_valid, void *ret, size_t size, gfp_t flags, int node)
+post___kmalloc_node(dr_mcontext_t *mc, bool args_valid, void *ret, size_t size,
+                    gfp_t flags, int node)
 {
     post___kmalloc(mc, args_valid, ret, size, flags);
 }
 
 static inline void
-pre___kmalloc_node_track_caller(dr_mcontext_t *mc, size_t size, gfp_t flags, int node, unsigned long caller)
+pre___kmalloc_node_track_caller(dr_mcontext_t *mc, size_t size, gfp_t flags, int node,
+                                unsigned long caller)
 {
     pre___kmalloc_node(mc, size, flags, node);
 }
 
 static inline void
-post___kmalloc_node_track_caller(dr_mcontext_t *mc, bool args_valid, void *ret, size_t size, gfp_t flags, int node, unsigned long caller)
+post___kmalloc_node_track_caller(dr_mcontext_t *mc, bool args_valid, void *ret,
+                                 size_t size, gfp_t flags, int node, unsigned long caller)
 {
     post___kmalloc_node(mc, args_valid, ret, size, flags, node);
 }
@@ -466,20 +464,23 @@ pre_kmem_cache_alloc(dr_mcontext_t *mc, struct kmem_cache *cachep, gfp_t flags)
 }
 
 static inline void
-post_kmem_cache_alloc(dr_mcontext_t *mc, bool args_valid, void *ret, struct kmem_cache *cachep, gfp_t flags)
+post_kmem_cache_alloc(dr_mcontext_t *mc, bool args_valid, void *ret,
+                      struct kmem_cache *cachep, gfp_t flags)
 {
     track_allocation(args_valid, ret, args_valid ? cachep->objsize : 0, flags,
                      args_valid ? cachep->ctor != NULL : true);
 }
 
-static inline void 
-pre_kmem_cache_alloc_node(dr_mcontext_t *mc, struct kmem_cache *cachep, gfp_t flags, int node)
+static inline void
+pre_kmem_cache_alloc_node(dr_mcontext_t *mc, struct kmem_cache *cachep, gfp_t flags,
+                          int node)
 {
     pre_kmem_cache_alloc(mc, cachep, flags);
 }
 
-static inline void 
-post_kmem_cache_alloc_node(dr_mcontext_t *mc, bool args_valid, void *ret, struct kmem_cache *cachep, gfp_t flags, int node)
+static inline void
+post_kmem_cache_alloc_node(dr_mcontext_t *mc, bool args_valid, void *ret,
+                           struct kmem_cache *cachep, gfp_t flags, int node)
 {
     post_kmem_cache_alloc(mc, args_valid, ret, cachep, flags);
 }
@@ -491,12 +492,12 @@ pre_kmem_cache_free(dr_mcontext_t *mc, struct kmem_cache *cachep, void *objp)
 #ifdef DEBUG
     DR_ASSERT(is_memory_ok_to_free(objp, cachep->objsize));
 #endif
-    set_memory_permission((void*) objp, cachep->size,
-                          PERMISSION_UNADDRESSABLE_SLAB_FREE);
+    set_memory_permission((void *)objp, cachep->size, PERMISSION_UNADDRESSABLE_SLAB_FREE);
 }
 
 static inline void
-post_kmem_cache_free(dr_mcontext_t *mc, bool args_valid, reg_t ret, struct kmem_cache *cachep, void *objp)
+post_kmem_cache_free(dr_mcontext_t *mc, bool args_valid, reg_t ret,
+                     struct kmem_cache *cachep, void *objp)
 {
 }
 
@@ -506,7 +507,8 @@ pre_new_slab(dr_mcontext_t *mc, struct kmem_cache *s, gfp_t flags, int node)
 }
 
 static inline void
-post_new_slab(dr_mcontext_t *mc, bool args_valid, struct page *ret, struct kmem_cache *s, gfp_t flags, int node)
+post_new_slab(dr_mcontext_t *mc, bool args_valid, struct page *ret, struct kmem_cache *s,
+              gfp_t flags, int node)
 {
     if (!ret) {
         return;
@@ -528,7 +530,8 @@ pre___free_slab(dr_mcontext_t *mc, struct kmem_cache *s, struct page *page)
 }
 
 static inline void
-post___free_slab(dr_mcontext_t *mc, bool args_valid, reg_t ret, struct kmem_cache *s, struct page *page)
+post___free_slab(dr_mcontext_t *mc, bool args_valid, reg_t ret, struct kmem_cache *s,
+                 struct page *page)
 {
 }
 
@@ -553,7 +556,8 @@ pre_kmem_cache_shrink(dr_mcontext_t *mc, struct kmem_cache *cachep)
 }
 
 static inline void
-post_kmem_cache_shrink(dr_mcontext_t *mc, bool args_valid, int ret, struct kmem_cache *cachep)
+post_kmem_cache_shrink(dr_mcontext_t *mc, bool args_valid, int ret,
+                       struct kmem_cache *cachep)
 {
 }
 
@@ -568,14 +572,15 @@ post_ksize(dr_mcontext_t *mc, bool args_valid, size_t ret, const void *x)
 }
 
 static inline void
-pre_kmem_cache_create (dr_mcontext_t *mc, const char *name, size_t size, size_t align,
-                       unsigned long flags, void (*ctor)(void *))
+pre_kmem_cache_create(dr_mcontext_t *mc, const char *name, size_t size, size_t align,
+                      unsigned long flags, void (*ctor)(void *))
 {
 }
 
 static inline void
-post_kmem_cache_create (dr_mcontext_t *mc, bool args_valid, struct kmem_cache *ret, const char *name, size_t size,
-                        size_t align, unsigned long flags, void (*ctor)(void *))
+post_kmem_cache_create(dr_mcontext_t *mc, bool args_valid, struct kmem_cache *ret,
+                       const char *name, size_t size, size_t align, unsigned long flags,
+                       void (*ctor)(void *))
 {
 }
 
@@ -585,7 +590,8 @@ pre_kmem_cache_destroy(dr_mcontext_t *mc, struct kmem_cache *cachep)
 }
 
 static inline void
-post_kmem_cache_destroy(dr_mcontext_t *mc, bool args_valid, reg_t void_ret, struct kmem_cache *cachep)
+post_kmem_cache_destroy(dr_mcontext_t *mc, bool args_valid, reg_t void_ret,
+                        struct kmem_cache *cachep)
 {
 }
 
@@ -599,12 +605,13 @@ post_flush_cpu_slab(dr_mcontext_t *mc, bool args_valid, reg_t void_ret, void *d)
 }
 
 static inline void
-pre_deactivate_slab(dr_mcontext_t *mc, struct kmem_cache *s, struct kmem_cache_cpu *c) 
+pre_deactivate_slab(dr_mcontext_t *mc, struct kmem_cache *s, struct kmem_cache_cpu *c)
 {
 }
 
 static inline void
-post_deactivate_slab(dr_mcontext_t *mc, bool args_valid, reg_t void_ret, struct kmem_cache *s, struct kmem_cache_cpu *c) 
+post_deactivate_slab(dr_mcontext_t *mc, bool args_valid, reg_t void_ret,
+                     struct kmem_cache *s, struct kmem_cache_cpu *c)
 {
 }
 
@@ -616,7 +623,8 @@ pre_skb_clone(dr_mcontext_t *mc, struct sk_buff *skb, gfp_t gfp_mask)
 }
 
 static inline void
-post_skb_clone(dr_mcontext_t *mc, bool args_valid, struct sk_buff *ret, struct sk_buff *skb, gfp_t gfp_mask)
+post_skb_clone(dr_mcontext_t *mc, bool args_valid, struct sk_buff *ret,
+               struct sk_buff *skb, gfp_t gfp_mask)
 {
     set_memory_permission(ret, sizeof(*ret), PERMISSION_DEFINED);
 }
@@ -625,7 +633,7 @@ static void
 enable_stack_guard(struct task_struct *tsk)
 {
     unsigned long *eos = end_of_stack(tsk);
-    DR_ASSERT(eos >= (unsigned long*) 0xffff800000000000);
+    DR_ASSERT(eos >= (unsigned long *)0xffff800000000000);
     /* Can't assert anything about current permission b/c it's probably coming
      * from kmalloc'd memory. */
     set_memory_permission(eos, sizeof(*eos), PERMISSION_UNADDRESSABLE_EOS);
@@ -655,7 +663,8 @@ pre_free_task(dr_mcontext_t *mc, struct task_struct *tsk)
 }
 
 static inline void
-post_free_task(dr_mcontext_t *mc, bool args_valid, reg_t void_ret, struct task_struct *tsk)
+post_free_task(dr_mcontext_t *mc, bool args_valid, reg_t void_ret,
+               struct task_struct *tsk)
 {
 }
 
@@ -681,34 +690,40 @@ post_copy_process(dr_mcontext_t *mc, bool args_valid, struct task_struct *ret)
 #define PRE_COMMA_6() ,
 
 #define ARG_EXPAND_0(aa, unused)
-#define ARG_EXPAND_1(aa, t1)                     (t1) (aa[0])
-#define ARG_EXPAND_2(aa, t1, t2)                 ARG_EXPAND_1(aa, t1), (t2) (aa[1])
-#define ARG_EXPAND_3(aa, t1, t2, t3)             ARG_EXPAND_2(aa, t1, t2), (t3) (aa[2])
-#define ARG_EXPAND_4(aa, t1, t2, t3, t4)         ARG_EXPAND_3(aa, t1, t2, t3), (t4) (aa[3])
-#define ARG_EXPAND_5(aa, t1, t2, t3, t4, t5)     ARG_EXPAND_4(aa, t1, t2, t3, t4), (t5) (aa[4])
-#define ARG_EXPAND_6(aa, t1, t2, t3, t4, t5, t6) ARG_EXPAND_5(aa, t1, t2, t3, t4, t5), (t6) (aa[5])
+#define ARG_EXPAND_1(aa, t1) (t1)(aa[0])
+#define ARG_EXPAND_2(aa, t1, t2) ARG_EXPAND_1(aa, t1), (t2)(aa[1])
+#define ARG_EXPAND_3(aa, t1, t2, t3) ARG_EXPAND_2(aa, t1, t2), (t3)(aa[2])
+#define ARG_EXPAND_4(aa, t1, t2, t3, t4) ARG_EXPAND_3(aa, t1, t2, t3), (t4)(aa[3])
+#define ARG_EXPAND_5(aa, t1, t2, t3, t4, t5) ARG_EXPAND_4(aa, t1, t2, t3, t4), (t5)(aa[4])
+#define ARG_EXPAND_6(aa, t1, t2, t3, t4, t5, t6) \
+    ARG_EXPAND_5(aa, t1, t2, t3, t4, t5), (t6)(aa[5])
 
-#define PRE_WRAP() get_memcheck_tls()->in_slub_function = get_memcheck_tls()->in_slub_function_sticky
-#define POST_WRAP() get_memcheck_tls()->in_slub_function = get_memcheck_tls()->in_slub_function_sticky
+#define PRE_WRAP() \
+    get_memcheck_tls()->in_slub_function = get_memcheck_tls()->in_slub_function_sticky
+#define POST_WRAP() \
+    get_memcheck_tls()->in_slub_function = get_memcheck_tls()->in_slub_function_sticky
 
 static func_args_t zero_args = {
     .arg = { [0 ... MAX_FUNC_ARGS - 1] = 0 },
 };
 
-#define SLUB_FUNCTION(name, ret_type, nargs, ...) \
-static void pre_wrapper_ ## name(dr_mcontext_t *mc, func_args_t *args) { \
-    PRE_WRAP();\
-    pre_ ## name(mc PRE_COMMA_ ## nargs() ARG_EXPAND_ ## nargs(args->arg, __VA_ARGS__));\
-}\
-static void post_wrapper_ ## name(dr_mcontext_t *mc, func_args_t *args,\
-                                  reg_t retval) { \
-    bool args_valid = args != NULL;\
-    POST_WRAP();\
-    if (!args_valid) {\
-        args = &zero_args;\
-    }\
-    post_ ## name(mc, args_valid, (ret_type) retval PRE_COMMA_ ## nargs() ARG_EXPAND_ ## nargs(args->arg, __VA_ARGS__));\
-}
+#define SLUB_FUNCTION(name, ret_type, nargs, ...)                                       \
+    static void pre_wrapper_##name(dr_mcontext_t *mc, func_args_t *args)                \
+    {                                                                                   \
+        PRE_WRAP();                                                                     \
+        pre_##name(mc PRE_COMMA_##nargs() ARG_EXPAND_##nargs(args->arg, __VA_ARGS__));  \
+    }                                                                                   \
+    static void post_wrapper_##name(dr_mcontext_t *mc, func_args_t *args, reg_t retval) \
+    {                                                                                   \
+        bool args_valid = args != NULL;                                                 \
+        POST_WRAP();                                                                    \
+        if (!args_valid) {                                                              \
+            args = &zero_args;                                                          \
+        }                                                                               \
+        post_##name(mc, args_valid,                                                     \
+                    (ret_type)retval PRE_COMMA_##nargs()                                \
+                        ARG_EXPAND_##nargs(args->arg, __VA_ARGS__));                    \
+    }
 #include "slubx.h"
 #undef SLUB_FUNCTION
 
@@ -720,25 +735,23 @@ typedef struct {
     post_func_wrapper_t post_wrapper;
 } function_t;
 
-#define SLUB_FUNCTION(fn_name, ret_type, nargs, ...) \
-    static function_t fn_name ## _wrapper =\
-        { .name = #fn_name,\
-          .pre_wrapper = pre_wrapper_ ## fn_name,\
-          .post_wrapper = post_wrapper_ ## fn_name};
+#define SLUB_FUNCTION(fn_name, ret_type, nargs, ...)                              \
+    static function_t fn_name##_wrapper = { .name = #fn_name,                     \
+                                            .pre_wrapper = pre_wrapper_##fn_name, \
+                                            .post_wrapper = post_wrapper_##fn_name };
 
 #include "slubx.h"
 #undef SLUB_FUNCTION
 
-#define SLUB_FUNCTION(fn_name, ret_type, nargs, ...) \
-    &fn_name ## _wrapper,
-static function_t *wrapped_functions[] =  {
+#define SLUB_FUNCTION(fn_name, ret_type, nargs, ...) &fn_name##_wrapper,
+static function_t *wrapped_functions[] = {
 #include "slubx.h"
 };
 #undef SLUB_FUNCTION
 
 #define NUM_WRAPPED_FUNCTIONS (sizeof(wrapped_functions) / sizeof(wrapped_functions[0]))
 
-static function_t*
+static function_t *
 get_wrapped_function(void *pc)
 {
     int i;
@@ -802,8 +815,7 @@ slub_function_on_stack(dr_mcontext_t *mc)
      * TODO(peter): Verify that this works. I've only tested this with schedule,
      * which is always called indirectly by slub functions.
      */
-    if (safe_read_reg((reg_t*) mc->xsp, &pc) &&
-        in_slub_function((void*) pc)) {
+    if (safe_read_reg((reg_t *)mc->xsp, &pc) && in_slub_function((void *)pc)) {
         return true;
     }
 
@@ -811,13 +823,13 @@ slub_function_on_stack(dr_mcontext_t *mc)
     base = mc->xbp;
     for (depth = 0; depth < SLUB_FUNCTION_SEARCH_DEPTH; depth++) {
 
-        if (!safe_read_reg(((reg_t*) base) + 1, &pc)) {
+        if (!safe_read_reg(((reg_t *)base) + 1, &pc)) {
             return false;
         }
-        if (in_slub_function((void*) pc)) {
+        if (in_slub_function((void *)pc)) {
             return true;
         }
-        if (!safe_read_reg((reg_t*) base, &base)) {
+        if (!safe_read_reg((reg_t *)base, &base)) {
             return false;
         }
     }
@@ -847,7 +859,7 @@ ref_is_interested(umbra_info_t *info, mem_ref_t *ref)
 
     /* TODO(peter): handle gs-relative */
     return !opnd_is_far_base_disp(ref->opnd) ||
-           segment_base_always_zero(opnd_get_segment(ref->opnd));
+        segment_base_always_zero(opnd_get_segment(ref->opnd));
 }
 
 static void
@@ -873,7 +885,7 @@ mcontext_to_pt_regs(dr_mcontext_t *mc, struct pt_regs *regs)
     regs->r15 = mc->r15;
 #endif
     regs->flags = mc->xflags;
-    regs->ip = (reg_t) mc->xip;
+    regs->ip = (reg_t)mc->xip;
 }
 
 /* Copied from arch/x86/kernel/dumpstack.c */
@@ -905,8 +917,7 @@ void
 printk_address(unsigned long address, int reliable)
 {
     /* N.B. "%pS" is the format specifier for a symbol. */
-    printk(" [<%p>] %s%pS\n", (void *) address,
-            reliable ? "" : "? ", (void *) address);
+    printk(" [<%p>] %s%pS\n", (void *)address, reliable ? "" : "? ", (void *)address);
 }
 
 /* Copied from arch/x86/kernel/dumpstack.c */
@@ -924,7 +935,8 @@ struct stacktrace_ops dump_trace_ops = {
     .address = print_trace_address,
 };
 
-static void save_stack_warning(void *data, char *msg)
+static void
+save_stack_warning(void *data, char *msg)
 {
 }
 
@@ -933,12 +945,14 @@ save_stack_warning_symbol(void *data, char *msg, unsigned long symbol)
 {
 }
 
-static int save_stack_stack(void *data, char *name)
+static int
+save_stack_stack(void *data, char *name)
 {
     return 0;
 }
 
-static void save_stack_address(void *data, unsigned long addr, int reliable)
+static void
+save_stack_address(void *data, unsigned long addr, int reliable)
 {
     struct stack_trace *trace = data;
     if (!reliable)
@@ -958,17 +972,17 @@ static const struct stacktrace_ops save_stack_ops = {
     .address = save_stack_address,
 };
 
-static void 
+static void
 save_stack_trace_regs(struct stack_trace *trace, struct pt_regs *regs)
 {
-    dump_trace(current, regs, (void*) regs->sp, regs->bp, &save_stack_ops,
-               trace);
+    dump_trace(current, regs, (void *)regs->sp, regs->bp, &save_stack_ops, trace);
     if (trace->nr_entries < trace->max_entries)
         trace->entries[trace->nr_entries++] = ULONG_MAX;
 }
 
 /* Copied from process_64.c */
-void __show_regs(struct pt_regs *regs, int all)
+void
+__show_regs(struct pt_regs *regs, int all)
 {
     unsigned long cr0 = 0L, cr2 = 0L, cr3 = 0L, cr4 = 0L, fs, gs, shadowgs;
     unsigned long d0, d1, d2, d3, d6, d7;
@@ -978,24 +992,24 @@ void __show_regs(struct pt_regs *regs, int all)
     printk("\n");
     printk(KERN_INFO "RIP: %04lx:[<%016lx>] ", regs->cs & 0xffff, regs->ip);
     printk_address(regs->ip, 1);
-    printk(KERN_INFO "RSP: %04lx:%016lx  EFLAGS: %08lx\n", regs->ss,
-            regs->sp, regs->flags);
-    printk(KERN_INFO "RAX: %016lx RBX: %016lx RCX: %016lx\n",
-           regs->ax, regs->bx, regs->cx);
-    printk(KERN_INFO "RDX: %016lx RSI: %016lx RDI: %016lx\n",
-           regs->dx, regs->si, regs->di);
-    printk(KERN_INFO "RBP: %016lx R08: %016lx R09: %016lx\n",
-           regs->bp, regs->r8, regs->r9);
-    printk(KERN_INFO "R10: %016lx R11: %016lx R12: %016lx\n",
-           regs->r10, regs->r11, regs->r12);
-    printk(KERN_INFO "R13: %016lx R14: %016lx R15: %016lx\n",
-           regs->r13, regs->r14, regs->r15);
+    printk(KERN_INFO "RSP: %04lx:%016lx  EFLAGS: %08lx\n", regs->ss, regs->sp,
+           regs->flags);
+    printk(KERN_INFO "RAX: %016lx RBX: %016lx RCX: %016lx\n", regs->ax, regs->bx,
+           regs->cx);
+    printk(KERN_INFO "RDX: %016lx RSI: %016lx RDI: %016lx\n", regs->dx, regs->si,
+           regs->di);
+    printk(KERN_INFO "RBP: %016lx R08: %016lx R09: %016lx\n", regs->bp, regs->r8,
+           regs->r9);
+    printk(KERN_INFO "R10: %016lx R11: %016lx R12: %016lx\n", regs->r10, regs->r11,
+           regs->r12);
+    printk(KERN_INFO "R13: %016lx R14: %016lx R15: %016lx\n", regs->r13, regs->r14,
+           regs->r15);
 
-    asm("movl %%ds,%0" : "=r" (ds));
-    asm("movl %%cs,%0" : "=r" (cs));
-    asm("movl %%es,%0" : "=r" (es));
-    asm("movl %%fs,%0" : "=r" (fsindex));
-    asm("movl %%gs,%0" : "=r" (gsindex));
+    asm("movl %%ds,%0" : "=r"(ds));
+    asm("movl %%cs,%0" : "=r"(cs));
+    asm("movl %%es,%0" : "=r"(es));
+    asm("movl %%fs,%0" : "=r"(fsindex));
+    asm("movl %%gs,%0" : "=r"(gsindex));
 
     rdmsrl(MSR_FS_BASE, fs);
     rdmsrl(MSR_GS_BASE, gs);
@@ -1009,12 +1023,10 @@ void __show_regs(struct pt_regs *regs, int all)
     cr3 = read_cr3();
     cr4 = read_cr4();
 
-    printk(KERN_INFO "FS:  %016lx(%04x) GS:%016lx(%04x) knlGS:%016lx\n",
-           fs, fsindex, gs, gsindex, shadowgs);
-    printk(KERN_INFO "CS:  %04x DS: %04x ES: %04x CR0: %016lx\n", cs, ds,
-            es, cr0);
-    printk(KERN_INFO "CR2: %016lx CR3: %016lx CR4: %016lx\n", cr2, cr3,
-            cr4);
+    printk(KERN_INFO "FS:  %016lx(%04x) GS:%016lx(%04x) knlGS:%016lx\n", fs, fsindex, gs,
+           gsindex, shadowgs);
+    printk(KERN_INFO "CS:  %04x DS: %04x ES: %04x CR0: %016lx\n", cs, ds, es, cr0);
+    printk(KERN_INFO "CR2: %016lx CR3: %016lx CR4: %016lx\n", cr2, cr3, cr4);
 
     get_debugreg(d0, 0);
     get_debugreg(d1, 1);
@@ -1056,7 +1068,8 @@ memcheck_num_reports(void)
     return __get_cpu_var(memcheck_tls)->report_count;
 }
 
-int memcheck_num_disabled_reports(void)
+int
+memcheck_num_disabled_reports(void)
 {
     DR_ASSERT(irqs_disabled());
     return __get_cpu_var(memcheck_tls)->num_disabled_reports;
@@ -1159,29 +1172,21 @@ printk_error_report(memcheck_report_t *report)
 {
     printk("Memcheck Error: %p ", report->addr);
     switch (report->type) {
-    case MEMCHECK_ERROR_UNADDRESSABLE:
-        printk("unaddressable");
-        break;
-    case MEMCHECK_ERROR_UNDEFINED_READ:
-        printk("undefined read");
-        break;
-    case MEMCHECK_ERROR_EOS:
-        printk("end of stack");
-        break;
-    default:
-        DR_ASSERT(false);
-        printk("unknown error type!");
+    case MEMCHECK_ERROR_UNADDRESSABLE: printk("unaddressable"); break;
+    case MEMCHECK_ERROR_UNDEFINED_READ: printk("undefined read"); break;
+    case MEMCHECK_ERROR_EOS: printk("end of stack"); break;
+    default: DR_ASSERT(false); printk("unknown error type!");
     }
     __show_regs(&report->regs, 1);
     print_stack_trace(&report->trace, 2);
 }
 
 static void
-report_memcheck_error(void *drcontext, memcheck_tls_t *tls, dr_mcontext_t *mc,
-                      byte *addr, memcheck_error_type_t type)
+report_memcheck_error(void *drcontext, memcheck_tls_t *tls, dr_mcontext_t *mc, byte *addr,
+                      memcheck_error_type_t type)
 {
     memcheck_report_t *report;
-    
+
     if (tls->reset_report_count) {
         tls->reset_report_count = false;
         memcheck_reset_reports();
@@ -1229,7 +1234,7 @@ report_memcheck_error(void *drcontext, memcheck_tls_t *tls, dr_mcontext_t *mc,
 static void
 induce_oops(void)
 {
-    *((int*) NULL) = 0;
+    *((int *)NULL) = 0;
 }
 
 void
@@ -1281,14 +1286,13 @@ memcheck_slowpath(mem_ref_t *ref)
     if (type == MEMCHECK_ERROR_EOS) {
         DR_ASSERT(MEMCHECK_OPTION(check_stack));
         mc.rsp = percpu_read(kernel_stack);
-        mc.pc = (byte*)(&induce_oops);
+        mc.pc = (byte *)(&induce_oops);
         dr_redirect_execution(&mc, 0);
     }
 }
 
-static byte*
-emit_slowpath_code(void *drcontext, memcheck_tls_t *tls, byte *pc,
-                   reg_id_t arg_reg)
+static byte *
+emit_slowpath_code(void *drcontext, memcheck_tls_t *tls, byte *pc, reg_id_t arg_reg)
 {
     instrlist_t *ilist;
     instr_t *instr;
@@ -1309,8 +1313,8 @@ emit_slowpath_code(void *drcontext, memcheck_tls_t *tls, byte *pc,
     instrlist_meta_append(ilist, instr);
 
     /* memcheck_slowpath() */
-    dr_insert_clean_call(drcontext, ilist, NULL, (void*) memcheck_slowpath,
-                         false, 1, opnd_create_reg(arg_reg));
+    dr_insert_clean_call(drcontext, ilist, NULL, (void *)memcheck_slowpath, false, 1,
+                         opnd_create_reg(arg_reg));
 
     /* done: */
     instrlist_meta_append(ilist, done);
@@ -1331,7 +1335,7 @@ memcheck_code_cache_init(void *drcontext, memcheck_tls_t *tls)
     reg_t reg;
     uint prot;
     byte *pc;
-    prot = DR_MEMPROT_READ|DR_MEMPROT_WRITE|DR_MEMPROT_EXEC;
+    prot = DR_MEMPROT_READ | DR_MEMPROT_WRITE | DR_MEMPROT_EXEC;
     pc = dr_nonheap_alloc(CODE_CACHE_SIZE, prot);
     tls->code_cache_start = pc;
     for (reg = DR_REG_START_64; reg <= DR_REG_STOP_64; reg++) {
@@ -1368,7 +1372,8 @@ memcheck_flush_cpu_slab(void)
     if (!get_slub_lock()) {
         return;
     }
-    list_for_each_entry(s, kernel_symbols.slab_caches, list) {
+    list_for_each_entry(s, kernel_symbols.slab_caches, list)
+    {
         kernel_symbols.flush_cpu_slab(s);
     }
     up_read(kernel_symbols.slub_lock);
@@ -1392,7 +1397,8 @@ slab_is_locked(struct page *page)
 }
 
 /* Copied from slub.c. */
-static inline void *get_freepointer(struct kmem_cache *s, void *object)
+static inline void *
+get_freepointer(struct kmem_cache *s, void *object)
 {
     return *(void **)(object + s->offset);
 }
@@ -1405,8 +1411,7 @@ static inline void *get_freepointer(struct kmem_cache *s, void *object)
 /* Copied from slub.c. */
 /* Loop over all objects in a slab */
 #define for_each_object(__p, __s, __addr, __objects) \
-    for (__p = (__addr); __p < (__addr) + (__objects) * (__s)->size;\
-            __p += (__s)->size)
+    for (__p = (__addr); __p < (__addr) + (__objects) * (__s)->size; __p += (__s)->size)
 
 static void
 memcheck_shadow_eos_init(void *drcontext, memcheck_tls_t *tls)
@@ -1415,9 +1420,11 @@ memcheck_shadow_eos_init(void *drcontext, memcheck_tls_t *tls)
     if (!MEMCHECK_OPTION(check_stack)) {
         return;
     }
-    do_each_thread(g, p) {
+    do_each_thread(g, p)
+    {
         enable_stack_guard(p);
-    } while_each_thread(g, p);
+    }
+    while_each_thread(g, p);
 }
 
 static void
@@ -1430,13 +1437,15 @@ memcheck_shadow_slub_init(void *drcontext, memcheck_tls_t *tls)
     if (!get_slub_lock()) {
         return;
     }
-    list_for_each_entry(s, kernel_symbols.slab_caches, list) {
+    list_for_each_entry(s, kernel_symbols.slab_caches, list)
+    {
         int node;
         /* TODO(peter): Fix this to properly include slabs that were allocated
          * from offline CPUs. This breaks our unit tests when a CPU was disabled
          * after startup but before attaching.
          */
-        for_each_node_state(node, N_NORMAL_MEMORY) {
+        for_each_node_state(node, N_NORMAL_MEMORY)
+        {
             struct kmem_cache_node *n = get_node(s, node);
             struct page *page;
             if (spin_is_locked(&n->list_lock)) {
@@ -1453,7 +1462,8 @@ memcheck_shadow_slub_init(void *drcontext, memcheck_tls_t *tls)
              * a full list only has addressable and, as far as we know, defined
              * bytes on it, so PERMISSION_UNKNOWN is okay.
              */
-            list_for_each_entry(page, &n->partial, lru) {
+            list_for_each_entry(page, &n->partial, lru)
+            {
                 size_t slab_size;
                 void *object;
                 if (slab_is_locked(page)) {
@@ -1474,14 +1484,15 @@ memcheck_shadow_slub_init(void *drcontext, memcheck_tls_t *tls)
                                       PERMISSION_UNADDRESSABLE_INIT);
                 tls->num_init_unaddressable_bytes += slab_size;
                 /* Next, make just the non-meta data of all objects defined.  */
-                for_each_object(object, s, page_address(page), page->objects) {
-                    set_memory_permission(object, s->objsize,
-                                          PERMISSION_DEFINED);
+                for_each_object(object, s, page_address(page), page->objects)
+                {
+                    set_memory_permission(object, s->objsize, PERMISSION_DEFINED);
                     tls->num_init_unaddressable_bytes -= s->objsize;
                     tls->num_init_addressable_bytes += s->objsize;
                 }
                 /* Finally, remove the addressability of all free objects. */
-                for_each_free_object(object, s, page->freelist) {
+                for_each_free_object(object, s, page->freelist)
+                {
                     set_memory_permission(object, s->objsize,
                                           PERMISSION_UNADDRESSABLE_INIT);
                     tls->num_init_addressable_bytes -= s->objsize;
@@ -1493,17 +1504,17 @@ memcheck_shadow_slub_init(void *drcontext, memcheck_tls_t *tls)
     up_read(kernel_symbols.slub_lock);
 }
 
-#define ASSERT_CALLED_ONCE()\
-do {\
-    static int call_count = 0;\
-    DR_ASSERT(call_count++ == 0);\
-} while(0)
+#define ASSERT_CALLED_ONCE()          \
+    do {                              \
+        static int call_count = 0;    \
+        DR_ASSERT(call_count++ == 0); \
+    } while (0)
 
 static void
 thread_init(void *drcontext, umbra_info_t *info)
 {
     memcheck_tls_t *tls = dr_thread_alloc(drcontext, sizeof(*tls));
-    memset(tls, 0, sizeof(*tls)); 
+    memset(tls, 0, sizeof(*tls));
     info->client_tls_data = tls;
 #ifdef DEBUG
     mtls[dr_get_thread_id(drcontext)] = tls;
@@ -1554,8 +1565,8 @@ naturally_sign_extended(reg_t value)
 }
 
 static void
-insert_movs_read_shadow_unknown(void *drcontext, instrlist_t *ilist,
-                                instr_t *where, reg_id_t scratch_reg)
+insert_movs_read_shadow_unknown(void *drcontext, instrlist_t *ilist, instr_t *where,
+                                reg_id_t scratch_reg)
 {
     instr_t *instr;
     opnd_t opnd1, opnd2;
@@ -1567,10 +1578,13 @@ insert_movs_read_shadow_unknown(void *drcontext, instrlist_t *ilist,
     instrlist_meta_preinsert(ilist, where, instr);
 }
 
-static void update_check_def(void) {}
+static void
+update_check_def(void)
+{
+}
 
 /* # Skip if all unknown.
- *  
+ *
  *   cmp 0(%shadow_reg), PERMISSION_UKNOWN
  *   je unknown
  *
@@ -1615,8 +1629,8 @@ static void update_check_def(void) {}
  * done:
  */
 static void
-instrument_update(void *drcontext, umbra_info_t  *umbra_info,
-                  mem_ref_t *ref, instrlist_t *ilist, instr_t *where)
+instrument_update(void *drcontext, umbra_info_t *umbra_info, mem_ref_t *ref,
+                  instrlist_t *ilist, instr_t *where)
 {
     instr_t *instr;
     opnd_t opnd1, opnd2;
@@ -1629,13 +1643,12 @@ instrument_update(void *drcontext, umbra_info_t  *umbra_info,
     if (tls->check_def_enabled) {
         update_check_def();
     }
-    
+
     if (in_slub_function(instr_get_app_pc(ref->instr))) {
         return;
     }
 
-    DR_ASSERT(ref->type == MemRead || ref->type == MemWrite ||
-              ref->type == MemModify);
+    DR_ASSERT(ref->type == MemRead || ref->type == MemWrite || ref->type == MemModify);
 
     done = INSTR_CREATE_label(drcontext);
     slowpath = INSTR_CREATE_label(drcontext);
@@ -1649,7 +1662,7 @@ instrument_update(void *drcontext, umbra_info_t  *umbra_info,
     opnd2 = OPND_CREATE_INT8(PERMISSION_UNKNOWN);
     instr = INSTR_CREATE_cmp(drcontext, opnd1, opnd2);
     instrlist_meta_preinsert(ilist, where, instr);
-    
+
     /* je unknown */
     opnd1 = opnd_create_instr(unknown);
     instr = INSTR_CREATE_jcc_short(drcontext, OP_je, opnd1);
@@ -1682,7 +1695,7 @@ instrument_update(void *drcontext, umbra_info_t  *umbra_info,
 
     /* mov %shadow_reg, mem */
     opnd1 = opnd_create_reg(shadow_reg);
-    if (naturally_sign_extended((reg_t) ref)) {
+    if (naturally_sign_extended((reg_t)ref)) {
         opnd2 = OPND_CREATE_INT32(ref);
     } else {
         opnd2 = OPND_CREATE_INTPTR(ref);
@@ -1769,12 +1782,12 @@ instrument_update(void *drcontext, umbra_info_t  *umbra_info,
     } else {
         DR_ASSERT(false);
     }
-    
+
     /* unknown: */
     instrlist_meta_preinsert(ilist, where, unknown);
 
     if (MEMCHECK_OPTION(check_defined) && ref->opcode == OP_movs &&
-            ref->type == MemRead) {
+        ref->type == MemRead) {
         insert_movs_read_shadow_unknown(drcontext, ilist, where, shadow_reg);
     }
 
@@ -1782,13 +1795,12 @@ instrument_update(void *drcontext, umbra_info_t  *umbra_info,
     instrlist_meta_preinsert(ilist, where, done);
 }
 
-
 static void
-instrument_update_user(void *drcontext, umbra_info_t  *umbra_info,
-                       mem_ref_t *ref, instrlist_t *ilist, instr_t *where)
+instrument_update_user(void *drcontext, umbra_info_t *umbra_info, mem_ref_t *ref,
+                       instrlist_t *ilist, instr_t *where)
 {
     if (MEMCHECK_OPTION(check_defined) && ref->opcode == OP_movs &&
-            ref->type == MemRead) {
+        ref->type == MemRead) {
         insert_movs_read_shadow_unknown(drcontext, ilist, where,
                                         umbra_info->steal_regs[0]);
     }
@@ -1808,15 +1820,42 @@ create_nonloop_stringop(void *drcontext, instr_t *inst)
     int i;
     DR_ASSERT(instr_is_stringop_loop(inst) && "invalid param");
     switch (opc) {
-    case OP_rep_ins:    opc = OP_ins; break;;
-    case OP_rep_outs:   opc = OP_outs; break;;
-    case OP_rep_movs:   opc = OP_movs; break;;
-    case OP_rep_stos:   opc = OP_stos; break;;
-    case OP_rep_lods:   opc = OP_lods; break;;
-    case OP_rep_cmps:   opc = OP_cmps; break;;
-    case OP_repne_cmps: opc = OP_cmps; break;;
-    case OP_rep_scas:   opc = OP_scas; break;;
-    case OP_repne_scas: opc = OP_scas; break;;
+    case OP_rep_ins:
+        opc = OP_ins;
+        break;
+        ;
+    case OP_rep_outs:
+        opc = OP_outs;
+        break;
+        ;
+    case OP_rep_movs:
+        opc = OP_movs;
+        break;
+        ;
+    case OP_rep_stos:
+        opc = OP_stos;
+        break;
+        ;
+    case OP_rep_lods:
+        opc = OP_lods;
+        break;
+        ;
+    case OP_rep_cmps:
+        opc = OP_cmps;
+        break;
+        ;
+    case OP_repne_cmps:
+        opc = OP_cmps;
+        break;
+        ;
+    case OP_rep_scas:
+        opc = OP_scas;
+        break;
+        ;
+    case OP_repne_scas:
+        opc = OP_scas;
+        break;
+        ;
     default: DR_ASSERT(false && "not a stringop loop opcode"); return NULL;
     }
     res = instr_build(drcontext, opc, ndst - 1, nsrc - 1);
@@ -1837,7 +1876,7 @@ create_nonloop_stringop(void *drcontext, instr_t *inst)
 
 /* Copied from drmemory. */
 /* PR 580123: add fastpath for rep string instrs by converting to normal loop */
-static void 
+static void
 convert_repstr_to_loop(void *drcontext, memcheck_tls_t *tls, instrlist_t *bb)
 {
     instr_t *inst, *next_inst;
@@ -1847,9 +1886,7 @@ convert_repstr_to_loop(void *drcontext, memcheck_tls_t *tls, instrlist_t *bb)
     /* Make a rep string instr be its own bb: the loop is going to
      * duplicate the tail anyway, and have to terminate at the added cbr.
      */
-    for (inst = instrlist_first(bb);
-         inst != NULL;
-         inst = next_inst) {
+    for (inst = instrlist_first(bb); inst != NULL; inst = next_inst) {
         next_inst = instr_get_next(inst);
         opc = instr_get_opcode(inst);
         if (delete_rest) {
@@ -1879,7 +1916,6 @@ convert_repstr_to_loop(void *drcontext, memcheck_tls_t *tls, instrlist_t *bb)
         zero = INSTR_CREATE_mov_imm(drcontext, xcx,
                                     opnd_create_immed_int(1, opnd_get_size(xcx)));
         iter = INSTR_CREATE_label(drcontext);
-
 
         /* A rep string instr does check for 0 up front.  DR limits us
          * to 1 cbr so we have to make a meta cbr.  If ecx is uninit
@@ -1950,9 +1986,9 @@ convert_repstr_to_loop(void *drcontext, memcheck_tls_t *tls, instrlist_t *bb)
     }
 }
 
-static void 
-app_to_app_transformation(void *drcontext, umbra_info_t *umbra_info,
-                          void *tag, instrlist_t  *ilist, bool for_trace)
+static void
+app_to_app_transformation(void *drcontext, umbra_info_t *umbra_info, void *tag,
+                          instrlist_t *ilist, bool for_trace)
 {
     memcheck_tls_t *tls = memcheck_tls(umbra_info);
     convert_repstr_to_loop(drcontext, tls, ilist);
@@ -1961,7 +1997,7 @@ app_to_app_transformation(void *drcontext, umbra_info_t *umbra_info,
 static bool
 mm_is_valid(void *start, void *end)
 {
-    return start >= (void*) 0xffff800000000000;
+    return start >= (void *)0xffff800000000000;
 }
 
 static void
@@ -1970,14 +2006,14 @@ shadow_page_alloc(umbra_info_t *info, void *start, size_t size)
     memset(start, PERMISSION_UNKNOWN, size);
 }
 
-static bool 
+static bool
 memcheck_interrupt(umbra_info_t *umbra_info, dr_interrupt_t *interrupt)
 {
     memcheck_tls_t *tls = memcheck_tls(umbra_info);
     byte *xip = interrupt->frame->xip;
-    
+
     if (xip >= tls->code_cache_start && xip < tls->code_cache_end) {
-        interrupt->frame->xip = (byte*) tls->cache_pc;
+        interrupt->frame->xip = (byte *)tls->cache_pc;
     }
 
     return true;
@@ -2005,13 +2041,15 @@ memcheck_options_init(const char *optstr)
         const char *option = strsep(&optstr_copy, ",");
         bool valid = false;
         if (!option || strcmp(option, "") == 0) {
-            break; 
+            break;
         }
-#define CHECK_OPTION(name) do {\
-        if (strcmp(option, "no_" #name) == 0) {\
-            memcheck_proc_info.options.name = false;\
-            valid = true;\
-        } } while (0)
+#define CHECK_OPTION(name)                           \
+    do {                                             \
+        if (strcmp(option, "no_" #name) == 0) {      \
+            memcheck_proc_info.options.name = false; \
+            valid = true;                            \
+        }                                            \
+    } while (0)
         CHECK_OPTION(check_addr);
         CHECK_OPTION(check_defined);
         CHECK_OPTION(check_stack);
@@ -2044,10 +2082,9 @@ init_options(client_id_t id)
     client->interrupt = memcheck_interrupt;
     client->bb_is_interested = bb_is_interested;
     client->ref_is_interested = ref_is_interested;
-    client->instrument_update = MEMCHECK_OPTION(check_addr) ? instrument_update
-                                                            : NULL;
-    client->instrument_update_user = MEMCHECK_OPTION(check_addr) ? instrument_update_user
-                                                                 : NULL;
+    client->instrument_update = MEMCHECK_OPTION(check_addr) ? instrument_update : NULL;
+    client->instrument_update_user =
+        MEMCHECK_OPTION(check_addr) ? instrument_update_user : NULL;
     client->app_to_app_transformation = app_to_app_transformation;
     client->app_unit_bits[0] = 0;
     client->shd_unit_bits[0] = 0;
@@ -2094,8 +2131,7 @@ show_memcheck_stats(int cpu, char *buf)
     if (!tls) {
         return sprintf(buf, "cpu not yet initilized\n");
     }
-#define PRINT_STAT(name)\
-    buf += sprintf(buf, #name ": %lu\n", (unsigned long) tls->name)
+#define PRINT_STAT(name) buf += sprintf(buf, #name ": %lu\n", (unsigned long)tls->name)
     PRINT_STAT(num_init_addressable_bytes);
     PRINT_STAT(num_init_unaddressable_bytes);
     PRINT_STAT(num_reports);
@@ -2138,8 +2174,7 @@ memcheck_test(int cpu, char *buf)
     if (memcheck_proc_info.exited) {
         return sprintf(buf, "memcheck already exited\n");
     } else {
-        return memcheck_test_main(buf,
-                                  MEMCHECK_OPTION(check_addr),
+        return memcheck_test_main(buf, MEMCHECK_OPTION(check_addr),
                                   MEMCHECK_OPTION(check_defined));
     }
 }
@@ -2162,8 +2197,8 @@ enable_disable_test(int cpu, char *buf)
     for (i = 0; i < MAX_NUM_MEMCHECK_REPORTS + 1000; i++) {
         y = x[1];
     }
-    kfree((char*)x);
-    return 0;    
+    kfree((char *)x);
+    return 0;
 }
 
 static dr_stats_t memcheck_stats;
@@ -2180,10 +2215,10 @@ umbra_client_kernel_init(void)
         }
     }
 
-#define KSYM(name, type, decl)\
-    if (!dr_kernel_find_symbol(#name, (void**) &kernel_symbols.name, NULL)) {\
-        printk("dr_kernel_find_symbol failed for " #name "\n");\
-        return -EINVAL;\
+#define KSYM(name, type, decl)                                                \
+    if (!dr_kernel_find_symbol(#name, (void **)&kernel_symbols.name, NULL)) { \
+        printk("dr_kernel_find_symbol failed for " #name "\n");               \
+        return -EINVAL;                                                       \
     }
 #include "ksymsx.h"
 #undef KSYM
@@ -2191,10 +2226,12 @@ umbra_client_kernel_init(void)
     if (dr_stats_init(&memcheck_stats)) {
         return -ENOMEM;
     }
-#define ALLOC_STAT(name, fn) do {\
-    if (dr_cpu_stat_alloc(&memcheck_stats, #name, fn, THIS_MODULE)) {\
-        goto failed;\
-    } } while (0)
+#define ALLOC_STAT(name, fn)                                              \
+    do {                                                                  \
+        if (dr_cpu_stat_alloc(&memcheck_stats, #name, fn, THIS_MODULE)) { \
+            goto failed;                                                  \
+        }                                                                 \
+    } while (0)
     ALLOC_STAT(memcheck_stats, show_memcheck_stats);
     ALLOC_STAT(memcheck_test, memcheck_test);
     ALLOC_STAT(stackcheck_test, stackcheck_test);

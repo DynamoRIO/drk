@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -32,14 +32,14 @@
 
 #include "dr_api.h"
 #ifdef LINUX
-# include <sys/time.h>
+#    include <sys/time.h>
 #endif
 
 #ifdef WINDOWS
-# define THREAD_ARG ((void *) dr_get_process_id())
+#    define THREAD_ARG ((void *)dr_get_process_id())
 #else
 /* thread actually has own pid so just using a constant to test arg passing */
-# define THREAD_ARG ((void *)37)
+#    define THREAD_ARG ((void *)37)
 #endif
 
 /* Eventually this routine will test i/o by waiting on a file */
@@ -53,25 +53,25 @@ static uint tls_offs;
 #define NUM_TLS_SLOTS 4
 
 #ifdef X64
-# define ASM_XAX "rax"
-# define ASM_XDX "rdx"
-# define ASM_XBP "rbp"
-# define ASM_XSP "rsp"
-# define ASM_SEG "gs"
+#    define ASM_XAX "rax"
+#    define ASM_XDX "rdx"
+#    define ASM_XBP "rbp"
+#    define ASM_XSP "rsp"
+#    define ASM_SEG "gs"
 #else
-# define ASM_XAX "eax"
-# define ASM_XDX "edx"
-# define ASM_XBP "ebp"
-# define ASM_XSP "esp"
-# define ASM_SEG "fs"
+#    define ASM_XAX "eax"
+#    define ASM_XDX "edx"
+#    define ASM_XBP "ebp"
+#    define ASM_XSP "esp"
+#    define ASM_SEG "fs"
 #endif
 
 /* we don't want msgboxes for regressions */
-#define ASSERT(x) \
-    ((void)((!(x)) ? \
-        (dr_fprintf(STDERR, "ASSERT FAILURE: %s:%d: %s\n", \
-                    __FILE__,  __LINE__, #x), \
-         dr_abort(), 0) : 0))
+#define ASSERT(x)                                                                 \
+    ((void)((!(x)) ? (dr_fprintf(STDERR, "ASSERT FAILURE: %s:%d: %s\n", __FILE__, \
+                                 __LINE__, #x),                                   \
+                      dr_abort(), 0)                                              \
+                   : 0))
 
 static bool child_alive;
 static bool child_continue;
@@ -109,43 +109,42 @@ thread_func(void *arg)
     child_dead = true;
 }
 
-static void 
+static void
 at_lea(uint opc, app_pc tag)
 {
     /* PR 223285: test (one side of) DR_ASSERT for something we know will succeed
      * (we don't want msgboxes in regressions)
      */
     DR_ASSERT(opc == OP_lea);
-    ASSERT((process_id_t)(ptr_uint_t) dr_get_tls_field(dr_get_current_drcontext()) ==
+    ASSERT((process_id_t)(ptr_uint_t)dr_get_tls_field(dr_get_current_drcontext()) ==
            dr_get_process_id() + 1 /*we added 1 inline*/);
-    dr_set_tls_field(dr_get_current_drcontext(),
-                     (void *)(ptr_uint_t) dr_get_process_id());
+    dr_set_tls_field(dr_get_current_drcontext(), (void *)(ptr_uint_t)dr_get_process_id());
     num_lea++;
     /* FIXME: should do some fp ops and really test the fp state preservation */
 }
-              
-static
-dr_emit_flags_t bb_event(void *drcontext, void *tag, instrlist_t *bb, bool for_trace, bool translating)
+
+static dr_emit_flags_t
+bb_event(void *drcontext, void *tag, instrlist_t *bb, bool for_trace, bool translating)
 {
     instr_t *instr, *next_instr;
     int num_nops = 0;
     bool in_nops = false;
-    
-    for (instr = instrlist_first(bb);
-         instr != NULL; instr = next_instr) {
+
+    for (instr = instrlist_first(bb); instr != NULL; instr = next_instr) {
         next_instr = instr_get_next(instr);
         if (instr_get_opcode(instr) == OP_lea) {
             /* PR 200411: test inline tls access by adding 1 */
             dr_save_reg(drcontext, bb, instr, REG_XAX, SPILL_SLOT_1);
             dr_insert_read_tls_field(drcontext, bb, instr, REG_XAX);
-            instrlist_meta_preinsert(bb, instr, INSTR_CREATE_lea
-                                     (drcontext, opnd_create_reg(REG_XAX),
-                                      opnd_create_base_disp(REG_XAX, REG_NULL, 0, 1,
-                                                            OPSZ_lea)));
+            instrlist_meta_preinsert(
+                bb, instr,
+                INSTR_CREATE_lea(
+                    drcontext, opnd_create_reg(REG_XAX),
+                    opnd_create_base_disp(REG_XAX, REG_NULL, 0, 1, OPSZ_lea)));
             dr_insert_write_tls_field(drcontext, bb, instr, REG_XAX);
             dr_restore_reg(drcontext, bb, instr, REG_XAX, SPILL_SLOT_1);
-            dr_insert_clean_call(drcontext, bb, instr, at_lea, true/*save fp*/,
-                                 2, OPND_CREATE_INT32(instr_get_opcode(instr)),
+            dr_insert_clean_call(drcontext, bb, instr, at_lea, true /*save fp*/, 2,
+                                 OPND_CREATE_INT32(instr_get_opcode(instr)),
                                  OPND_CREATE_INTPTR(tag));
         }
         if (instr_get_opcode(instr) == OP_nop) {
@@ -179,7 +178,8 @@ dr_emit_flags_t bb_event(void *drcontext, void *tag, instrlist_t *bb, bool for_t
     return DR_EMIT_DEFAULT;
 }
 
-void exit_event(void)
+void
+exit_event(void)
 {
     bool success = dr_raw_tls_cfree(tls_offs, NUM_TLS_SLOTS);
     ASSERT(success);
@@ -205,14 +205,14 @@ thread_init_event(void *drcontext)
 {
     int i;
     for (i = 0; i < NUM_TLS_SLOTS; i++) {
-        int idx = tls_offs + i*sizeof(void*);
-        ptr_uint_t val = (ptr_uint_t) (CANARY+i);
+        int idx = tls_offs + i * sizeof(void *);
+        ptr_uint_t val = (ptr_uint_t)(CANARY + i);
 #ifdef WINDOWS
-        IF_X64_ELSE(__writegsqword,__writefsdword)(idx, val);
+        IF_X64_ELSE(__writegsqword, __writefsdword)(idx, val);
 #else
-        asm("mov %0, %%"ASM_XAX : : "m"((val)) : ASM_XAX);
-        asm("movzx %0, %%"ASM_XDX"" : : "m"((idx)) : ASM_XDX);
-        asm("mov %%"ASM_XAX", %%"ASM_SEG":(%%"ASM_XDX")" : : : ASM_XAX, ASM_XDX);
+        asm("mov %0, %%" ASM_XAX : : "m"((val)) : ASM_XAX);
+        asm("movzx %0, %%" ASM_XDX "" : : "m"((idx)) : ASM_XDX);
+        asm("mov %%" ASM_XAX ", %%" ASM_SEG ":(%%" ASM_XDX ")" : : : ASM_XAX, ASM_XDX);
 #endif
     }
 }
@@ -222,26 +222,27 @@ thread_exit_event(void *drcontext)
 {
     int i;
     for (i = 0; i < NUM_TLS_SLOTS; i++) {
-        int idx = tls_offs + i*sizeof(void*);
+        int idx = tls_offs + i * sizeof(void *);
         ptr_uint_t val;
 #ifdef WINDOWS
-        val = IF_X64_ELSE(__readgsqword,__readfsdword)(idx);
+        val = IF_X64_ELSE(__readgsqword, __readfsdword)(idx);
 #else
-        asm("movzx %0, %%"ASM_XAX : : "m"((idx)) : ASM_XAX);
-        asm("mov %%"ASM_SEG":(%%"ASM_XAX"), %%"ASM_XAX : : : ASM_XAX);
-        asm("mov %%"ASM_XAX", %0" : "=m"((val)) : : ASM_XAX);
+        asm("movzx %0, %%" ASM_XAX : : "m"((idx)) : ASM_XAX);
+        asm("mov %%" ASM_SEG ":(%%" ASM_XAX "), %%" ASM_XAX : : : ASM_XAX);
+        asm("mov %%" ASM_XAX ", %0" : "=m"((val)) : : ASM_XAX);
 #endif
-        dr_fprintf(STDERR, "TLS slot %d is "PFX"\n", i, val);
+        dr_fprintf(STDERR, "TLS slot %d is " PFX "\n", i, val);
     }
 }
 
 DR_EXPORT
-void dr_init(client_id_t id)
+void
+dr_init(client_id_t id)
 {
     bool success;
     reg_id_t seg;
     /* PR 216931: client options */
-    const char * ops = dr_get_options(id);
+    const char *ops = dr_get_options(id);
     ASSERT(str_eq(ops, "-paramx -paramy"));
     dr_fprintf(STDERR, "PR 216931: client options are %s\n", ops);
 
@@ -261,8 +262,7 @@ void dr_init(client_id_t id)
 #else /* LINUX - append .exe so can use same expect file. */
     dr_fprintf(STDERR, "inside app %s.exe\n", dr_get_application_name());
 #endif
-    dr_set_tls_field(dr_get_current_drcontext(),
-                     (void *)(ptr_uint_t) dr_get_process_id());
+    dr_set_tls_field(dr_get_current_drcontext(), (void *)(ptr_uint_t)dr_get_process_id());
 
     {
         /* test PR 198871: client locks are all at same rank */

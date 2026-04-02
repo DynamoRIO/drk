@@ -5,18 +5,18 @@
 /*
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
- * 
+ *
  * * Redistributions of source code must retain the above copyright notice,
  *   this list of conditions and the following disclaimer.
- * 
+ *
  * * Redistributions in binary form must reproduce the above copyright notice,
  *   this list of conditions and the following disclaimer in the documentation
  *   and/or other materials provided with the distribution.
- * 
+ *
  * * Neither the name of VMware, Inc. nor the names of its contributors may be
  *   used to endorse or promote products derived from this software without
  *   specific prior written permission.
- * 
+ *
  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
@@ -46,26 +46,35 @@
 /* synchronization of shared traces */
 extern mutex_t trace_building_lock;
 
-void monitor_init(void);
-void monitor_exit(void);
-void monitor_thread_init(dcontext_t *dcontext);
-void monitor_thread_exit(dcontext_t *dcontext);
+void
+monitor_init(void);
+void
+monitor_exit(void);
+void
+monitor_thread_init(dcontext_t *dcontext);
+void
+monitor_thread_exit(dcontext_t *dcontext);
 
 /* re-initializes non-persistent memory */
-void monitor_thread_reset_init(dcontext_t *dcontext);
+void
+monitor_thread_reset_init(dcontext_t *dcontext);
 /* frees all non-persistent memory */
-void monitor_thread_reset_free(dcontext_t *dcontext);
+void
+monitor_thread_reset_free(dcontext_t *dcontext);
 
-void monitor_remove_fragment(dcontext_t *dcontext, fragment_t *f);
-bool monitor_delete_would_abort_trace(dcontext_t *dcontext, fragment_t *f);
-bool monitor_is_linkable(dcontext_t *dcontext, fragment_t *from_f,
-                         linkstub_t *from_l, fragment_t *to_f,
-                         bool have_link_lock, bool mark_new_trace_head);
-void mark_trace_head(dcontext_t *dcontext, fragment_t *f, fragment_t *src_f,
-                     linkstub_t *src_l);
+void
+monitor_remove_fragment(dcontext_t *dcontext, fragment_t *f);
+bool
+monitor_delete_would_abort_trace(dcontext_t *dcontext, fragment_t *f);
+bool
+monitor_is_linkable(dcontext_t *dcontext, fragment_t *from_f, linkstub_t *from_l,
+                    fragment_t *to_f, bool have_link_lock, bool mark_new_trace_head);
+void
+mark_trace_head(dcontext_t *dcontext, fragment_t *f, fragment_t *src_f,
+                linkstub_t *src_l);
 
 enum {
-    TRACE_HEAD_YES           = 0x01,
+    TRACE_HEAD_YES = 0x01,
     TRACE_HEAD_OBTAINED_LOCK = 0x02,
 };
 
@@ -74,17 +83,23 @@ enum {
  * For -shared_bbs, will return TRACE_HEAD_OBTAINED_LOCK if the
  * change_linking_lock is not already held (meaning from_l->fragment is
  * private) and the to_tag is FRAG_SHARED and TRACE_HEAD_YES is being returned,
- * since the change_linking_lock must be held and the TRACE_HEAD_YES result 
+ * since the change_linking_lock must be held and the TRACE_HEAD_YES result
  * re-verified.  In that case the caller must free the change_linking_lock.
  */
-uint should_be_trace_head(dcontext_t *dcontext, fragment_t *from_f, linkstub_t *from_l,
-                          app_pc to_tag, uint to_flags, bool have_link_lock);
+uint
+should_be_trace_head(dcontext_t *dcontext, fragment_t *from_f, linkstub_t *from_l,
+                     app_pc to_tag, uint to_flags, bool have_link_lock);
 
-fragment_t *monitor_cache_enter(dcontext_t *dcontext, fragment_t *f);
-void monitor_cache_exit(dcontext_t *dcontext);
-bool is_building_trace(dcontext_t *dcontext);
-app_pc cur_trace_tag(dcontext_t *dcontext);
-void * cur_trace_vmlist(dcontext_t *dcontext);
+fragment_t *
+monitor_cache_enter(dcontext_t *dcontext, fragment_t *f);
+void
+monitor_cache_exit(dcontext_t *dcontext);
+bool
+is_building_trace(dcontext_t *dcontext);
+app_pc
+cur_trace_tag(dcontext_t *dcontext);
+void *
+cur_trace_vmlist(dcontext_t *dcontext);
 
 /* This routine internally calls enter_couldbelinking, thus it is safe
  * to call from any linking state. Restores linking to previous state at exit.
@@ -92,7 +107,8 @@ void * cur_trace_vmlist(dcontext_t *dcontext);
  * (either via flushing synch or thread_synch methods) FIXME : verify all users
  * on other threads are properly synchronized
  */
-void trace_abort(dcontext_t *dcontext);
+void
+trace_abort(dcontext_t *dcontext);
 
 void
 thcounter_range_remove(dcontext_t *dcontext, app_pc start, app_pc end);
@@ -106,7 +122,7 @@ thcounter_range_remove(dcontext_t *dcontext, app_pc start, app_pc end);
  */
 typedef struct _trace_head_counter_t {
     app_pc tag;
-    uint   counter;
+    uint counter;
     /* FIXME: use open-address to save memory, and share code
      * w/ fragment.c?
      */
@@ -115,14 +131,14 @@ typedef struct _trace_head_counter_t {
 
 typedef struct _trace_head_table_t {
     trace_head_counter_t **counter_table;
-    uint  hash_bits;
-    ptr_uint_t  hash_mask;
-    uint  hash_mask_offset;
+    uint hash_bits;
+    ptr_uint_t hash_mask;
+    uint hash_mask_offset;
     hash_function_t hash_func;
-    uint  capacity;           /* = 2^bits */
-    uint  entries;
-    uint  load_factor_percent; /* \alpha = load_factor_percent/100 */
-    uint  resize_threshold;    /*  = capacity * load_factor */
+    uint capacity; /* = 2^bits */
+    uint entries;
+    uint load_factor_percent; /* \alpha = load_factor_percent/100 */
+    uint resize_threshold;    /*  = capacity * load_factor */
 } trace_head_table_t;
 
 typedef struct _trace_bb_build_t {
@@ -141,22 +157,22 @@ typedef struct _monitor_data_t {
      * exported in the header file.
      * Needs to be in separate struct to share across callbacks.
      */
-    app_pc         trace_tag;       /* tag of trace head */
-    uint           trace_flags;     /* FRAGMENT_ flags for trace */
-    instrlist_t      trace;           /* place to build the instruction trace */
-    byte           *trace_buf;      /* place to temporarily store instr bytes */
-    uint           trace_buf_size;  /* length of trace_buf in bytes */
-    uint           trace_buf_top;   /* index of next free location in trace_buf */
-    void *         trace_vmlist;    /* list of vmareas trace touches */
-    uint           num_blks;        /* count of the number of blocks in trace */
-    trace_bb_build_t *blk_info;     /* info for all basic blocks making up trace */
-    uint           blk_info_length; /* length of blk_info array */
-    uint           emitted_size;    /* calculated final trace size once emitted */
-    fragment_t *     last_copy;     /* private copy of shared bb for trace building only 
-                                     * equals the previous last_fragment that was shared
-                                     */
-    fragment_t *     last_fragment;   /* for restoring (can't just use last_exit) */
-    uint           last_fragment_flags; /* for restoring */
+    app_pc trace_tag;           /* tag of trace head */
+    uint trace_flags;           /* FRAGMENT_ flags for trace */
+    instrlist_t trace;          /* place to build the instruction trace */
+    byte *trace_buf;            /* place to temporarily store instr bytes */
+    uint trace_buf_size;        /* length of trace_buf in bytes */
+    uint trace_buf_top;         /* index of next free location in trace_buf */
+    void *trace_vmlist;         /* list of vmareas trace touches */
+    uint num_blks;              /* count of the number of blocks in trace */
+    trace_bb_build_t *blk_info; /* info for all basic blocks making up trace */
+    uint blk_info_length;       /* length of blk_info array */
+    uint emitted_size;          /* calculated final trace size once emitted */
+    fragment_t *last_copy;      /* private copy of shared bb for trace building only
+                                 * equals the previous last_fragment that was shared
+                                 */
+    fragment_t *last_fragment;  /* for restoring (can't just use last_exit) */
+    uint last_fragment_flags;   /* for restoring */
 
     /* trace head counters are thread-private and must be kept in a
      * separate table and not in the fragment_t structure.
@@ -166,18 +182,18 @@ typedef struct _monitor_data_t {
 
 #ifdef CLIENT_INTERFACE
     /* PR 299808: we re-build each bb and pass to the client */
-    instrlist_t    unmangled_ilist;
-    instrlist_t    *unmangled_bb_ilist; /* next bb */
+    instrlist_t unmangled_ilist;
+    instrlist_t *unmangled_bb_ilist; /* next bb */
     /* cache at start of trace building whether we're going to pass to client */
-    bool           pass_to_client;
+    bool pass_to_client;
 #endif
     /* Record whether final block ends in syscall or int.
      * FIXME: remove once we have PR 307284.
      */
-    uint           final_exit_flags;
+    uint final_exit_flags;
 
 #ifdef CUSTOM_TRACES
-    fragment_t     wrapper; /* for creating new shadowed trace heads */
+    fragment_t wrapper; /* for creating new shadowed trace heads */
 #endif
 } monitor_data_t;
 
