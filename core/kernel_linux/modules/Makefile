@@ -8,7 +8,7 @@ EXTRA_AFLAGS=$(DR_INCLUDE_FLAGS)\
 	dynamorio_controller-objs :=\
 ../../kernel_linux/dynamorio_controller_module.o
 ################################################################################
-## TODO i#14: Re-enable the tests at a later step
+## TODO i#14: Re-enable the tests at a later step.
 ## ../../kernel_linux/simple_tests/wrap.o\
 ## ../../kernel_linux/simple_tests/recurse.o\
 ## ../../kernel_linux/simple_tests/retaddr.o\
@@ -22,7 +22,7 @@ EXTRA_AFLAGS=$(DR_INCLUDE_FLAGS)\
 ################################################################################
 
 ################################################################################
-## TODO i#11: Re-enable this moudle once the previous module is building
+## TODO i#11: Re-enable this module once the previous module is building.
 ## 	obj-m += dynamorio.o
 ## 	dynamorio-objs :=\
 ## ../../exports.o\
@@ -83,14 +83,14 @@ EXTRA_AFLAGS=$(DR_INCLUDE_FLAGS)\
 ################################################################################
 
 ################################################################################
-## TODO i#11: Re-enable this module once the previous modules are building
+## TODO i#11: Re-enable this module once the previous modules are building.
 ## obj-m += dr_kernel_utils.o
 ## 	dr_kernel_utils-objs :=\
 ## ../../kernel_linux/dr_kernel_utils.o
 ################################################################################
 
 ################################################################################
-## TODO i#11: Re-enbale the clients once the core modules are building
+## TODO i#11: Re-enable the clients once the core modules are building.
 ## obj-m += instrcount.o
 ## 	instrcount-objs :=\
 ## ../../kernel_linux/clients/instrcount_module.o

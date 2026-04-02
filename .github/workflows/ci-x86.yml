@@ -28,5 +28,5 @@ jobs:
           make modules_prepare
 
       - name: Build drk
-        # TODO i#10: Convert to cmake
+        # TODO i#10: Convert to cmake.
         run: cd core && make -f drk.mk KERNELDIR=$GITHUB_WORKSPACE/$KERNEL_DIR
