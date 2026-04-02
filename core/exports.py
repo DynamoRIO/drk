@@ -8,8 +8,6 @@ import os
 # Exports symbols for client kernel modules to use.
 
 
-# TODO(peter): I copied this function from debugging/setup_gdb.py. This code
-# should be unified.
 def check_open(args):
     popen = subprocess.Popen(args, stdout=subprocess.PIPE, text=True)
     result = popen.communicate()[0]
