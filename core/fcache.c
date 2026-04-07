@@ -47,7 +47,11 @@
 #    include "hotpatch.h"
 #endif
 #include "string_wrapper.h" /* for memcpy */
-#include <stddef.h>         /* for offsetof */
+#ifdef LINUX_KERNEL
+#    include <linux/stddef.h> /* for offsetof */
+#else
+#    include <stddef.h> /* for offsetof */
+#endif
 #include "limits_wrapper.h" /* for UCHAR_MAX */
 #include "perscache.h"
 #include "synch.h"
