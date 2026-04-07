@@ -435,9 +435,7 @@ opnd_disassemble(dcontext_t *dcontext, opnd_t opnd, file_t outfile)
         break;
     case BASE_DISP_kind: opnd_base_disp_disassemble(dcontext, opnd, outfile); break;
 #    ifdef X64
-    case REL_ADDR_kind:
-        print_file(outfile, "<rel> ");
-        /* fall-through */
+    case REL_ADDR_kind: print_file(outfile, "<rel> "); fallthrough;
     case ABS_ADDR_kind:
         opnd_mem_disassemble_prefix(dcontext, opnd, outfile);
         if (opnd_get_segment(opnd) != REG_NULL)
@@ -634,7 +632,8 @@ opnd_disassemble_intel(dcontext_t *dcontext, file_t outfile, instr_t *instr, byt
             /* if has implicit st0 then don't print it */
             (opnd_get_reg(opnd) == REG_ST0 && instr_memory_reference_size(instr) > 0))
             return false;
-        /* else fall through */
+        else
+            fallthrough;
     case TYPE_A:
     case TYPE_C:
     case TYPE_D:
@@ -668,6 +667,7 @@ opnd_disassemble_intel(dcontext_t *dcontext, file_t outfile, instr_t *instr, byt
             reg_disassemble(outfile, opnd_get_segment(opnd), "", postop_suffix());
             return true;
         }
+        return false;
     default:
         /* implicit operand */
         return false;
