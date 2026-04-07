@@ -451,9 +451,7 @@ decode_sizeof(dcontext_t *dcontext, byte *start_pc,
                 sz += 1;
                 break;
             case 0xf2:
-            case 0xf3: /* REP */
-                rep_prefix = true;
-                /* fall through */
+            case 0xf3: /* REP */ rep_prefix = true; fallthrough;
             case 0xf0: /* LOCK */
             case 0x64:
             case 0x65: /* segment overrides */
