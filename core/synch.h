@@ -119,7 +119,8 @@ enum {
      desired_synch_state == THREAD_SYNCH_TERMINATED_AND_CLEANED)
 #define THREAD_SYNCH_IS_TERMINATED(desired_synch_state) \
     (desired_synch_state == THREAD_SYNCH_TERMINATED_AND_CLEANED)
-#define THREAD_SYNCH_SAFE(synch_perm, desired_perm) (synch_perm >= desired_perm)
+#define THREAD_SYNCH_SAFE(synch_perm, desired_perm) \
+    (synch_perm >= (thread_synch_permission_t)desired_perm)
 
 void
 synch_init(void);
