@@ -41,7 +41,11 @@
 #ifndef _OS_EXPORTS_H_
 #define _OS_EXPORTS_H_ 1
 
-#include <stdarg.h>
+#ifdef LINUX_KERNEL
+#    include <linux/stdarg.h>
+#else
+#    include <stdarg.h>
+#endif
 #include "../os_shared.h"
 #include "arch_exports.h"
 
