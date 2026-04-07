@@ -651,7 +651,7 @@ get_pcache_dynamo_options_string(options_t *options, char *opstr, int len,
                        description, flag, pcache)                                 \
     {                                                                             \
         if (command_line_option[0] != ' ' && /* not synthethic */                 \
-            OPTION_AFFECTS_PCACHE_##name >= pcache_effect &&                      \
+            (op_pcache_t)OPTION_AFFECTS_PCACHE_##name >= pcache_effect &&         \
             DIFF_##type(options->name, default_options.name)) {                   \
             PRINT_STRING_##type(optionbuff, options->name, command_line_option);  \
             NULL_TERMINATE_BUFFER(optionbuff);                                    \
@@ -674,7 +674,7 @@ has_pcache_dynamo_options(options_t *options, op_pcache_t pcache_effect)
                        description, flag, pcache)                                 \
     {                                                                             \
         if (command_line_option[0] != ' ' && /* not synthethic */                 \
-            OPTION_AFFECTS_PCACHE_##name == pcache_effect &&                      \
+            (op_pcache_t)OPTION_AFFECTS_PCACHE_##name == pcache_effect &&         \
             DIFF_##type(options->name, default_options.name)) {                   \
             return true;                                                          \
         }                                                                         \
