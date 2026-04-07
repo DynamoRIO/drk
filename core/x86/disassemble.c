@@ -232,8 +232,8 @@ opnd_disassemble(dcontext_t *dcontext, opnd_t opnd, file_t outfile)
             print_file(outfile, "%s%s%u.%.6u%s", immed_prefix(), sign, top, bottom,
                        postop_suffix());
         });
-        break;
 #    endif
+        break;
     }
     case PC_kind: {
         app_pc target = opnd_get_pc(opnd);
