@@ -1665,4 +1665,14 @@ typedef struct _dr_mcontext_t {
 #    define EOF (-1)
 #endif
 
+#ifndef fallthrough
+#    if defined(__GNUC__) && __GNUC__ >= 7
+#        define fallthrough __attribute__((fallthrough))
+#    else
+#        define fallthrough \
+            do {            \
+            } while (0) /* fallthrough */
+#    endif
+#endif
+
 #endif /* ifndef _GLOBALS_SHARED_H_ */

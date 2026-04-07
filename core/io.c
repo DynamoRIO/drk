@@ -378,7 +378,7 @@ our_vsnprintf(char *s, size_t max, const char *fmt, va_list ap)
                                         false);
                     break;
                 }
-                /* note no break */
+                fallthrough;
             case 'x':
             case 'X':
             case 'o':
@@ -437,7 +437,7 @@ our_vsnprintf(char *s, size_t max, const char *fmt, va_list ap)
             case 'G':
                 if (decimal == 0 || decimal == -1)
                     decimal = 1; /* default */
-                /* no break */
+                fallthrough;
             case 'e':
             case 'E':
             case 'f': {
