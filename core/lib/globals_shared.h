@@ -121,7 +121,9 @@
 #    endif
 #    define LINK_ONCE __attribute__((weak))
 #    define ALIGN_VAR(x) __attribute__((aligned(x)))
-#    define inline __inline__
+#    ifndef LINUX_KERNEL
+#        define inline __inline__
+#    endif
 #    define INLINE_FORCED inline
 #endif
 
