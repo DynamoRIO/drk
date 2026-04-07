@@ -5658,7 +5658,7 @@ mangle_trace(dcontext_t *dcontext, instrlist_t *ilist, monitor_data_t *md)
 {
     instr_t *inst, *next_inst, *start_instr, *jmp;
     uint blk, num_exits_deleted;
-    app_pc fallthrough = NULL;
+    app_pc fallthrough_pc = NULL;
     bool found_syscall = false, found_int = false;
     int i;
 
@@ -5756,7 +5756,7 @@ mangle_trace(dcontext_t *dcontext, instrlist_t *ilist, monitor_data_t *md)
 
         /* in case no exit ctis in last block, find last non-meta fall-through */
         if (blk == md->num_blks - 1)
-            fallthrough = instr_get_translation(inst) + instr_length(dcontext, inst);
+            fallthrough_pc = instr_get_translation(inst) + instr_length(dcontext, inst);
 
         /* PR 299808: identify bb boundaries.  We can't go by translations alone, as
          * ubrs can point at their targets and theoretically the entire trace could
@@ -5830,7 +5830,7 @@ mangle_trace(dcontext_t *dcontext, instrlist_t *ilist, monitor_data_t *md)
             return false;
         }
         /* must have been no final exit cti: add final fall-through jmp */
-        jmp = create_exit_jmp(dcontext, fallthrough, fallthrough, 0);
+        jmp = create_exit_jmp(dcontext, fallthrough_pc, fallthrough_pc, 0);
         /* FIXME PR 307284: support client modifying, replacing, or adding
          * syscalls and ints: need to re-analyze.  Then we wouldn't
          * need the md->final_exit_flags field anymore.
