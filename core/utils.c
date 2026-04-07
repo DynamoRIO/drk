@@ -1706,6 +1706,7 @@ divide_uint64_print(uint64 numerator, uint64 denominator, bool percentage, uint 
 }
 
 #if defined(DEBUG) || defined(INTERNAL) || defined(CLIENT_INTERFACE)
+#    ifndef LINUX_KERNEL
 /* for printing a float (can't use %f on windows with NOLIBC), NOTE: you must
  * preserve floating point state to call this function!!
  * FIXME : truncates instead of rounding, also negative with width looks funny,
@@ -1732,7 +1733,8 @@ double_print(double val, uint precision, uint *top, uint *bottom, char **sign)
     *top = (uint)val;
     *bottom = (uint)((val - *top) * precision_multiple);
 }
-#endif /* DEBUG || INTERNAL */
+#    endif /* !LINUX_KERNEL */
+#endif     /* DEBUG || INTERNAL */
 
 #ifdef WINDOWS
 /* for pre_inject, injector, and core shared files, is just wrapper for syslog
@@ -4006,7 +4008,7 @@ profile_callers_exit()
 
 #endif /* CALL_PROFILE */
 
-#ifdef UTILS_UNIT_TEST
+#if defined(UTILS_UNIT_TEST) && !defined(LINUX_KERNEL)
 
 #    ifdef printf
 #        undef printf

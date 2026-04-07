@@ -2102,6 +2102,7 @@ divide_uint64_print(uint64 numerator, uint64 denominator, bool percentage, uint 
                     uint *top, uint *bottom);
 
 #if defined(DEBUG) || defined(INTERNAL) || defined(CLIENT_INTERFACE)
+#    ifndef LINUX_KERNEL
 /* for printing a float (can't use %f on windows with NOLIBC), NOTE: you must
  * preserve floating point state to call this function!!
  * Usage : given double/float a; uint c, d and char *s tmp; dp==double_print
@@ -2112,7 +2113,8 @@ divide_uint64_print(uint64 numerator, uint64 denominator, bool percentage, uint 
  */
 void
 double_print(double val, uint precision, uint *top, uint *bottom, char **sign);
-#endif /* DEBUG || INTERNAL */
+#    endif /* !LINUX_KERNEL */
+#endif     /* DEBUG || INTERNAL */
 
 #ifdef CALL_PROFILE
 /* Max depth of call stack to maintain.
