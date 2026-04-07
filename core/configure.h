@@ -87,7 +87,7 @@
 /* #undef DR_DO_NOT_DEFINE_bool */
 /* #undef DR_DO_NOT_DEFINE_byte */
 /* #undef DR_DO_NOT_DEFINE_int64 */
-/* #undef DR_DO_NOT_DEFINE_MAX_MIN */
+#define DR_DO_NOT_DEFINE_MAX_MIN
 /* #undef DR_DO_NOT_DEFINE_sbyte */
 #define DR_DO_NOT_DEFINE_uint
 /* #undef DR_DO_NOT_DEFINE_uint32 */
