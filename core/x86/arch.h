@@ -43,8 +43,12 @@
 #ifndef X86_ARCH_H
 #define X86_ARCH_H
 
-#include <stddef.h> /* for offsetof */
-#include "instr.h"  /* for reg_id_t */
+#ifdef LINUX_KERNEL
+#    include <linux/stddef.h> /* for offsetof */
+#else
+#    include <stddef.h> /* for offsetof */
+#endif
+#include "instr.h" /* for reg_id_t */
 
 /* FIXME: check on all platforms: these are for Fedora 8 and XP SP2
  * Keep in synch w/ defines in pre_inject_asm.asm
