@@ -123,7 +123,11 @@ process_id_t
 get_parent_id(void);
 
 /* to avoid transparency problems we must have our own vnsprintf */
-#include <stdarg.h> /* for va_list */
+#ifdef LINUX_KERNEL
+#    include <linux/stdarg.h> /* for va_list */
+#else
+#    include <stdarg.h> /* for va_list */
+#endif
 int
 our_snprintf(char *s, size_t max, const char *fmt, ...);
 int
