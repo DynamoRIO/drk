@@ -4178,7 +4178,7 @@ fragment_add_ibl_target_helper(dcontext_t *dcontext, fragment_t *f,
 }
 
 /* IBL targeted fragments per branch type */
-fragment_t *
+void
 fragment_add_ibl_target(dcontext_t *dcontext, app_pc tag, ibl_branch_type_t branch_type)
 {
     per_thread_t *pt = (per_thread_t *)dcontext->fragment_field;
@@ -4216,7 +4216,7 @@ fragment_add_ibl_target(dcontext_t *dcontext, app_pc tag, ibl_branch_type_t bran
                             TABLE_RWLOCK(ibl_table, read, unlock);
                             if (in_persisted_ibl) {
                                 mutex_unlock(&coarse->lock);
-                                return f;
+                                return;
                             }
                         }
                         mutex_unlock(&coarse->lock);
@@ -4284,7 +4284,7 @@ fragment_add_ibl_target(dcontext_t *dcontext, app_pc tag, ibl_branch_type_t bran
         if (TEST(FRAG_TABLE_SHARED, ibl_table->table_flags) &&
             !TEST(FRAG_SHARED, f->flags)) {
             STATS_INC(num_ibt_shared_private_conflict);
-            return f;
+            return;
         }
 
         ASSERT(TEST(FRAG_IS_TRACE, f->flags) ==
@@ -4415,7 +4415,7 @@ fragment_add_ibl_target(dcontext_t *dcontext, app_pc tag, ibl_branch_type_t bran
     }
 #endif /* HASHTABLE_STATISTICS */
     DOLOG(4, LOG_FRAGMENT, { dump_lookuptable_tls(dcontext); });
-    return f;
+    return;
 }
 
 /**********************************************************************/
