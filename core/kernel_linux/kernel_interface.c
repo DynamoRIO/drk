@@ -7,6 +7,7 @@
 #include <linux/kallsyms.h>
 #include <linux/sched.h>
 #include <linux/mm.h>
+#include <linux/version.h>
 
 #include "dynamorio_module_interface.h"
 #include "dynamorio_module_assert_interface.h"
@@ -39,7 +40,6 @@ zero_cpu_private_data(void)
 
 typedef struct {
     unsigned long address;
-    struct module *module;
     bool has_size;
     size_t size;
     const char *name;
@@ -77,13 +77,19 @@ done:
     kfree(buffer);
 }
 
+/* The callback function signature was changed in Linux 6.4.0. The module parameter has
+ * been removed.
+ * https://github.com/torvalds/linux/commit/3703bd54cd37e7875f51ece8df8c85c184e40bba
+ */
 static int
-find_kernel_sybmol_callback(void *data, const char *name, struct module *module,
+find_kernel_symbol_callback(void *data, const char *name,
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 4, 0)
+                            struct module *module,
+#endif
                             unsigned long address)
 {
     kernel_symbol_t *symbol = (kernel_symbol_t *)data;
     if (strcmp(name, symbol->name) == 0) {
-        symbol->module = module;
         symbol->address = address;
         get_symbol_size(symbol);
         return 1;
@@ -94,7 +100,7 @@ find_kernel_sybmol_callback(void *data, const char *name, struct module *module,
 static bool
 find_kernel_symbol(kernel_symbol_t *symbol)
 {
-    if (kallsyms_on_each_symbol(find_kernel_sybmol_callback, symbol)) {
+    if (kallsyms_on_each_symbol(find_kernel_symbol_callback, symbol)) {
         return true;
     }
     printk("find_kernel_symbol failed for %s\n", symbol->name);
