@@ -262,10 +262,21 @@ kernel_lookup_library_routine(void *lib, char *name)
 }
 
 static void
-get_module_bounds(struct module *module, byte **start, byte **end)
+get_module_bounds(struct module *module, byte *addr, byte **start, byte **end)
 {
-    *start = (byte *)module->module_core;
-    *end = (byte *)module->module_core + module->core_size;
+    for (int i = 0; i < MOD_MEM_NUM_TYPES; i++) {
+        unsigned long base = (unsigned long)module->mem[i].base;
+        unsigned long size = module->mem[i].size;
+        if ((unsigned long)addr >= base && (unsigned long)addr < base + size) {
+            *start = (byte *)base;
+            *end = (byte *)base + size;
+            return;
+        }
+    }
+
+    /* Fallback to text segment if address not found in any segment (shouldn't happen?) */
+    *start = (byte *)module->mem[MOD_TEXT].base;
+    *end = (byte *)module->mem[MOD_TEXT].base + module->mem[MOD_TEXT].size;
 }
 
 bool
@@ -276,7 +287,7 @@ kernel_shared_library_bounds(void *lib, byte *addr, byte **start, byte **end)
     if (module == NULL) {
         return false;
     }
-    get_module_bounds(module, start, end);
+    get_module_bounds(module, addr, start, end);
     DR_ASSERT(addr >= *start && addr < *end);
     return true;
 }
@@ -284,13 +295,15 @@ kernel_shared_library_bounds(void *lib, byte *addr, byte **start, byte **end)
 byte *
 kernel_get_module_base(byte *pc)
 {
-    byte *start, *end;
+    /* We always return the start of the core text segment as the 'base address' to ensure
+     * consistency for symbol offsets, even if the PC is in a data segment.
+     * TODO: maybe rename this function to make this more obvious.
+     */
     struct module *module = __module_address_ptr((unsigned long)pc);
     if (module == NULL) {
         return NULL;
     }
-    get_module_bounds(module, &start, &end);
-    return start;
+    return (byte *)module->mem[MOD_TEXT].base;
 }
 
 bool
@@ -303,7 +316,12 @@ kernel_find_dynamorio_module_bounds(byte **start, byte **end)
     if (this_module == NULL) {
         return false;
     }
-    get_module_bounds(this_module, start, end);
+
+    /* For DynamoRIO's own bounds, we return the text segment. DR uses this to identify
+     * its own code for exclusion from instrumentation.
+     */
+    *start = (byte *)this_module->mem[MOD_TEXT].base;
+    *end = (byte *)this_module->mem[MOD_TEXT].base + this_module->mem[MOD_TEXT].size;
     return true;
 }
 
