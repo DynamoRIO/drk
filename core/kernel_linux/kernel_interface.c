@@ -383,7 +383,7 @@ kernel_get_present_processor_count()
 void
 kernel_init_cpu_private_data(size_t *size, size_t *gs_offset)
 {
-    *gs_offset = (size_t)&per_cpu_var(dynamorio_page);
+    *gs_offset = (size_t)&dynamorio_page;
     *size = sizeof(struct dynamorio_page);
 }
 
