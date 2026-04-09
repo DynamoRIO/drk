@@ -146,8 +146,10 @@ find_kernel_symbol_address(const char *name)
  * find_kernel_symbol_address. */
 kernel_symbol_t native_load_gs_index_symbol;
 kernel_symbol_t gs_change_symbol;
-static void *(*module_alloc_address)(unsigned long) = NULL;
-static unsigned long (*module_kallsyms_lookup_name_address)(const char *name) = NULL;
+static void *(*module_alloc_ptr)(unsigned long) = NULL;
+static unsigned long (*module_kallsyms_lookup_name_ptr)(const char *name) = NULL;
+static struct module *(*find_module_ptr)(const char *name) = NULL;
+static struct module *(*__module_address_ptr)(unsigned long addr) = NULL;
 
 bool
 kernel_module_init(size_t dr_heap_size)
@@ -168,13 +170,21 @@ kernel_module_init(size_t dr_heap_size)
     if (!find_kernel_symbol(&gs_change_symbol)) {
         return false;
     }
-    module_alloc_address = find_kernel_symbol_address("module_alloc");
-    if (!module_alloc_address) {
+    module_alloc_ptr = find_kernel_symbol_address("module_alloc");
+    if (!module_alloc_ptr) {
         return false;
     }
-    module_kallsyms_lookup_name_address =
+    module_kallsyms_lookup_name_ptr =
         find_kernel_symbol_address("module_kallsyms_lookup_name");
-    if (!module_kallsyms_lookup_name_address) {
+    if (!module_kallsyms_lookup_name_ptr) {
+        return false;
+    }
+    find_module_ptr = find_kernel_symbol_address("find_module");
+    if (!find_module_ptr) {
+        return false;
+    }
+    __module_address_ptr = find_kernel_symbol_address("__module_address");
+    if (!__module_address_ptr) {
         return false;
     }
 
@@ -189,7 +199,7 @@ kernel_module_init(size_t dr_heap_size)
      * are disabled.
      */
     heap_size = dr_heap_size;
-    heap = module_alloc_address(heap_size);
+    heap = module_alloc_ptr(heap_size);
     if (!heap) {
         printk("Failed to allocate %luB using module_alloc.\n", heap_size);
         return false;
@@ -222,17 +232,11 @@ void *
 kernel_load_shared_library(char *name)
 {
     struct module *module;
-    /* We're supposed to lock module_mutex here to use find_module. However, we
-     * are screwed if we have to block because DR code should not be
-     * interrupted. A better hack would be to use mutex_trylock, but the
-     * kernel's module loader links mutex_trylock to the one defined in utils.c,
-     * not one in Linux's linux/mutex.c :-(.
-     */
-    if (mutex_is_locked(&module_mutex)) {
-        DR_ASSERT(false);
-        return NULL;
-    }
-    module = find_module(name);
+
+    rcu_read_lock();
+    module = find_module_ptr(name);
+    rcu_read_unlock();
+
     return module;
 }
 
@@ -254,7 +258,7 @@ kernel_lookup_library_routine(void *lib, char *name)
     qualified_name[strlen(module->name)] = ':';
     strcpy(qualified_name + strlen(module->name) + 1, name);
     DR_ASSERT(qualified_name[qualified_name_len] == '\0');
-    return (void *)module_kallsyms_lookup_name_address(qualified_name);
+    return (void *)module_kallsyms_lookup_name_ptr(qualified_name);
 }
 
 static void
@@ -281,7 +285,7 @@ byte *
 kernel_get_module_base(byte *pc)
 {
     byte *start, *end;
-    struct module *module = __module_address((unsigned long)pc);
+    struct module *module = __module_address_ptr((unsigned long)pc);
     if (module == NULL) {
         return NULL;
     }
@@ -292,10 +296,9 @@ kernel_get_module_base(byte *pc)
 bool
 kernel_find_dynamorio_module_bounds(byte **start, byte **end)
 {
-    const struct kernel_symbol *sym;
     struct module *this_module;
-    sym = find_symbol("dynamorio_dummy_symbol", &this_module, NULL, true, true);
-    if (sym == NULL) {
+    this_module = __module_address_ptr((unsigned long)&dynamorio_dummy_symbol);
+    if (this_module == NULL) {
         return false;
     }
     get_module_bounds(this_module, start, end);
