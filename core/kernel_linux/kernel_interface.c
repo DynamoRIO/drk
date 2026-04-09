@@ -329,7 +329,8 @@ static void
 assert_heap_mapped(void *heap, size_t size)
 {
     struct task_struct *g, *p;
-    do_each_thread(g, p)
+    rcu_read_lock();
+    for_each_process_thread(g, p)
     {
         vm_region_t region;
         if (!p->mm) {
@@ -344,7 +345,7 @@ assert_heap_mapped(void *heap, size_t size)
         DR_ASSERT(region.access.executable);
         DR_ASSERT(!region.access.user);
     }
-    while_each_thread(g, p);
+    rcu_read_unlock();
 }
 
 void *
