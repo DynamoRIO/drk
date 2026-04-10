@@ -17,6 +17,8 @@ def check_open(args):
 
 def excluded_functions():
     return {
+        "dr_init",
+        "dr_smp_exit",
         "dr_get_app_PEB",
         "instr_exit_stub_code",
         "dr_syscall_get_result",
