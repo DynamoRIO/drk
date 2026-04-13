@@ -299,7 +299,7 @@ byte *
 kernel_get_module_base(byte *pc)
 {
     /* We always return the start of the core text segment as the 'base address' to ensure
-     * consistency for symbol offsets, even if the PC is in a data segment.
+     * consistency for symbol offsets, even if the PC is not in the core text segment.
      * TODO: maybe rename this function to make this more obvious.
      */
     struct module *module = __module_address_ptr((unsigned long)pc);
