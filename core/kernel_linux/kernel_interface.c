@@ -275,6 +275,9 @@ get_module_bounds(struct module *module, byte *addr, byte **start, byte **end)
     }
 
     /* Fallback to text segment if address not found in any segment (shouldn't happen?) */
+    pr_warn("drk: Address %p not found for any segment for module %s. Falling back to "
+            "text segment.\n",
+            addr, module->name);
     *start = (byte *)module->mem[MOD_TEXT].base;
     *end = (byte *)module->mem[MOD_TEXT].base + module->mem[MOD_TEXT].size;
 }
