@@ -77,16 +77,8 @@ done:
     kfree(buffer);
 }
 
-/* The callback function signature was changed in Linux 6.4.0. The module parameter has
- * been removed.
- * https://github.com/torvalds/linux/commit/3703bd54cd37e7875f51ece8df8c85c184e40bba
- */
 static int
-find_kernel_symbol_callback(void *data, const char *name,
-#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 4, 0)
-                            struct module *module,
-#endif
-                            unsigned long address)
+find_kernel_symbol_callback(void *data, const char *name, unsigned long address)
 {
     kernel_symbol_t *symbol = (kernel_symbol_t *)data;
     if (strcmp(name, symbol->name) == 0) {
