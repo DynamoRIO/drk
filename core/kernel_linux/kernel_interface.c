@@ -326,6 +326,9 @@ static void
 assert_heap_mapped(void *heap, size_t size)
 {
     struct task_struct *g, *p;
+    /* The Linux kernel stores the task list as an RCU-protected linked list. 
+     * for_each_process_thread requires the RCU read lock to safely traverse all threads.
+     * See https://docs.kernel.org/6.6/RCU/listRCU.html */
     rcu_read_lock();
     for_each_process_thread(g, p)
     {
