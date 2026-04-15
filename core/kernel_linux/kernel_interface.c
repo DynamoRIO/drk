@@ -225,6 +225,8 @@ kernel_load_shared_library(char *name)
 {
     struct module *module;
 
+    /* The Linux kernel stores loaded modules as an RCU-protected linked list.
+     * find_module requires the RCU read lock to safely traverse it. */
     rcu_read_lock();
     module = find_module_ptr(name);
     rcu_read_unlock();
