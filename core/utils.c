@@ -1707,7 +1707,7 @@ divide_uint64_print(uint64 numerator, uint64 denominator, bool percentage, uint 
 
 #if defined(DEBUG) || defined(INTERNAL) || defined(CLIENT_INTERFACE)
 #    ifndef LINUX_KERNEL
-/* for printing a float (can't use %f on windows with NOLIBC), NOTE: you must
+/* For printing a float (can't use %f on windows with NOLIBC), NOTE: you must
  * preserve floating point state to call this function!!
  * FIXME : truncates instead of rounding, also negative with width looks funny,
  *         finally width can be one off if negative
@@ -1716,6 +1716,7 @@ divide_uint64_print(uint64 numerator, uint64 denominator, bool percentage, uint 
  * note that %f is eqv. to %.6f
  * "%.pf", a => dp(a, p, &c, &d, &s) "%s%u.%.pu", s, c, d
  * "%w.pf", a => dp(a, p, &c, &d, &s) "%s%(w-p-1)u.%.pu", s, c, d
+ * Disabled for Linux kernel because floating-point operations are restricted.
  */
 void
 double_print(double val, uint precision, uint *top, uint *bottom, char **sign)
@@ -4008,6 +4009,7 @@ profile_callers_exit()
 
 #endif /* CALL_PROFILE */
 
+/* Disabled for Linux kernel because floating-point operations are restricted. */
 #if defined(UTILS_UNIT_TEST) && !defined(LINUX_KERNEL)
 
 #    ifdef printf
