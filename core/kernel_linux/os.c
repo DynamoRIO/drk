@@ -237,7 +237,7 @@ get_module_company_name(app_pc mod_base, char *out_buf, size_t out_buf_size)
 app_pc
 get_module_base(app_pc pc)
 {
-    return kernel_get_module_base(pc);
+    return kernel_get_module_text_base(pc);
 }
 
 bool
