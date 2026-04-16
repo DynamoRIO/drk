@@ -52,7 +52,7 @@
 #include "../link.h"
 #include "../monitor.h"     /* for mark_trace_head */
 #include "string_wrapper.h" /* for strstr */
-#include <stdarg.h>         /* for varargs */
+#include "stdarg_wrapper.h" /* for varargs */
 #include "../nudge.h"       /* for nudge_internal() */
 #include "../synch.h"
 #include "barrier.h"

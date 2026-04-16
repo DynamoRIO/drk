@@ -74,6 +74,6 @@ kernel_lookup_library_routine(void *lib, char *name);
 bool
 kernel_shared_library_bounds(void *lib, byte *addr, byte **start, byte **end);
 byte *
-kernel_get_module_base(byte *pc);
+kernel_get_module_text_base(byte *pc);
 
 #endif

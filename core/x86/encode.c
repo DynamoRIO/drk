@@ -1575,7 +1575,7 @@ encode_operand(decode_info_t *di, int optype, opnd_size_t opsize, opnd_t opnd)
     case TYPE_M:
         CLIENT_ASSERT(opnd_is_memory_reference(opnd),
                       "encode error: M operand must be mem ref");
-        /* fall through */
+        fallthrough;
     case TYPE_INDIR_E:
     case TYPE_E:
     case TYPE_Q:

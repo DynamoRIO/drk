@@ -48,7 +48,7 @@
 #include "synch.h"
 #include "module_shared.h"
 #include "string_wrapper.h" /* for memset */
-#include <stddef.h>         /* for offsetof */
+#include "stddef_wrapper.h" /* for offsetof */
 
 #ifdef DEBUG
 #    include "disassemble.h"

@@ -1199,16 +1199,16 @@ STATS_DEF("Nudges", num_nudges)
 STATS_DEF("Doubled-up nudges", num_pending_nudges)
 
 #ifdef LINUX_KERNEL
-STATS_DEF("system call entries", num_syscalls);
-STATS_DEF("interrupt exits handled by dispatcher", num_exits_interrupts);
-STATS_DEF("interrupt patches", num_fragment_interrupt_patches);
-STATS_DEF("interrupt entries", num_interrupts);
-STATS_DEF("interrupt entries", num_user_interrupts);
-STATS_DEF("interrupts in ibl", num_ibl_interrupts);
-STATS_DEF("interrupts in fcache enter", num_fcache_enter_interrupts);
-STATS_DEF("interrupts in fcache return", num_fcache_return_interrupts);
-STATS_DEF("interrupts in fragments (delayed)", num_delayed_frag_intr);
-STATS_DEF("interrupts in fragments (not delayed)", num_ndelayed_frag_intr);
-STATS_DEF("swapgs in user interrupt handler", num_intr_swap_gs_user);
-STATS_DEF("swapgs in kernel interrupt handler", num_intr_swap_gs_kernel);
+STATS_DEF("system call entries", num_syscalls)
+STATS_DEF("interrupt exits handled by dispatcher", num_exits_interrupts)
+STATS_DEF("interrupt patches", num_fragment_interrupt_patches)
+STATS_DEF("interrupt entries", num_interrupts)
+STATS_DEF("interrupt entries", num_user_interrupts)
+STATS_DEF("interrupts in ibl", num_ibl_interrupts)
+STATS_DEF("interrupts in fcache enter", num_fcache_enter_interrupts)
+STATS_DEF("interrupts in fcache return", num_fcache_return_interrupts)
+STATS_DEF("interrupts in fragments (delayed)", num_delayed_frag_intr)
+STATS_DEF("interrupts in fragments (not delayed)", num_ndelayed_frag_intr)
+STATS_DEF("swapgs in user interrupt handler", num_intr_swap_gs_user)
+STATS_DEF("swapgs in kernel interrupt handler", num_intr_swap_gs_kernel)
 #endif

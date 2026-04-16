@@ -1,0 +1,12 @@
+#ifndef __STDDEF_WRAPPER_H_
+#define __STDDEF_WRAPPER_H_
+
+#include "configure.h"
+
+#ifdef LINUX_KERNEL
+#    include <linux/stddef.h>
+#else
+#    include <stddef.h>
+#endif
+
+#endif /* __STDDEF_WRAPPER_H_ */

@@ -41,7 +41,7 @@
 #ifndef _OS_EXPORTS_H_
 #define _OS_EXPORTS_H_ 1
 
-#include <stdarg.h>
+#include "stdarg_wrapper.h"
 #include "../os_shared.h"
 #include "arch_exports.h"
 
@@ -119,7 +119,6 @@ process_id_t
 get_parent_id(void);
 
 /* to avoid transparency problems we must have our own vnsprintf */
-#include <stdarg.h> /* for va_list */
 int
 our_snprintf(char *s, size_t max, const char *fmt, ...);
 int

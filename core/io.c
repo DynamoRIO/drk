@@ -43,8 +43,8 @@
 
 #include "globals.h"
 #include "string_wrapper.h"
-#include <linux/kernel.h> // for vsscanf
-#include <stdarg.h>       /* for varargs */
+#include <linux/kernel.h>   // for vsscanf
+#include "stdarg_wrapper.h" /* for varargs */
 
 #define VA_ARG_CHAR2INT
 #define BUF_SIZE 64
@@ -374,7 +374,7 @@ our_vsnprintf(char *s, size_t max, const char *fmt, va_list ap)
                                         false);
                     break;
                 }
-                /* note no break */
+                fallthrough;
             case 'x':
             case 'X':
             case 'o':
@@ -433,7 +433,7 @@ our_vsnprintf(char *s, size_t max, const char *fmt, va_list ap)
             case 'G':
                 if (decimal == 0 || decimal == -1)
                     decimal = 1; /* default */
-                /* no break */
+                fallthrough;
             case 'e':
             case 'E':
             case 'f': {

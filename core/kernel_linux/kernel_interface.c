@@ -39,7 +39,6 @@ zero_cpu_private_data(void)
 
 typedef struct {
     unsigned long address;
-    struct module *module;
     bool has_size;
     size_t size;
     const char *name;
@@ -54,7 +53,7 @@ get_symbol_size(kernel_symbol_t *symbol)
 
     symbol->has_size = false;
     buffer = kmalloc(strlen(symbol->name) + 100, GFP_ATOMIC);
-    if (!buffer) {
+    if (buffer == NULL) {
         goto done;
     }
     sprint_symbol(buffer, symbol->address);
@@ -78,12 +77,10 @@ done:
 }
 
 static int
-find_kernel_sybmol_callback(void *data, const char *name, struct module *module,
-                            unsigned long address)
+find_kernel_symbol_callback(void *data, const char *name, unsigned long address)
 {
     kernel_symbol_t *symbol = (kernel_symbol_t *)data;
     if (strcmp(name, symbol->name) == 0) {
-        symbol->module = module;
         symbol->address = address;
         get_symbol_size(symbol);
         return 1;
@@ -94,7 +91,7 @@ find_kernel_sybmol_callback(void *data, const char *name, struct module *module,
 static bool
 find_kernel_symbol(kernel_symbol_t *symbol)
 {
-    if (kallsyms_on_each_symbol(find_kernel_sybmol_callback, symbol)) {
+    if (kallsyms_on_each_symbol(find_kernel_symbol_callback, symbol)) {
         return true;
     }
     printk("find_kernel_symbol failed for %s\n", symbol->name);
@@ -109,11 +106,11 @@ kernel_find_symbol(const char *name, void **address, size_t *size)
     if (find_kernel_symbol(&symbol)) {
         *address = (void *)symbol.address;
         if (symbol.has_size) {
-            if (size) {
+            if (size != NULL) {
                 *size = symbol.size;
             }
         } else {
-            if (size) {
+            if (size != NULL) {
                 *size = 0;
             }
         }
@@ -140,8 +137,10 @@ find_kernel_symbol_address(const char *name)
  * find_kernel_symbol_address. */
 kernel_symbol_t native_load_gs_index_symbol;
 kernel_symbol_t gs_change_symbol;
-static void *(*module_alloc_address)(unsigned long) = NULL;
-static unsigned long (*module_kallsyms_lookup_name_address)(const char *name) = NULL;
+static void *(*module_alloc_ptr)(unsigned long) = NULL;
+static unsigned long (*module_kallsyms_lookup_name_ptr)(const char *name) = NULL;
+static struct module *(*find_module_ptr)(const char *name) = NULL;
+static struct module *(*__module_address_ptr)(unsigned long addr) = NULL;
 
 bool
 kernel_module_init(size_t dr_heap_size)
@@ -162,13 +161,21 @@ kernel_module_init(size_t dr_heap_size)
     if (!find_kernel_symbol(&gs_change_symbol)) {
         return false;
     }
-    module_alloc_address = find_kernel_symbol_address("module_alloc");
-    if (!module_alloc_address) {
+    module_alloc_ptr = find_kernel_symbol_address("module_alloc");
+    if (module_alloc_ptr == NULL) {
         return false;
     }
-    module_kallsyms_lookup_name_address =
+    module_kallsyms_lookup_name_ptr =
         find_kernel_symbol_address("module_kallsyms_lookup_name");
-    if (!module_kallsyms_lookup_name_address) {
+    if (module_kallsyms_lookup_name_ptr == NULL) {
+        return false;
+    }
+    find_module_ptr = find_kernel_symbol_address("find_module");
+    if (find_module_ptr == NULL) {
+        return false;
+    }
+    __module_address_ptr = find_kernel_symbol_address("__module_address");
+    if (__module_address_ptr == NULL) {
         return false;
     }
 
@@ -183,8 +190,8 @@ kernel_module_init(size_t dr_heap_size)
      * are disabled.
      */
     heap_size = dr_heap_size;
-    heap = module_alloc_address(heap_size);
-    if (!heap) {
+    heap = module_alloc_ptr(heap_size);
+    if (heap == NULL) {
         printk("Failed to allocate %luB using module_alloc.\n", heap_size);
         return false;
         ;
@@ -216,17 +223,13 @@ void *
 kernel_load_shared_library(char *name)
 {
     struct module *module;
-    /* We're supposed to lock module_mutex here to use find_module. However, we
-     * are screwed if we have to block because DR code should not be
-     * interrupted. A better hack would be to use mutex_trylock, but the
-     * kernel's module loader links mutex_trylock to the one defined in utils.c,
-     * not one in Linux's linux/mutex.c :-(.
-     */
-    if (mutex_is_locked(&module_mutex)) {
-        DR_ASSERT(false);
-        return NULL;
-    }
-    module = find_module(name);
+
+    /* The Linux kernel stores loaded modules as an RCU-protected linked list.
+     * find_module requires the RCU read lock to safely traverse it. */
+    rcu_read_lock();
+    module = find_module_ptr(name);
+    rcu_read_unlock();
+
     return module;
 }
 
@@ -248,14 +251,28 @@ kernel_lookup_library_routine(void *lib, char *name)
     qualified_name[strlen(module->name)] = ':';
     strcpy(qualified_name + strlen(module->name) + 1, name);
     DR_ASSERT(qualified_name[qualified_name_len] == '\0');
-    return (void *)module_kallsyms_lookup_name_address(qualified_name);
+    return (void *)module_kallsyms_lookup_name_ptr(qualified_name);
 }
 
 static void
-get_module_bounds(struct module *module, byte **start, byte **end)
+get_module_bounds(struct module *module, byte *addr, byte **start, byte **end)
 {
-    *start = (byte *)module->module_core;
-    *end = (byte *)module->module_core + module->core_size;
+    for (int i = 0; i < MOD_MEM_NUM_TYPES; i++) {
+        unsigned long base = (unsigned long)module->mem[i].base;
+        unsigned long size = module->mem[i].size;
+        if ((unsigned long)addr >= base && (unsigned long)addr < base + size) {
+            *start = (byte *)base;
+            *end = (byte *)base + size;
+            return;
+        }
+    }
+
+    /* Fallback to text segment if address not found in any segment (shouldn't happen?) */
+    pr_warn("drk: Address %p not found for any segment for module %s. Falling back to "
+            "text segment.\n",
+            addr, module->name);
+    *start = (byte *)module->mem[MOD_TEXT].base;
+    *end = (byte *)module->mem[MOD_TEXT].base + module->mem[MOD_TEXT].size;
 }
 
 bool
@@ -266,33 +283,40 @@ kernel_shared_library_bounds(void *lib, byte *addr, byte **start, byte **end)
     if (module == NULL) {
         return false;
     }
-    get_module_bounds(module, start, end);
+    get_module_bounds(module, addr, start, end);
     DR_ASSERT(addr >= *start && addr < *end);
     return true;
 }
 
 byte *
-kernel_get_module_base(byte *pc)
+kernel_get_module_text_base(byte *pc)
 {
-    byte *start, *end;
-    struct module *module = __module_address((unsigned long)pc);
+    /* We always return the start of the core text segment as the 'base address' to ensure
+     * consistency for symbol offsets, even if the PC is not in the core text segment.
+     */
+    struct module *module = __module_address_ptr((unsigned long)pc);
     if (module == NULL) {
         return NULL;
     }
-    get_module_bounds(module, &start, &end);
-    return start;
+    return (byte *)module->mem[MOD_TEXT].base;
 }
 
 bool
 kernel_find_dynamorio_module_bounds(byte **start, byte **end)
 {
-    const struct kernel_symbol *sym;
+    // TODO i#11: once the module is running we should test whether the following logic
+    // can be simplified using the THIS_MODULE macro.
     struct module *this_module;
-    sym = find_symbol("dynamorio_dummy_symbol", &this_module, NULL, true, true);
-    if (sym == NULL) {
+    this_module = __module_address_ptr((unsigned long)&dynamorio_dummy_symbol);
+    if (this_module == NULL) {
         return false;
     }
-    get_module_bounds(this_module, start, end);
+
+    /* For DynamoRIO's own bounds, we return the text segment. DR uses this to identify
+     * its own code for exclusion from instrumentation.
+     */
+    *start = (byte *)this_module->mem[MOD_TEXT].base;
+    *end = (byte *)this_module->mem[MOD_TEXT].base + this_module->mem[MOD_TEXT].size;
     return true;
 }
 
@@ -300,10 +324,14 @@ static void
 assert_heap_mapped(void *heap, size_t size)
 {
     struct task_struct *g, *p;
-    do_each_thread(g, p)
+    /* The Linux kernel stores the task list as an RCU-protected linked list.
+     * for_each_process_thread requires the RCU read lock to safely traverse all threads.
+     * See https://docs.kernel.org/6.6/RCU/listRCU.html */
+    rcu_read_lock();
+    for_each_process_thread(g, p)
     {
         vm_region_t region;
-        if (!p->mm) {
+        if (p->mm == NULL) {
             continue;
         }
         DR_ASSERT(p->mm->pgd);
@@ -315,7 +343,7 @@ assert_heap_mapped(void *heap, size_t size)
         DR_ASSERT(region.access.executable);
         DR_ASSERT(!region.access.user);
     }
-    while_each_thread(g, p);
+    rcu_read_unlock();
 }
 
 void *
@@ -353,7 +381,7 @@ kernel_get_present_processor_count()
 void
 kernel_init_cpu_private_data(size_t *size, size_t *gs_offset)
 {
-    *gs_offset = (size_t)&per_cpu_var(dynamorio_page);
+    *gs_offset = (size_t)&dynamorio_page;
     *size = sizeof(struct dynamorio_page);
 }
 

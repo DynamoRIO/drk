@@ -78,7 +78,7 @@
 #    include "synch.h" /* all_threads_synch_lock */
 #endif
 
-#include <stdarg.h> /* for varargs */
+#include "stdarg_wrapper.h" /* for varargs */
 
 #ifdef LINUX_KERNEL
 #    include <linux/ctype.h>
@@ -1702,7 +1702,8 @@ divide_uint64_print(uint64 numerator, uint64 denominator, bool percentage, uint 
 }
 
 #if defined(DEBUG) || defined(INTERNAL) || defined(CLIENT_INTERFACE)
-/* for printing a float (can't use %f on windows with NOLIBC), NOTE: you must
+#    ifndef LINUX_KERNEL
+/* For printing a float (can't use %f on windows with NOLIBC), NOTE: you must
  * preserve floating point state to call this function!!
  * FIXME : truncates instead of rounding, also negative with width looks funny,
  *         finally width can be one off if negative
@@ -1711,6 +1712,7 @@ divide_uint64_print(uint64 numerator, uint64 denominator, bool percentage, uint 
  * note that %f is eqv. to %.6f
  * "%.pf", a => dp(a, p, &c, &d, &s) "%s%u.%.pu", s, c, d
  * "%w.pf", a => dp(a, p, &c, &d, &s) "%s%(w-p-1)u.%.pu", s, c, d
+ * Disabled for Linux kernel because floating-point operations are restricted.
  */
 void
 double_print(double val, uint precision, uint *top, uint *bottom, char **sign)
@@ -1728,7 +1730,8 @@ double_print(double val, uint precision, uint *top, uint *bottom, char **sign)
     *top = (uint)val;
     *bottom = (uint)((val - *top) * precision_multiple);
 }
-#endif /* DEBUG || INTERNAL */
+#    endif /* !LINUX_KERNEL */
+#endif     /* DEBUG || INTERNAL */
 
 #ifdef WINDOWS
 /* for pre_inject, injector, and core shared files, is just wrapper for syslog
@@ -4002,7 +4005,8 @@ profile_callers_exit()
 
 #endif /* CALL_PROFILE */
 
-#ifdef UTILS_UNIT_TEST
+/* Disabled for Linux kernel because floating-point operations are restricted. */
+#if defined(UTILS_UNIT_TEST) && !defined(LINUX_KERNEL)
 
 #    ifdef printf
 #        undef printf
