@@ -54,7 +54,7 @@ get_symbol_size(kernel_symbol_t *symbol)
 
     symbol->has_size = false;
     buffer = kmalloc(strlen(symbol->name) + 100, GFP_ATOMIC);
-    if (!buffer) {
+    if (buffer == NULL) {
         goto done;
     }
     sprint_symbol(buffer, symbol->address);
@@ -107,11 +107,11 @@ kernel_find_symbol(const char *name, void **address, size_t *size)
     if (find_kernel_symbol(&symbol)) {
         *address = (void *)symbol.address;
         if (symbol.has_size) {
-            if (size) {
+            if (size != NULL) {
                 *size = symbol.size;
             }
         } else {
-            if (size) {
+            if (size != NULL) {
                 *size = 0;
             }
         }
@@ -163,20 +163,20 @@ kernel_module_init(size_t dr_heap_size)
         return false;
     }
     module_alloc_ptr = find_kernel_symbol_address("module_alloc");
-    if (!module_alloc_ptr) {
+    if (module_alloc_ptr == NULL) {
         return false;
     }
     module_kallsyms_lookup_name_ptr =
         find_kernel_symbol_address("module_kallsyms_lookup_name");
-    if (!module_kallsyms_lookup_name_ptr) {
+    if (module_kallsyms_lookup_name_ptr == NULL) {
         return false;
     }
     find_module_ptr = find_kernel_symbol_address("find_module");
-    if (!find_module_ptr) {
+    if (find_module_ptr == NULL) {
         return false;
     }
     __module_address_ptr = find_kernel_symbol_address("__module_address");
-    if (!__module_address_ptr) {
+    if (__module_address_ptr == NULL) {
         return false;
     }
 
@@ -192,7 +192,7 @@ kernel_module_init(size_t dr_heap_size)
      */
     heap_size = dr_heap_size;
     heap = module_alloc_ptr(heap_size);
-    if (!heap) {
+    if (heap == NULL) {
         printk("Failed to allocate %luB using module_alloc.\n", heap_size);
         return false;
         ;
@@ -326,14 +326,14 @@ static void
 assert_heap_mapped(void *heap, size_t size)
 {
     struct task_struct *g, *p;
-    /* The Linux kernel stores the task list as an RCU-protected linked list. 
+    /* The Linux kernel stores the task list as an RCU-protected linked list.
      * for_each_process_thread requires the RCU read lock to safely traverse all threads.
      * See https://docs.kernel.org/6.6/RCU/listRCU.html */
     rcu_read_lock();
     for_each_process_thread(g, p)
     {
         vm_region_t region;
-        if (!p->mm) {
+        if (p->mm == NULL) {
             continue;
         }
         DR_ASSERT(p->mm->pgd);
