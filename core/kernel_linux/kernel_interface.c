@@ -7,7 +7,6 @@
 #include <linux/kallsyms.h>
 #include <linux/sched.h>
 #include <linux/mm.h>
-#include <linux/version.h>
 
 #include "dynamorio_module_interface.h"
 #include "dynamorio_module_assert_interface.h"
