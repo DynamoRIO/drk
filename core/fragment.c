@@ -46,11 +46,7 @@
 #include "monitor.h"
 #include "string_wrapper.h" /* for memset */
 #include "instrument.h"
-#ifdef LINUX_KERNEL
-#    include <linux/stddef.h> /* for offsetof */
-#else
-#    include <stddef.h> /* for offsetof */
-#endif
+#include "stddef_wrapper.h" /* for offsetof */
 #include "limits_wrapper.h" /* UINT_MAX */
 #include "perscache.h"
 #include "synch.h"

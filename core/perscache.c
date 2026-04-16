@@ -48,11 +48,7 @@
 #include "synch.h"
 #include "module_shared.h"
 #include "string_wrapper.h" /* for memset */
-#ifdef LINUX_KERNEL
-#    include <linux/stddef.h> /* for offsetof */
-#else
-#    include <stddef.h> /* for offsetof */
-#endif
+#include "stddef_wrapper.h" /* for offsetof */
 
 #ifdef DEBUG
 #    include "disassemble.h"

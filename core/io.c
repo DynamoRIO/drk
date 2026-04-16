@@ -43,12 +43,8 @@
 
 #include "globals.h"
 #include "string_wrapper.h"
-#include <linux/kernel.h> // for vsscanf
-#ifdef LINUX_KERNEL
-#    include <linux/stdarg.h> /* for varargs */
-#else
-#    include <stdarg.h> /* for varargs */
-#endif
+#include <linux/kernel.h>   // for vsscanf
+#include "stdarg_wrapper.h" /* for varargs */
 
 #define VA_ARG_CHAR2INT
 #define BUF_SIZE 64

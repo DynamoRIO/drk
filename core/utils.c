@@ -78,11 +78,7 @@
 #    include "synch.h" /* all_threads_synch_lock */
 #endif
 
-#ifdef LINUX_KERNEL
-#    include <linux/stdarg.h> /* for varargs */
-#else
-#    include <stdarg.h> /* for varargs */
-#endif
+#include "stdarg_wrapper.h" /* for varargs */
 
 #ifdef LINUX_KERNEL
 #    include <linux/ctype.h>
