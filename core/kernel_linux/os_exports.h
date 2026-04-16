@@ -41,7 +41,7 @@
 #ifndef _OS_EXPORTS_H_
 #define _OS_EXPORTS_H_ 1
 
-#include <stdarg_wrapper.h>
+#include "stdarg_wrapper.h"
 #include "../os_shared.h"
 #include "arch_exports.h"
 
