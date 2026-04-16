@@ -304,8 +304,8 @@ kernel_get_module_text_base(byte *pc)
 bool
 kernel_find_dynamorio_module_bounds(byte **start, byte **end)
 {
-    // TODO: once the module is running we should test whether the following logic can be
-    // simplified using the THIS_MODULE macro.
+    // TODO i#11: once the module is running we should test whether the following logic
+    // can be simplified using the THIS_MODULE macro.
     struct module *this_module;
     this_module = __module_address_ptr((unsigned long)&dynamorio_dummy_symbol);
     if (this_module == NULL) {
