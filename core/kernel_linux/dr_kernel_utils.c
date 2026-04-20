@@ -1,7 +1,10 @@
+#include "dr_kernel_utils.h"
+
 #include <linux/kobject.h>
 #include <linux/sysfs.h>
 #include <linux/module.h>
-#include "dr_kernel_utils.h"
+#include <linux/slab.h>
+
 MODULE_LICENSE("Dual BSD/GPL");
 
 int
