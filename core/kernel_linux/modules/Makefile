@@ -94,12 +94,12 @@ obj-m += stress_dead_reg.o
 	stress_dead_reg-objs :=\
 ../../kernel_linux/clients/stress_dead_reg_module.o
 
+obj-m += cleancall.o
+	cleancall-objs :=\
+../../kernel_linux/clients/cleancall_module.o
+
 ################################################################################
 ## TODO i#11: Re-enable the clients once the core modules are building.
-## obj-m += cleancall.o
-## 	cleancall-objs :=\
-## ../../kernel_linux/clients/cleancall_module.o
-##
 ## obj-m += client_codecache.o
 ## 	client_codecache-objs :=\
 ## ../../kernel_linux/clients/client_codecache.o
