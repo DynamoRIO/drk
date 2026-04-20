@@ -86,12 +86,12 @@ EXTRA_AFLAGS=$(DR_INCLUDE_FLAGS)\
 ## ../../kernel_linux/dr_kernel_utils.o
 ################################################################################
 
+obj-m += instrcount.o
+	instrcount-objs :=\
+../../kernel_linux/clients/instrcount_module.o
+
 ################################################################################
 ## TODO i#11: Re-enable the clients once the core modules are building.
-## obj-m += instrcount.o
-## 	instrcount-objs :=\
-## ../../kernel_linux/clients/instrcount_module.o
-##
 ## obj-m += stress_dead_reg.o
 ## 	stress_dead_reg-objs :=\
 ## ../../kernel_linux/clients/stress_dead_reg_module.o
