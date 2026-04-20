@@ -102,12 +102,12 @@ obj-m += client_codecache.o
 	client_codecache-objs :=\
 ../../kernel_linux/clients/client_codecache.o
 
+obj-m += client_cleancall_codecache.o
+	client_cleancall_codecache-objs :=\
+../../kernel_linux/clients/client_cleancall_codecache.o
+
 ################################################################################
 ## TODO i#11: Re-enable the clients once the core modules are building.
-## obj-m += client_cleancall_codecache.o
-## 	client_cleancall_codecache-objs :=\
-## ../../kernel_linux/clients/client_cleancall_codecache.o
-##
 ## obj-m += umbra.o
 ## 	umbra-objs :=\
 ## ../../kernel_linux/clients/umbra/analyzer.o\
