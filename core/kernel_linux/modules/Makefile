@@ -98,12 +98,12 @@ obj-m += cleancall.o
 	cleancall-objs :=\
 ../../kernel_linux/clients/cleancall_module.o
 
+obj-m += client_codecache.o
+	client_codecache-objs :=\
+../../kernel_linux/clients/client_codecache.o
+
 ################################################################################
 ## TODO i#11: Re-enable the clients once the core modules are building.
-## obj-m += client_codecache.o
-## 	client_codecache-objs :=\
-## ../../kernel_linux/clients/client_codecache.o
-##
 ## obj-m += client_cleancall_codecache.o
 ## 	client_cleancall_codecache-objs :=\
 ## ../../kernel_linux/clients/client_cleancall_codecache.o
