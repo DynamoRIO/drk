@@ -41,7 +41,7 @@ DEFINE_PER_CPU(instr_count_tls_t *, instr_count_tls);
 static instr_count_tls_t *
 get_instr_count_tls(void)
 {
-    return __get_cpu_var(instr_count_tls);
+    return this_cpu_read(instr_count_tls);
 }
 
 static void
@@ -52,7 +52,7 @@ set_instr_count_tls(instr_count_tls_t *tls)
      * (dcontext->client_data->user_field). We'd like to use instrcount with
      * other clients.
      */
-    __get_cpu_var(instr_count_tls) = tls;
+    this_cpu_write(instr_count_tls, tls);
 }
 
 static void
