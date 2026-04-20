@@ -90,12 +90,12 @@ obj-m += instrcount.o
 	instrcount-objs :=\
 ../../kernel_linux/clients/instrcount_module.o
 
+obj-m += stress_dead_reg.o
+	stress_dead_reg-objs :=\
+../../kernel_linux/clients/stress_dead_reg_module.o
+
 ################################################################################
 ## TODO i#11: Re-enable the clients once the core modules are building.
-## obj-m += stress_dead_reg.o
-## 	stress_dead_reg-objs :=\
-## ../../kernel_linux/clients/stress_dead_reg_module.o
-##
 ## obj-m += cleancall.o
 ## 	cleancall-objs :=\
 ## ../../kernel_linux/clients/cleancall_module.o
