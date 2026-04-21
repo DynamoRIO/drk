@@ -247,7 +247,7 @@ umbra_thread_init(void *drcontext)
     info = (umbra_info_t *)dr_thread_alloc(drcontext, sizeof(umbra_info_t));
 
 #ifdef LINUX_KERNEL
-    __get_cpu_var(cpu_umbra_info) = info;
+    this_cpu_write(cpu_umbra_info, info);
 #endif
 
     dr_set_tls_field(drcontext, info);
@@ -278,7 +278,7 @@ umbra_thread_exit(void *drcontext)
     dr_set_tls_field(drcontext, NULL);
     dr_thread_free(drcontext, info, sizeof(umbra_info_t));
 #ifdef LINUX_KERNEL
-    __get_cpu_var(cpu_umbra_info) = NULL;
+    this_cpu_write(cpu_umbra_info, NULL);
 #endif
 }
 
@@ -454,7 +454,7 @@ static ssize_t
 show_umbra_stats(int cpu, char *buf)
 {
     char *orig_buf = buf;
-    umbra_info_t *umbra_info = __get_cpu_var(cpu_umbra_info);
+    umbra_info_t *umbra_info = this_cpu_read(cpu_umbra_info);
     if (!umbra_info) {
         return sprintf(buf, "cpu %d not yet initilized!\n", cpu);
     }
