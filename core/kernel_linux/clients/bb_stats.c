@@ -90,7 +90,7 @@ bb_event(void *drcontext, void *tag, instrlist_t *bb, bool for_trace, bool trans
         int length = instrlist_length(bb);
         DR_ASSERT(length <= MAX_BB_INSTRS);
         if (!dr_is_emulating_interrupt_return(drcontext)) {
-            DR_ASSERT(bb_stats->histogram[length] < USHORT_MAX);
+            DR_ASSERT(bb_stats->histogram[length] < USHRT_MAX);
             bb_stats->histogram[length] += 1;
             bb_stats->last_fragment_tag = tag;
             bb_stats->last_fragment_length = length;
@@ -102,7 +102,7 @@ bb_event(void *drcontext, void *tag, instrlist_t *bb, bool for_trace, bool trans
                 bb_stats->instr_pairs[instr_get_opcode(first)]++;
             }
         } else {
-            DR_ASSERT(bb_stats->histogram_tail[length] < USHORT_MAX);
+            DR_ASSERT(bb_stats->histogram_tail[length] < USHRT_MAX);
             bb_stats->histogram_tail[length] += 1;
         }
     }
