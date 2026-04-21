@@ -284,7 +284,7 @@ is_memory_ok_to_alloc(void *start, size_t size)
              * returned from unknown memory as opposed to unaddressable because
              * kmalloc_large uses __get_free_pages directly. */
             if (size <= SLUB_MAX_SIZE && perm == PERMISSION_UNKNOWN) {
-                return false; 
+                return false;
             }
 #    endif
         });
@@ -1042,37 +1042,37 @@ void
 memcheck_reset_reports(void)
 {
     DR_ASSERT(irqs_disabled());
-    __get_cpu_var(memcheck_tls)->report_count = 0;
-    __get_cpu_var(memcheck_tls)->report_read_index = 0;
-    __get_cpu_var(memcheck_tls)->report_write_index = 0;
+    this_cpu_read(memcheck_tls)->report_count = 0;
+    this_cpu_read(memcheck_tls)->report_read_index = 0;
+    this_cpu_read(memcheck_tls)->report_write_index = 0;
 }
 
 void
 memcheck_disable_reporting(void)
 {
     DR_ASSERT(irqs_disabled());
-    __get_cpu_var(memcheck_tls)->reporting_enabled = false;
+    this_cpu_read(memcheck_tls)->reporting_enabled = false;
 }
 
 void
 memcheck_enable_reporting(void)
 {
     DR_ASSERT(irqs_disabled());
-    __get_cpu_var(memcheck_tls)->reporting_enabled = true;
+    this_cpu_read(memcheck_tls)->reporting_enabled = true;
 }
 
 int
 memcheck_num_reports(void)
 {
     DR_ASSERT(irqs_disabled());
-    return __get_cpu_var(memcheck_tls)->report_count;
+    return this_cpu_read(memcheck_tls)->report_count;
 }
 
 int
 memcheck_num_disabled_reports(void)
 {
     DR_ASSERT(irqs_disabled());
-    return __get_cpu_var(memcheck_tls)->num_disabled_reports;
+    return this_cpu_read(memcheck_tls)->num_disabled_reports;
 }
 
 memcheck_report_t *
@@ -1081,7 +1081,7 @@ memcheck_get_report(void)
     memcheck_tls_t *tls;
     memcheck_report_t *report;
     DR_ASSERT(irqs_disabled());
-    tls = __get_cpu_var(memcheck_tls);
+    tls = this_cpu_read(memcheck_tls);
     if (tls->report_count == 0) {
         return NULL;
     }
@@ -1098,7 +1098,7 @@ memcheck_new_report(void)
     memcheck_tls_t *tls;
     memcheck_report_t *report;
     DR_ASSERT(irqs_disabled());
-    tls = __get_cpu_var(memcheck_tls);
+    tls = this_cpu_read(memcheck_tls);
     if (tls->report_count == MAX_NUM_MEMCHECK_REPORTS) {
         return NULL;
     }
@@ -1540,7 +1540,7 @@ thread_init(void *drcontext, umbra_info_t *info)
     tls->reporting_enabled = true;
     tls->check_def_enabled = true;
 
-    __get_cpu_var(memcheck_tls) = tls;
+    this_cpu_write(memcheck_tls, tls);
 }
 
 static void
@@ -1549,7 +1549,7 @@ thread_exit(void *drcontext, umbra_info_t *umbra_info)
     memcheck_tls_t *tls = memcheck_tls(umbra_info);
     dr_nonheap_free(tls->code_cache_start, CODE_CACHE_SIZE);
     dr_thread_free(umbra_info->drcontext, tls, sizeof(*tls));
-    __get_cpu_var(memcheck_tls) = NULL;
+    this_cpu_write(memcheck_tls, NULL);
 }
 
 static opnd_t
