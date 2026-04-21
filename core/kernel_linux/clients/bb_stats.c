@@ -39,7 +39,7 @@ DEFINE_PER_CPU(bb_stats_t *, bb_stats_tls);
 static bb_stats_t *
 get_bb_stats_tls(void)
 {
-    return __get_cpu_var(bb_stats_tls);
+    return this_cpu_read(bb_stats_tls);
 }
 
 static void
@@ -50,7 +50,7 @@ set_bb_stats_tls(bb_stats_t *tls)
      * (dcontext->client_data->user_field). We'd like to use instrcount with
      * other clients.
      */
-    __get_cpu_var(bb_stats_tls) = tls;
+    this_cpu_write(bb_stats_tls, tls);
 }
 
 static ushort *
