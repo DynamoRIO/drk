@@ -5,6 +5,7 @@
 #include <linux/skbuff.h>
 #include <linux/sched.h>
 #include <asm/stacktrace.h>
+#include <linux/stacktrace.h>
 #include "dr_api.h"
 #include "umbra.h"
 #include "global.h"
@@ -889,30 +890,6 @@ mcontext_to_pt_regs(dr_mcontext_t *mc, struct pt_regs *regs)
 }
 
 /* Copied from arch/x86/kernel/dumpstack.c */
-static void
-print_trace_warning_symbol(void *data, char *msg, unsigned long symbol)
-{
-    printk(data);
-    print_symbol(msg, symbol);
-    printk("\n");
-}
-
-/* Copied from arch/x86/kernel/dumpstack.c */
-static void
-print_trace_warning(void *data, char *msg)
-{
-    printk("%s%s\n", (char *)data, msg);
-}
-
-/* Copied from arch/x86/kernel/dumpstack.c */
-static int
-print_trace_stack(void *data, char *name)
-{
-    printk("%s <%s> ", (char *)data, name);
-    return 0;
-}
-
-/* Copied from arch/x86/kernel/dumpstack.c */
 void
 printk_address(unsigned long address, int reliable)
 {
@@ -920,62 +897,10 @@ printk_address(unsigned long address, int reliable)
     printk(" [<%p>] %s%pS\n", (void *)address, reliable ? "" : "? ", (void *)address);
 }
 
-/* Copied from arch/x86/kernel/dumpstack.c */
-static void
-print_trace_address(void *data, unsigned long addr, int reliable)
-{
-    printk_address(addr, reliable);
-}
-
-/* Copied from arch/x86/kernel/dumpstack.c */
-struct stacktrace_ops dump_trace_ops = {
-    .warning = print_trace_warning,
-    .warning_symbol = print_trace_warning_symbol,
-    .stack = print_trace_stack,
-    .address = print_trace_address,
-};
-
-static void
-save_stack_warning(void *data, char *msg)
-{
-}
-
-static void
-save_stack_warning_symbol(void *data, char *msg, unsigned long symbol)
-{
-}
-
-static int
-save_stack_stack(void *data, char *name)
-{
-    return 0;
-}
-
-static void
-save_stack_address(void *data, unsigned long addr, int reliable)
-{
-    struct stack_trace *trace = data;
-    if (!reliable)
-        return;
-    if (trace->skip > 0) {
-        trace->skip--;
-        return;
-    }
-    if (trace->nr_entries < trace->max_entries)
-        trace->entries[trace->nr_entries++] = addr;
-}
-
-static const struct stacktrace_ops save_stack_ops = {
-    .warning = save_stack_warning,
-    .warning_symbol = save_stack_warning_symbol,
-    .stack = save_stack_stack,
-    .address = save_stack_address,
-};
-
 static void
 save_stack_trace_regs(struct stack_trace *trace, struct pt_regs *regs)
 {
-    dump_trace(current, regs, (void *)regs->sp, regs->bp, &save_stack_ops, trace);
+    trace->nr_entries = stack_trace_save_regs(regs, trace->entries, trace->max_entries, trace->skip);
     if (trace->nr_entries < trace->max_entries)
         trace->entries[trace->nr_entries++] = ULONG_MAX;
 }
