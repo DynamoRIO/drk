@@ -108,6 +108,7 @@ obj-m += client_cleancall_codecache.o
 
 ################################################################################
 ## TODO i#11: Re-enable the clients once the core modules are building.
+## We are skipping umbra for now due to its tight coupling with the kernel and not a high priority.
 ## obj-m += umbra.o
 ## 	umbra-objs :=\
 ## ../../kernel_linux/clients/umbra/analyzer.o\
@@ -122,12 +123,12 @@ obj-m += client_cleancall_codecache.o
 ## ../../kernel_linux/clients/umbra/memcheck.o\
 ## ../../kernel_linux/clients/umbra/memcheck_test.o\
 ## ../../kernel_linux/clients/umbra/pagepool.o
-##
-## obj-m += bb_stats.o
-## 	bb_stats-objs :=\
-## ../../kernel_linux/clients/bb_stats.o
-##
-## obj-m += null.o
-## 	null-objs :=\
-## ../../kernel_linux/clients/null.o
 ################################################################################
+
+obj-m += bb_stats.o
+	bb_stats-objs :=\
+../../kernel_linux/clients/bb_stats.o
+
+obj-m += null.o
+	null-objs :=\
+../../kernel_linux/clients/null.o
