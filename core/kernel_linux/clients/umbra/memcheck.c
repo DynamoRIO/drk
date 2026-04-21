@@ -2,13 +2,9 @@
 #include <linux/bit_spinlock.h>
 #include <linux/kallsyms.h>
 #include <linux/mm.h>
-#include <linux/slab.h>
-#include <asm/debugreg.h>
-#include <linux/sched/signal.h>
 #include <linux/skbuff.h>
 #include <linux/sched.h>
 #include <asm/stacktrace.h>
-#include <linux/stacktrace.h>
 #include "dr_api.h"
 #include "umbra.h"
 #include "global.h"
@@ -16,99 +12,6 @@
 #include "utils.h"
 #include "dr_kernel_utils.h"
 #include "memcheck.h"
-
-#ifdef CONFIG_SLUB
-#include <linux/reciprocal_div.h>
-
-/* Replicated from include/linux/slub_def.h for Linux 6.6.130 */
-struct kmem_cache_order_objects {
-    unsigned int x;
-};
-
-struct kmem_cache {
-#ifndef CONFIG_SLUB_TINY
-	struct kmem_cache_cpu __percpu *cpu_slab;
-#endif
-	slab_flags_t flags;
-	unsigned long min_partial;
-	unsigned int size;	/* The size of an object including metadata */
-	unsigned int object_size;/* The size of an object without metadata */
-	struct reciprocal_value reciprocal_size;
-	unsigned int offset;	/* Free pointer offset */
-#ifdef CONFIG_SLUB_CPU_PARTIAL
-	unsigned int cpu_partial;
-	unsigned int cpu_partial_slabs;
-#endif
-	struct kmem_cache_order_objects oo;
-	struct kmem_cache_order_objects min;
-	gfp_t allocflags;	/* gfp flags to use on each alloc */
-	int refcount;		/* Refcount for slab cache destroy */
-	void (*ctor)(void *);
-	unsigned int inuse;		/* Offset to metadata */
-	unsigned int align;		/* Alignment */
-	unsigned int red_left_pad;	/* Left redzone padding size */
-	const char *name;	/* Name (only for display!) */
-	struct list_head list;	/* List of slab caches */
-#ifdef CONFIG_SYSFS
-	struct kobject kobj;	/* For sysfs */
-#endif
-#ifdef CONFIG_SLAB_FREELIST_HARDENED
-	unsigned long random;
-#endif
-#ifdef CONFIG_NUMA
-	unsigned int remote_node_defrag_ratio;
-#endif
-#ifdef CONFIG_SLAB_FREELIST_RANDOM
-	unsigned int *random_seq;
-#endif
-#ifdef CONFIG_KASAN_GENERIC
-	struct kasan_cache kasan_info;
-#endif
-#ifdef CONFIG_HARDENED_USERCOPY
-	unsigned int useroffset;
-	unsigned int usersize;
-#endif
-	struct kmem_cache_node *node[MAX_NUMNODES];
-};
-
-/* Replicated from mm/slab.h for Linux 6.6.130 */
-struct slab {
-    unsigned long __page_flags;
-    struct kmem_cache *slab_cache;
-    union {
-        struct {
-            union {
-                struct list_head slab_list;
-            };
-            union {
-                struct {
-                    void *freelist;
-                    union {
-                        unsigned long counters;
-                        struct {
-                            unsigned inuse:16;
-                            unsigned objects:15;
-                            unsigned frozen:1;
-                        };
-                    };
-                };
-            };
-        };
-        struct rcu_head rcu_head;
-    };
-};
-
-struct kmem_cache_node {
-    spinlock_t list_lock;
-    unsigned long nr_partial;
-    struct list_head partial;
-#ifdef CONFIG_SLUB_DEBUG
-    atomic_long_t nr_slabs;
-    atomic_long_t total_objects;
-    struct list_head full;
-#endif
-};
-#endif
 
 #define MAX_NUM_MEMCHECK_REPORTS 64
 
@@ -182,7 +85,7 @@ DEFINE_PER_CPU(memcheck_tls_t *, memcheck_tls);
 #define CODE_CACHE_SIZE PAGE_SIZE * 2
 
 static inline memcheck_tls_t *
-get_memcheck_tls_from_info(umbra_info_t *info)
+memcheck_tls(umbra_info_t *info)
 {
     return (memcheck_tls_t *)info->client_tls_data;
 }
@@ -190,7 +93,7 @@ get_memcheck_tls_from_info(umbra_info_t *info)
 static inline memcheck_tls_t *
 get_memcheck_tls(void)
 {
-    return get_memcheck_tls_from_info(umbra_get_info());
+    return memcheck_tls(umbra_get_info());
 }
 
 /* The number of CPUs that we've called flush_cpu_slab on. We don't use a proper
@@ -381,7 +284,7 @@ is_memory_ok_to_alloc(void *start, size_t size)
              * returned from unknown memory as opposed to unaddressable because
              * kmalloc_large uses __get_free_pages directly. */
             if (size <= SLUB_MAX_SIZE && perm == PERMISSION_UNKNOWN) {
-                return false;
+                return false; 
             }
 #    endif
         });
@@ -557,14 +460,14 @@ post___kmalloc_node_track_caller(dr_mcontext_t *mc, bool args_valid, void *ret,
 static inline void
 pre_kmem_cache_alloc(dr_mcontext_t *mc, struct kmem_cache *cachep, gfp_t flags)
 {
-    pre___kmalloc(mc, cachep->object_size, flags);
+    pre___kmalloc(mc, cachep->objsize, flags);
 }
 
 static inline void
 post_kmem_cache_alloc(dr_mcontext_t *mc, bool args_valid, void *ret,
                       struct kmem_cache *cachep, gfp_t flags)
 {
-    track_allocation(args_valid, ret, args_valid ? cachep->object_size : 0, flags,
+    track_allocation(args_valid, ret, args_valid ? cachep->objsize : 0, flags,
                      args_valid ? cachep->ctor != NULL : true);
 }
 
@@ -587,7 +490,7 @@ pre_kmem_cache_free(dr_mcontext_t *mc, struct kmem_cache *cachep, void *objp)
 {
     /* Do this in pre_kmem_cache_free to be consistent with pre_kfree. */
 #ifdef DEBUG
-    DR_ASSERT(is_memory_ok_to_free(objp, cachep->object_size));
+    DR_ASSERT(is_memory_ok_to_free(objp, cachep->objsize));
 #endif
     set_memory_permission((void *)objp, cachep->size, PERMISSION_UNADDRESSABLE_SLAB_FREE);
 }
@@ -986,6 +889,30 @@ mcontext_to_pt_regs(dr_mcontext_t *mc, struct pt_regs *regs)
 }
 
 /* Copied from arch/x86/kernel/dumpstack.c */
+static void
+print_trace_warning_symbol(void *data, char *msg, unsigned long symbol)
+{
+    printk(data);
+    print_symbol(msg, symbol);
+    printk("\n");
+}
+
+/* Copied from arch/x86/kernel/dumpstack.c */
+static void
+print_trace_warning(void *data, char *msg)
+{
+    printk("%s%s\n", (char *)data, msg);
+}
+
+/* Copied from arch/x86/kernel/dumpstack.c */
+static int
+print_trace_stack(void *data, char *name)
+{
+    printk("%s <%s> ", (char *)data, name);
+    return 0;
+}
+
+/* Copied from arch/x86/kernel/dumpstack.c */
 void
 printk_address(unsigned long address, int reliable)
 {
@@ -993,15 +920,65 @@ printk_address(unsigned long address, int reliable)
     printk(" [<%p>] %s%pS\n", (void *)address, reliable ? "" : "? ", (void *)address);
 }
 
-#ifndef CONFIG_ARCH_STACKWALK
+/* Copied from arch/x86/kernel/dumpstack.c */
+static void
+print_trace_address(void *data, unsigned long addr, int reliable)
+{
+    printk_address(addr, reliable);
+}
+
+/* Copied from arch/x86/kernel/dumpstack.c */
+struct stacktrace_ops dump_trace_ops = {
+    .warning = print_trace_warning,
+    .warning_symbol = print_trace_warning_symbol,
+    .stack = print_trace_stack,
+    .address = print_trace_address,
+};
+
+static void
+save_stack_warning(void *data, char *msg)
+{
+}
+
+static void
+save_stack_warning_symbol(void *data, char *msg, unsigned long symbol)
+{
+}
+
+static int
+save_stack_stack(void *data, char *name)
+{
+    return 0;
+}
+
+static void
+save_stack_address(void *data, unsigned long addr, int reliable)
+{
+    struct stack_trace *trace = data;
+    if (!reliable)
+        return;
+    if (trace->skip > 0) {
+        trace->skip--;
+        return;
+    }
+    if (trace->nr_entries < trace->max_entries)
+        trace->entries[trace->nr_entries++] = addr;
+}
+
+static const struct stacktrace_ops save_stack_ops = {
+    .warning = save_stack_warning,
+    .warning_symbol = save_stack_warning_symbol,
+    .stack = save_stack_stack,
+    .address = save_stack_address,
+};
+
 static void
 save_stack_trace_regs(struct stack_trace *trace, struct pt_regs *regs)
 {
-    trace->nr_entries = stack_trace_save_regs(regs, trace->entries, trace->max_entries, trace->skip);
+    dump_trace(current, regs, (void *)regs->sp, regs->bp, &save_stack_ops, trace);
     if (trace->nr_entries < trace->max_entries)
         trace->entries[trace->nr_entries++] = ULONG_MAX;
 }
-#endif
 
 /* Copied from process_64.c */
 void
@@ -1013,9 +990,9 @@ __show_regs(struct pt_regs *regs, int all)
     unsigned int ds, cs, es;
 
     printk("\n");
-    printk(KERN_INFO "RIP: %04lx:[<%016lx>] ", (unsigned long)(regs->cs & 0xffff), regs->ip);
+    printk(KERN_INFO "RIP: %04lx:[<%016lx>] ", regs->cs & 0xffff, regs->ip);
     printk_address(regs->ip, 1);
-    printk(KERN_INFO "RSP: %04lx:%016lx  EFLAGS: %08lx\n", (unsigned long)regs->ss, regs->sp,
+    printk(KERN_INFO "RSP: %04lx:%016lx  EFLAGS: %08lx\n", regs->ss, regs->sp,
            regs->flags);
     printk(KERN_INFO "RAX: %016lx RBX: %016lx RCX: %016lx\n", regs->ax, regs->bx,
            regs->cx);
@@ -1043,8 +1020,8 @@ __show_regs(struct pt_regs *regs, int all)
 
     cr0 = read_cr0();
     cr2 = read_cr2();
-    cr3 = __read_cr3();
-    cr4 = __read_cr4();
+    cr3 = read_cr3();
+    cr4 = read_cr4();
 
     printk(KERN_INFO "FS:  %016lx(%04x) GS:%016lx(%04x) knlGS:%016lx\n", fs, fsindex, gs,
            gsindex, shadowgs);
@@ -1065,37 +1042,37 @@ void
 memcheck_reset_reports(void)
 {
     DR_ASSERT(irqs_disabled());
-    this_cpu_read(memcheck_tls)->report_count = 0;
-    this_cpu_read(memcheck_tls)->report_read_index = 0;
-    this_cpu_read(memcheck_tls)->report_write_index = 0;
+    __get_cpu_var(memcheck_tls)->report_count = 0;
+    __get_cpu_var(memcheck_tls)->report_read_index = 0;
+    __get_cpu_var(memcheck_tls)->report_write_index = 0;
 }
 
 void
 memcheck_disable_reporting(void)
 {
     DR_ASSERT(irqs_disabled());
-    this_cpu_read(memcheck_tls)->reporting_enabled = false;
+    __get_cpu_var(memcheck_tls)->reporting_enabled = false;
 }
 
 void
 memcheck_enable_reporting(void)
 {
     DR_ASSERT(irqs_disabled());
-    this_cpu_read(memcheck_tls)->reporting_enabled = true;
+    __get_cpu_var(memcheck_tls)->reporting_enabled = true;
 }
 
 int
 memcheck_num_reports(void)
 {
     DR_ASSERT(irqs_disabled());
-    return this_cpu_read(memcheck_tls)->report_count;
+    return __get_cpu_var(memcheck_tls)->report_count;
 }
 
 int
 memcheck_num_disabled_reports(void)
 {
     DR_ASSERT(irqs_disabled());
-    return this_cpu_read(memcheck_tls)->num_disabled_reports;
+    return __get_cpu_var(memcheck_tls)->num_disabled_reports;
 }
 
 memcheck_report_t *
@@ -1104,7 +1081,7 @@ memcheck_get_report(void)
     memcheck_tls_t *tls;
     memcheck_report_t *report;
     DR_ASSERT(irqs_disabled());
-    tls = this_cpu_read(memcheck_tls);
+    tls = __get_cpu_var(memcheck_tls);
     if (tls->report_count == 0) {
         return NULL;
     }
@@ -1121,7 +1098,7 @@ memcheck_new_report(void)
     memcheck_tls_t *tls;
     memcheck_report_t *report;
     DR_ASSERT(irqs_disabled());
-    tls = this_cpu_read(memcheck_tls);
+    tls = __get_cpu_var(memcheck_tls);
     if (tls->report_count == MAX_NUM_MEMCHECK_REPORTS) {
         return NULL;
     }
@@ -1140,7 +1117,6 @@ get_canonical_opsz(opnd_size_t opsz)
     case 0:
         /* This should be handled by ref_is_interested. */
         DR_ASSERT(false);
-        __builtin_unreachable();
     case 1: return OPSZ_1;
     case 2: return OPSZ_2;
     case 4: return OPSZ_4;
@@ -1202,11 +1178,7 @@ printk_error_report(memcheck_report_t *report)
     default: DR_ASSERT(false); printk("unknown error type!");
     }
     __show_regs(&report->regs, 1);
-#ifndef CONFIG_ARCH_STACKWALK
     print_stack_trace(&report->trace, 2);
-#else
-    stack_trace_print(report->trace_entries, report->nr_entries, 2);
-#endif
 }
 
 static void
@@ -1251,15 +1223,11 @@ report_memcheck_error(void *drcontext, memcheck_tls_t *tls, dr_mcontext_t *mc, b
     mcontext_to_pt_regs(mc, &report->regs);
     report->addr = addr;
     report->type = type;
-#ifndef CONFIG_ARCH_STACKWALK
     report->trace.entries = report->trace_entries;
     report->trace.skip = 0;
     report->trace.nr_entries = 0;
     report->trace.max_entries = ARRAY_SIZE(report->trace_entries);
-    save_stack_trace_regs(&report->regs, &report->trace);
-#else
-    report->nr_entries = stack_trace_save_regs(&report->regs, report->trace_entries, ARRAY_SIZE(report->trace_entries), 0);
-#endif
+    save_stack_trace_regs(&report->trace, &report->regs);
     printk_error_report(report);
 }
 
@@ -1278,7 +1246,7 @@ memcheck_slowpath(mem_ref_t *ref)
     memcheck_error_type_t type;
     void *drcontext = dr_get_current_drcontext();
     umbra_info_t *umbra_info = umbra_get_info();
-    memcheck_tls_t *tls = get_memcheck_tls_from_info(umbra_info);
+    memcheck_tls_t *tls = memcheck_tls(umbra_info);
 #ifdef DEBUG
     void *tag = dr_tag_from_cache_pc(tls->cache_pc);
     DR_ASSERT(tag != NULL);
@@ -1317,7 +1285,7 @@ memcheck_slowpath(mem_ref_t *ref)
 
     if (type == MEMCHECK_ERROR_EOS) {
         DR_ASSERT(MEMCHECK_OPTION(check_stack));
-        mc.rsp = current_top_of_stack();
+        mc.rsp = percpu_read(kernel_stack);
         mc.pc = (byte *)(&induce_oops);
         dr_redirect_execution(&mc, 0);
     }
@@ -1452,10 +1420,11 @@ memcheck_shadow_eos_init(void *drcontext, memcheck_tls_t *tls)
     if (!MEMCHECK_OPTION(check_stack)) {
         return;
     }
-    for_each_process_thread(g, p)
+    do_each_thread(g, p)
     {
         enable_stack_guard(p);
     }
+    while_each_thread(g, p);
 }
 
 static void
@@ -1478,7 +1447,7 @@ memcheck_shadow_slub_init(void *drcontext, memcheck_tls_t *tls)
         for_each_node_state(node, N_NORMAL_MEMORY)
         {
             struct kmem_cache_node *n = get_node(s, node);
-            struct slab *slab;
+            struct page *page;
             if (spin_is_locked(&n->list_lock)) {
                 printk("Cache %s is busy on node %d, skipping\n", s->name, node);
                 /* This is an error because any CPU that owns this spinlock
@@ -1493,12 +1462,12 @@ memcheck_shadow_slub_init(void *drcontext, memcheck_tls_t *tls)
              * a full list only has addressable and, as far as we know, defined
              * bytes on it, so PERMISSION_UNKNOWN is okay.
              */
-            list_for_each_entry(slab, &n->partial, slab_list)
+            list_for_each_entry(page, &n->partial, lru)
             {
                 size_t slab_size;
                 void *object;
-                if (slab_is_locked((struct page *)slab)) {
-                    printk("Slab 0x%p busy on %s, skipping\n", slab, s->name);
+                if (slab_is_locked(page)) {
+                    printk("Slab 0x%p busy on %s, skipping\n", page, s->name);
                     /* This is a spinlock too, so this is an error too. */
                     DR_ASSERT(false);
                     continue;
@@ -1509,25 +1478,25 @@ memcheck_shadow_slub_init(void *drcontext, memcheck_tls_t *tls)
                  * wrappers isn't a good idea because they will incur page
                  * faults rarely.
                  */
-                slab_size = PAGE_SIZE << compound_order((struct page *)slab);
+                slab_size = PAGE_SIZE << compound_order(page);
                 /* First, set the entire slab unaddressable. */
-                set_memory_permission(page_address((struct page *)slab), slab_size,
+                set_memory_permission(page_address(page), slab_size,
                                       PERMISSION_UNADDRESSABLE_INIT);
                 tls->num_init_unaddressable_bytes += slab_size;
                 /* Next, make just the non-meta data of all objects defined.  */
-                for_each_object(object, s, page_address((struct page *)slab), slab->objects)
+                for_each_object(object, s, page_address(page), page->objects)
                 {
-                    set_memory_permission(object, s->object_size, PERMISSION_DEFINED);
-                    tls->num_init_unaddressable_bytes -= s->object_size;
-                    tls->num_init_addressable_bytes += s->object_size;
+                    set_memory_permission(object, s->objsize, PERMISSION_DEFINED);
+                    tls->num_init_unaddressable_bytes -= s->objsize;
+                    tls->num_init_addressable_bytes += s->objsize;
                 }
                 /* Finally, remove the addressability of all free objects. */
-                for_each_free_object(object, s, slab->freelist)
+                for_each_free_object(object, s, page->freelist)
                 {
-                    set_memory_permission(object, s->object_size,
+                    set_memory_permission(object, s->objsize,
                                           PERMISSION_UNADDRESSABLE_INIT);
-                    tls->num_init_addressable_bytes -= s->object_size;
-                    tls->num_init_unaddressable_bytes += s->object_size;
+                    tls->num_init_addressable_bytes -= s->objsize;
+                    tls->num_init_unaddressable_bytes += s->objsize;
                 }
             }
         }
@@ -1551,7 +1520,7 @@ thread_init(void *drcontext, umbra_info_t *info)
     mtls[dr_get_thread_id(drcontext)] = tls;
 #endif
     DR_ASSERT(get_memcheck_tls() == tls);
-    DR_ASSERT(get_memcheck_tls_from_info(info) == tls);
+    DR_ASSERT(memcheck_tls(info) == tls);
     tls->in_slub_function = false;
     tls->in_slub_function_sticky = false;
     memcheck_code_cache_init(drcontext, tls);
@@ -1571,16 +1540,16 @@ thread_init(void *drcontext, umbra_info_t *info)
     tls->reporting_enabled = true;
     tls->check_def_enabled = true;
 
-    this_cpu_write(memcheck_tls, tls);
+    __get_cpu_var(memcheck_tls) = tls;
 }
 
 static void
 thread_exit(void *drcontext, umbra_info_t *umbra_info)
 {
-    memcheck_tls_t *tls = get_memcheck_tls_from_info(umbra_info);
+    memcheck_tls_t *tls = memcheck_tls(umbra_info);
     dr_nonheap_free(tls->code_cache_start, CODE_CACHE_SIZE);
     dr_thread_free(umbra_info->drcontext, tls, sizeof(*tls));
-    this_cpu_write(memcheck_tls, NULL);
+    __get_cpu_var(memcheck_tls) = NULL;
 }
 
 static opnd_t
@@ -1666,7 +1635,7 @@ instrument_update(void *drcontext, umbra_info_t *umbra_info, mem_ref_t *ref,
     instr_t *instr;
     opnd_t opnd1, opnd2;
     instr_t *done, *slowpath, *after_slowpath, *unknown;
-    memcheck_tls_t *tls = get_memcheck_tls_from_info(umbra_info);
+    memcheck_tls_t *tls = memcheck_tls(umbra_info);
     reg_id_t shadow_reg = umbra_info->steal_regs[0];
     reg_id_t scratch_reg = umbra_info->steal_regs[1];
     opnd_size_t opsz = get_canonical_opsz(opnd_get_size(ref->opnd));
@@ -2021,7 +1990,7 @@ static void
 app_to_app_transformation(void *drcontext, umbra_info_t *umbra_info, void *tag,
                           instrlist_t *ilist, bool for_trace)
 {
-    memcheck_tls_t *tls = get_memcheck_tls_from_info(umbra_info);
+    memcheck_tls_t *tls = memcheck_tls(umbra_info);
     convert_repstr_to_loop(drcontext, tls, ilist);
 }
 
@@ -2040,7 +2009,7 @@ shadow_page_alloc(umbra_info_t *info, void *start, size_t size)
 static bool
 memcheck_interrupt(umbra_info_t *umbra_info, dr_interrupt_t *interrupt)
 {
-    memcheck_tls_t *tls = get_memcheck_tls_from_info(umbra_info);
+    memcheck_tls_t *tls = memcheck_tls(umbra_info);
     byte *xip = interrupt->frame->xip;
 
     if (xip >= tls->code_cache_start && xip < tls->code_cache_end) {

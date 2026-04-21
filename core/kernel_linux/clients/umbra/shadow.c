@@ -56,8 +56,6 @@
 #    include <sys/mman.h>
 #else
 #    include <linux/sched.h>
-#    include <linux/sched/signal.h>
-#    include <linux/mman.h>
 #    include <linux/gfp.h>
 #    include <linux/mm.h>
 #    include <linux/vmalloc.h>
@@ -90,7 +88,7 @@ possible_shadow_address(void *address)
 
 #    define SHADOW_MEMORY_SIZE (512 * 1024 * 1024)
 pagepool_t *pagepool;
-umbra_pfn_t global_ro_pfn;
+pfn_t global_ro_pfn;
 #endif
 
 /* Data structure for memory map fast lookup via hashtable */
@@ -1632,21 +1630,21 @@ remove_shadow_mappings(void)
 {
     struct task_struct *g, *p;
     generic_page_table_entry_t *l4;
-    rcu_read_lock();
-    for_each_process_thread(g, p)
+    int i;
+    do_each_thread(g, p)
     {
         if (!p->mm) {
             continue;
         }
         l4 = (generic_page_table_entry_t *)p->mm->pgd;
-        for (int i = 0; i < PAGE_TABLE_ENTIRES_PER_LEVEL; i++) {
+        for (i = 0; i < PAGE_TABLE_ENTIRES_PER_LEVEL; i++) {
             if (global_l4[i].present) {
                 memset(&l4[i], 0, sizeof(generic_page_table_entry_t));
                 DR_ASSERT(!l4[i].present);
             }
         }
     }
-    rcu_read_unlock();
+    while_each_thread(g, p);
 }
 #endif
 
@@ -1837,7 +1835,7 @@ expand_app_stack(void)
 #ifdef LINUX_KERNEL
 
 static void
-create_pte(generic_page_table_entry_t *entry, vm_access_t *access, umbra_pfn_t next_pfn,
+create_pte(generic_page_table_entry_t *entry, vm_access_t *access, pfn_t next_pfn,
            bool zero_entry)
 {
     /* TODO(peter): Are we setting this to the right kind of memory wrt caching?
@@ -1906,17 +1904,14 @@ insert_page_table_mapping(umbra_info_t *umbra, generic_page_table_entry_t *l4,
             global_l4[va.l4_index] = *parent;
             parent = &follow_page_table_entry(parent)[va.l3_index];
             umbra->num_pages_for_page_table++;
-            fallthrough;
         case 3:
             create_pte(parent, &rw_access, pagepool_alloc(pool), true);
             parent = &follow_page_table_entry(parent)[va.l2_index];
             umbra->num_pages_for_page_table++;
-            fallthrough;
         case 2:
             create_pte(parent, &rw_access, pagepool_alloc(pool), true);
             parent = &follow_page_table_entry(parent)[va.l1_index];
             umbra->num_pages_for_page_table++;
-            fallthrough;
         case 1:
             if (is_write) {
                 create_pte(parent, &rw_access, pagepool_alloc(pool), false);

@@ -19,11 +19,7 @@ typedef struct {
     memcheck_error_type_t type;
     void *addr;
     struct pt_regs regs;
-#ifndef CONFIG_ARCH_STACKWALK
     struct stack_trace trace;
-#else
-    unsigned int nr_entries;
-#endif
     unsigned long trace_entries[32];
 } memcheck_report_t;
 

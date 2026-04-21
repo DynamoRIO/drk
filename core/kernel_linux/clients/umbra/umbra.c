@@ -153,25 +153,25 @@ print_stat_count(void *drcontext, umbra_info_t *info)
     dr_fprintf(
         info->log,
         "\ttotal inline check: %llu, "
-        "miss: %llu, hit ratio: %d%%\n",
+        "miss: %llu, hit ratio: %f\n",
         info->num_bb_inline_checks + info->num_trace_inline_checks, info->num_map_checks,
-        (info->num_bb_inline_checks + info->num_trace_inline_checks == 0)
+        (info->num_bb_inline_checks == 0)
             ? 0
-            : (int)((info->num_bb_inline_checks + info->num_trace_inline_checks -
-                     info->num_map_checks) * 100 /
-                    (info->num_bb_inline_checks + info->num_trace_inline_checks)));
-    dr_fprintf(info->log, "Num of map checks: %llu, miss: %llu, hit ratio: %d%%\n",
+            : ((double)(info->num_bb_inline_checks + info->num_trace_inline_checks -
+                        info->num_map_checks) /
+               (double)(info->num_bb_inline_checks + info->num_trace_inline_checks)));
+    dr_fprintf(info->log, "Num of map checks: %llu, miss: %llu, hit ratio: %f\n",
                info->num_map_checks, info->num_map_searchs,
                (info->num_map_checks == 0)
                    ? 0
-                   : (int)((info->num_map_checks - info->num_map_searchs) * 100 /
-                           info->num_map_checks));
-    dr_fprintf(info->log, "Num of map searchs: %llu, miss: %llu, hit ratio: %d%%\n",
+                   : ((double)(info->num_map_checks - info->num_map_searchs) /
+                      (double)(info->num_map_checks)));
+    dr_fprintf(info->log, "Num of map searchs: %llu, miss: %llu, hit ratio: %f\n",
                info->num_map_searchs, info->num_clean_calls,
                (info->num_map_searchs == 0)
                    ? 0
-                   : (int)((info->num_map_searchs - info->num_clean_calls) * 100 /
-                           info->num_map_searchs));
+                   : ((double)(info->num_map_searchs - info->num_clean_calls) /
+                      (double)(info->num_map_searchs)));
     dr_fprintf(info->log, "Num of clean calls: %llu\n", info->num_clean_calls);
     dr_fprintf(info->log, "Num of aflags restore: %llu\n", info->num_aflags_restores);
     dr_fprintf(info->log, "Num of reg restore: %llu\n", info->num_reg_restores);
@@ -247,7 +247,7 @@ umbra_thread_init(void *drcontext)
     info = (umbra_info_t *)dr_thread_alloc(drcontext, sizeof(umbra_info_t));
 
 #ifdef LINUX_KERNEL
-    this_cpu_write(cpu_umbra_info, info);
+    __get_cpu_var(cpu_umbra_info) = info;
 #endif
 
     dr_set_tls_field(drcontext, info);
@@ -278,7 +278,7 @@ umbra_thread_exit(void *drcontext)
     dr_set_tls_field(drcontext, NULL);
     dr_thread_free(drcontext, info, sizeof(umbra_info_t));
 #ifdef LINUX_KERNEL
-    this_cpu_write(cpu_umbra_info, NULL);
+    __get_cpu_var(cpu_umbra_info) = NULL;
 #endif
 }
 
@@ -454,7 +454,7 @@ static ssize_t
 show_umbra_stats(int cpu, char *buf)
 {
     char *orig_buf = buf;
-    umbra_info_t *umbra_info = this_cpu_read(cpu_umbra_info);
+    umbra_info_t *umbra_info = __get_cpu_var(cpu_umbra_info);
     if (!umbra_info) {
         return sprintf(buf, "cpu %d not yet initilized!\n", cpu);
     }

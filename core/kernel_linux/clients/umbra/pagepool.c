@@ -7,7 +7,7 @@
 
 typedef union _poolpage_t {
     struct {
-        umbra_pfn_t next_pfn;
+        pfn_t next_pfn;
     };
     byte bytes[PAGE_SIZE];
 } poolpage_t;
@@ -19,7 +19,7 @@ page_to_poolpage(struct page *page)
 }
 
 static inline poolpage_t *
-pfn_to_poolpage(umbra_pfn_t pfn)
+pfn_to_poolpage(pfn_t pfn)
 {
     return page_to_poolpage(pfn_to_page(pfn));
 }
@@ -28,7 +28,7 @@ pagepool_t *
 pagepool_kernel_init(size_t num_pages)
 {
     pagepool_t *pool;
-    umbra_pfn_t *prev = NULL;
+    pfn_t *prev = NULL;
     size_t i;
 
     pool = kmalloc(sizeof(pagepool_t), GFP_KERNEL);
@@ -61,10 +61,10 @@ pagepool_empty(pagepool_t *pagepool)
     return pagepool->free_pages == 0;
 }
 
-umbra_pfn_t
+pfn_t
 pagepool_alloc(pagepool_t *pagepool)
 {
-    umbra_pfn_t pfn;
+    pfn_t pfn;
     if (pagepool_empty(pagepool)) {
         DR_ASSERT(false && "pagepool is empty, cannot alloc");
         return -1;
@@ -86,7 +86,7 @@ pagepool_kernel_exit(pagepool_t *pool)
 }
 
 void
-pagepool_free(pagepool_t *pool, umbra_pfn_t pfn)
+pagepool_free(pagepool_t *pool, pfn_t pfn)
 {
     pfn_to_poolpage(pfn)->next_pfn = pool->next_pfn;
     pool->next_pfn = pfn;

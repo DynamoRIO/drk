@@ -106,23 +106,23 @@ obj-m += client_cleancall_codecache.o
 	client_cleancall_codecache-objs :=\
 ../../kernel_linux/clients/client_cleancall_codecache.o
 
-obj-m += umbra.o
-	umbra-objs :=\
-../../kernel_linux/clients/umbra/analyzer.o\
-../../kernel_linux/clients/umbra/cfg.o\
-../../kernel_linux/clients/umbra/dr_client.o\
-../../kernel_linux/clients/umbra/instrument.o\
-../../kernel_linux/clients/umbra/optimize.o\
-../../kernel_linux/clients/umbra/shadow.o\
-../../kernel_linux/clients/umbra/table.o\
-../../kernel_linux/clients/umbra/umbra.o\
-../../kernel_linux/clients/umbra/utils.o\
-../../kernel_linux/clients/umbra/memcheck.o\
-../../kernel_linux/clients/umbra/memcheck_test.o\
-../../kernel_linux/clients/umbra/pagepool.o
-
 ################################################################################
 ## TODO i#11: Re-enable the clients once the core modules are building.
+## obj-m += umbra.o
+## 	umbra-objs :=\
+## ../../kernel_linux/clients/umbra/analyzer.o\
+## ../../kernel_linux/clients/umbra/cfg.o\
+## ../../kernel_linux/clients/umbra/dr_client.o\
+## ../../kernel_linux/clients/umbra/instrument.o\
+## ../../kernel_linux/clients/umbra/optimize.o\
+## ../../kernel_linux/clients/umbra/shadow.o\
+## ../../kernel_linux/clients/umbra/table.o\
+## ../../kernel_linux/clients/umbra/umbra.o\
+## ../../kernel_linux/clients/umbra/utils.o\
+## ../../kernel_linux/clients/umbra/memcheck.o\
+## ../../kernel_linux/clients/umbra/memcheck_test.o\
+## ../../kernel_linux/clients/umbra/pagepool.o
+##
 ## obj-m += bb_stats.o
 ## 	bb_stats-objs :=\
 ## ../../kernel_linux/clients/bb_stats.o

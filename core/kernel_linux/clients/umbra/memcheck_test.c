@@ -1,7 +1,7 @@
+#include "memcheck.h"
 #include <linux/irqflags.h>
 #include <linux/module.h>
 #include <linux/mm.h>
-#include "memcheck.h"
 
 static unsigned long expected_val;
 static unsigned long actual_val;
@@ -23,12 +23,12 @@ static unsigned long actual_val;
         memcheck_enable_reporting();                                                \
     } while (0)
 
-#define TEST_PTR_EQ(expected, actual) TEST_OP(expected, ==, actual, %p)
-#define TEST_PTR_NE(expected, actual) TEST_OP(expected, !=, actual, %p)
-#define TEST_NOT_NULL(actual) TEST_PTR_NE(NULL, actual)
+#define TEST_PTR_EQ(expected, actual) TEST_OP(expected, ==, actual, % p)
+#define TEST_PTR_NE(expected, actual) TEST_OP(expected, !=, actual, % p)
+#define TEST_NOT_NULL(actual) TEST_PTR_NE(NULL, actual);
 
-#define TEST_INT_EQ(expected, actual) TEST_OP(expected, ==, actual, %d)
-#define TEST_INT_GE(min_expected, actual) TEST_OP(min_expected, <=, actual, %d)
+#define TEST_INT_EQ(expected, actual) TEST_OP(expected, ==, actual, % d)
+#define TEST_INT_GE(min_expected, actual) TEST_OP(min_expected, <=, actual, % d)
 
 #define TEST_ASSERT(x)                                                                \
     do {                                                                              \
@@ -174,15 +174,6 @@ volatile unsigned long y8;
 #define X2 X2P(0)
 #define X4 X4P(0)
 #define X8 X8P(0)
-
-struct kmem_cache {
-#ifndef CONFIG_SLUB_TINY
-	void __percpu *cpu_slab;
-#endif
-	unsigned long flags;
-	unsigned long min_partial;
-	unsigned int size;
-};
 
 ssize_t
 memcheck_test_main(char *buf, bool check_addr, bool check_defined)
@@ -527,7 +518,7 @@ memcheck_test_main(char *buf, bool check_addr, bool check_defined)
      * unknown after kfree.
      */
     {
-        x = __kmalloc(KMALLOC_MAX_SIZE + 1, GFP_ATOMIC | __GFP_ZERO);
+        x = __kmalloc(SLUB_MAX_SIZE + 1, GFP_ATOMIC | __GFP_ZERO);
         y = x[0];
         x[0] = y;
         TEST_NO_REPORTS();
