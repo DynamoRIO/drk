@@ -1904,14 +1904,17 @@ insert_page_table_mapping(umbra_info_t *umbra, generic_page_table_entry_t *l4,
             global_l4[va.l4_index] = *parent;
             parent = &follow_page_table_entry(parent)[va.l3_index];
             umbra->num_pages_for_page_table++;
+            fallthrough;
         case 3:
             create_pte(parent, &rw_access, pagepool_alloc(pool), true);
             parent = &follow_page_table_entry(parent)[va.l2_index];
             umbra->num_pages_for_page_table++;
+            fallthrough;
         case 2:
             create_pte(parent, &rw_access, pagepool_alloc(pool), true);
             parent = &follow_page_table_entry(parent)[va.l1_index];
             umbra->num_pages_for_page_table++;
+            fallthrough;
         case 1:
             if (is_write) {
                 create_pte(parent, &rw_access, pagepool_alloc(pool), false);
