@@ -56,6 +56,8 @@
 #    include <sys/mman.h>
 #else
 #    include <linux/sched.h>
+#    include <linux/sched/signal.h>
+#    include <linux/mman.h>
 #    include <linux/gfp.h>
 #    include <linux/mm.h>
 #    include <linux/vmalloc.h>
@@ -88,7 +90,7 @@ possible_shadow_address(void *address)
 
 #    define SHADOW_MEMORY_SIZE (512 * 1024 * 1024)
 pagepool_t *pagepool;
-pfn_t global_ro_pfn;
+umbra_pfn_t global_ro_pfn;
 #endif
 
 /* Data structure for memory map fast lookup via hashtable */

@@ -153,25 +153,25 @@ print_stat_count(void *drcontext, umbra_info_t *info)
     dr_fprintf(
         info->log,
         "\ttotal inline check: %llu, "
-        "miss: %llu, hit ratio: %f\n",
+        "miss: %llu, hit ratio: %d%%\n",
         info->num_bb_inline_checks + info->num_trace_inline_checks, info->num_map_checks,
-        (info->num_bb_inline_checks == 0)
+        (info->num_bb_inline_checks + info->num_trace_inline_checks == 0)
             ? 0
-            : ((double)(info->num_bb_inline_checks + info->num_trace_inline_checks -
-                        info->num_map_checks) /
-               (double)(info->num_bb_inline_checks + info->num_trace_inline_checks)));
-    dr_fprintf(info->log, "Num of map checks: %llu, miss: %llu, hit ratio: %f\n",
+            : (int)((info->num_bb_inline_checks + info->num_trace_inline_checks -
+                     info->num_map_checks) * 100 /
+                    (info->num_bb_inline_checks + info->num_trace_inline_checks)));
+    dr_fprintf(info->log, "Num of map checks: %llu, miss: %llu, hit ratio: %d%%\n",
                info->num_map_checks, info->num_map_searchs,
                (info->num_map_checks == 0)
                    ? 0
-                   : ((double)(info->num_map_checks - info->num_map_searchs) /
-                      (double)(info->num_map_checks)));
-    dr_fprintf(info->log, "Num of map searchs: %llu, miss: %llu, hit ratio: %f\n",
+                   : (int)((info->num_map_checks - info->num_map_searchs) * 100 /
+                           info->num_map_checks));
+    dr_fprintf(info->log, "Num of map searchs: %llu, miss: %llu, hit ratio: %d%%\n",
                info->num_map_searchs, info->num_clean_calls,
                (info->num_map_searchs == 0)
                    ? 0
-                   : ((double)(info->num_map_searchs - info->num_clean_calls) /
-                      (double)(info->num_map_searchs)));
+                   : (int)((info->num_map_searchs - info->num_clean_calls) * 100 /
+                           info->num_map_searchs));
     dr_fprintf(info->log, "Num of clean calls: %llu\n", info->num_clean_calls);
     dr_fprintf(info->log, "Num of aflags restore: %llu\n", info->num_aflags_restores);
     dr_fprintf(info->log, "Num of reg restore: %llu\n", info->num_reg_restores);

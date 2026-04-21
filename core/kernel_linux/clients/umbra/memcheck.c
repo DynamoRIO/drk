@@ -2,6 +2,9 @@
 #include <linux/bit_spinlock.h>
 #include <linux/kallsyms.h>
 #include <linux/mm.h>
+#include <linux/slab.h>
+#include <asm/debugreg.h>
+#include <linux/sched/signal.h>
 #include <linux/skbuff.h>
 #include <linux/sched.h>
 #include <asm/stacktrace.h>
@@ -13,6 +16,99 @@
 #include "utils.h"
 #include "dr_kernel_utils.h"
 #include "memcheck.h"
+
+#ifdef CONFIG_SLUB
+#include <linux/reciprocal_div.h>
+
+/* Replicated from include/linux/slub_def.h for Linux 6.6.130 */
+struct kmem_cache_order_objects {
+    unsigned int x;
+};
+
+struct kmem_cache {
+#ifndef CONFIG_SLUB_TINY
+	struct kmem_cache_cpu __percpu *cpu_slab;
+#endif
+	slab_flags_t flags;
+	unsigned long min_partial;
+	unsigned int size;	/* The size of an object including metadata */
+	unsigned int object_size;/* The size of an object without metadata */
+	struct reciprocal_value reciprocal_size;
+	unsigned int offset;	/* Free pointer offset */
+#ifdef CONFIG_SLUB_CPU_PARTIAL
+	unsigned int cpu_partial;
+	unsigned int cpu_partial_slabs;
+#endif
+	struct kmem_cache_order_objects oo;
+	struct kmem_cache_order_objects min;
+	gfp_t allocflags;	/* gfp flags to use on each alloc */
+	int refcount;		/* Refcount for slab cache destroy */
+	void (*ctor)(void *);
+	unsigned int inuse;		/* Offset to metadata */
+	unsigned int align;		/* Alignment */
+	unsigned int red_left_pad;	/* Left redzone padding size */
+	const char *name;	/* Name (only for display!) */
+	struct list_head list;	/* List of slab caches */
+#ifdef CONFIG_SYSFS
+	struct kobject kobj;	/* For sysfs */
+#endif
+#ifdef CONFIG_SLAB_FREELIST_HARDENED
+	unsigned long random;
+#endif
+#ifdef CONFIG_NUMA
+	unsigned int remote_node_defrag_ratio;
+#endif
+#ifdef CONFIG_SLAB_FREELIST_RANDOM
+	unsigned int *random_seq;
+#endif
+#ifdef CONFIG_KASAN_GENERIC
+	struct kasan_cache kasan_info;
+#endif
+#ifdef CONFIG_HARDENED_USERCOPY
+	unsigned int useroffset;
+	unsigned int usersize;
+#endif
+	struct kmem_cache_node *node[MAX_NUMNODES];
+};
+
+/* Replicated from mm/slab.h for Linux 6.6.130 */
+struct slab {
+    unsigned long __page_flags;
+    struct kmem_cache *slab_cache;
+    union {
+        struct {
+            union {
+                struct list_head slab_list;
+            };
+            union {
+                struct {
+                    void *freelist;
+                    union {
+                        unsigned long counters;
+                        struct {
+                            unsigned inuse:16;
+                            unsigned objects:15;
+                            unsigned frozen:1;
+                        };
+                    };
+                };
+            };
+        };
+        struct rcu_head rcu_head;
+    };
+};
+
+struct kmem_cache_node {
+    spinlock_t list_lock;
+    unsigned long nr_partial;
+    struct list_head partial;
+#ifdef CONFIG_SLUB_DEBUG
+    atomic_long_t nr_slabs;
+    atomic_long_t total_objects;
+    struct list_head full;
+#endif
+};
+#endif
 
 #define MAX_NUM_MEMCHECK_REPORTS 64
 
@@ -461,14 +557,14 @@ post___kmalloc_node_track_caller(dr_mcontext_t *mc, bool args_valid, void *ret,
 static inline void
 pre_kmem_cache_alloc(dr_mcontext_t *mc, struct kmem_cache *cachep, gfp_t flags)
 {
-    pre___kmalloc(mc, cachep->objsize, flags);
+    pre___kmalloc(mc, cachep->object_size, flags);
 }
 
 static inline void
 post_kmem_cache_alloc(dr_mcontext_t *mc, bool args_valid, void *ret,
                       struct kmem_cache *cachep, gfp_t flags)
 {
-    track_allocation(args_valid, ret, args_valid ? cachep->objsize : 0, flags,
+    track_allocation(args_valid, ret, args_valid ? cachep->object_size : 0, flags,
                      args_valid ? cachep->ctor != NULL : true);
 }
 
@@ -491,7 +587,7 @@ pre_kmem_cache_free(dr_mcontext_t *mc, struct kmem_cache *cachep, void *objp)
 {
     /* Do this in pre_kmem_cache_free to be consistent with pre_kfree. */
 #ifdef DEBUG
-    DR_ASSERT(is_memory_ok_to_free(objp, cachep->objsize));
+    DR_ASSERT(is_memory_ok_to_free(objp, cachep->object_size));
 #endif
     set_memory_permission((void *)objp, cachep->size, PERMISSION_UNADDRESSABLE_SLAB_FREE);
 }
@@ -897,6 +993,7 @@ printk_address(unsigned long address, int reliable)
     printk(" [<%p>] %s%pS\n", (void *)address, reliable ? "" : "? ", (void *)address);
 }
 
+#ifndef CONFIG_ARCH_STACKWALK
 static void
 save_stack_trace_regs(struct stack_trace *trace, struct pt_regs *regs)
 {
@@ -904,6 +1001,7 @@ save_stack_trace_regs(struct stack_trace *trace, struct pt_regs *regs)
     if (trace->nr_entries < trace->max_entries)
         trace->entries[trace->nr_entries++] = ULONG_MAX;
 }
+#endif
 
 /* Copied from process_64.c */
 void
@@ -915,9 +1013,9 @@ __show_regs(struct pt_regs *regs, int all)
     unsigned int ds, cs, es;
 
     printk("\n");
-    printk(KERN_INFO "RIP: %04lx:[<%016lx>] ", regs->cs & 0xffff, regs->ip);
+    printk(KERN_INFO "RIP: %04lx:[<%016lx>] ", (unsigned long)(regs->cs & 0xffff), regs->ip);
     printk_address(regs->ip, 1);
-    printk(KERN_INFO "RSP: %04lx:%016lx  EFLAGS: %08lx\n", regs->ss, regs->sp,
+    printk(KERN_INFO "RSP: %04lx:%016lx  EFLAGS: %08lx\n", (unsigned long)regs->ss, regs->sp,
            regs->flags);
     printk(KERN_INFO "RAX: %016lx RBX: %016lx RCX: %016lx\n", regs->ax, regs->bx,
            regs->cx);
@@ -945,8 +1043,8 @@ __show_regs(struct pt_regs *regs, int all)
 
     cr0 = read_cr0();
     cr2 = read_cr2();
-    cr3 = read_cr3();
-    cr4 = read_cr4();
+    cr3 = __read_cr3();
+    cr4 = __read_cr4();
 
     printk(KERN_INFO "FS:  %016lx(%04x) GS:%016lx(%04x) knlGS:%016lx\n", fs, fsindex, gs,
            gsindex, shadowgs);
@@ -1104,7 +1202,11 @@ printk_error_report(memcheck_report_t *report)
     default: DR_ASSERT(false); printk("unknown error type!");
     }
     __show_regs(&report->regs, 1);
+#ifndef CONFIG_ARCH_STACKWALK
     print_stack_trace(&report->trace, 2);
+#else
+    stack_trace_print(report->trace_entries, report->nr_entries, 2);
+#endif
 }
 
 static void
@@ -1149,11 +1251,15 @@ report_memcheck_error(void *drcontext, memcheck_tls_t *tls, dr_mcontext_t *mc, b
     mcontext_to_pt_regs(mc, &report->regs);
     report->addr = addr;
     report->type = type;
+#ifndef CONFIG_ARCH_STACKWALK
     report->trace.entries = report->trace_entries;
     report->trace.skip = 0;
     report->trace.nr_entries = 0;
     report->trace.max_entries = ARRAY_SIZE(report->trace_entries);
-    save_stack_trace_regs(&report->trace, &report->regs);
+    save_stack_trace_regs(&report->regs, &report->trace);
+#else
+    report->nr_entries = stack_trace_save_regs(&report->regs, report->trace_entries, ARRAY_SIZE(report->trace_entries), 0);
+#endif
     printk_error_report(report);
 }
 
@@ -1211,7 +1317,7 @@ memcheck_slowpath(mem_ref_t *ref)
 
     if (type == MEMCHECK_ERROR_EOS) {
         DR_ASSERT(MEMCHECK_OPTION(check_stack));
-        mc.rsp = percpu_read(kernel_stack);
+        mc.rsp = current_top_of_stack();
         mc.pc = (byte *)(&induce_oops);
         dr_redirect_execution(&mc, 0);
     }
@@ -1346,11 +1452,10 @@ memcheck_shadow_eos_init(void *drcontext, memcheck_tls_t *tls)
     if (!MEMCHECK_OPTION(check_stack)) {
         return;
     }
-    do_each_thread(g, p)
+    for_each_process_thread(g, p)
     {
         enable_stack_guard(p);
     }
-    while_each_thread(g, p);
 }
 
 static void
@@ -1373,7 +1478,7 @@ memcheck_shadow_slub_init(void *drcontext, memcheck_tls_t *tls)
         for_each_node_state(node, N_NORMAL_MEMORY)
         {
             struct kmem_cache_node *n = get_node(s, node);
-            struct page *page;
+            struct slab *slab;
             if (spin_is_locked(&n->list_lock)) {
                 printk("Cache %s is busy on node %d, skipping\n", s->name, node);
                 /* This is an error because any CPU that owns this spinlock
@@ -1388,12 +1493,12 @@ memcheck_shadow_slub_init(void *drcontext, memcheck_tls_t *tls)
              * a full list only has addressable and, as far as we know, defined
              * bytes on it, so PERMISSION_UNKNOWN is okay.
              */
-            list_for_each_entry(page, &n->partial, lru)
+            list_for_each_entry(slab, &n->partial, slab_list)
             {
                 size_t slab_size;
                 void *object;
-                if (slab_is_locked(page)) {
-                    printk("Slab 0x%p busy on %s, skipping\n", page, s->name);
+                if (slab_is_locked((struct page *)slab)) {
+                    printk("Slab 0x%p busy on %s, skipping\n", slab, s->name);
                     /* This is a spinlock too, so this is an error too. */
                     DR_ASSERT(false);
                     continue;
@@ -1404,25 +1509,25 @@ memcheck_shadow_slub_init(void *drcontext, memcheck_tls_t *tls)
                  * wrappers isn't a good idea because they will incur page
                  * faults rarely.
                  */
-                slab_size = PAGE_SIZE << compound_order(page);
+                slab_size = PAGE_SIZE << compound_order((struct page *)slab);
                 /* First, set the entire slab unaddressable. */
-                set_memory_permission(page_address(page), slab_size,
+                set_memory_permission(page_address((struct page *)slab), slab_size,
                                       PERMISSION_UNADDRESSABLE_INIT);
                 tls->num_init_unaddressable_bytes += slab_size;
                 /* Next, make just the non-meta data of all objects defined.  */
-                for_each_object(object, s, page_address(page), page->objects)
+                for_each_object(object, s, page_address((struct page *)slab), slab->objects)
                 {
-                    set_memory_permission(object, s->objsize, PERMISSION_DEFINED);
-                    tls->num_init_unaddressable_bytes -= s->objsize;
-                    tls->num_init_addressable_bytes += s->objsize;
+                    set_memory_permission(object, s->object_size, PERMISSION_DEFINED);
+                    tls->num_init_unaddressable_bytes -= s->object_size;
+                    tls->num_init_addressable_bytes += s->object_size;
                 }
                 /* Finally, remove the addressability of all free objects. */
-                for_each_free_object(object, s, page->freelist)
+                for_each_free_object(object, s, slab->freelist)
                 {
-                    set_memory_permission(object, s->objsize,
+                    set_memory_permission(object, s->object_size,
                                           PERMISSION_UNADDRESSABLE_INIT);
-                    tls->num_init_addressable_bytes -= s->objsize;
-                    tls->num_init_unaddressable_bytes += s->objsize;
+                    tls->num_init_addressable_bytes -= s->object_size;
+                    tls->num_init_unaddressable_bytes += s->object_size;
                 }
             }
         }
