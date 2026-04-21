@@ -1630,21 +1630,21 @@ remove_shadow_mappings(void)
 {
     struct task_struct *g, *p;
     generic_page_table_entry_t *l4;
-    int i;
-    do_each_thread(g, p)
+    rcu_read_lock();
+    for_each_process_thread(g, p)
     {
         if (!p->mm) {
             continue;
         }
         l4 = (generic_page_table_entry_t *)p->mm->pgd;
-        for (i = 0; i < PAGE_TABLE_ENTIRES_PER_LEVEL; i++) {
+        for (int i = 0; i < PAGE_TABLE_ENTIRES_PER_LEVEL; i++) {
             if (global_l4[i].present) {
                 memset(&l4[i], 0, sizeof(generic_page_table_entry_t));
                 DR_ASSERT(!l4[i].present);
             }
         }
     }
-    while_each_thread(g, p);
+    rcu_read_unlock();
 }
 #endif
 
