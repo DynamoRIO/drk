@@ -1835,7 +1835,7 @@ expand_app_stack(void)
 #ifdef LINUX_KERNEL
 
 static void
-create_pte(generic_page_table_entry_t *entry, vm_access_t *access, pfn_t next_pfn,
+create_pte(generic_page_table_entry_t *entry, vm_access_t *access, umbra_pfn_t next_pfn,
            bool zero_entry)
 {
     /* TODO(peter): Are we setting this to the right kind of memory wrt caching?
