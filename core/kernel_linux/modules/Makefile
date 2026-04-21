@@ -79,12 +79,9 @@ EXTRA_AFLAGS=$(DR_INCLUDE_FLAGS)\
 ../../kernel_linux/dynamorio_module_interface.o\
 ../../kernel_linux/dynamorio_module.o
 
-################################################################################
-## TODO i#11: Re-enable this module once the previous modules are building.
-## obj-m += dr_kernel_utils.o
-## 	dr_kernel_utils-objs :=\
-## ../../kernel_linux/dr_kernel_utils.o
-################################################################################
+obj-m += dr_kernel_utils.o
+	dr_kernel_utils-objs :=\
+../../kernel_linux/dr_kernel_utils.o
 
 ################################################################################
 ## TODO i#11: Re-enable the clients once the core modules are building.
