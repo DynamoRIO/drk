@@ -35,7 +35,7 @@
  *
  */
 
-#include <stddef.h>
+#include "stddef_wrapper.h"
 
 #include "umbra.h"
 #include "global.h"
