@@ -144,7 +144,7 @@ analyze_client_code(void *drcontext, instrlist_t *ilist, instr_t *where,
         opnd = OPND_CREATE_ABSMEM(
             (void *)(reg_t)ref_info[pos].cache + offsetof(ref_cache_t, offset), OPSZ_PTR);
         instr_set_src(sub, 0, opnd);
-        if (proc_info.client.app_unit_bits > 0 && proc_info.client.shd_unit_bits != 0)
+        if (proc_info.client.app_unit_bits[0] > 0 && proc_info.client.shd_unit_bits[0] != 0)
             next = instr_get_next(sub); /* reg & mask => reg */
         if (proc_info.client.orig_addr) {
             next = instr_get_next(next); /* mov reg => r2 */
