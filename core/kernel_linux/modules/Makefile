@@ -6,20 +6,17 @@ EXTRA_AFLAGS=$(DR_INCLUDE_FLAGS)\
 
 	obj-m += dynamorio_controller.o
 	dynamorio_controller-objs :=\
-../../kernel_linux/dynamorio_controller_module.o
-################################################################################
-## TODO i#14: Re-enable the tests at a later step.
-## ../../kernel_linux/simple_tests/wrap.o\
-## ../../kernel_linux/simple_tests/recurse.o\
-## ../../kernel_linux/simple_tests/retaddr.o\
-## ../../kernel_linux/simple_tests/eflags.o\
-## ../../kernel_linux/simple_tests/eflags_asm.o\
-## ../../kernel_linux/simple_tests/fib.o\
-## ../../kernel_linux/simple_tests/xsave.o\
-## ../../kernel_linux/simple_tests/exception_asm.o\
-## ../../kernel_linux/simple_tests/repstr.o\
-## ../../kernel_linux/simple_tests.o
-################################################################################
+../../kernel_linux/dynamorio_controller_module.o\
+../../kernel_linux/simple_tests/wrap.o\
+../../kernel_linux/simple_tests/recurse.o\
+../../kernel_linux/simple_tests/retaddr.o\
+../../kernel_linux/simple_tests/eflags.o\
+../../kernel_linux/simple_tests/eflags_asm.o\
+../../kernel_linux/simple_tests/fib.o\
+../../kernel_linux/simple_tests/xsave.o\
+../../kernel_linux/simple_tests/exception_asm.o\
+../../kernel_linux/simple_tests/repstr.o\
+../../kernel_linux/simple_tests.o
 
 	obj-m += dynamorio.o
 	dynamorio-objs :=\
