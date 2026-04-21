@@ -85,7 +85,7 @@ DEFINE_PER_CPU(memcheck_tls_t *, memcheck_tls);
 #define CODE_CACHE_SIZE PAGE_SIZE * 2
 
 static inline memcheck_tls_t *
-memcheck_tls(umbra_info_t *info)
+get_memcheck_tls_from_info(umbra_info_t *info)
 {
     return (memcheck_tls_t *)info->client_tls_data;
 }
@@ -93,7 +93,7 @@ memcheck_tls(umbra_info_t *info)
 static inline memcheck_tls_t *
 get_memcheck_tls(void)
 {
-    return memcheck_tls(umbra_get_info());
+    return get_memcheck_tls_from_info(umbra_get_info());
 }
 
 /* The number of CPUs that we've called flush_cpu_slab on. We don't use a proper
@@ -1246,7 +1246,7 @@ memcheck_slowpath(mem_ref_t *ref)
     memcheck_error_type_t type;
     void *drcontext = dr_get_current_drcontext();
     umbra_info_t *umbra_info = umbra_get_info();
-    memcheck_tls_t *tls = memcheck_tls(umbra_info);
+    memcheck_tls_t *tls = get_memcheck_tls_from_info(umbra_info);
 #ifdef DEBUG
     void *tag = dr_tag_from_cache_pc(tls->cache_pc);
     DR_ASSERT(tag != NULL);
@@ -1520,7 +1520,7 @@ thread_init(void *drcontext, umbra_info_t *info)
     mtls[dr_get_thread_id(drcontext)] = tls;
 #endif
     DR_ASSERT(get_memcheck_tls() == tls);
-    DR_ASSERT(memcheck_tls(info) == tls);
+    DR_ASSERT(get_memcheck_tls_from_info(info) == tls);
     tls->in_slub_function = false;
     tls->in_slub_function_sticky = false;
     memcheck_code_cache_init(drcontext, tls);
@@ -1546,7 +1546,7 @@ thread_init(void *drcontext, umbra_info_t *info)
 static void
 thread_exit(void *drcontext, umbra_info_t *umbra_info)
 {
-    memcheck_tls_t *tls = memcheck_tls(umbra_info);
+    memcheck_tls_t *tls = get_memcheck_tls_from_info(umbra_info);
     dr_nonheap_free(tls->code_cache_start, CODE_CACHE_SIZE);
     dr_thread_free(umbra_info->drcontext, tls, sizeof(*tls));
     this_cpu_write(memcheck_tls, NULL);
@@ -1635,7 +1635,7 @@ instrument_update(void *drcontext, umbra_info_t *umbra_info, mem_ref_t *ref,
     instr_t *instr;
     opnd_t opnd1, opnd2;
     instr_t *done, *slowpath, *after_slowpath, *unknown;
-    memcheck_tls_t *tls = memcheck_tls(umbra_info);
+    memcheck_tls_t *tls = get_memcheck_tls_from_info(umbra_info);
     reg_id_t shadow_reg = umbra_info->steal_regs[0];
     reg_id_t scratch_reg = umbra_info->steal_regs[1];
     opnd_size_t opsz = get_canonical_opsz(opnd_get_size(ref->opnd));
@@ -1990,7 +1990,7 @@ static void
 app_to_app_transformation(void *drcontext, umbra_info_t *umbra_info, void *tag,
                           instrlist_t *ilist, bool for_trace)
 {
-    memcheck_tls_t *tls = memcheck_tls(umbra_info);
+    memcheck_tls_t *tls = get_memcheck_tls_from_info(umbra_info);
     convert_repstr_to_loop(drcontext, tls, ilist);
 }
 
@@ -2009,7 +2009,7 @@ shadow_page_alloc(umbra_info_t *info, void *start, size_t size)
 static bool
 memcheck_interrupt(umbra_info_t *umbra_info, dr_interrupt_t *interrupt)
 {
-    memcheck_tls_t *tls = memcheck_tls(umbra_info);
+    memcheck_tls_t *tls = get_memcheck_tls_from_info(umbra_info);
     byte *xip = interrupt->frame->xip;
 
     if (xip >= tls->code_cache_start && xip < tls->code_cache_end) {
