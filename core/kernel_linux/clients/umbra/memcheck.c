@@ -1042,6 +1042,7 @@ get_canonical_opsz(opnd_size_t opsz)
     case 0:
         /* This should be handled by ref_is_interested. */
         DR_ASSERT(false);
+        __builtin_unreachable();
     case 1: return OPSZ_1;
     case 2: return OPSZ_2;
     case 4: return OPSZ_4;
