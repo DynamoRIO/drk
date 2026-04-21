@@ -23,12 +23,12 @@ static unsigned long actual_val;
         memcheck_enable_reporting();                                                \
     } while (0)
 
-#define TEST_PTR_EQ(expected, actual) TEST_OP(expected, ==, actual, % p)
-#define TEST_PTR_NE(expected, actual) TEST_OP(expected, !=, actual, % p)
-#define TEST_NOT_NULL(actual) TEST_PTR_NE(NULL, actual);
+#define TEST_PTR_EQ(expected, actual) TEST_OP(expected, ==, actual, %p)
+#define TEST_PTR_NE(expected, actual) TEST_OP(expected, !=, actual, %p)
+#define TEST_NOT_NULL(actual) TEST_PTR_NE(NULL, actual)
 
-#define TEST_INT_EQ(expected, actual) TEST_OP(expected, ==, actual, % d)
-#define TEST_INT_GE(min_expected, actual) TEST_OP(min_expected, <=, actual, % d)
+#define TEST_INT_EQ(expected, actual) TEST_OP(expected, ==, actual, %d)
+#define TEST_INT_GE(min_expected, actual) TEST_OP(min_expected, <=, actual, %d)
 
 #define TEST_ASSERT(x)                                                                \
     do {                                                                              \
