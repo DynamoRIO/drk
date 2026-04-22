@@ -1,4 +1,3 @@
-typedef char bool;
 #include <sys/types.h>
 #include "configure.h"
 #include "globals.h"
