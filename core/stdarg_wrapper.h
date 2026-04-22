@@ -3,7 +3,7 @@
 
 #include "configure.h"
 
-#ifdef LINUX_KERNEL
+#if defined(LINUX_KERNEL) && !defined(__USER_UNIT_TEST)
 #    include <linux/stdarg.h>
 #else
 #    include <stdarg.h>
