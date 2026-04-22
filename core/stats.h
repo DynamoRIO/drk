@@ -214,7 +214,7 @@ extern timestamp_t kstat_ignore_context_switch;
 #        define KSTAT_DUMP_STACK(kstack)                                       \
             if ((kstack)->node[(kstack)->depth - 1].var !=                     \
                 &cur_dcontext->thread_kstats->vars_kstats.logging) {           \
-                LOG(THREAD_GET, LOG_STATS, 1, "ks %s:%d\n"__FILE__, __LINE__); \
+                LOG(THREAD_GET, LOG_STATS, 1, "ks %s:%d\n" __FILE__, __LINE__); \
                 kstats_dump_stack(cur_dcontext);                               \
             }
 #    endif
