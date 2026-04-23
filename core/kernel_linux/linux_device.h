@@ -1,5 +1,5 @@
 #ifndef __LINUX_DEVICE_H_
-#    define __LINUE_DEVICE_H_
+#    define __LINUX_DEVICE_H_
 
 #    include <string>
 

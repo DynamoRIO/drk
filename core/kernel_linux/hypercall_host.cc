@@ -16,6 +16,7 @@ extern "C" {
 #include <sys/types.h>
 #include <time.h>
 #include <string.h>
+#include <unistd.h>
 
 #include "linux_device.h"
 

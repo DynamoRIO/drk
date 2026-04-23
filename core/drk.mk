@@ -21,9 +21,7 @@ MODULES_MAKE =-C $(KERNELDIR) M=$(DR_CORE_DIR)/kernel_linux/modules\
 
 ASM_FILES= $(shell find . -name '*.asm' | sed 's/\.asm/.S/g')
 
-# TODO i#11: re-enable scons to build utility programs and tests
-# default: exports.c api_headers scons $(ASM_FILES)
-default: exports.c api_headers $(ASM_FILES)
+default: exports.c api_headers scons $(ASM_FILES)
 	cp kernel_linux/modules/Module.symvers.in kernel_linux/modules/Module.symvers
 	$(MAKE) $(MODULES_MAKE) KBUILD_MODPOST_WARN=1 modules
 
@@ -52,8 +50,7 @@ $(API_INCLUDE_DIR): $(shell find . -name '*.h' | grep -v $(API_INCLUDE_DIR) | gr
 
 clean:
 	$(MAKE) $(MODULES_MAKE) clean
-# TODO i#11: Re-enable scons to build utility programs and tests
-#	scons -c
+	scons -c
 	rm -f $$(find . -name '*.S')
 	rm -f $$(find . -name '*.o')
 	rm -f $$(find . -name '.*.o.cmd')

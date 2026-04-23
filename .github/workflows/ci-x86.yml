@@ -12,7 +12,7 @@ jobs:
           DEBIAN_FRONTEND: noninteractive
         run: |
           sudo apt update
-          sudo apt install libelf-dev
+          sudo apt install libelf-dev scons
 
       - name: Download and extract kernel source
         run: |
