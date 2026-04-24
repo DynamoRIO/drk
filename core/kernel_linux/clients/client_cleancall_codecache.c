@@ -1,6 +1,9 @@
 #include <linux/module.h>
+#include <linux/slab.h>
+
 #include "dr_api.h"
 #include "dr_kernel_utils.h"
+
 MODULE_LICENSE("Dual BSD/GPL");
 
 typedef struct {
@@ -71,8 +74,10 @@ bb_event(void *drcontext, void *tag, instrlist_t *bb, bool for_trace, bool trans
              * interrupts for the first instruction after STI).
              */
             instr = instr_get_next(instr);
-            if (instr == NULL)
+            if (instr == NULL) {
                 break;
+            }
+            fallthrough;
         }
         case OP_cli: {
             instr_t *label = INSTR_CREATE_label(drcontext);

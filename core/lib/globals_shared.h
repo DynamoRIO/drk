@@ -121,7 +121,11 @@
 #    endif
 #    define LINK_ONCE __attribute__((weak))
 #    define ALIGN_VAR(x) __attribute__((aligned(x)))
-#    ifndef inline
+/* Avoid redefining 'inline' when compiling for the Linux kernel,
+ * as kernel headers provide their own definitions and attributes for it,
+ * which can cause conflict errors if redefined here.
+ */
+#    ifndef LINUX_KERNEL
 #        define inline __inline__
 #    endif
 #    define INLINE_FORCED inline

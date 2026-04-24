@@ -80,28 +80,29 @@ obj-m += dr_kernel_utils.o
 	dr_kernel_utils-objs :=\
 ../../kernel_linux/dr_kernel_utils.o
 
+obj-m += instrcount.o
+	instrcount-objs :=\
+../../kernel_linux/clients/instrcount_module.o
+
+obj-m += stress_dead_reg.o
+	stress_dead_reg-objs :=\
+../../kernel_linux/clients/stress_dead_reg_module.o
+
+obj-m += cleancall.o
+	cleancall-objs :=\
+../../kernel_linux/clients/cleancall_module.o
+
+obj-m += client_codecache.o
+	client_codecache-objs :=\
+../../kernel_linux/clients/client_codecache.o
+
+obj-m += client_cleancall_codecache.o
+	client_cleancall_codecache-objs :=\
+../../kernel_linux/clients/client_cleancall_codecache.o
+
 ################################################################################
 ## TODO i#11: Re-enable the clients once the core modules are building.
-## obj-m += instrcount.o
-## 	instrcount-objs :=\
-## ../../kernel_linux/clients/instrcount_module.o
-##
-## obj-m += stress_dead_reg.o
-## 	stress_dead_reg-objs :=\
-## ../../kernel_linux/clients/stress_dead_reg_module.o
-##
-## obj-m += cleancall.o
-## 	cleancall-objs :=\
-## ../../kernel_linux/clients/cleancall_module.o
-##
-## obj-m += client_codecache.o
-## 	client_codecache-objs :=\
-## ../../kernel_linux/clients/client_codecache.o
-##
-## obj-m += client_cleancall_codecache.o
-## 	client_cleancall_codecache-objs :=\
-## ../../kernel_linux/clients/client_cleancall_codecache.o
-##
+## We are skipping umbra for now due to its tight coupling with the kernel and not a high priority.
 ## obj-m += umbra.o
 ## 	umbra-objs :=\
 ## ../../kernel_linux/clients/umbra/analyzer.o\
@@ -116,12 +117,12 @@ obj-m += dr_kernel_utils.o
 ## ../../kernel_linux/clients/umbra/memcheck.o\
 ## ../../kernel_linux/clients/umbra/memcheck_test.o\
 ## ../../kernel_linux/clients/umbra/pagepool.o
-##
-## obj-m += bb_stats.o
-## 	bb_stats-objs :=\
-## ../../kernel_linux/clients/bb_stats.o
-##
-## obj-m += null.o
-## 	null-objs :=\
-## ../../kernel_linux/clients/null.o
 ################################################################################
+
+obj-m += bb_stats.o
+	bb_stats-objs :=\
+../../kernel_linux/clients/bb_stats.o
+
+obj-m += null.o
+	null-objs :=\
+../../kernel_linux/clients/null.o

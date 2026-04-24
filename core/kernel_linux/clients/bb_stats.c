@@ -39,7 +39,7 @@ DEFINE_PER_CPU(bb_stats_t *, bb_stats_tls);
 static bb_stats_t *
 get_bb_stats_tls(void)
 {
-    return __get_cpu_var(bb_stats_tls);
+    return this_cpu_read(bb_stats_tls);
 }
 
 static void
@@ -50,7 +50,7 @@ set_bb_stats_tls(bb_stats_t *tls)
      * (dcontext->client_data->user_field). We'd like to use instrcount with
      * other clients.
      */
-    __get_cpu_var(bb_stats_tls) = tls;
+    this_cpu_write(bb_stats_tls, tls);
 }
 
 static ushort *
@@ -90,7 +90,7 @@ bb_event(void *drcontext, void *tag, instrlist_t *bb, bool for_trace, bool trans
         int length = instrlist_length(bb);
         DR_ASSERT(length <= MAX_BB_INSTRS);
         if (!dr_is_emulating_interrupt_return(drcontext)) {
-            DR_ASSERT(bb_stats->histogram[length] < USHORT_MAX);
+            DR_ASSERT(bb_stats->histogram[length] < USHRT_MAX);
             bb_stats->histogram[length] += 1;
             bb_stats->last_fragment_tag = tag;
             bb_stats->last_fragment_length = length;
@@ -102,7 +102,7 @@ bb_event(void *drcontext, void *tag, instrlist_t *bb, bool for_trace, bool trans
                 bb_stats->instr_pairs[instr_get_opcode(first)]++;
             }
         } else {
-            DR_ASSERT(bb_stats->histogram_tail[length] < USHORT_MAX);
+            DR_ASSERT(bb_stats->histogram_tail[length] < USHRT_MAX);
             bb_stats->histogram_tail[length] += 1;
         }
     }
