@@ -17,6 +17,7 @@ def check_open(args):
 
 def excluded_functions():
     return {
+        "__attribute__",
         "dr_init",
         "dr_smp_exit",
         "dr_get_app_PEB",
@@ -65,8 +66,8 @@ def main():
     functions = set()
     for path in glob.glob(f"{sys.argv[1]}/*.h"):
         code = check_open(f"cpp -DX86_64 -DLINUX -DLINUX_KERNEL {path}".split())
-        for match in re.findall("(^[a-zA-Z0-9_]+)(\(.*)$", code, re.MULTILINE):
-            functions.add(match[0])
+        for match in re.findall(r"^\s*(?:[a-zA-Z0-9_]+\s+)*([a-zA-Z0-9_]+)\(", code, re.MULTILINE):
+            functions.add(match)
     # This is a dirty hack. We don't export certain functions that aren't #
     # implemented. The lib/genapi.pl script should probably be modified to not include
     # functions that are IFDEF'd out.
