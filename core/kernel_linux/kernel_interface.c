@@ -5,6 +5,7 @@
 #include <linux/percpu.h>
 #include <linux/smp.h>
 #include <linux/kallsyms.h>
+#include <linux/kprobes.h>
 #include <linux/sched.h>
 #include <linux/mm.h>
 
@@ -76,25 +77,17 @@ done:
     kfree(buffer);
 }
 
-static int
-find_kernel_symbol_callback(void *data, const char *name, unsigned long address)
-{
-    kernel_symbol_t *symbol = (kernel_symbol_t *)data;
-    if (strcmp(name, symbol->name) == 0) {
-        symbol->address = address;
-        get_symbol_size(symbol);
-        return 1;
-    }
-    return 0;
-}
+static unsigned long (*kallsyms_lookup_name_ptr)(const char *name) = NULL;
 
 static bool
 find_kernel_symbol(kernel_symbol_t *symbol)
 {
-    if (kallsyms_on_each_symbol(find_kernel_symbol_callback, symbol)) {
+    symbol->address = kallsyms_lookup_name_ptr(symbol->name);
+    if (symbol->address != 0) {
+        get_symbol_size(symbol);
         return true;
     }
-    printk("find_kernel_symbol failed for %s\n", symbol->name);
+    printk("find_kernel_symbol failed for %s.\n", symbol->name);
     return false;
 }
 
@@ -145,6 +138,31 @@ static struct module *(*__module_address_ptr)(unsigned long addr) = NULL;
 bool
 kernel_module_init(size_t dr_heap_size)
 {
+    /* kallsyms_lookup_name is unexported in newer kernels (5.7+), so we use
+     * this kprobe trick to resolve its address.
+     * NOTE: This requires the kernel to be configured with CONFIG_KPROBES=y.
+     * If this becomes an issue, an alternative is to parse the address from
+     * /proc/kallsyms in user space and pass it into the kernel module as
+     * module parameters.
+     */
+    struct kprobe kp = {
+        .symbol_name = "kallsyms_lookup_name",
+    };
+
+    if (register_kprobe(&kp) < 0) {
+        printk("Failed to register kprobe for kallsyms_lookup_name.\n");
+        return false;
+    }
+
+    if (kp.addr == NULL) {
+        printk("kprobe registered for kallsyms_lookup_name but the address is NULL.\n");
+        unregister_kprobe(&kp);
+        return false;
+    }
+
+    kallsyms_lookup_name_ptr = (void *)kp.addr;
+    unregister_kprobe(&kp);
+
 #ifdef HYPERCALL_DEBUGGING
     if (!hypercall_init()) {
         return false;
