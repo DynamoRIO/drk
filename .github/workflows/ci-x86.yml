@@ -25,9 +25,9 @@ jobs:
         working-directory: ${{ env.KERNEL_DIR }}
         run: |
           make defconfig
-          make -j vmlinux
-          make -j modules
+          make -j$(nproc) vmlinux
+          make -j$(nproc) modules
 
       - name: Build drk
         # TODO i#10: Convert to cmake.
-        run: cd core && make -j -f drk.mk KERNELDIR=$GITHUB_WORKSPACE/$KERNEL_DIR
+        run: cd core && make -j$(nproc) -f drk.mk KERNELDIR=$GITHUB_WORKSPACE/$KERNEL_DIR
