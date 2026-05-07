@@ -142,8 +142,8 @@ kernel_module_init(size_t dr_heap_size)
      * this kprobe trick to resolve its address.
      * NOTE: This requires the kernel to be configured with CONFIG_KPROBES=y.
      * If this becomes an issue, an alternative is to parse the address from
-     * /proc/kallsyms in user space and pass it into the kernel module as
-     * module parameters.
+     * /proc/kallsyms in user space and pass it into the kernel module as a
+     * module parameter.
      */
     struct kprobe kp = {
         .symbol_name = "kallsyms_lookup_name",
