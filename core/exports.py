@@ -63,10 +63,14 @@ def extra_symbols():
 
 def main():
     assert len(sys.argv) == 2
+    # TODO i#10: The current approach of discovering and exporting functions using
+    # regular expressions is hacky. It should be replaced when moving to CMake.
     functions = set()
     for path in glob.glob(f"{sys.argv[1]}/*.h"):
         code = check_open(f"cpp -DX86_64 -DLINUX -DLINUX_KERNEL {path}".split())
-        for match in re.findall(r"^\s*(?:[a-zA-Z0-9_]+\s+)*([a-zA-Z0-9_]+)\(", code, re.MULTILINE):
+        for match in re.findall(
+            r"^\s*(?:[a-zA-Z0-9_]+\s+)*([a-zA-Z0-9_]+)\(", code, re.MULTILINE
+        ):
             functions.add(match)
     # This is a dirty hack. We don't export certain functions that aren't #
     # implemented. The lib/genapi.pl script should probably be modified to not include
