@@ -3,6 +3,8 @@ on: [push, pull_request]
 jobs:
   x86-64:
     runs-on: ubuntu-24.04
+    env:
+      MAKE: make -j$(nproc)
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -25,8 +27,8 @@ jobs:
         working-directory: ${{ env.KERNEL_DIR }}
         run: |
           make defconfig
-          make -j$(nproc) vmlinux modules
+          $MAKE vmlinux modules
 
       - name: Build drk
         # TODO i#10: Convert to cmake.
-        run: cd core && make -j$(nproc) -f drk.mk KERNELDIR=$GITHUB_WORKSPACE/$KERNEL_DIR
+        run: cd core && $MAKE -f drk.mk KERNELDIR=$GITHUB_WORKSPACE/$KERNEL_DIR
