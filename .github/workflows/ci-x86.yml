@@ -13,7 +13,7 @@ jobs:
         run: |
           sudo apt update
           sudo apt install libelf-dev scons
-          echo "MAKE=make -j$(nproc)" >> $GITHUB_ENV
+          echo "MAKE_CMD=make -j$(nproc)" >> $GITHUB_ENV
 
       - name: Download and extract kernel source
         run: |
@@ -26,8 +26,8 @@ jobs:
         working-directory: ${{ env.KERNEL_DIR }}
         run: |
           make defconfig
-          $MAKE vmlinux modules
+          $MAKE_CMD vmlinux modules
 
       - name: Build drk
         # TODO i#10: Convert to cmake.
-        run: cd core && $MAKE -f drk.mk KERNELDIR=$GITHUB_WORKSPACE/$KERNEL_DIR
+        run: cd core && $MAKE_CMD -f drk.mk KERNELDIR=$GITHUB_WORKSPACE/$KERNEL_DIR
