@@ -3,8 +3,6 @@ on: [push, pull_request]
 jobs:
   x86-64:
     runs-on: ubuntu-24.04
-    env:
-      MAKE: make -j$(nproc)
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -15,6 +13,7 @@ jobs:
         run: |
           sudo apt update
           sudo apt install libelf-dev scons
+          echo "MAKE=make -j$(nproc)" >> $GITHUB_ENV
 
       - name: Download and extract kernel source
         run: |
