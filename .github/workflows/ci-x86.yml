@@ -25,8 +25,7 @@ jobs:
         working-directory: ${{ env.KERNEL_DIR }}
         run: |
           make defconfig
-          make -j$(nproc) vmlinux
-          make -j$(nproc) modules
+          make -j$(nproc) vmlinux modules
 
       - name: Build drk
         # TODO i#10: Convert to cmake.
