@@ -157,19 +157,19 @@ if ($header) {
 # by comments in the header files.
 @headers =
     (
-     './instrlist.h',
+     './ir/instrlist.h',
      './lib/globals_shared.h', # defs
      './globals.h',
-     './x86/arch_exports.h', # encode routines
-     './x86/proc.h',
+     './arch/arch_exports.h', # encode routines
+     './arch/proc.h',
      './os_shared.h',        # before instrument.h
      './module_shared.h',    # before instrument.h
-     './x86/instrument.h',
-     './x86/instr.h',
-     './x86/instr_create.h',
-     './x86/decode.h',       # OPSZ_ consts, decode routines
-     './x86/decode_fast.h',  # decode routines
-     './x86/disassemble.h',  # disassemble routines
+     './lib/instrument.h',
+     './ir/instr.h',
+     './ir/x86/instr_create.h',
+     './ir/decode.h',       # OPSZ_ consts, decode routines
+     './ir/decode_fast.h',  # decode routines
+     './ir/disassemble.h',  # disassemble routines
      './fragment.h',         # binary tracedump format
      './win32/os_private.h', # rsrc section walking
      './hotpatch.c',         # probe api
