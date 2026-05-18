@@ -4,8 +4,8 @@ EXTRA_AFLAGS=$(DR_INCLUDE_FLAGS)\
  -Xassembler -mmnemonic=intel -Xassembler -msyntax=intel -Xassembler -mnaked-reg\
  -Xassembler --noexecstack -Xassembler --64
 
-	obj-m += dynamorio_controller.o
-	dynamorio_controller-objs :=\
+obj-m += dynamorio_controller.o
+dynamorio_controller-objs :=\
 ../../kernel_linux/dynamorio_controller_module.o\
 ../../kernel_linux/simple_tests/wrap.o\
 ../../kernel_linux/simple_tests/recurse.o\
@@ -21,7 +21,7 @@ EXTRA_AFLAGS=$(DR_INCLUDE_FLAGS)\
 ################################################################################
 ## TODO i#20: Re-enable this module once the previous module is building.
 ## obj-m += dynamorio.o
-## 	dynamorio-objs :=\
+##     dynamorio-objs :=\
 ## ../../exports.o\
 ## ../../buildmark.o\
 ## ../../config.o\
@@ -82,37 +82,37 @@ EXTRA_AFLAGS=$(DR_INCLUDE_FLAGS)\
 ################################################################################
 ## TODO i#20: Re-enable this module once the previous modules are building.
 ## obj-m += dr_kernel_utils.o
-## 	dr_kernel_utils-objs :=\
+##     dr_kernel_utils-objs :=\
 ## ../../kernel_linux/dr_kernel_utils.o
 ################################################################################
 
 ################################################################################
 ## TODO i#20: Re-enable the clients once the core modules are building.
 ## obj-m += instrcount.o
-## 	instrcount-objs :=\
+##     instrcount-objs :=\
 ## ../../kernel_linux/clients/instrcount_module.o
 ##
 ## obj-m += stress_dead_reg.o
-## 	stress_dead_reg-objs :=\
+##     stress_dead_reg-objs :=\
 ## ../../kernel_linux/clients/stress_dead_reg_module.o
 ##
 ## obj-m += cleancall.o
-## 	cleancall-objs :=\
+##     cleancall-objs :=\
 ## ../../kernel_linux/clients/cleancall_module.o
 ##
 ## obj-m += client_codecache.o
-## 	client_codecache-objs :=\
+##     client_codecache-objs :=\
 ## ../../kernel_linux/clients/client_codecache.o
 ##
 ## obj-m += client_cleancall_codecache.o
-## 	client_cleancall_codecache-objs :=\
+##     client_cleancall_codecache-objs :=\
 ## ../../kernel_linux/clients/client_cleancall_codecache.o
 ################################################################################
 
 ################################################################################
 ## We are skipping umbra for now due to its tight coupling with the kernel and not a high priority.
 ## obj-m += umbra.o
-## 	umbra-objs :=\
+##     umbra-objs :=\
 ## ../../kernel_linux/clients/umbra/analyzer.o\
 ## ../../kernel_linux/clients/umbra/cfg.o\
 ## ../../kernel_linux/clients/umbra/dr_client.o\
@@ -130,10 +130,10 @@ EXTRA_AFLAGS=$(DR_INCLUDE_FLAGS)\
 ################################################################################
 ## TODO i#20: Re-enable the clients once the core modules are building.
 ## obj-m += bb_stats.o
-## 	bb_stats-objs :=\
+##     bb_stats-objs :=\
 ## ../../kernel_linux/clients/bb_stats.o
 ##
 ## obj-m += null.o
-## 	null-objs :=\
+##     null-objs :=\
 ## ../../kernel_linux/clients/null.o
 ################################################################################
