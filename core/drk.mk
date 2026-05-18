@@ -1,4 +1,5 @@
 .DELETE_ON_ERROR:
+.RECIPEPREFIX = >
 # REQUIRED - The kernel being instrumented.
 KERNELDIR ?= /lib/modules/$(shell uname -r)/build
 
@@ -31,39 +32,39 @@ ASM_FILES= $(shell find . -name '*.asm' | grep -vE 'aarch64|aarchxx|arm|riscv64'
 # TODO i#20: Re-enable scons to build utility programs and tests.
 # default: exports.c api_headers scons $(ASM_FILES)
 default: exports.c api_headers $(ASM_FILES)
-	cp kernel_linux/modules/Module.symvers.in kernel_linux/modules/Module.symvers
-	$(MAKE) $(MODULES_MAKE) KBUILD_MODPOST_WARN=1 modules
+> cp kernel_linux/modules/Module.symvers.in kernel_linux/modules/Module.symvers
+> $(MAKE) $(MODULES_MAKE) KBUILD_MODPOST_WARN=1 modules
 
 scons:
-	scons -j10
+> scons -j10
 
 test: scons
-	./run_unittests.py
+> ./run_unittests.py
 
 exports.c: $(API_INCLUDE_DIR) exports.py
-	./exports.py $(API_INCLUDE_DIR)	> exports.c
+> ./exports.py $(API_INCLUDE_DIR) > exports.c
 
 api_headers: $(API_INCLUDE_DIR)
 
 $(API_INCLUDE_DIR): $(shell find . -name '*.h' | grep -v $(API_INCLUDE_DIR) | grep -v 'kernel_linux/clients') lib/genapi.pl
-	mkdir -p $(API_INCLUDE_DIR)
-	touch $(API_INCLUDE_DIR)
-	./lib/genapi.pl -header $(API_INCLUDE_DIR) "$(shell ./defines.py ../build/configure.h) -DAPI_EXPORT_ONLY"
-	cp -rf ../build/include/* $(API_INCLUDE_DIR)/
-	cp lib/dr_api.h $(API_INCLUDE_DIR)/dr_api.h
-	sed -i 's/$${VERSION_NUMBER_INTEGER}/200/' $(API_INCLUDE_DIR)/dr_api.h
-	./defines.py ../build/configure.h | grep -v '\-DDEBUG'; sed -i "s/\$${DEBUG}/$$?/" $(API_INCLUDE_DIR)/dr_api.h
+> mkdir -p $(API_INCLUDE_DIR)
+> touch $(API_INCLUDE_DIR)
+> ./lib/genapi.pl -header $(API_INCLUDE_DIR) "$(shell ./defines.py ../build/configure.h) -DAPI_EXPORT_ONLY"
+> cp -rf ../build/include/* $(API_INCLUDE_DIR)/
+> cp lib/dr_api.h $(API_INCLUDE_DIR)/dr_api.h
+> sed -i 's/$${VERSION_NUMBER_INTEGER}/200/' $(API_INCLUDE_DIR)/dr_api.h
+> ./defines.py ../build/configure.h | grep -v '\-DDEBUG'; sed -i "s/\$${DEBUG}/$$?/" $(API_INCLUDE_DIR)/dr_api.h
 
 %.S: %.asm
-	cpp  $(DR_INCLUDE_FLAGS) -Ddynamorio_EXPORTS -E $^ -o $@
-	sed -i 's/@N@/\n/g' $@
+> cpp  $(DR_INCLUDE_FLAGS) -Ddynamorio_EXPORTS -E $^ -o $@
+> sed -i 's/@N@/\n/g' $@
 
 clean:
-	$(MAKE) $(MODULES_MAKE) clean
+> $(MAKE) $(MODULES_MAKE) clean
 # TODO i#20: Re-enable scons to build utility programs and tests.
-#	scons -c
-	rm -f $$(find . -name '*.S')
-	rm -f $$(find . -name '*.o')
-	rm -f $$(find . -name '.*.o.cmd')
-	rm -rf lib/include
-	rm -f exports.c
+# scons -c
+> rm -f $$(find . -name '*.S')
+> rm -f $$(find . -name '*.o')
+> rm -f $$(find . -name '.*.o.cmd')
+> rm -rf lib/include
+> rm -f exports.c
