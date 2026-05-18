@@ -17,7 +17,7 @@ def main():
     code = check_open(
         ["cpp", "-fdirectives-only", "-fpreprocessed", "-dD", sys.argv[1]]
     )
-    matches = re.findall("(\s*#\s*define\s+)([a-zA-Z_0-9]+)(.*)", code)
+    matches = re.findall(r"(\s*#\s*define\s+)([a-zA-Z_0-9]+)(.*)", code)
     for match in matches:
         print(f"-D{match[1]}", end=" ")
 
