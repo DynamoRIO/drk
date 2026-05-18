@@ -6,13 +6,15 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
+        with:
+          submodules: true
 
       - name: Setup build environment
         env:
           DEBIAN_FRONTEND: noninteractive
         run: |
           sudo apt update
-          sudo apt install -y libelf-dev scons cmake
+          sudo apt install -y doxygen vera++ libelf-dev scons cmake g++-multilib
           echo "MAKE_CMD=make -j$(nproc)" >> $GITHUB_ENV
 
       - name: Download and extract kernel source
@@ -26,7 +28,7 @@ jobs:
         working-directory: ${{ env.KERNEL_DIR }}
         run: |
           make defconfig
-          $MAKE_CMD vmlinux modules
+          $MAKE_CMD modules_prepare
 
       - name: Generate DynamoRIO headers via CMake
         run: |
