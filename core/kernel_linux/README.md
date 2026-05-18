@@ -57,9 +57,9 @@ start DRK with the instruction counting client, instrcount:
 
 When the last command returns, you're running from the code cache!
 
-To stop instrumentation, run 
-   
-``` 
+To stop instrumentation, run
+
+```
     cd core/kernel_linux
     sudo ./controller exit
 ```
@@ -91,7 +91,7 @@ There's a bunch of housekeeping that could be done on the DRK code:
 - Licensing is a bit of a mess. All of the code should be BSD.
 
 There are some less trivial cleanup tasks that could be done:
-    
+
 - Merge dynamorio, dynamorio_controller, and dr_kernel_utils into a single
       kernel module; frankly, I can't remember why I separated it into three
       separate modules in the first place.
@@ -107,7 +107,7 @@ There's a bunch of DynamoRIO stuff that just doesn't work. Making these things
 work in DRK will take quite a bit of engineering effort. Making some of these
 things work _well_ will probably take some research effort :-) Here's a
 list of some major things that don't work:
-    
+
 - Running out of space in the code cache. DRK will crash if it tries to
       reset the cache entirely when it runs out of space. Use these options to
       trigger the crash:
