@@ -1134,71 +1134,72 @@ instrument_update(void *drcontext, umbra_info_t *umbra_info, ilist_info_t *ilist
                 if (!memory_mod_app_lookup(addr)) {
                     memory_mod_app_add(addr, 4);
                 }
+                compute_shd_memory_addr(addr, shd_addr);
+                ref->cache->offset[1] = shd_addr[1] - addr;
 #else
                 if (addr >= min_kernel_addr) {
                     memory_map_thread_lazy_add(umbra_info, addr);
+                    compute_shd_memory_addr(addr, shd_addr);
+                    ref->cache->offset[1] = shd_addr[1] - addr;
+                }
+                could_be_user = addr < min_kernel_addr;
+                could_be_kernel = !could_be_user;
 #endif
-                compute_shd_memory_addr(addr, shd_addr);
-                ref->cache->offset[1] = shd_addr[1] - addr;
-
-#ifdef LINUX_KERNEL
             }
-            could_be_user = addr < min_kernel_addr;
-            could_be_kernel = !could_be_user;
-#endif
         }
     }
-}
-offset_ptr = ref->cache->offset;
+    offset_ptr = ref->cache->offset;
 
-for (i = 1, j = 0; i < NUM_SPILL_REGS; i++) {
-    if (ilist_info->regs[i].steal == true)
-        umbra_info->steal_regs[j++] = ilist_info->regs[i].reg;
-}
+    for (i = 1, j = 0; i < NUM_SPILL_REGS; i++) {
+        if (ilist_info->regs[i].steal == true)
+            umbra_info->steal_regs[j++] = ilist_info->regs[i].reg;
+    }
 
-/* skip opnd that is not interested */
-if (!client->ref_is_interested(umbra_info, mem->ref))
-    return;
+    /* skip opnd that is not interested */
+    if (!client->ref_is_interested(umbra_info, mem->ref))
+        return;
 
 #ifdef LINUX_KERNEL
-if (could_be_user) {
-    /* update_user: */
-    *update_user = INSTR_CREATE_label(drcontext);
-    instrlist_meta_preinsert(ilist, where, *update_user);
+    if (could_be_user) {
+        /* update_user: */
+        *update_user = INSTR_CREATE_label(drcontext);
+        instrlist_meta_preinsert(ilist, where, *update_user);
 
-    preinsert_calculate_app_addr(drcontext, mem, ilist_info->reg_addr, ilist, where);
+        preinsert_calculate_app_addr(drcontext, mem, ilist_info->reg_addr, ilist, where);
 
-    if (proc_info.options.stat == true) {
-        preinsert_count_inc(drcontext, ilist, where, &umbra_info->num_dyn_user_refs, 1);
+        if (proc_info.options.stat == true) {
+            preinsert_count_inc(drcontext, ilist, where, &umbra_info->num_dyn_user_refs,
+                                1);
+        }
+
+        if (proc_info.client.instrument_update_user != NULL) {
+            proc_info.client.instrument_update_user(drcontext, umbra_info, mem->ref,
+                                                    ilist, where);
+        }
+        /* jmp .restore */
+        instrlist_meta_preinsert(ilist, where,
+                                 INSTR_CREATE_jmp(drcontext, opnd_create_instr(restore)));
     }
 
-    if (proc_info.client.instrument_update_user != NULL) {
-        proc_info.client.instrument_update_user(drcontext, umbra_info, mem->ref, ilist,
-                                                where);
-    }
-    /* jmp .restore */
-    instrlist_meta_preinsert(ilist, where,
-                             INSTR_CREATE_jmp(drcontext, opnd_create_instr(restore)));
-}
-
-if (could_be_kernel) {
+    if (could_be_kernel) {
 #endif
-    /* update: */
-    *update = INSTR_CREATE_label(drcontext);
-    instrlist_meta_preinsert(ilist, where, *update);
+        /* update: */
+        *update = INSTR_CREATE_label(drcontext);
+        instrlist_meta_preinsert(ilist, where, *update);
 
-    preinsert_calculate_app_addr(drcontext, mem, ilist_info->reg_addr, ilist, where);
+        preinsert_calculate_app_addr(drcontext, mem, ilist_info->reg_addr, ilist, where);
 
-    preinsert_calculate_shd_addr(drcontext, umbra_info, &proc_info.client, ilist_info,
-                                 mem, ilist_info->reg_addr, ilist, where, offset_ptr);
+        preinsert_calculate_shd_addr(drcontext, umbra_info, &proc_info.client, ilist_info,
+                                     mem, ilist_info->reg_addr, ilist, where, offset_ptr);
 
-    if (proc_info.options.stat == true) {
-        preinsert_count_inc(drcontext, ilist, where, &umbra_info->num_dyn_refs, 1);
-    }
-    if (proc_info.client.instrument_update != NULL)
-        proc_info.client.instrument_update(drcontext, umbra_info, mem->ref, ilist, where);
+        if (proc_info.options.stat == true) {
+            preinsert_count_inc(drcontext, ilist, where, &umbra_info->num_dyn_refs, 1);
+        }
+        if (proc_info.client.instrument_update != NULL)
+            proc_info.client.instrument_update(drcontext, umbra_info, mem->ref, ilist,
+                                               where);
 #ifdef LINUX_KERNEL
-}
+    }
 #endif
 }
 
