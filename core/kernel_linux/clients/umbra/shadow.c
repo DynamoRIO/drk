@@ -644,12 +644,15 @@ memory_map_offset_add(reg_t offset)
 
     /* add prot_map for the new offset */
     for (i = 0; i < MAP_HASH_SIZE; i++) {
-        for (hash = app_map_hash[i]; hash != NULL; hash = hash->next)
-            if (hash->map->shd_base != NULL)
+        for (hash = app_map_hash[i]; hash != NULL; hash = hash->next) {
+            if (hash->map->shd_base != NULL) {
                 /* skip app map that not compute shadow yet */
                 prot_map_hash_add(hash->tag);
-        for (hash = shd_map_hash[i]; hash != NULL; hash = hash->next)
+            }
+        }
+        for (hash = shd_map_hash[i]; hash != NULL; hash = hash->next) {
             prot_map_hash_add(hash->tag);
+        }
     }
 }
 #endif
@@ -1072,15 +1075,17 @@ memory_map_app_add(void *start, void *end, bool add_shadow_now)
         /* tries to mark the first and last page non-accessible
          * to avoid memory mod span multiple units
          */
-        if (base >= end || (base + PAGE_SIZE) <= start)
+        if (base >= end || (base + PAGE_SIZE) <= start) {
             os_mmap(base, PAGE_SIZE, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED,
                     -1, 0);
+        }
 #endif
         base += proc_info.unit_size;
 #ifndef LINUX_KERNEL
-        if ((base - PAGE_SIZE) >= end || base <= start)
+        if ((base - PAGE_SIZE) >= end || base <= start) {
             os_mmap(base + proc_info.unit_size - PAGE_SIZE, PAGE_SIZE, PROT_NONE,
                     MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
+        }
 #endif
     } while (base < end && base != 0);
 
@@ -1269,12 +1274,13 @@ shadow_post_brk(void *drcontext, umbra_info_t *info)
     dr_fprintf(info->log, "brk %p \n", result);
 #    endif
     dr_mutex_lock(proc_info.mutex);
-    if ((void *)result > proc_info.heap_brk)
+    if ((void *)result > proc_info.heap_brk) {
         /* expand heap */
         memory_mod_app_add(proc_info.heap_brk, result - (reg_t)proc_info.heap_brk);
-    else if ((void *)result < proc_info.heap_brk)
+    } else if ((void *)result < proc_info.heap_brk) {
         /* shrink heap */
         memory_mod_app_remove((void *)result, (reg_t)proc_info.heap_brk - result);
+    }
     proc_info.heap_brk = (void *)result;
     dr_mutex_unlock(proc_info.mutex);
 }

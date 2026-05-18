@@ -1172,9 +1172,10 @@ if (could_be_user) {
         preinsert_count_inc(drcontext, ilist, where, &umbra_info->num_dyn_user_refs, 1);
     }
 
-    if (proc_info.client.instrument_update_user != NULL)
+    if (proc_info.client.instrument_update_user != NULL) {
         proc_info.client.instrument_update_user(drcontext, umbra_info, mem->ref, ilist,
                                                 where);
+    }
     /* jmp .restore */
     instrlist_meta_preinsert(ilist, where,
                              INSTR_CREATE_jmp(drcontext, opnd_create_instr(restore)));

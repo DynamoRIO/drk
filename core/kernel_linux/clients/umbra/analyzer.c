@@ -274,11 +274,12 @@ analyzer_update_bb(void *drcontext, umbra_info_t *info, basic_block_t *bb,
             aflags_dead = true;
         }
         for (i = 0; i < bb->num_refs; i++) {
-            if (bb->refs[i].pc == pc)
+            if (bb->refs[i].pc == pc) {
                 /* change the instr, the old instr should
                  * have been destroyed on code emission
                  */
                 bb->refs[i].instr = instr;
+            }
         }
     }
     if (aflags_dead == true)
