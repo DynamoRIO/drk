@@ -3,6 +3,9 @@
 
 #include <string>
 
+namespace dynamorio {
+namespace kernel {
+
 class LinuxDevice {
 public:
     LinuxDevice(const std::string &name, const std::string &path);
@@ -24,5 +27,8 @@ private:
     LinuxDevice &
     operator=(const LinuxDevice &);
 };
+
+} // namespace kernel
+} // namespace dynamorio
 
 #endif
