@@ -165,9 +165,10 @@ reg_update_is_limited(instr_t *instr, reg_id_t reg)
     opcode = instr_get_opcode(instr);
     if (opcode == OP_inc || opcode == OP_dec)
         return true;
-    if (opcode == OP_and)
+    if (opcode == OP_and) {
         /* for 0xffffffd0 & reg => reg */
         return true;
+    }
 
     if ((opcode == OP_add || opcode == OP_sub || opcode == OP_adc || opcode == OP_sbb) &&
         opnd_is_immed_int(instr_get_src(instr, 0))) {
@@ -224,11 +225,13 @@ optimize_cfg_aflags(void *drcontext, umbra_info_t *umbra_info, ilist_info_t *ili
 
     for (edge = cfg_bb_get_first_outgoing_edge(umbra_info, bb); edge->id != 0;
          edge = cfg_edge_get_next_outgoing_edge(umbra_info, edge)) {
-        if (EDGE_IS_IND_BRANCH(edge))
+        if (EDGE_IS_IND_BRANCH(edge)) {
             return;
-        if (edge->opcode == OP_call_fall)
+        }
+        if (edge->opcode == OP_call_fall) {
             /* call fall through, not a real cfg edge */
             continue;
+        }
         tgt = cfg_get_bb(umbra_info, edge->dst_bb);
         aflags_dead = BB_IS_AFLAGS_DEAD(tgt) && aflags_dead;
     }

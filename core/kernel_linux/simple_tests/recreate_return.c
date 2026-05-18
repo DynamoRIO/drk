@@ -15,10 +15,11 @@
  */
 
 #if 0
-static void testa(void) { }
-static void testb(void) { }
+static void testa(void) {}
+static void testb(void) {}
 
-static void test_recreate_return(void) {
+static void
+test_recreate_return(void) {
     int j = 0;
     while (true) {
         j++;

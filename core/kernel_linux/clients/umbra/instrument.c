@@ -1195,9 +1195,10 @@ instrument_update(void *drcontext, umbra_info_t *umbra_info, ilist_info_t *ilist
         if (proc_info.options.stat == true) {
             preinsert_count_inc(drcontext, ilist, where, &umbra_info->num_dyn_refs, 1);
         }
-        if (proc_info.client.instrument_update != NULL)
+        if (proc_info.client.instrument_update != NULL) {
             proc_info.client.instrument_update(drcontext, umbra_info, mem->ref, ilist,
                                                where);
+        }
 #ifdef LINUX_KERNEL
     }
 #endif
