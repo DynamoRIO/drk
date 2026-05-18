@@ -9,7 +9,7 @@
 
 #include <linux/kernel.h>
 
-/* Number of bits in a `char'.	*/
+/* Number of bits in a `char'. */
 #define CHAR_BIT 8
 
 /* Minimum and maximum values a `signed char' can hold.  */
