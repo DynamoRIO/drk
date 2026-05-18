@@ -18,8 +18,9 @@
 
 namespace dynamorio {
 namespace kernel {
+namespace {
 
-static int
+int
 GetDeviceMajor(const std::string &name)
 {
     std::ifstream devices("/proc/devices");
@@ -38,7 +39,7 @@ GetDeviceMajor(const std::string &name)
     throw std::runtime_error("Could not get device major.");
 }
 
-static bool
+bool
 DeviceFileExists(const std::string &path, int dev_major)
 {
     struct stat stat;
@@ -56,7 +57,7 @@ DeviceFileExists(const std::string &path, int dev_major)
     return true;
 }
 
-static void
+void
 CreateDevFile(const std::string &path, int major)
 {
     if (mknod(path.c_str(), S_IFCHR, makedev(major, 0)) != 0) {
@@ -68,6 +69,8 @@ CreateDevFile(const std::string &path, int major)
                             strerror(errno));
     }
 }
+
+} // namespace
 
 LinuxDevice::LinuxDevice(const std::string &name, const std::string &path)
     : path_(path)
