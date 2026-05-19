@@ -125,10 +125,15 @@ find_kernel_symbol_address(const char *name)
     }
 }
 
-/* These functions aren't exported with EXPORT_SYMBOL, so we aren't supposed to
- * be able to access them within our module. So we use
- * find_kernel_symbol_address. */
+/* We dynamically resolve the address and size of asm_load_gs_index to check
+ * against the program counter in kernel_native_swapgs.
+ */
 kernel_symbol_t asm_load_gs_index_symbol;
+
+/* The following kernel functions aren't exported with EXPORT_SYMBOL, so we
+ * cannot link against them directly within our module. Instead, we resolve
+ * them dynamically using find_kernel_symbol_address.
+ */
 static void *(*module_alloc_ptr)(unsigned long) = NULL;
 static unsigned long (*module_kallsyms_lookup_name_ptr)(const char *name) = NULL;
 static struct module *(*find_module_ptr)(const char *name) = NULL;
