@@ -125,11 +125,15 @@ find_kernel_symbol_address(const char *name)
     }
 }
 
-/* These functions aren't exported with EXPORT_SYMBOL, so we aren't supposed to
- * be able to access them within our module. So we use
- * find_kernel_symbol_address. */
-kernel_symbol_t native_load_gs_index_symbol;
-kernel_symbol_t gs_change_symbol;
+/* We dynamically resolve the address and size of asm_load_gs_index to check
+ * against the program counter in kernel_native_swapgs.
+ */
+kernel_symbol_t asm_load_gs_index_symbol;
+
+/* The following kernel functions aren't exported with EXPORT_SYMBOL, so we
+ * cannot link against them directly within our module. Instead, we resolve
+ * them dynamically using find_kernel_symbol_address.
+ */
 static void *(*module_alloc_ptr)(unsigned long) = NULL;
 static unsigned long (*module_kallsyms_lookup_name_ptr)(const char *name) = NULL;
 static struct module *(*find_module_ptr)(const char *name) = NULL;
@@ -171,12 +175,8 @@ kernel_module_init(size_t dr_heap_size)
     /* Some OS interfaces, such as get_thread_private_dcontext, rely on the TLS
      * initially being all 0. */
     zero_cpu_private_data();
-    native_load_gs_index_symbol.name = "native_load_gs_index";
-    if (!find_kernel_symbol(&native_load_gs_index_symbol)) {
-        return false;
-    }
-    gs_change_symbol.name = "gs_change";
-    if (!find_kernel_symbol(&gs_change_symbol)) {
+    asm_load_gs_index_symbol.name = "asm_load_gs_index";
+    if (!find_kernel_symbol(&asm_load_gs_index_symbol)) {
         return false;
     }
     module_alloc_ptr = find_kernel_symbol_address("module_alloc");
@@ -473,25 +473,16 @@ pc_within_symbol(void *pc, kernel_symbol_t *symbol)
 bool
 kernel_native_swapgs(void *pc)
 {
-    /* This is a shameful hack. We want to allow the swapgs instructions inside
-     * of native_load_gs_index.
+    /* We should allow swapgs instructions inside asm_load_gs_index (including
+     * its internal exception fixup handlers like .Lbad_gs) to execute unmodified
+     * so that segment loading faults can be handled safely.
      *
-     * TODO(peter): We might also need to allow some of the swapgs instructions
-     * in the fixup routines (e.g., bad_gs in entry_64.S). I'm not sure yet
-     * because we are suppressing all swapgs instructions elsewhere, so
-     * everything might just cancel out. In general, this could be fixed by not
-     * using thread-local storage or emulating swapgs; both alternatives would
-     * be painful.
+     * The bounds of asm_load_gs_index_symbol are dynamically resolved, making it
+     * safe and robust to check against the program counter.
      *
-     * TODO(peter): Is there a more robust way to get the end of native_load_gs_index
-     * than adding 30 bytes to its starting address?
+     * NOTE: In the future, we might want to switch to emulating swapgs.
      */
-    return pc_within_symbol(pc, &native_load_gs_index_symbol) ||
-        pc_within_symbol(pc, &gs_change_symbol);
-#if 0
-    return pc >= (void*) native_load_gs_index_address &&
-           pc <= (void*) (((char*) native_load_gs_index_address) + 30);
-#endif
+    return pc_within_symbol(pc, &asm_load_gs_index_symbol);
 }
 
 bool
