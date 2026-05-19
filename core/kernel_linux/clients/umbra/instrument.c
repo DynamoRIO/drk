@@ -1233,7 +1233,7 @@ instrument_lean_call(void *drcontext, umbra_info_t *umbra_info, ilist_info_t *il
 #ifdef LINUX_KERNEL
     instr_t *where = update_user;
 #else
-        instr_t *where = update;
+    instr_t *where = update;
 #endif
 
     if (IF_X64(opnd_is_rel_addr(mem->ref->opnd) ||) opnd_is_abs_addr(mem->ref->opnd))
@@ -1338,7 +1338,7 @@ instrument_inline_check(void *drcontext, umbra_info_t *umbra_info,
 #ifdef LINUX_KERNEL
     instr_t *where = update_user;
 #else
-        instr_t *where = update;
+    instr_t *where = update;
 #endif
 
     cache = ilist_info->mems[mem->group.leader].ref->cache;
@@ -1858,7 +1858,7 @@ build_map_search_ilist(void *drcontext, umbra_info_t *info, reg_id_t reg)
 #ifdef LINUX_KERNEL
     reg_id_t app_tag_reg = reg == REG_XAX ? REG_XBX : REG_XAX;
 #else
-        reg_id_t app_tag_reg = REG_XSP;
+    reg_id_t app_tag_reg = REG_XSP;
 #endif
 
     ilist = instrlist_create(drcontext);

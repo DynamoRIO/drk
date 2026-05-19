@@ -48,7 +48,7 @@ DeviceFileExists(const std::string &path, int dev_major)
         case ENOENT: return false;
         default:
             throw std::runtime_error(std::string("Could not lstat the device file: ") +
-                                strerror(errno));
+                                     strerror(errno));
         }
     }
     if (major(stat.st_rdev) != (unsigned int)dev_major) {
@@ -62,11 +62,11 @@ CreateDevFile(const std::string &path, int major)
 {
     if (mknod(path.c_str(), S_IFCHR, makedev(major, 0)) != 0) {
         throw std::runtime_error(std::string("Could not mknod the device file: ") +
-                            strerror(errno));
+                                 strerror(errno));
     }
     if (chmod(path.c_str(), S_IROTH) != 0) {
         throw std::runtime_error(std::string("Could not make the dev file readable: ") +
-                            strerror(errno));
+                                 strerror(errno));
     }
 }
 
@@ -87,7 +87,8 @@ LinuxDevice::OpenDevFile()
 {
     fd_ = open(path_.c_str(), O_RDONLY);
     if (fd_ == -1) {
-        throw std::runtime_error(std::string("Could not open device: ") + strerror(errno));
+        throw std::runtime_error(std::string("Could not open device: ") +
+                                 strerror(errno));
     }
 }
 
@@ -105,7 +106,8 @@ LinuxDevice::~LinuxDevice()
 {
     if (close(fd_) != 0) {
         // Can't throw an exception from a destructor.
-        std::cerr << "Could not close the device file descriptor: " << strerror(errno) << std::endl;
+        std::cerr << "Could not close the device file descriptor: " << strerror(errno)
+                  << std::endl;
     }
 }
 
