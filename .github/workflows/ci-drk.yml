@@ -1,0 +1,33 @@
+name: ci-x86
+on: [push, pull_request]
+jobs:
+  x86-64:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Setup build environment
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt update
+          sudo apt install libelf-dev scons
+          echo "MAKE_CMD=make -j$(nproc)" >> $GITHUB_ENV
+
+      - name: Download and extract kernel source
+        run: |
+          VERSION="6.6.130"
+          wget --quiet https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-$VERSION.tar.xz
+          tar -xf linux-$VERSION.tar.xz
+          echo "KERNEL_DIR=linux-$VERSION" >> $GITHUB_ENV
+
+      - name: Generate kernel headers
+        working-directory: ${{ env.KERNEL_DIR }}
+        run: |
+          make defconfig
+          $MAKE_CMD vmlinux modules
+
+      - name: Build drk
+        # TODO i#10: Convert to cmake.
+        run: cd core && $MAKE_CMD -f drk.mk KERNELDIR=$GITHUB_WORKSPACE/$KERNEL_DIR
