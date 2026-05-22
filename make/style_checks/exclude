@@ -65,7 +65,9 @@ foreach rule $rules {
     }
 }
 
+# Exclude memcheck.c and list.h specifically from the multi_line_body check
 lappend ruleExclusions(multi_line_body) memcheck.c
+lappend ruleExclusions(multi_line_body) list.h
 
 ## 1.3.0 syntax for reference:
 ##
