@@ -1,3 +1,14 @@
+/*
+ * Note: This file is compiled and executed in userspace (as part of the
+ * userspace controller utility), NOT inside the Linux kernel. Therefore,
+ * standard C++ library headers are permitted.
+ *
+ * TODO: Standard C++ exceptions are disallowed in DynamoRIO's general C++
+ * coding style. We should replace standard C++ exceptions with a different
+ * error-handling mechanism, such as standard error codes or boolean status
+ * returns, to maximize code interoperability and style consistency.
+ */
+
 #include "linux_device.h"
 
 #include <fstream>
