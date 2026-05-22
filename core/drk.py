@@ -77,7 +77,7 @@ class RequiredOptionParser(object):
         self.parser.add_option(name, *args, **kwargs)
 
     def parse_args(self):
-        (options, args) = self.parser.parse_args()
+        options, args = self.parser.parse_args()
         missing = None
         for value in options.__dict__.values():
             if isinstance(value, RequiredOptionParser.DefaultSentenil):
@@ -249,7 +249,7 @@ def main():
         default="true",
         help="Command to run after init. Useful for tests.",
     )
-    (options, args) = parser.parse_args()
+    options, args = parser.parse_args()
 
     if options.run_locally:
         if not running_as_root():

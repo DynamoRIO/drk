@@ -9,23 +9,30 @@ API_INCLUDE_DIR ?= lib/include
 .PHONY: test
 
 DR_CORE_DIR := $(shell pwd)
-DR_INCLUDE_FLAGS := -DDR_REG_ENUM_COMPATIBILITY -DX86_64 -DLINUX -DLINUX_KERNEL\
+DR_INCLUDE_FLAGS := -DDR_REG_ENUM_COMPATIBILITY -DLINUX_KERNEL\
+					-I$(DR_CORE_DIR)/../build\
 					-I$(DR_CORE_DIR)/$(API_INCLUDE_DIR)\
-					-I$(DR_CORE_DIR)/kernel_linux\
+					-I$(DR_CORE_DIR)\
 					-I$(DR_CORE_DIR)/lib\
+					-I$(DR_CORE_DIR)/drlibc\
+					-I$(DR_CORE_DIR)/kernel_linux\
+					-I$(DR_CORE_DIR)/unix\
 					-I$(DR_CORE_DIR)/x86\
-					-I$(DR_CORE_DIR)
+					-I$(DR_CORE_DIR)/arch\
+					-I$(DR_CORE_DIR)/arch/x86\
+					-I$(DR_CORE_DIR)/ir\
+					-I$(DR_CORE_DIR)/ir/x86
 
 MODULES_MAKE =-C $(KERNELDIR) M=$(DR_CORE_DIR)/kernel_linux/modules\
 			  DR_CORE_DIR=$(DR_CORE_DIR) DR_INCLUDE_FLAGS="$(DR_INCLUDE_FLAGS)"
 
-ASM_FILES= $(shell find . -name '*.asm' | sed 's/\.asm/.S/g')
+ASM_FILES= $(shell find . -name '*.asm' | grep -vE 'aarch64|aarchxx|arm|riscv64' | sed 's/\.asm/.S/g')
 
 # TODO i#20: Re-enable scons to build utility programs and tests.
 # default: exports.c api_headers scons $(ASM_FILES)
 default: exports.c api_headers $(ASM_FILES)
 	cp kernel_linux/modules/Module.symvers.in kernel_linux/modules/Module.symvers
-	$(MAKE) $(MODULES_MAKE) modules
+	$(MAKE) $(MODULES_MAKE) KBUILD_MODPOST_WARN=1 modules
 
 scons:
 	scons -j10
@@ -38,13 +45,9 @@ exports.c: $(API_INCLUDE_DIR) exports.py
 
 api_headers: $(API_INCLUDE_DIR)
 
-$(API_INCLUDE_DIR): $(shell find . -name '*.h' | grep -v $(API_INCLUDE_DIR) | grep -v 'kernel_linux/clients') lib/genapi.pl
+$(API_INCLUDE_DIR):
 	mkdir -p $(API_INCLUDE_DIR)
-	touch $(API_INCLUDE_DIR)
-	./lib/genapi.pl -header $(API_INCLUDE_DIR) "$(shell ./defines.py configure.h) -DAPI_EXPORT_ONLY"
-	cp lib/dr_api.h $(API_INCLUDE_DIR)/dr_api.h
-	sed -i 's/$${VERSION_NUMBER_INTEGER}/200/' $(API_INCLUDE_DIR)/dr_api.h
-	./defines.py configure.h | grep -v '\-DDEBUG'; sed -i "s/\$${DEBUG}/$$?/" $(API_INCLUDE_DIR)/dr_api.h
+	cp -r ../build/include/* $(API_INCLUDE_DIR)/
 
 %.S: %.asm
 	cpp  $(DR_INCLUDE_FLAGS) -Ddynamorio_EXPORTS -E $^ -o $@
