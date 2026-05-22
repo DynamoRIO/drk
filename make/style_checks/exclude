@@ -65,7 +65,9 @@ foreach rule $rules {
     }
 }
 
-# Exclude memcheck.c specifically from the multi_line_body check
+# Exclude memcheck.c from multi_line_body check because the macros
+# for_each_free_object and for_each_object define loop constructs
+# that span multiple lines and trip the style checker.
 lappend ruleExclusions(multi_line_body) memcheck.c
 
 ## 1.3.0 syntax for reference:
