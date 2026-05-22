@@ -138,6 +138,7 @@ static void *(*module_alloc_ptr)(unsigned long) = NULL;
 static unsigned long (*module_kallsyms_lookup_name_ptr)(const char *name) = NULL;
 static struct module *(*find_module_ptr)(const char *name) = NULL;
 static struct module *(*__module_address_ptr)(unsigned long addr) = NULL;
+static int (*set_memory_x_ptr)(unsigned long, int) = NULL;
 
 bool
 kernel_module_init(size_t dr_heap_size)
@@ -196,6 +197,10 @@ kernel_module_init(size_t dr_heap_size)
     if (__module_address_ptr == NULL) {
         return false;
     }
+    set_memory_x_ptr = find_kernel_symbol_address("set_memory_x");
+    if (set_memory_x_ptr == NULL) {
+        return false;
+    }
 
     /* Use module_alloc so the heap is located close (i.e., 32-bit reachable) to
      * the module's text and data. The Linux kernel allocates only 1.5 GB of
@@ -212,7 +217,19 @@ kernel_module_init(size_t dr_heap_size)
     if (heap == NULL) {
         printk("Failed to allocate %luB using module_alloc.\n", heap_size);
         return false;
-        ;
+    }
+
+    /* In modern kernels, module_alloc allocates memory as non-executable (NX)
+     * by default to adhere to strict W^X policies. We must explicitly mark
+     * the allocated heap as executable using set_memory_x, so DynamoRIO can
+     * store its code cache.
+     */
+    int ret = set_memory_x_ptr((unsigned long)heap, heap_size / PAGE_SIZE);
+    if (ret != 0) {
+        printk("set_memory_x failed with error %d\n", ret);
+        vfree(heap);
+        heap = NULL;
+        return false;
     }
     return true;
 }
