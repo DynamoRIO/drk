@@ -9,9 +9,6 @@ util.Program('kernel_linux/controller',
              ['kernel_linux/controller.cc',
               'kernel_linux/controller_stats_interface.cc',
               'kernel_linux/linux_device.cc'])
-util.Program('kernel_linux/hypercall_host',
-             ['kernel_linux/hypercall_host.cc',
-              'kernel_linux/linux_device.cc'])
 
 unittest.Program('kernel_linux/list_unittest.c')
 unittest.Program('kernel_linux/page_table_unittest.c')
