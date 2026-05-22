@@ -10,7 +10,6 @@ util.Program('kernel_linux/controller',
               'kernel_linux/controller_stats_interface.cc',
               'kernel_linux/linux_device.cc'])
 
-unittest.Program('kernel_linux/list_unittest.c')
 unittest.Program('kernel_linux/page_table_unittest.c')
 unittest.Program('barrier_unittest.c')
 unittest.Program('utils_unittest.c')
