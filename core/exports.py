@@ -67,6 +67,9 @@ def main():
     # regular expressions is hacky. It should be replaced when moving to CMake.
     functions = set()
     for path in glob.glob(f"{sys.argv[1]}/*.h"):
+        # Skip architecture-specific headers for AArch64 and ARM. Only x86 is
+        # supported for now, as this script hardcodes -DX86_64 to extract exports.
+        # TODO: Add support for ARM and AArch64 architectures in the future.
         if "aarch64" in path or "arm" in path:
             continue
         code = check_open(
