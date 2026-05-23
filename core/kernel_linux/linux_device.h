@@ -1,7 +1,10 @@
 #ifndef __LINUX_DEVICE_H_
-#    define __LINUX_DEVICE_H_
+#define __LINUX_DEVICE_H_
 
-#    include <string>
+#include <string>
+
+namespace dynamorio {
+namespace kernel {
 
 class LinuxDevice {
 public:
@@ -24,5 +27,8 @@ private:
     LinuxDevice &
     operator=(const LinuxDevice &);
 };
+
+} // namespace kernel
+} // namespace dynamorio
 
 #endif

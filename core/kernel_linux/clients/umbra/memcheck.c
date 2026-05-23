@@ -284,7 +284,7 @@ is_memory_ok_to_alloc(void *start, size_t size)
              * returned from unknown memory as opposed to unaddressable because
              * kmalloc_large uses __get_free_pages directly. */
             if (size <= SLUB_MAX_SIZE && perm == PERMISSION_UNKNOWN) {
-                return false; 
+                return false;
             }
 #    endif
         });

@@ -15,16 +15,17 @@
  */
 
 #if 0
-static void testa(void) { }
-static void testb(void) { }
+static void testa(void) {}
+static void testb(void) {}
 
-static void test_recreate_return(void) {
+static void
+test_recreate_return(void) {
     int j = 0;
     while (true) {
         j++;
         if (j % 2 == 0) {
             /* Force interrupt stack frame alignment by doing rsp -= 8 before
-             * testa() and rsp -= 0 before testb(). 
+             * testa() and rsp -= 0 before testb().
              * TODO(peter): This whole thing should be written in assembly
              * because popping rax with optimizations enabled could crash (i.e.
              * we're changing rsp and rax without telling the compiler),

@@ -67,7 +67,14 @@ def main():
     # regular expressions is hacky. It should be replaced when moving to CMake.
     functions = set()
     for path in glob.glob(f"{sys.argv[1]}/*.h"):
-        code = check_open(f"cpp -DX86_64 -DLINUX -DLINUX_KERNEL {path}".split())
+        # Skip architecture-specific headers for AArch64 and ARM. Only x86 is
+        # supported for now, as this script hardcodes -DX86_64 to extract exports.
+        # TODO: Add support for ARM and AArch64 architectures in the future.
+        if "aarch64" in path or "arm" in path:
+            continue
+        code = check_open(
+            f"cpp -DX86_64 -DLINUX -DLINUX_KERNEL -Ilib/include -include dr_api.h {path}".split()
+        )
         for match in re.findall(
             r"^\s*(?:[a-zA-Z0-9_]+\s+)*([a-zA-Z0-9_]+)\(", code, re.MULTILINE
         ):

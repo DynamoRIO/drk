@@ -273,7 +273,7 @@ cfg_bb_trim_ilist(void *drcontext, umbra_info_t *info, app_pc tag, instrlist_t *
 #if 0
         /* Assertion no longer valid with app-to-app transformations for repstr.
          */
-        DR_ASSERT_MSG((tag + length) == instr_get_app_pc(instr), 
+        DR_ASSERT_MSG((tag + length) == instr_get_app_pc(instr),
                       "BB does not have a continuous code!");
 #endif
         length += instr_length(drcontext, instr);

@@ -458,7 +458,10 @@ show_umbra_stats(int cpu, char *buf)
     if (!umbra_info) {
         return sprintf(buf, "cpu %d not yet initilized!\n", cpu);
     }
-#    define PRINT_UMBRA_STAT(name) buf += sprintf(buf, #    name ": %lu\n", umbra_info->name);
+    /* clang-format off */
+#    define PRINT_UMBRA_STAT(name) \
+        buf += sprintf(buf, #name ": %lu\n", umbra_info->name);
+    /* clang-format on */
     PRINT_UMBRA_STAT(num_app_instrs);
     PRINT_UMBRA_STAT(num_app_refs);
     PRINT_UMBRA_STAT(num_ref_caches);
