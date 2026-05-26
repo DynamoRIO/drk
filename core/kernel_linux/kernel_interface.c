@@ -223,6 +223,25 @@ kernel_module_init(size_t dr_heap_size)
      * by default to adhere to strict W^X policies. We must explicitly mark
      * the allocated heap as executable using set_memory_x, so DynamoRIO can
      * store its code cache.
+     *
+     * NOTE: We must mark the entire heap as executable at module load time
+     * (where interrupts are enabled) rather than dynamically toggling page
+     * permissions at runtime via os_heap_commit. This is because DynamoRIO's
+     * thread takeover and dynamic allocations often occur in contexts where
+     * interrupts are disabled. Modifying page tables at runtime in these
+     * contexts would require sending Inter-Processor Interrupts (IPIs) to flush
+     * TLBs across other cores, which is forbidden when interrupts are disabled
+     * and would trigger an immediate kernel panic or system deadlock.
+     *
+     * TODO i#32: We would need to allocate two separate memory heaps at startup
+     * for fine-grained W^X protection:
+     *   1) An executable code heap (marked +x).
+     *   2) A non-executable data heap (left NX).
+     * Since page permissions are set at startup (when interrupts are enabled),
+     * no runtime permission changes are needed. This requires modifying the VMM
+     * (core/heap.c) to support two concurrent VMM regions instead of a single
+     * one, routing executable allocations to the code heap and non-executable
+     * allocations to the data heap.
      */
     int ret = set_memory_x_ptr((unsigned long)heap, heap_size / PAGE_SIZE);
     if (ret != 0) {
