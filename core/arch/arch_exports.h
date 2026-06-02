@@ -1879,4 +1879,53 @@ typedef struct _rseq_entry_state_t {
 #    define ARCH_SUPPORTS_HW_CACHE_CONSISTENCY
 #endif
 
+#ifdef LINUX_KERNEL
+typedef enum {
+    VECTOR_DIVIDE_ERROR = 0,
+    VECTOR_START = VECTOR_DIVIDE_ERROR,
+    VECTOR_EXCEPTION_START = VECTOR_DIVIDE_ERROR,
+    VECTOR_DEBUG = 1,
+    VECTOR_NMI = 2,
+    VECTOR_BREAKPOINT = 3,
+    VECTOR_OVERFLOW = 4,
+    VECTOR_BOUND_RANGE_EXCEEDED = 5,
+    VECTOR_INVALID_OPCODE = 6,
+    VECTOR_DEVICE_NOT_AVAILABLE = 7,
+    VECTOR_DOUBLE_FAULT = 8,
+    VECTOR_COPROCESSOR_SEGMENT_OVERRUN = 9,
+    VECTOR_INVALID_TSS = 10,
+    VECTOR_SEGMENT_NOT_PRESENT = 11,
+    VECTOR_STACK_FAULT = 12,
+    VECTOR_GENERAL_PROTECTION = 13,
+    VECTOR_PAGE_FAULT = 14,
+    /* no 15 */
+    VECTOR_X87_FPU_FLOATING_POINT_ERROR = 16,
+    VECTOR_ALIGNMENT_CHECK = 17,
+    VECTOR_MACHINE_CHECK = 18,
+    VECTOR_SIMD_FLOATING_POINT = 19,
+    VECTOR_EXCEPTION_END = 20,
+    VECTOR_INTERRUPT_START = 20,
+    VECTOR_INTERRUPT_END = 256,
+    VECTOR_END = VECTOR_INTERRUPT_END
+} interrupt_vector_t;
+
+#    define MAGIC_FAKE_ERROR 0xfffffffffbadbeef
+
+/* The layout of the interrupt stack frame. The stack pointer will point to
+ * error_code. */
+typedef struct {
+    reg_t error_code;
+    byte *xip;
+    reg_t cs;
+    reg_t xflags;
+    reg_t xsp;
+    reg_t ss;
+} interrupt_stack_frame_t;
+
+#    define INTERRUPT_STACK_FRAME_ALIGNMENT 0x10
+
+typedef void (*interrupt_handler_t)(interrupt_stack_frame_t *, dr_mcontext_t *,
+                                    interrupt_vector_t);
+#endif /* LINUX_KERNEL */
+
 #endif /* _ARCH_EXPORTS_H_ */
