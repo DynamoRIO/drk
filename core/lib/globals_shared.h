@@ -963,9 +963,9 @@ typedef struct {
     uint flags : 2;
     int ignored2; /* siginfo_t.si_code: has meaning to kernel so we avoid using */
 #else
-    uint version;           /* version number for future proofing */
-    uint nudge_action_mask; /* drawn from NUDGE_DEFS above */
-    uint flags;             /* flags drawn from above enum */
+    uint version;                   /* version number for future proofing */
+    uint nudge_action_mask;         /* drawn from NUDGE_DEFS above */
+    uint flags;                     /* flags drawn from above enum */
 #endif
     client_id_t client_id; /* unique ID identifying client */
     uint64 client_arg;     /* argument for a client nudge */
