@@ -73,7 +73,7 @@ def main():
         if "aarch64" in path or "arm" in path:
             continue
         code = check_open(
-            f"cpp -DX86_64 -DLINUX -DLINUX_KERNEL -Ilib/include -include dr_api.h {path}".split()
+            f"cpp -DX86_64 -DLINUX -Ilib/include -include dr_api.h {path}".split()
         )
         for match in re.findall(
             r"^\s*(?:[a-zA-Z0-9_]+\s+)*([a-zA-Z0-9_]+)\(", code, re.MULTILINE
