@@ -249,9 +249,15 @@ get_thread_private_dcontext(void);
 void
 set_thread_private_dcontext(dcontext_t *dcontext);
 
+#ifdef LINUX_KERNEL
+typedef uint tls_offset_t;
+#else
+typedef ushort tls_offset_t;
+#endif
+
 /* converts a local_state_t offset to a segment offset */
-ushort
-os_tls_offset(ushort tls_offs);
+tls_offset_t
+os_tls_offset(tls_offset_t tls_offs);
 
 ushort
 os_local_state_offset(ushort seg_offs);
