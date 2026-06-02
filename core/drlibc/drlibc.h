@@ -149,8 +149,10 @@ find_script_interpreter(DR_PARAM_OUT script_interpreter_t *result,
                         DR_PARAM_IN const char *fname,
                         ssize_t (*reader)(const char *pathname, void *buf, size_t count));
 
+#    ifndef LINUX_KERNEL
 ptr_int_t
 dr_stat_syscall(const char *fname, struct stat64 *st);
+#    endif
 #endif /* UNIX */
 
 #if defined(WINDOWS) && !defined(X64)
