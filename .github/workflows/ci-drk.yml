@@ -35,6 +35,7 @@ jobs:
           mkdir -p build
           cd build
           cmake ..
+          $MAKE_CMD
 
       - name: Build drk
         # TODO i#10: Convert to cmake.
