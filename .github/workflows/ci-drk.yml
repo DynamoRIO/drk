@@ -17,6 +17,13 @@ jobs:
           sudo apt install -y doxygen vera++ libelf-dev scons cmake g++-multilib
           echo "MAKE_CMD=make -j$(nproc)" >> $GITHUB_ENV
 
+      - name: Generate DynamoRIO headers via CMake
+        run: |
+          mkdir -p build
+          cd build
+          cmake ..
+          $MAKE_CMD
+
       - name: Download and extract kernel source
         run: |
           VERSION="6.6.130"
@@ -29,13 +36,6 @@ jobs:
         run: |
           make defconfig
           $MAKE_CMD modules_prepare
-
-      - name: Generate DynamoRIO headers via CMake
-        run: |
-          mkdir -p build
-          cd build
-          cmake ..
-          $MAKE_CMD
 
       - name: Build drk
         # TODO i#10: Convert to cmake.
