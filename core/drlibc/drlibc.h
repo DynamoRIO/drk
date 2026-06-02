@@ -41,12 +41,14 @@
 #define _DR_LIBC_H_
 
 #ifdef UNIX
+#    ifndef LINUX_KERNEL
 /* _LARGEFILE64_SOURCE should make libc struct match kernel. */
-#    ifndef _LARGEFILE64_SOURCE
-#        define _LARGEFILE64_SOURCE
+#        ifndef _LARGEFILE64_SOURCE
+#            define _LARGEFILE64_SOURCE
+#        endif
+#        include <sys/types.h>
+#        include <sys/stat.h>
 #    endif
-#    include <sys/types.h>
-#    include <sys/stat.h>
 #endif
 
 #if defined(MACOS) && defined(AARCH64)
