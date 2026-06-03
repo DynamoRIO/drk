@@ -1199,13 +1199,15 @@ strtoul(const char *str, char **end, int base);
 #endif
 
 #if !defined(NOT_DYNAMORIO_CORE_PROPER) && !defined(NOT_DYNAMORIO_CORE)
-#    undef printf
-#    define printf printf_forbidden_function
-#    undef sprintf /* defined on macos */
-#    define sprintf sprintf_forbidden_function
-#    define swprintf swprintf_forbidden_function
-#    undef vsprintf /* defined on macos */
-#    define vsprintf vsprintf_forbidden_function
+#    ifndef LINUX_KERNEL
+#        undef printf
+#        define printf printf_forbidden_function
+#        undef sprintf /* defined on macos */
+#        define sprintf sprintf_forbidden_function
+#        define swprintf swprintf_forbidden_function
+#        undef vsprintf /* defined on macos */
+#        define vsprintf vsprintf_forbidden_function
+#    endif
 
 /* libc independence */
 #    define mprotect mprotect_forbidden_function
