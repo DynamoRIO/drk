@@ -1212,13 +1212,13 @@ dr_unregister_fork_init_event(void (*func)(void *drcontext))
 #endif
 
 void
-dr_register_low_on_memory_event(void (*func)())
+dr_register_low_on_memory_event(void (*func)(void))
 {
     add_callback(&low_on_memory_callbacks, (void (*)(void))func, true);
 }
 
 bool
-dr_unregister_low_on_memory_event(void (*func)())
+dr_unregister_low_on_memory_event(void (*func)(void))
 {
     return remove_callback(&low_on_memory_callbacks, (void (*)(void))func, true);
 }
