@@ -2329,7 +2329,7 @@ detach_on_permanent_stack(bool internal, bool do_cleanup, dr_stats_t *drstats)
 
 #ifdef LINUX
 void
-detach_externally_on_new_stack()
+detach_externally_on_new_stack(void)
 {
     dcontext_t *my_dcontext;
     priv_mcontext_t my_mcontext;

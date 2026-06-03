@@ -1275,7 +1275,7 @@ set_app_args(DR_PARAM_IN int *app_argc_in, DR_PARAM_IN char **app_argv_in)
 
 /* Returns the number of application's command-line arguments. */
 int
-num_app_args()
+num_app_args(void)
 {
     if (!DYNAMO_OPTION(early_inject)) {
         set_client_error_code(NULL, DR_ERROR_NOT_IMPLEMENTED);
@@ -1442,7 +1442,7 @@ query_time_millis()
 
 /* microseconds since 1601 */
 uint64
-query_time_micros()
+query_time_micros(void)
 {
     struct timeval current_time;
     uint64 val = dynamorio_syscall(SYS_gettimeofday, 2, &current_time, NULL);

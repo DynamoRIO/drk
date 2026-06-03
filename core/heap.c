@@ -1552,7 +1552,7 @@ reached_beyond_vmm(which_vmm_t which)
 }
 
 void
-vmm_heap_handle_pending_low_on_memory_event_trigger()
+vmm_heap_handle_pending_low_on_memory_event_trigger(void)
 {
     bool trigger = false;
 

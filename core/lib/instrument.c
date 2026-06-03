@@ -1521,7 +1521,7 @@ instrument_fork_init(dcontext_t *dcontext)
 #endif
 
 void
-instrument_low_on_memory()
+instrument_low_on_memory(void)
 {
     call_all(low_on_memory_callbacks, int (*)());
 }
