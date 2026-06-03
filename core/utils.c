@@ -2665,14 +2665,17 @@ enable_new_log_dir()
 void
 create_log_dir(int dir_type)
 {
-#ifdef UNIX
+#ifdef LINUX_KERNEL
+    ASSERT_NOT_IMPLEMENTED(false);
+#else
+#    ifdef UNIX
     char *pre_execve = getenv(DYNAMORIO_VAR_EXECVE_LOGDIR);
     DEBUG_DECLARE(bool sharing_logdir = false;)
-#endif
+#    endif
     /* synchronize */
     acquire_recursive_lock(&logdir_mutex);
     SELF_UNPROTECT_DATASEC(DATASEC_RARELY_PROT);
-#ifdef UNIX
+#    ifdef UNIX
     if (dir_type == PROCESS_DIR && pre_execve != NULL) {
         /* if this app has a logdir option or config, that should trump sharing
          * the pre-execve logdir.  a logdir env var should not.
@@ -2692,7 +2695,7 @@ create_log_dir(int dir_type)
         /* check that it's gone: we've had problems with unsetenv */
         ASSERT(getenv(DYNAMORIO_VAR_EXECVE_LOGDIR) == NULL);
     }
-#endif
+#    endif
     /* used to be an else: leaving indentation though */
     if (dir_type == BASE_DIR) {
         int retval;
@@ -2715,21 +2718,21 @@ create_log_dir(int dir_type)
             basedir_initialized = true;
             /* skip creating dir basedir if is empty */
             if (basedir[0] == '\0') {
-#ifndef STATIC_LIBRARY
+#    ifndef STATIC_LIBRARY
                 SYSLOG(SYSLOG_WARNING, WARNING_EMPTY_OR_NONEXISTENT_LOGDIR_KEY, 2,
                        get_application_name(), get_application_pid());
-#endif
+#    endif
             } else {
                 if (!os_create_dir(basedir, CREATE_DIR_ALLOW_EXISTING)) {
                     /* try to create full path */
                     char swap;
                     char *end = double_strchr(basedir, DIRSEP, ALT_DIRSEP);
                     bool res;
-#ifdef WINDOWS
+#    ifdef WINDOWS
                     /* skip the drive */
                     if (end != NULL && end > basedir && *(end - 1) == ':')
                         end = double_strchr(++end, DIRSEP, ALT_DIRSEP);
-#endif
+#    endif
                     while (end) {
                         swap = *end;
                         *end = '\0';
@@ -2771,7 +2774,7 @@ create_log_dir(int dir_type)
     SELF_PROTECT_DATASEC(DATASEC_RARELY_PROT);
     release_recursive_lock(&logdir_mutex);
 
-#ifdef DEBUG
+#    ifdef DEBUG
     if (d_r_stats != NULL) {
         /* if null, we're trying to report an error (probably via a core dump),
          * so who cares if we lose logdir name */
@@ -2779,12 +2782,13 @@ create_log_dir(int dir_type)
         d_r_stats->logdir[sizeof(d_r_stats->logdir) - 1] = '\0'; /* if max no null */
     }
     if (dir_type == PROCESS_DIR
-#    ifdef UNIX
+#        ifdef UNIX
         && !sharing_logdir
-#    endif
+#        endif
     )
         SYSLOG_INTERNAL_INFO("log dir=%s", logdir);
-#endif /* DEBUG */
+#    endif /* DEBUG */
+#endif     /* LINUX_KERNEL */
 }
 
 /* Copies the name of the specified directory into buffer, returns true if

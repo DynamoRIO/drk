@@ -417,10 +417,11 @@ dynamorio_app_init_part_one_options(void)
         /* avoid time() for libc independence */
         DODEBUG(starttime = query_time_seconds(););
 
-#ifdef UNIX
+#ifndef LINUX_KERNEL
+#    ifdef UNIX
         if (getenv(DYNAMORIO_VAR_EXECVE) != NULL) {
             post_execve = true;
-#    ifdef VMX86_SERVER
+#        ifdef VMX86_SERVER
             /* PR 458917: our gdt slot was not cleared on exec so we need to
              * clear it now to ensure we don't leak it and eventually run out of
              * slots.  We could alternatively call os_tls_exit() prior to
@@ -429,7 +430,7 @@ dynamorio_app_init_part_one_options(void)
              * TLS index we had.
              */
             os_tls_pre_init(atoi(getenv(DYNAMORIO_VAR_EXECVE)));
-#    endif
+#        endif
             /* important to remove it, don't want to propagate to forked children, etc. */
             /* i#909: unsetenv is unsafe as it messes up auxv access, so we disable */
             disable_env(DYNAMORIO_VAR_EXECVE);
@@ -437,6 +438,7 @@ dynamorio_app_init_part_one_options(void)
             ASSERT(getenv(DYNAMORIO_VAR_EXECVE) == NULL);
         } else
             post_execve = false;
+#    endif
 #endif
 
             /* default non-zero dynamo settings (options structure is
@@ -789,7 +791,7 @@ dynamorio_app_init_part_two_finalize(void)
     return SUCCESS;
 }
 
-#ifdef UNIX
+#if defined(UNIX) && !defined(LINUX_KERNEL)
 void
 dynamorio_fork_init(dcontext_t *dcontext)
 {
@@ -896,7 +898,7 @@ dynamorio_fork_init(dcontext_t *dcontext)
         instrument_fork_init(dcontext);
     }
 }
-#endif /* UNIX */
+#endif /* UNIX && !LINUX_KERNEL */
 
 /* To make DynamoRIO useful as a library for a standalone client
  * application (as opposed to a client library that works with
