@@ -173,7 +173,7 @@ typedef char bool;
 #    define ALIGN_VAR(x) __attribute__((aligned(x)))
 #    define INLINE_FORCED inline
 #    define WEAK __attribute__((weak))
-#    define NOINLINE __attribute__((noinline))
+#    define NOINLINE __attribute__((__noinline__))
 #endif
 
 /* We want a consistent size so we stay away from MAX_PATH.
