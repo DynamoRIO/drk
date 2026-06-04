@@ -252,9 +252,11 @@ static callback_list_t pre_syscall_callbacks = {
 static callback_list_t post_syscall_callbacks = {
     0,
 };
+#ifndef LINUX_KERNEL
 static callback_list_t kernel_xfer_callbacks = {
     0,
 };
+#endif
 #ifdef WINDOWS
 static callback_list_t exception_callbacks = {
     0,
@@ -873,7 +875,9 @@ free_all_callback_lists()
     free_callback_list(&filter_syscall_callbacks);
     free_callback_list(&pre_syscall_callbacks);
     free_callback_list(&post_syscall_callbacks);
+#ifndef LINUX_KERNEL
     free_callback_list(&kernel_xfer_callbacks);
+#endif
 #ifdef WINDOWS
     free_callback_list(&exception_callbacks);
 #else
@@ -1314,6 +1318,7 @@ dr_unregister_post_syscall_event(void (*func)(void *drcontext, int sysnum))
     return remove_callback(&post_syscall_callbacks, (void (*)(void))func, true);
 }
 
+#ifndef LINUX_KERNEL
 void
 dr_register_kernel_xfer_event(void (*func)(void *drcontext,
                                            const dr_kernel_xfer_info_t *info))
@@ -1327,6 +1332,7 @@ dr_unregister_kernel_xfer_event(void (*func)(void *drcontext,
 {
     return remove_callback(&kernel_xfer_callbacks, (void (*)(void))func, true);
 }
+#endif
 
 #ifdef PROGRAM_SHEPHERDING
 void
@@ -2131,6 +2137,7 @@ instrument_invoke_another_syscall(dcontext_t *dcontext)
     return dcontext->client_data->invoke_another_syscall;
 }
 
+#ifndef LINUX_KERNEL
 bool
 instrument_kernel_xfer(dcontext_t *dcontext, dr_kernel_xfer_type_t type,
                        os_cxt_ptr_t source_os_cxt, dr_mcontext_t *source_dmc,
@@ -2172,6 +2179,7 @@ instrument_kernel_xfer(dcontext_t *dcontext, dr_kernel_xfer_type_t type,
     dcontext->client_data->cur_mc = NULL;
     return true;
 }
+#endif
 
 #ifdef WINDOWS
 /* Notify user of exceptions.  Note: not called for RaiseException */
@@ -6866,6 +6874,7 @@ dr_redirect_execution(dr_mcontext_t *mcontext)
     dcontext->next_tag = canonicalize_pc_target(dcontext, mcontext->pc);
     dcontext->whereami = DR_WHERE_FCACHE;
     set_last_exit(dcontext, (linkstub_t *)get_client_linkstub());
+#ifndef LINUX_KERNEL
     if (kernel_xfer_callbacks.num > 0) {
         /* This can only be called from a clean call or an exception event.
          * For both of those we can get the current mcontext via dr_get_mcontext()
@@ -6880,6 +6889,7 @@ dr_redirect_execution(dr_mcontext_t *mcontext)
                                    dr_mcontext_as_priv_mcontext(mcontext), 0))
             dcontext->next_tag = canonicalize_pc_target(dcontext, mcontext->pc);
     }
+#endif
     transfer_to_dispatch(dcontext, dr_mcontext_as_priv_mcontext(mcontext),
                          true /*full_DR_state*/);
     /* on success we won't get here */
