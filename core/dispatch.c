@@ -992,7 +992,7 @@ dispatch_enter_dynamorio(dcontext_t *dcontext)
                 ASSERT_NOT_REACHED();
             } else if (dcontext->upcontext.upcontext.exit_reason ==
                        EXIT_REASON_RSEQ_ABORT) {
-#ifdef LINUX
+#if defined(LINUX) && !defined(LINUX_KERNEL)
                 rseq_process_native_abort(dcontext);
 #else
                 ASSERT_NOT_REACHED();
