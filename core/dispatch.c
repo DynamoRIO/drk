@@ -135,7 +135,7 @@ d_r_dispatch(dcontext_t *dcontext)
     fragment_t coarse_f;
 
 #ifdef HAVE_TLS
-#    if defined(UNIX) && defined(X86)
+#    if defined(UNIX) && defined(X86) && !defined(LINUX_KERNEL)
     /* i#2089: the parent of a new thread has TLS in an unstable state
      * and needs to restore it prior to invoking get_thread_private_dcontext().
      */
