@@ -407,7 +407,7 @@ dynamorio_app_init_part_one_options(void)
         }
     } else /* we do enter if nullcalls is on */ {
 
-#ifdef UNIX
+#if defined(UNIX) && !defined(LINUX_KERNEL)
         os_page_size_init((const char **)our_environ, is_our_environ_followed_by_auxv());
 #endif
 #ifdef WINDOWS
@@ -922,7 +922,7 @@ standalone_init(void)
     /* avoid issues w/ GLOBAL_DCONTEXT instead of thread dcontext */
     dynamo_options.deadlock_avoidance = false;
 #endif
-#ifdef UNIX
+#if defined(UNIX) && !defined(LINUX_KERNEL)
     os_page_size_init((const char **)our_environ, is_our_environ_followed_by_auxv());
 #endif
 #ifdef WINDOWS
