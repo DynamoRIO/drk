@@ -4229,7 +4229,7 @@ fcache_reset_all_caches_proactively(uint target)
     LOG(GLOBAL, LOG_CACHE, 2,
         "fcache_reset_all_caches_proactively: walking the threads\n");
     char buf[16];
-    snprintf(buf, BUFFER_SIZE_ELEMENTS(buf), "%d",
+    snprintf(buf, BUFFER_SIZE_ELEMENTS(buf), SSZFMT,
              GLOBAL_STAT(num_bbs) + GLOBAL_STAT(num_traces));
     NULL_TERMINATE_BUFFER(buf);
     SYSLOG(SYSLOG_INFORMATION, INFO_RESET_IN_PROGRESS, 3, buf, get_application_name(),

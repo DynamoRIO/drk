@@ -2565,7 +2565,7 @@ report_low_on_memory(which_vmm_t which, oom_source_t source,
 {
     if (TESTANY(DYNAMO_OPTION(silent_oom_mask), source) ||
         silent_oom_for_process(source)) {
-        SYSLOG_INTERNAL_WARNING("Mostly silent OOM: %s " PFX ".\n",
+        SYSLOG_INTERNAL_WARNING("Mostly silent OOM: %s 0x%x.\n",
                                 get_oom_source_name(source), os_error_code);
         /* still produce an ldmp for internal use */
         if (TEST(DUMPCORE_OUT_OF_MEM_SILENT, DYNAMO_OPTION(dumpcore_mask)))
@@ -2573,10 +2573,10 @@ report_low_on_memory(which_vmm_t which, oom_source_t source,
     } else {
         const char *oom_source_code = get_oom_source_name(source);
         char type_hex[19];
-        snprintf(type_hex, BUFFER_SIZE_ELEMENTS(type_hex), PFX, which);
+        snprintf(type_hex, BUFFER_SIZE_ELEMENTS(type_hex), "0x%x", which);
         NULL_TERMINATE_BUFFER(type_hex);
         char status_hex[19];
-        snprintf(status_hex, BUFFER_SIZE_ELEMENTS(status_hex), PFX, os_error_code);
+        snprintf(status_hex, BUFFER_SIZE_ELEMENTS(status_hex), "0x%x", os_error_code);
         NULL_TERMINATE_BUFFER(status_hex);
         /* SYSLOG first */
         SYSLOG(SYSLOG_CRITICAL, OUT_OF_MEMORY, 4, get_application_name(),
