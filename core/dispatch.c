@@ -502,7 +502,7 @@ dispatch_enter_fcache(dcontext_t *dcontext, fragment_t *targetf)
         PC_AS_JMP_TGT(FRAG_ISA_MODE(targetf->flags), FCACHE_ENTRY_PC(targetf))
 #endif
     );
-#ifdef UNIX
+#if defined(UNIX) && !defined(LINUX_KERNEL)
     if (dcontext->signals_pending > 0) {
         /* i#2019: the fcache_enter generated code starts with a check for pending
          * signals, allowing the signal handling code to simply queue signals that
@@ -1225,7 +1225,7 @@ dispatch_exit_fcache(dcontext_t *dcontext)
     }
 #endif
 
-#ifdef UNIX
+#if defined(UNIX) && !defined(LINUX_KERNEL)
     if (dcontext->signals_pending != 0) {
         /* XXX: We can overflow the app stack if we stack up too many signals
          * by interrupting prev handlers -- exacerbated by RAC lack of
@@ -2134,7 +2134,7 @@ handle_system_call(dcontext_t *dcontext)
                 break;
 #endif
         } while (repeat);
-#ifdef UNIX
+#if defined(UNIX) && !defined(LINUX_KERNEL)
         if (dcontext->signals_pending != 0) {
             /* i#2019: see comments in dispatch_enter_fcache() */
             KSTOP(syscall_fcache);
