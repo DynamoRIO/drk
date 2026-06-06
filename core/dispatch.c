@@ -820,6 +820,10 @@ dispatch_enter_dynamorio(dcontext_t *dcontext)
      */
 
     if (wherewasi == DR_WHERE_APP) { /* first entrance */
+#ifdef LINUX_KERNEL
+        ASSERT(dcontext->last_exit == get_starting_linkstub() ||
+               IS_KERNEL_ENTRY_LINKSTUB(dcontext->last_exit));
+#else
         if (dcontext->last_exit == get_syscall_linkstub()) {
             /* i#813: the app hit our post-sysenter hook while native.
              * XXX: should we try to process ni syscalls here?  But we're only
@@ -837,6 +841,7 @@ dispatch_enter_dynamorio(dcontext_t *dcontext)
                    /* new thread */
                    IF_WINDOWS_ELSE_0(dcontext->last_exit == get_asynch_linkstub()));
         }
+#endif
     } else {
         /* MUST be set, if only to a fake linkstub_t */
         ASSERT(dcontext->last_exit != NULL);

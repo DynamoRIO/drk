@@ -187,6 +187,12 @@ static const linkstub_t linkstub_shared_syscall_bb = {
 static const linkstub_t linkstub_shared_syscall_unlinked = { LINK_FAKE, 0 };
 #endif
 
+#ifdef LINUX_KERNEL
+static const linkstub_t linkstub_syscall_entry = { LINK_FAKE, 0 };
+static const linkstub_t linkstub_kernel_interrupt_entry = { LINK_FAKE, 0 };
+static const linkstub_t linkstub_user_interrupt_entry = { LINK_FAKE, 0 };
+#endif
+
 /* A unique fragment_t for use when the details don't matter */
 static const fragment_t coarse_fragment = {
     NULL,
@@ -776,6 +782,26 @@ get_shared_syscalls_bb_linkstub()
     return &linkstub_shared_syscall_bb;
 }
 #endif /* WINDOWS */
+
+#ifdef LINUX_KERNEL
+const linkstub_t *
+get_syscall_entry_linkstub()
+{
+    return &linkstub_syscall_entry;
+}
+
+const linkstub_t *
+get_user_interrupt_entry_linkstub()
+{
+    return &linkstub_user_interrupt_entry;
+}
+
+const linkstub_t *
+get_kernel_interrupt_entry_linkstub()
+{
+    return &linkstub_kernel_interrupt_entry;
+}
+#endif
 
 #ifdef HOT_PATCHING_INTERFACE
 const linkstub_t *
