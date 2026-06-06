@@ -470,7 +470,7 @@ dispatch_enter_fcache(dcontext_t *dcontext, fragment_t *targetf)
         check_filter("linux.thread;linux.clone", get_short_name(get_application_name())));
 #endif
 
-#if defined(UNIX) && !defined(DGC_DIAGNOSTICS) && defined(X86)
+#if defined(UNIX) && !defined(DGC_DIAGNOSTICS) && defined(X86) && !defined(LINUX_KERNEL)
     /* i#107: handle segment register usage conflicts between app and dr:
      * if the target fragment has an instr that updates the segment selector,
      * update the corresponding information maintained by DR.
