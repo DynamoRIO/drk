@@ -89,8 +89,10 @@ dispatch_exit_fcache(dcontext_t *dcontext);
 static void
 dispatch_exit_fcache_stats(dcontext_t *dcontext);
 
+#ifndef LINUX_KERNEL
 static void
 handle_post_system_call(dcontext_t *dcontext);
+#endif
 
 static void
 handle_special_tag(dcontext_t *dcontext);
@@ -731,6 +733,7 @@ dispatch_enter_native(dcontext_t *dcontext)
     ASSERT_NOT_REACHED();
 }
 
+#ifndef LINUX_KERNEL
 static void
 set_next_tag_to_prior_syscall(dcontext_t *dcontext)
 {
@@ -748,6 +751,7 @@ set_next_tag_to_prior_syscall(dcontext_t *dcontext)
                                         : FRAG_ISA_MODE(dcontext->last_fragment->flags));
     ASSERT(is_syscall_at_pc(dcontext, dcontext->next_tag));
 }
+#endif
 
 static void
 dispatch_enter_dynamorio(dcontext_t *dcontext)
@@ -904,8 +908,10 @@ dispatch_enter_dynamorio(dcontext_t *dcontext)
     KSTART_DC(dcontext, dispatch_num_exits);
 
     if (wherewasi != DR_WHERE_APP) { /* if not first entrance */
+#ifndef LINUX_KERNEL
         if (get_at_syscall(dcontext))
             handle_post_system_call(dcontext);
+#endif
 
 #ifdef X86
         /* If the next basic block starts at a debug register value,
@@ -2198,6 +2204,7 @@ handle_system_call(dcontext_t *dcontext)
 }
 #endif
 
+#ifndef LINUX_KERNEL
 static void
 handle_post_system_call(dcontext_t *dcontext)
 {
@@ -2212,7 +2219,7 @@ handle_post_system_call(dcontext_t *dcontext)
     /* some syscalls require modifying local memory */
     SELF_PROTECT_LOCAL(dcontext, WRITABLE);
 
-#ifdef UNIX
+#    ifdef UNIX
     /* restore mcontext values prior to invoking instrument_post_syscall() */
     if (was_sigreturn_syscall(dcontext)) {
         /* restore app xax/r0 */
@@ -2221,16 +2228,16 @@ handle_post_system_call(dcontext_t *dcontext)
             dcontext->sys_param1, dcontext->asynch_target);
         /* XXX i#3544: Check if this is a proper register to use */
         mc->IF_X86_ELSE(xax, IF_RISCV64_ELSE(a0, r0)) = dcontext->sys_param1;
-#    ifdef MACOS
+#        ifdef MACOS
         /* We need to skip the use app_xdx, as we've changed the context.
          * We can't just set app_xdx from handle_sigreturn() as the
          * pre-sysenter code clobbers app_xdx, and we want to handle
          * a failed SYS_sigreturn.
          */
         skip_adjust = true;
-#    endif
+#        endif
     }
-#endif
+#    endif
     /* i#1661: ensure we set the right pc for dr_get_mcontext() */
     get_mcontext(dcontext)->pc = dcontext->asynch_target;
 
@@ -2240,7 +2247,7 @@ handle_post_system_call(dcontext_t *dcontext)
     /* XXX: need to handle syscall failure -- those that clobbered asynch_target
      * need to restore it to its previous value, which has to be stored somewhere!
      */
-#ifdef WINDOWS
+#    ifdef WINDOWS
     if (DYNAMO_OPTION(sygate_sysenter) &&
         get_syscall_method() == SYSCALL_METHOD_SYSENTER) {
         /* restore sysenter_storage, note stack was popped twice for
@@ -2248,25 +2255,26 @@ handle_post_system_call(dcontext_t *dcontext)
         get_mcontext(dcontext)->xsp -= XSP_SZ;
         *((app_pc *)get_mcontext(dcontext)->xsp) = dcontext->sysenter_storage;
     }
-#else
+#    else
     if (!skip_adjust)
         adjust_syscall_continuation(dcontext);
-#endif
+#    endif
     set_fcache_target(dcontext, dcontext->asynch_target);
-#ifdef WINDOWS
+#    ifdef WINDOWS
     /* We no longer need asynch_target so zero it out. Other pieces of DR
      * -- callback & APC handling, detach -- test asynch_target to determine
      * where the next app pc to execute is stored. If asynch_target != 0,
      * it holds the value, else it's in the esi slot.
      */
     dcontext->asynch_target = 0;
-#endif
+#    endif
 
     LOG(THREAD, LOG_SYSCALLS, 3, "finished handling system call\n");
 
     SELF_PROTECT_LOCAL(dcontext, READONLY);
     /* caller will go back to couldbelinking status */
 }
+#endif /* !LINUX_KERNEL */
 
 #ifdef WINDOWS
 /* in callback.c */
