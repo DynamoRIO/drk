@@ -2215,7 +2215,6 @@ get_stack_bounds(dcontext_t *dcontext, byte **base, byte **top)
     return true;
 }
 
-
 bool
 is_clone_thread_syscall(dcontext_t *dcontext)
 {
