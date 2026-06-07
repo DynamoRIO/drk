@@ -17,18 +17,18 @@ bool
 barrier_wait(barrier_t *barrier)
 {
     int count;
-    mutex_lock(&barrier->lock);
+    d_r_mutex_lock(&barrier->lock);
     ASSERT(barrier->count > 0);
     barrier->count -= 1;
     count = barrier->count;
-    mutex_unlock(&barrier->lock);
+    d_r_mutex_unlock(&barrier->lock);
     if (count == 0) {
         return true;
     }
     for (;;) {
-        mutex_lock(&barrier->lock);
+        d_r_mutex_lock(&barrier->lock);
         count = barrier->count;
-        mutex_unlock(&barrier->lock);
+        d_r_mutex_unlock(&barrier->lock);
         if (count == 0) {
             return false;
         }
