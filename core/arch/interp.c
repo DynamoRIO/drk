@@ -1906,6 +1906,11 @@ bb_process_non_ignorable_syscall(dcontext_t *dcontext, build_bb_t *bb, int sysnu
 static inline bool
 bb_process_syscall(dcontext_t *dcontext, build_bb_t *bb)
 {
+#ifdef LINUX_KERNEL
+    ASSERT_MESSAGE(CHKLVL_ASSERTS, "There should not be system calls in the kernel.",
+                   false);
+    return true;
+#endif
     int sysnum;
     /* PR 307284: for simplicity do syscall/int processing post-client.
      * We give up on inlining but we can still use ignorable/shared syscalls
