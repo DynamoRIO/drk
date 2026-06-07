@@ -31,7 +31,7 @@ dynamorio-objs :=\
 ../../hashtable.o\
 ../../heap.o\
 ../../hotpatch.o\
-../../instrlist.o\
+../../ir/instrlist.o\
 ../../io.o\
 ../../link.o\
 ../../loader_shared.o\
