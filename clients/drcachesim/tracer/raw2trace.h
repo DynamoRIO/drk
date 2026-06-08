@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2016-2025 Google, Inc.  All rights reserved.
+ * Copyright (c) 2016-2026 Google, Inc.  All rights reserved.
  * **********************************************************/
 
 /*
@@ -126,6 +126,8 @@ typedef enum {
     RAW2TRACE_STAT_SYSCALL_TRACES_INJECTED,
     // Count of negative times that were corrected.
     RAW2TRACE_STAT_NEGATIVE_TIMES_CORRECTED,
+    // Count of addresses found with non-canonical top bits.
+    RAW2TRACE_STAT_NON_CANONICAL_TOP_BITS,
     // We add a MAX member so that we can iterate over all stats in unit tests.
     RAW2TRACE_STAT_MAX,
 } raw2trace_statistic_t;
@@ -315,6 +317,21 @@ private:
         return branch_target_pc_;
     }
 
+    // Returns the vector element size in bytes for a scatter/gather instruction.
+    // Returns 0 for non-scatter-gather instructions.
+    byte
+    scatter_gather_element_size() const
+    {
+        return scatter_gather_element_size_;
+    }
+
+    // Some scatter/gather read from or write to 2, 3, or 4 vector registers at once.
+    byte
+    scatter_gather_vector_count() const
+    {
+        return scatter_gather_vector_count_;
+    }
+
     static const int kReadsMemMask = 0x0001;
     static const int kWritesMemMask = 0x0002;
     static const int kIsPrefetchMask = 0x0004;
@@ -351,6 +368,10 @@ private:
     std::vector<memref_summary_t> mem_srcs_and_dests_;
     uint8_t num_mem_srcs_ = 0;
     byte packed_ = 0;
+
+    byte scatter_gather_element_size_ = 0; // Size in bytes.
+    // Some scatter/gather read from or write to 2, 3, or 4 vector registers at once.
+    byte scatter_gather_vector_count_ = 0;
 };
 
 /**
@@ -361,6 +382,8 @@ private:
 struct trace_metadata_writer_t {
     static int
     write_thread_exit(byte *buffer, thread_id_t tid);
+    static trace_marker_type_t
+    canonicalize_marker_type(trace_marker_type_t marker_type);
     static int
     write_marker(byte *buffer, trace_marker_type_t type, uintptr_t val);
     static int
@@ -626,6 +649,7 @@ protected:
         }
         app_pc start_pc;
         std::vector<instr_summary_t> instrs;
+        int total_mem_count = -1;
     };
 
     struct branch_info_t {
@@ -686,6 +710,7 @@ protected:
         offline_file_type_t file_type;
         size_t cache_line_size = 0;
         std::deque<offline_entry_t> pre_read;
+        offline_instru_t instru_offline;
 
         // Used to delay a thread-buffer-final branch to keep it next to its target.
         std::vector<trace_entry_t> delayed_branch;
@@ -732,6 +757,7 @@ protected:
         uint64 syscall_traces_conversion_empty = 0;
         uint64 syscall_traces_injected = 0;
         uint64 negative_times_corrected = 0;
+        uint64 non_canonical_top_bits = 0;
 
         uint64 cur_chunk_instr_count = 0;
         uint64 cur_chunk_ref_count = 0;
@@ -1010,6 +1036,7 @@ protected:
     uint64 syscall_traces_conversion_empty_ = 0;
     uint64 syscall_traces_injected_ = 0;
     uint64 negative_times_corrected_ = 0;
+    uint64 non_canonical_top_bits_ = 0;
 
     std::unique_ptr<module_mapper_t> module_mapper_;
 
@@ -1097,6 +1124,14 @@ private:
     block_summary_t *
     lookup_block_summary(raw2trace_thread_data_t *tdata, uint64 modidx, uint64 modoffs,
                          app_pc block_start);
+    block_summary_t *
+    create_block_summary(raw2trace_thread_data_t *tdata, uint64 modidx, uint64 modoffs,
+                         app_pc block_start, int instr_count);
+    // Creates a new block summary if one doesn't exist.
+    bool
+    set_block_mem_count(raw2trace_thread_data_t *tdata, uint64 modidx, uint64 modoffs,
+                        app_pc block_start, int instr_count, int total_traced_mem_count);
+
     instr_summary_t *
     lookup_instr_summary(raw2trace_thread_data_t *tdata, uint64 modidx, uint64 modoffs,
                          app_pc block_start, int index, app_pc pc,
@@ -1216,10 +1251,14 @@ private:
                      DR_PARAM_OUT uintptr_t *value);
 
     bool
+    could_entry_be_address(offline_entry_t entry);
+
+    bool
     append_memref(raw2trace_thread_data_t *tdata, DR_PARAM_INOUT trace_entry_t **buf_in,
                   const instr_summary_t *instr, instr_summary_t::memref_summary_t memref,
                   bool write, std::unordered_map<reg_id_t, addr_t> &reg_vals,
-                  DR_PARAM_OUT bool *reached_end_of_memrefs);
+                  DR_PARAM_OUT bool *reached_end_of_memrefs, bool expect_all_memrefs,
+                  DR_PARAM_OUT int &consumed_memrefs);
 
     bool
     should_omit_syscall(raw2trace_thread_data_t *tdata);
@@ -1350,7 +1389,6 @@ private:
     // Chunking for seeking support in compressed files.
     uint64_t chunk_instr_count_ = 0;
 
-    offline_instru_t instru_offline_;
     const std::vector<module_t> *modvec_ptr_ = nullptr;
 
     // For decoding kernel PT traces.

@@ -268,6 +268,10 @@ public:
     instrument_rseq_entry(void *drcontext, instrlist_t *ilist, instr_t *where,
                           instr_t *rseq_label, reg_id_t reg_ptr, int adjust) = 0;
 
+    virtual int
+    instrument_gather_base(void *drcontext, instrlist_t *ilist, instr_t *where,
+                           reg_id_t reg_ptr, int adjust, opnd_t ref) = 0;
+
     virtual void
     bb_analysis(void *drcontext, void *tag, void **bb_field, instrlist_t *ilist,
                 bool repstr_expanded, bool memref_needs_full_info) = 0;
@@ -387,6 +391,10 @@ public:
     instrument_rseq_entry(void *drcontext, instrlist_t *ilist, instr_t *where,
                           instr_t *rseq_label, reg_id_t reg_ptr, int adjust) override;
 
+    int
+    instrument_gather_base(void *drcontext, instrlist_t *ilist, instr_t *where,
+                           reg_id_t reg_ptr, int adjust, opnd_t ref) override;
+
     void
     bb_analysis(void *drcontext, void *tag, void **bb_field, instrlist_t *ilist,
                 bool repstr_expanded, bool memref_needs_full_info) override;
@@ -474,6 +482,10 @@ public:
     instrument_rseq_entry(void *drcontext, instrlist_t *ilist, instr_t *where,
                           instr_t *rseq_label, reg_id_t reg_ptr, int adjust) override;
 
+    int
+    instrument_gather_base(void *drcontext, instrlist_t *ilist, instr_t *where,
+                           reg_id_t reg_ptr, int adjust, opnd_t ref) override;
+
     void
     bb_analysis(void *drcontext, void *tag, void **bb_field, instrlist_t *ilist,
                 bool repstr_expanded, bool memref_needs_full_info) override;
@@ -492,13 +504,22 @@ public:
     opnd_is_elidable(opnd_t memop, DR_PARAM_OUT reg_id_t &base, int version);
     // Inserts labels marking elidable addresses. label_marks_elidable() identifies them.
     // "version" is an OFFLINE_FILE_VERSION* constant.
-    void
+    // Returns the count of addresses that will be recorded in the trace, or -1 if
+    // the count is unknown (due to predicated/conditional loads/stores or
+    // online filtering).
+    int
     identify_elidable_addresses(void *drcontext, instrlist_t *ilist, int version,
                                 bool memref_needs_full_info);
     bool
     label_marks_elidable(instr_t *instr, DR_PARAM_OUT int *opnd_index,
                          DR_PARAM_OUT int *memopnd_index, DR_PARAM_OUT bool *is_write,
                          DR_PARAM_OUT bool *needs_base);
+
+    void
+    set_disable_optimizations(bool disable_optimizations)
+    {
+        disable_optimizations_ = disable_optimizations;
+    }
 
 private:
     struct custom_module_data_t {
@@ -539,7 +560,8 @@ private:
                               instr_t *app, opnd_t ref, bool write);
     ssize_t (*write_file_func_)(file_t file, const void *data, size_t count);
 
-    void
+    // Returns whether elidable; if so, inserts an info label.
+    bool
     opnd_check_elidable(void *drcontext, instrlist_t *ilist, instr_t *instr, opnd_t memop,
                         int op_index, int memop_index, bool write, int version,
                         reg_id_set_t &saw_base);

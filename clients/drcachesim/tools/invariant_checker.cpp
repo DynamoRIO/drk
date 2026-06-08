@@ -684,6 +684,12 @@ invariant_checker_t::parallel_shard_memref(void *shard_data, const memref_t &mem
         }
         shard->last_chunk_ordinal_ = memref.marker.marker_value;
     }
+    if (memref.marker.type == TRACE_TYPE_MARKER &&
+        memref.marker.marker_type == TRACE_MARKER_TYPE_KERNEL_EVENT_RAW) {
+        report_if_false(
+            shard, false,
+            "TRACE_MARKER_TYPE_KERNEL_EVENT_RAW should not appear in the final trace");
+    }
     // Ensure each syscall instruction has a marker immediately afterward.  An
     // asynchronous signal could be delivered after the tracer recorded the syscall
     // instruction but before DR executed the syscall itself (xref i#5790) but raw2trace
@@ -1808,10 +1814,13 @@ invariant_checker_t::check_for_pc_discontinuity(
     if (shard->prev_kernel_end_branch_target_ != 0) {
         const addr_t kernel_end_branch_target = shard->prev_kernel_end_branch_target_;
         shard->prev_kernel_end_branch_target_ = 0;
-        if (kernel_end_branch_target != cur_pc)
+        if (kernel_end_branch_target != cur_pc &&
+            // We always see a discontinuity for sysenter.
+            prev_instr.instr.type != TRACE_TYPE_INSTR_SYSENTER) {
             // We want the check for PC continuity of cur_pc to take precedence
             // over this, so later code may overwrite error_msg.
             error_msg = "Kernel trace-end branch marker does not match next pc";
+        }
     }
     if (prev_instr_trace_pc == 0 /*first*/) {
         return error_msg;

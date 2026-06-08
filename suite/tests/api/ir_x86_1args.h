@@ -125,6 +125,7 @@ OPCODE(xsavec64, xsavec64, xsavec64, X64_ONLY, MEMARG(OPSZ_xsave))
 OPCODE(clflushopt, clflushopt, clflushopt, 0, MEMARG(OPSZ_clflush))
 OPCODE(clwb, clwb, clwb, 0, MEMARG(OPSZ_clflush))
 OPCODE(cldemote, cldemote, cldemote, 0, MEMARG(OPSZ_clflush))
+OPCODE(lkgs_mem, lkgs, lkgs, X64_ONLY, MEMARG(OPSZ_2))
 
 /****************************************************************************/
 /* single immed argument */
@@ -167,6 +168,14 @@ OPCODE(rdfsbase, rdfsbase, rdfsbase, X64_ONLY, REGARG(EBX))
 OPCODE(rdgsbase, rdgsbase, rdgsbase, X64_ONLY, REGARG(EBX))
 OPCODE(wrfsbase, wrfsbase, wrfsbase, X64_ONLY, REGARG(EBX))
 OPCODE(wrgsbase, wrgsbase, wrgsbase, X64_ONLY, REGARG(EBX))
+OPCODE(lkgs_reg, lkgs, lkgs, X64_ONLY, REGARG(AX))
+OPCODE(umonitor_16, umonitor, umonitor, X86_ONLY, REGARG(CX))
+OPCODE(umonitor_32, umonitor, umonitor, 0, REGARG(EAX))
+OPCODE(umonitor_64, umonitor, umonitor, X64_ONLY, REGARG(R15))
+OPCODE(tpause, tpause, tpause, 0, REGARG(ECX))
+OPCODE(tpause_hi, tpause, tpause, X64_ONLY, REGARG(R15D))
+OPCODE(umwait, umwait, umwait, 0, REGARG(ECX))
+OPCODE(umwait_hi, umwait, umwait, X64_ONLY, REGARG(R15D))
 
 /****************************************************************************/
 /* single pc/instr argument */

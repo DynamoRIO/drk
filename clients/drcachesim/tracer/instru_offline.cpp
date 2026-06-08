@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2016-2025 Google, Inc.  All rights reserved.
+ * Copyright (c) 2016-2026 Google, Inc.  All rights reserved.
  * **********************************************************/
 
 /*
@@ -104,8 +104,13 @@ offline_instru_t::offline_instru_t(
     DR_ASSERT(elide_memref_note_ != DRMGR_NOTE_NONE);
 
     uint64 max_bb_instrs;
-    if (!dr_get_integer_option("max_bb_instrs", &max_bb_instrs))
-        max_bb_instrs = 256; /* current default */
+    if (!dr_get_integer_option(MAX_BB_INSTRS_NAME, &max_bb_instrs))
+        max_bb_instrs = MAX_BB_INSTRS;
+    else if (max_bb_instrs > MAX_BB_INSTRS) {
+        log_(1,
+             "Warning: -%s is too large (max is %d) to safely support Top Byte Ignore\n",
+             MAX_BB_INSTRS_NAME, MAX_BB_INSTRS);
+    }
     max_block_encoding_size_ = static_cast<int>(max_bb_instrs) * MAX_INSTR_LENGTH;
     encoding_lock_ = dr_mutex_create();
     encoding_buf_sz_ = ALIGN_FORWARD(max_block_encoding_size_ * 10, dr_page_size());
@@ -235,9 +240,13 @@ offline_instru_t::get_entry_type(byte *buf_ptr) const
     case OFFLINE_TYPE_PC: return TRACE_TYPE_INSTR;
     case OFFLINE_TYPE_THREAD: return TRACE_TYPE_THREAD;
     case OFFLINE_TYPE_PID: return TRACE_TYPE_PID;
-    case OFFLINE_TYPE_TIMESTAMP: return TRACE_TYPE_THREAD; // Closest.
+#ifdef X64
+    case OFFLINE_TYPE_PC_TOP_BIT: return TRACE_TYPE_INSTR;
+#else
     case OFFLINE_TYPE_IFLUSH: return TRACE_TYPE_INSTR_FLUSH;
-    case OFFLINE_TYPE_EXTENDED: return TRACE_TYPE_MARKER; // Closest.
+#endif
+    case OFFLINE_TYPE_TIMESTAMP: return TRACE_TYPE_THREAD; // Closest.
+    case OFFLINE_TYPE_EXTENDED: return TRACE_TYPE_MARKER;  // Closest.
     }
     DR_ASSERT(false);
     return TRACE_TYPE_THREAD_EXIT; // Unknown: returning rarest entry.
@@ -254,7 +263,8 @@ int
 offline_instru_t::get_instr_count(byte *buf_ptr) const
 {
     offline_entry_t *entry = (offline_entry_t *)buf_ptr;
-    if (entry->addr.type != OFFLINE_TYPE_PC)
+    if (entry->addr.type !=
+        OFFLINE_TYPE_PC IF_X64(&&entry->addr.type != OFFLINE_TYPE_PC_TOP_BIT))
         return 0;
     // TODO i#3995: We should *not* count "non-fetched" instrs so we'll match
     // hardware performance counters.
@@ -266,7 +276,8 @@ addr_t
 offline_instru_t::get_entry_addr(void *drcontext, byte *buf_ptr) const
 {
     offline_entry_t *entry = (offline_entry_t *)buf_ptr;
-    if (entry->addr.type == OFFLINE_TYPE_PC) {
+    if (entry->addr.type ==
+        OFFLINE_TYPE_PC IF_X64(|| entry->addr.type == OFFLINE_TYPE_PC_TOP_BIT)) {
         // XXX i#4014: Use caching to avoid lookup for last queried modbase.
         app_pc modbase;
         if (drmodtrack_lookup_pc_from_index(drcontext, entry->pc.modidx, &modbase) !=
@@ -348,6 +359,10 @@ offline_instru_t::append_marker(byte *buf_ptr, trace_marker_type_t type, uintptr
 int
 offline_instru_t::append_iflush(byte *buf_ptr, addr_t start, size_t size)
 {
+#ifdef X64
+    DR_ASSERT(false);
+    return 0;
+#else
     offline_entry_t *entry = (offline_entry_t *)buf_ptr;
     entry->addr.type = OFFLINE_TYPE_IFLUSH;
     entry->addr.addr = start;
@@ -355,6 +370,7 @@ offline_instru_t::append_iflush(byte *buf_ptr, addr_t start, size_t size)
     entry->addr.type = OFFLINE_TYPE_IFLUSH;
     entry->addr.addr = start + size;
     return 2 * sizeof(offline_entry_t);
+#endif
 }
 
 int
@@ -558,7 +574,7 @@ offline_instru_t::insert_save_pc(void *drcontext, instrlist_t *ilist, instr_t *w
                                  app_pc pc, uint instr_count, per_block_t *per_block)
 {
     offline_entry_t entry;
-    entry.pc.type = OFFLINE_TYPE_PC;
+    entry.pc.type = IF_X64_ELSE(OFFLINE_TYPE_PC_TOP_BIT, OFFLINE_TYPE_PC);
     app_pc modbase;
     uint modidx;
     uint64_t modoffs;
@@ -839,6 +855,69 @@ offline_instru_t::instrument_rseq_entry(void *drcontext, instrlist_t *ilist,
     return adjust;
 }
 
+int
+offline_instru_t::instrument_gather_base(void *drcontext, instrlist_t *ilist,
+                                         instr_t *where, reg_id_t reg_ptr, int adjust,
+                                         opnd_t ref)
+{
+    int disp = adjust;
+    reg_id_t reg_addr = DR_REG_NULL;
+    drreg_status_t res =
+        drreg_reserve_register(drcontext, ilist, where, reg_vector_, &reg_addr);
+    DR_ASSERT(res == DRREG_SUCCESS); // Can't recover.
+    bool reg_ptr_used_unused;
+    insert_obtain_addr(drcontext, ilist, where, reg_addr, reg_ptr, ref,
+                       &reg_ptr_used_unused);
+    // Now set the top bits (we don't care if we lose top bits of non-canonical addrs).
+    // TODO i#7914: Store a different sentinel in valueB when the top bits
+    // in canonical form should be 1's.
+    offline_entry_t entry_top_zero;
+    entry_top_zero.extended.type = 0;
+    entry_top_zero.extended.ext = 0;
+    entry_top_zero.extended.valueB = 0;
+    entry_top_zero.extended.valueA = 0xffffffffffff;
+    instrlist_insert_mov_immed_ptrsz(drcontext, (ptr_int_t)entry_top_zero.combined_value,
+                                     opnd_create_reg(reg_ptr), ilist, where, NULL, NULL);
+#ifdef X86
+    MINSERT(
+        ilist, where,
+        INSTR_CREATE_and(drcontext, opnd_create_reg(reg_addr), opnd_create_reg(reg_ptr)));
+#else
+    MINSERT(ilist, where,
+            INSTR_CREATE_and(drcontext, opnd_create_reg(reg_addr),
+                             opnd_create_reg(reg_addr), opnd_create_reg(reg_ptr)));
+#endif
+    offline_entry_t entry_top_set;
+    entry_top_set.extended.type = OFFLINE_TYPE_EXTENDED;
+    entry_top_set.extended.ext = OFFLINE_EXT_TYPE_SCATTER_GATHER_BASE;
+    // We set a bit here to avoid this being confused with an address.
+    entry_top_set.extended.valueB = 1;
+    entry_top_set.extended.valueA = 0;
+    instrlist_insert_mov_immed_ptrsz(drcontext, (ptr_int_t)entry_top_set.combined_value,
+                                     opnd_create_reg(reg_ptr), ilist, where, NULL, NULL);
+#ifdef X86
+    MINSERT(
+        ilist, where,
+        INSTR_CREATE_or(drcontext, opnd_create_reg(reg_addr), opnd_create_reg(reg_ptr)));
+#elif defined(AARCH64)
+    MINSERT(ilist, where,
+            INSTR_CREATE_orr(drcontext, opnd_create_reg(reg_addr),
+                             opnd_create_reg(reg_addr), opnd_create_reg(reg_ptr)));
+#else
+    DR_ASSERT(false && "Only x86 and aarch64 are supported for scatter/gather skips");
+    return 0;
+#endif
+    // Re-load because reg_ptr was clobbered.
+    insert_load_buf_ptr_(drcontext, ilist, where, reg_ptr);
+    MINSERT(ilist, where,
+            XINST_CREATE_store(drcontext, OPND_CREATE_MEMPTR(reg_ptr, disp),
+                               opnd_create_reg(reg_addr)));
+    res = drreg_unreserve_register(drcontext, ilist, where, reg_addr);
+    DR_ASSERT(res == DRREG_SUCCESS); // Can't recover.
+    adjust += sizeof(offline_entry_t);
+    return adjust;
+}
+
 void
 offline_instru_t::bb_analysis(void *drcontext, void *tag, void **bb_field,
                               instrlist_t *ilist, bool repstr_expanded,
@@ -903,7 +982,7 @@ offline_instru_t::opnd_is_elidable(opnd_t memop, DR_PARAM_OUT reg_id_t &base, in
     return true;
 }
 
-void
+bool
 offline_instru_t::opnd_check_elidable(void *drcontext, instrlist_t *ilist, instr_t *instr,
                                       opnd_t memop, int op_index, int memop_index,
                                       bool write, int version, reg_id_set_t &saw_base)
@@ -912,7 +991,7 @@ offline_instru_t::opnd_check_elidable(void *drcontext, instrlist_t *ilist, instr
     // displacement, as well as rip-relative or absolute-address operands.
     reg_id_t base;
     if (!opnd_is_elidable(memop, base, version))
-        return;
+        return false;
     // When adding new elision cases, be sure to check "version" to keep backward
     // compatibility.  See the opnd_is_elidable() notes.  Here we insert a label if
     // we find a base that has not changed or a rip-relative operand.
@@ -925,8 +1004,10 @@ offline_instru_t::opnd_check_elidable(void *drcontext, instrlist_t *ilist, instr
         data->data[LABEL_DATA_ELIDED_IS_WRITE] = write;
         data->data[LABEL_DATA_ELIDED_NEEDS_BASE] = (base != DR_REG_NULL);
         MINSERT(ilist, instr, note);
+        return true;
     } else
         saw_base.insert(base);
+    return false;
 }
 
 bool
@@ -952,17 +1033,16 @@ offline_instru_t::label_marks_elidable(instr_t *instr, DR_PARAM_OUT int *opnd_in
     return true;
 }
 
-void
+int
 offline_instru_t::identify_elidable_addresses(void *drcontext, instrlist_t *ilist,
                                               int version, bool memref_needs_full_info)
 {
     // Analysis for eliding redundant addresses we can reconstruct during
     // post-processing.
-    if (disable_optimizations_)
-        return;
-    // We can't elide when doing filtering.
+    bool contains_memory_predication = false;
+    // We can't elide when doing filtering; we also don't know the total count.
     if (memref_needs_full_info)
-        return;
+        return -1;
     reg_id_set_t saw_base;
     for (instr_t *instr = instrlist_first(ilist); instr != NULL;
          instr = instr_get_next(instr)) {
@@ -975,27 +1055,37 @@ offline_instru_t::identify_elidable_addresses(void *drcontext, instrlist_t *ilis
         // drx_expand_scatter_gather) when building the ilist.
         if (drutil_instr_is_stringop_loop(instr)
                 IF_X86_OR_AARCH64(|| instr_is_scatter(instr) || instr_is_gather(instr))) {
-            return;
+            return -1;
         }
         if (drmgr_is_emulation_start(instr) || drmgr_is_emulation_end(instr)) {
-            return;
+            return -1;
         }
     }
+    int total_traced_mem_count = 0;
     for (instr_t *instr = instrlist_first_app(ilist); instr != NULL;
          instr = instr_get_next_app(instr)) {
+        // Use instr_{reads,writes}_memory() to rule out LEA and NOP.
+        bool instr_accesses_memory =
+            instr_reads_memory(instr) || instr_writes_memory(instr);
         // For now we bail at predication.
         if (instr_get_predicate(instr) != DR_PRED_NONE) {
             saw_base.clear();
+            if (instr_accesses_memory)
+                contains_memory_predication = true;
             continue;
         }
-        // Use instr_{reads,writes}_memory() to rule out LEA and NOP.
-        if (instr_reads_memory(instr) || instr_writes_memory(instr)) {
-            int mem_count = 0;
+        if (instr_accesses_memory) {
+            int opnd_mem_count = 0;
             for (int i = 0; i < instr_num_srcs(instr); i++) {
                 if (opnd_is_memory_reference(instr_get_src(instr, i))) {
-                    opnd_check_elidable(drcontext, ilist, instr, instr_get_src(instr, i),
-                                        i, mem_count, false, version, saw_base);
-                    ++mem_count;
+                    if (disable_optimizations_)
+                        ++total_traced_mem_count;
+                    else if (!opnd_check_elidable(
+                                 drcontext, ilist, instr, instr_get_src(instr, i), i,
+                                 opnd_mem_count, false, version, saw_base)) {
+                        ++total_traced_mem_count;
+                    }
+                    ++opnd_mem_count;
                 }
             }
             // Rule out sharing with any dest if the base is written to.  The ISA
@@ -1007,12 +1097,17 @@ offline_instru_t::identify_elidable_addresses(void *drcontext, instrlist_t *ilis
                 else
                     ++reg_it;
             }
-            mem_count = 0;
+            opnd_mem_count = 0;
             for (int i = 0; i < instr_num_dsts(instr); i++) {
                 if (opnd_is_memory_reference(instr_get_dst(instr, i))) {
-                    opnd_check_elidable(drcontext, ilist, instr, instr_get_dst(instr, i),
-                                        i, mem_count, true, version, saw_base);
-                    ++mem_count;
+                    if (disable_optimizations_)
+                        ++total_traced_mem_count;
+                    else if (!opnd_check_elidable(
+                                 drcontext, ilist, instr, instr_get_dst(instr, i), i,
+                                 opnd_mem_count, true, version, saw_base)) {
+                        ++total_traced_mem_count;
+                    }
+                    ++opnd_mem_count;
                 }
             }
         }
@@ -1027,6 +1122,9 @@ offline_instru_t::identify_elidable_addresses(void *drcontext, instrlist_t *ilis
                 ++reg_it;
         }
     }
+    if (contains_memory_predication)
+        return -1;
+    return total_traced_mem_count;
 }
 
 } // namespace drmemtrace
