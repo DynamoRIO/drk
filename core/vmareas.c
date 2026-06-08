@@ -1687,7 +1687,7 @@ vm_areas_init()
 }
 
 static void
-vm_areas_statistics()
+vm_areas_statistics(void)
 {
 #ifdef PROGRAM_SHEPHERDING
     DOLOG(1, LOG_VMAREAS | LOG_STATS, {
