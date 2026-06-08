@@ -586,14 +586,14 @@ nudge_internal(process_id_t pid, uint nudge_action_mask, uint64 client_arg,
         nudge_add_pending(dcontext, &nudge_arg);
         return DR_SUCCESS;
     } else {
-#ifndef LINUX_KERNEL
+#    ifndef LINUX_KERNEL
         if (send_nudge_signal(pid, nudge_action_mask, client_id, client_arg))
             return DR_SUCCESS;
         else
             return DR_FAILURE;
-#else
+#    else
         return DR_FAILURE;
-#endif
+#    endif
     }
 #endif /* WINDOWS -> UNIX */
 }

@@ -557,7 +557,7 @@ TNAME(d_r_vsnprintf)(TCHAR *s, size_t max, const TCHAR *fmt, va_list ap)
             case _T('G'):
                 if (decimal == 0 || decimal == -1)
                     decimal = 1; /* default */
-               DR_FALLTHROUGH;
+                DR_FALLTHROUGH;
             case _T('e'):
             case _T('E'):
             case _T('f'): {

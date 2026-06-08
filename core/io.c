@@ -59,7 +59,7 @@ dr_fpu_exception_init(void);
 #        define _EXTERNALIZE_CTYPE_INLINES_
 #    endif
 #    ifndef LINUX_KERNEL
-#    include <wchar.h>
+#        include <wchar.h>
 #    endif
 #endif
 
