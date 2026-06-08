@@ -1424,6 +1424,22 @@ event_app_instruction(void *drcontext, void *tag, instrlist_t *bb, instr_t *inst
         ud->last_app_pc = instr_get_app_pc(instr_fetch);
     }
 
+    // TODO i#7914: Add x86 contiguous skipped memref support.
+#ifdef AARCH64
+    if (instr_fetch != NULL &&
+        (instr_is_gather(instr_fetch) || instr_is_scatter(instr_fetch))) {
+        opnd_t memop = instr_is_gather(instr_fetch) ? instr_get_src(instr_fetch, 0)
+                                                    : instr_get_dst(instr_fetch, 0);
+        DR_ASSERT(opnd_is_memory_reference(memop));
+        bool is_contiguous =
+            !(reg_is_z(opnd_get_base(memop)) || reg_is_z(opnd_get_index(memop)));
+        if (is_contiguous) {
+            adjust = instru->instrument_gather_base(drcontext, bb, where, reg_ptr, adjust,
+                                                    memop);
+        }
+    }
+#endif
+
     /* Data entries. */
     if (instr_operands != NULL &&
         (instr_reads_memory(instr_operands) || instr_writes_memory(instr_operands))) {
@@ -1832,7 +1848,10 @@ event_kernel_xfer(void *drcontext, const dr_kernel_xfer_info_t *info)
     case DR_XFER_EXCEPTION_DISPATCHER:
     case DR_XFER_RAISE_DISPATCHER:
     case DR_XFER_CALLBACK_DISPATCHER:
-    case DR_XFER_RSEQ_ABORT: marker_type = TRACE_MARKER_TYPE_KERNEL_EVENT; break;
+    case DR_XFER_RSEQ_ABORT:
+        marker_type = op_offline.get_value() ? TRACE_MARKER_TYPE_KERNEL_EVENT_RAW
+                                             : TRACE_MARKER_TYPE_KERNEL_EVENT;
+        break;
     case DR_XFER_SIGNAL_RETURN:
     case DR_XFER_CALLBACK_RETURN:
     case DR_XFER_CONTINUE:
@@ -2471,7 +2490,7 @@ drmemtrace_client_main(client_id_t id, int argc, const char *argv[])
     // all addresses during tracing or when instruction or data address entries
     // are being filtered.
     if (op_use_physical.get_value() || op_L0I_filter.get_value() ||
-        op_L0D_filter.get_value())
+        op_L0D_filter.get_value() || op_L0_filter_until_instrs.get_value())
         op_disable_optimizations.set_value(true);
 
     init_record_syscall();
@@ -2603,8 +2622,14 @@ drmemtrace_client_main(client_id_t id, int argc, const char *argv[])
      * max_bb_instrs can fit in the instr_count bitfield in offline_entry_t.
      */
     uint64 max_bb_instrs;
-    if (!dr_get_integer_option("max_bb_instrs", &max_bb_instrs))
-        max_bb_instrs = 256; /* current default */
+    if (!dr_get_integer_option(MAX_BB_INSTRS_NAME, &max_bb_instrs))
+        max_bb_instrs = MAX_BB_INSTRS;
+    else if (max_bb_instrs > MAX_BB_INSTRS) {
+        NOTIFY(
+            1,
+            "Warning: -%s is too large (max is %d) to safely support Top Byte Ignore\n",
+            MAX_BB_INSTRS_NAME, MAX_BB_INSTRS);
+    }
     DR_ASSERT(max_bb_instrs < uint64(1) << PC_INSTR_COUNT_BITS);
     redzone_size = instru->sizeof_entry() * (size_t)max_bb_instrs * 2;
 

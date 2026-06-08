@@ -1,5 +1,5 @@
 /* **********************************************************
- * Copyright (c) 2021-2025 Google, Inc.  All rights reserved.
+ * Copyright (c) 2021-2026 Google, Inc.  All rights reserved.
  * **********************************************************/
 
 /*
@@ -247,7 +247,7 @@ offline_entry_t
 make_block(uint64_t offs, uint64_t instr_count)
 {
     offline_entry_t entry;
-    entry.pc.type = OFFLINE_TYPE_PC;
+    entry.pc.type = IF_X64_ELSE(OFFLINE_TYPE_PC_TOP_BIT, OFFLINE_TYPE_PC);
     entry.pc.modidx = 0; // Just one "module" in this test.
     entry.pc.modoffs = offs;
     entry.pc.instr_count = instr_count;
@@ -258,8 +258,11 @@ offline_entry_t
 make_memref(uint64_t addr)
 {
     offline_entry_t entry;
-    entry.addr.type = OFFLINE_TYPE_MEMREF;
-    entry.addr.addr = addr;
+    // The type field is included in the address, just like occurs in
+    // instrumentation, even with non-canonical addresses which won't
+    // have the right type field (which we distinguish using the logic
+    // outlined in the offline_type_t comment).
+    entry.combined_value = addr;
     return entry;
 }
 
@@ -303,6 +306,17 @@ make_marker(uint64_t type, int64_t value)
     entry.extended.ext = OFFLINE_EXT_TYPE_MARKER;
     entry.extended.valueA = value;
     entry.extended.valueB = type;
+    return entry;
+}
+
+offline_entry_t
+make_gather_base(uint64_t addr)
+{
+    offline_entry_t entry;
+    entry.extended.type = OFFLINE_TYPE_EXTENDED;
+    entry.extended.ext = OFFLINE_EXT_TYPE_SCATTER_GATHER_BASE;
+    entry.extended.valueA = addr;
+    entry.extended.valueB = 1;
     return entry;
 }
 
@@ -427,6 +441,33 @@ run_raw2trace(void *drcontext, const std::vector<offline_entry_t> raw, instrlist
         ++idx;
     }
     return true;
+}
+
+// Takes ownership of ilist and destroys it.
+// Returns the failure string.
+std::string
+run_raw2trace_for_error_string(void *drcontext, const std::vector<offline_entry_t> raw,
+                               instrlist_t *ilist)
+{
+    // We need an istream so we use istringstream.
+    std::ostringstream raw_out;
+    for (const auto &entry : raw) {
+        std::string as_string(reinterpret_cast<const char *>(&entry),
+                              reinterpret_cast<const char *>(&entry + 1));
+        raw_out << as_string;
+    }
+    std::istringstream raw_in(raw_out.str());
+    std::vector<std::istream *> input;
+    input.push_back(&raw_in);
+
+    // We need an ostream to capture out.
+    std::ostringstream result_stream;
+    std::vector<std::ostream *> output;
+    output.push_back(&result_stream);
+
+    // Run raw2trace with our subclass supplying our decodings.
+    raw2trace_test_t raw2trace(input, output, *ilist, drcontext);
+    return raw2trace.do_conversion();
 }
 
 bool
@@ -807,8 +848,14 @@ test_chunk_boundaries(void *drcontext)
     raw.push_back(make_block(offs_move1, 2));
     raw.push_back(make_block(offs_jmp2, 1));
     raw.push_back(make_block(offs_move2, 2));
+#ifdef X86
+    raw.push_back(make_memref(42)); // ret load.
+#endif
     raw.push_back(make_block(offs_jcc1, 1));
     raw.push_back(make_block(offs_ret1, 1));
+#ifdef X86
+    raw.push_back(make_memref(42)); // ret load.
+#endif
     raw.push_back(make_block(offs_move1, 1));
     // TODO i#5724: Add repeats of the same instrs to test re-emitting encodings
     // in new chunks.
@@ -862,6 +909,9 @@ test_chunk_boundaries(void *drcontext)
         check_entry(entries, idx, TRACE_TYPE_ENCODING, -1) &&
         check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_BRANCH_TARGET) &&
         check_entry(entries, idx, TRACE_TYPE_INSTR_RETURN, -1) &&
+#ifdef X86
+        check_entry(entries, idx, TRACE_TYPE_READ, -1) &&
+#endif
 #ifdef X86_32
         // An extra encoding entry is needed.
         check_entry(entries, idx, TRACE_TYPE_ENCODING, -1) &&
@@ -883,6 +933,9 @@ test_chunk_boundaries(void *drcontext)
         check_entry(entries, idx, TRACE_TYPE_ENCODING, -1) &&
         // Block 5.
         check_entry(entries, idx, TRACE_TYPE_INSTR_RETURN, -1) &&
+#ifdef X86
+        check_entry(entries, idx, TRACE_TYPE_READ, -1) &&
+#endif
         check_entry(entries, idx, TRACE_TYPE_ENCODING, -1) &&
         // Block 6.
         check_entry(entries, idx, TRACE_TYPE_INSTR, -1) &&
@@ -959,9 +1012,15 @@ test_chunk_encodings(void *drcontext)
     // Add a final chunk boundary right between a branch;ret pair.
     raw.push_back(make_block(offs_nop_start, 4));
     raw.push_back(make_block(offs_ret, 1));
+#ifdef X86
+    raw.push_back(make_memref(42)); // ret load.
+#endif
     // Test that we don't get another encoding for a 2nd instance of the ret
     // (yes, nonsensical having the ret target itself: that's ok).
     raw.push_back(make_block(offs_ret, 1));
+#ifdef X86
+    raw.push_back(make_memref(42)); // ret load.
+#endif
     // Re-use move2 for the target of the 2nd ret to it isn't truncated.
     raw.push_back(make_block(offs_move2, 1));
     raw.push_back(make_exit());
@@ -1042,9 +1101,15 @@ test_chunk_encodings(void *drcontext)
         check_entry(entries, idx, TRACE_TYPE_ENCODING, -1) &&
         check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_BRANCH_TARGET) &&
         check_entry(entries, idx, TRACE_TYPE_INSTR_RETURN, -1, offs_ret) &&
+#ifdef X86
+        check_entry(entries, idx, TRACE_TYPE_READ, -1) &&
+#endif
         // There should be no encoding before the 2nd instance.
         check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_BRANCH_TARGET) &&
         check_entry(entries, idx, TRACE_TYPE_INSTR_RETURN, -1, offs_ret) &&
+#ifdef X86
+        check_entry(entries, idx, TRACE_TYPE_READ, -1) &&
+#endif
         check_entry(entries, idx, TRACE_TYPE_ENCODING, -1) &&
         check_entry(entries, idx, TRACE_TYPE_INSTR, -1) &&
         // Footer.
@@ -2052,7 +2117,9 @@ test_rseq_side_exit_signal(void *drcontext)
     // A discontinuity as we continue with the side exit target.
     // But, a signal arrived (whose interruption must be that target).
     raw.push_back(make_marker(TRACE_MARKER_TYPE_KERNEL_EVENT, offs_move3));
-    raw.push_back(make_block(offs_move1, 1));
+    // Re-use the rseq end as our signal handler.
+    raw.push_back(make_block(offs_move1, 2));
+    raw.push_back(make_memref(42));
     raw.push_back(make_marker(TRACE_MARKER_TYPE_KERNEL_XFER, offs_store));
     raw.push_back(make_block(offs_move3, 1));
     raw.push_back(make_exit());
@@ -2087,6 +2154,9 @@ test_rseq_side_exit_signal(void *drcontext)
         check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_KERNEL_EVENT) &&
         check_entry(entries, idx, TRACE_TYPE_ENCODING, -1) &&
         check_entry(entries, idx, TRACE_TYPE_INSTR, -1, offs_move1) &&
+        check_entry(entries, idx, TRACE_TYPE_ENCODING, -1) &&
+        check_entry(entries, idx, TRACE_TYPE_INSTR, -1, offs_store) &&
+        check_entry(entries, idx, TRACE_TYPE_WRITE, -1) &&
         check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_KERNEL_XFER) &&
         check_entry(entries, idx, TRACE_TYPE_ENCODING, -1) &&
         check_entry(entries, idx, TRACE_TYPE_INSTR, -1, offs_move3) &&
@@ -2997,6 +3067,7 @@ test_branch_decoration(void *drcontext)
         // Now repeat that branch to test encodings.
         raw.push_back(make_block(offs_mov, 2));
         raw.push_back(make_block(offs_store, 1));
+        raw.push_back(make_memref(42));
         raw.push_back(make_exit());
 
         std::vector<trace_entry_t> entries;
@@ -3026,6 +3097,7 @@ test_branch_decoration(void *drcontext)
             check_entry(entries, idx, TRACE_TYPE_INSTR_TAKEN_JUMP, -1, offs_jcc) &&
             check_entry(entries, idx, TRACE_TYPE_ENCODING, -1) &&
             check_entry(entries, idx, TRACE_TYPE_INSTR, -1, offs_store) &&
+            check_entry(entries, idx, TRACE_TYPE_WRITE, -1) &&
             check_entry(entries, idx, TRACE_TYPE_THREAD_EXIT, -1) &&
             check_entry(entries, idx, TRACE_TYPE_FOOTER, -1);
     }
@@ -3068,6 +3140,7 @@ test_branch_decoration(void *drcontext)
         raw.push_back(make_block(offs_mov, 2));
         raw.push_back(make_block(offs_jcc_move, 1));
         raw.push_back(make_block(offs_store, 1));
+        raw.push_back(make_memref(42));
         raw.push_back(make_exit());
 
         std::vector<trace_entry_t> entries;
@@ -3108,6 +3181,7 @@ test_branch_decoration(void *drcontext)
             check_entry(entries, idx, TRACE_TYPE_INSTR_UNTAKEN_JUMP, -1, offs_jcc_move) &&
             check_entry(entries, idx, TRACE_TYPE_ENCODING, -1) &&
             check_entry(entries, idx, TRACE_TYPE_INSTR, -1, offs_store) &&
+            check_entry(entries, idx, TRACE_TYPE_WRITE, -1) &&
             check_entry(entries, idx, TRACE_TYPE_THREAD_EXIT, -1) &&
             check_entry(entries, idx, TRACE_TYPE_FOOTER, -1);
     }
@@ -4119,6 +4193,473 @@ test_negative_timestamps(void *drcontext)
     }
 }
 
+bool
+test_top_byte_ignore(void *drcontext)
+{
+#ifndef X64
+    return true;
+#else
+    std::cerr << "\n===============\nTesting non-canonical top bytes in addresses\n";
+    instrlist_t *ilist = instrlist_create(drcontext);
+    instr_t *nop = XINST_CREATE_nop(drcontext);
+    instr_t *load1 =
+        XINST_CREATE_load(drcontext, opnd_create_reg(REG1), OPND_CREATE_MEMPTR(REG2, 0));
+    // Re-use the base so this will be elided, to test base sharing.
+    constexpr int SHARE_DISP = 10;
+    instr_t *load2 = XINST_CREATE_load(drcontext, opnd_create_reg(REG1),
+                                       OPND_CREATE_MEMPTR(REG2, SHARE_DISP));
+    // No elision (because REG1 has changed).
+    instr_t *load3 =
+        XINST_CREATE_load(drcontext, opnd_create_reg(REG1), OPND_CREATE_MEMPTR(REG1, 0));
+    // No elision (because REG1 has changed).
+    instr_t *load4 =
+        XINST_CREATE_load(drcontext, opnd_create_reg(REG1), OPND_CREATE_MEMPTR(REG1, 0));
+    // No elision (because REG1 has changed).
+    instr_t *load5 =
+        XINST_CREATE_load(drcontext, opnd_create_reg(REG1), OPND_CREATE_MEMPTR(REG1, 0));
+    // No elision (because REG1 has changed).
+    instr_t *load6 =
+        XINST_CREATE_load(drcontext, opnd_create_reg(REG1), OPND_CREATE_MEMPTR(REG1, 0));
+    // No elision (because REG1 has changed).
+    instr_t *store1 =
+        XINST_CREATE_store(drcontext, OPND_CREATE_MEMPTR(REG1, 0), opnd_create_reg(REG2));
+    instr_t *move =
+        XINST_CREATE_move(drcontext, opnd_create_reg(REG2), opnd_create_reg(REG1));
+    // No elision (b/c prior move changed REG2).
+    instr_t *store2 =
+        XINST_CREATE_store(drcontext, OPND_CREATE_MEMPTR(REG2, 0), opnd_create_reg(REG1));
+    instrlist_append(ilist, nop);
+    instrlist_append(ilist, load1);
+    instrlist_append(ilist, load2);
+    instrlist_append(ilist, load3);
+    instrlist_append(ilist, load4);
+    instrlist_append(ilist, load5);
+    instrlist_append(ilist, load6);
+    instrlist_append(ilist, store1);
+    instrlist_append(ilist, move);
+    instrlist_append(ilist, store2);
+    size_t offs_nop = 0;
+    size_t offs_load1 = offs_nop + instr_length(drcontext, nop);
+    size_t offs_load2 = offs_load1 + instr_length(drcontext, load1);
+    size_t offs_load3 = offs_load2 + instr_length(drcontext, load2);
+    size_t offs_load4 = offs_load3 + instr_length(drcontext, load3);
+    size_t offs_load5 = offs_load4 + instr_length(drcontext, load4);
+    size_t offs_load6 = offs_load5 + instr_length(drcontext, load5);
+    size_t offs_store1 = offs_load6 + instr_length(drcontext, load6);
+    size_t offs_move = offs_store1 + instr_length(drcontext, store1);
+    size_t offs_store2 = offs_move + instr_length(drcontext, move);
+
+    std::vector<offline_entry_t> raw;
+    raw.push_back(make_header());
+    raw.push_back(make_tid());
+    raw.push_back(make_pid());
+    raw.push_back(make_line_size());
+    constexpr uint64_t TIME_VALUE = 101;
+    raw.push_back(make_timestamp(TIME_VALUE));
+    raw.push_back(make_core());
+    raw.push_back(make_block(offs_load1, 9));
+    // Select addresses with top bits set such that they look like
+    // other record types, to ensure we treat them as addresses.
+    offline_entry_t check_type;
+    constexpr uint64_t ADDR_LIKE_TIMESTAMP = 0x8000123400005678;
+    check_type.combined_value = ADDR_LIKE_TIMESTAMP;
+    ASSERT(check_type.timestamp.type == OFFLINE_TYPE_TIMESTAMP,
+           "invalid top-bit constant");
+    raw.push_back(make_memref(ADDR_LIKE_TIMESTAMP));
+    constexpr uint64_t ADDR_LIKE_PC = 0x2000123400005678;
+    check_type.combined_value = ADDR_LIKE_PC;
+    ASSERT(check_type.pc.type == OFFLINE_TYPE_PC, "invalid top-bit constant");
+    raw.push_back(make_memref(ADDR_LIKE_PC));
+    constexpr uint64_t ADDR_LIKE_PC_TOP_BIT = 0xab00123400005678;
+    check_type.combined_value = ADDR_LIKE_PC_TOP_BIT;
+    ASSERT(check_type.pc.type == OFFLINE_TYPE_PC_TOP_BIT, "invalid top-bit constant");
+    raw.push_back(make_memref(ADDR_LIKE_PC_TOP_BIT));
+#    ifdef X86_64
+    // Test bits 48..55 not being canonical.
+    constexpr uint64_t ADDR_LIKE_PC_LAM_U57 = 0x2abc123400005678;
+    check_type.combined_value = ADDR_LIKE_PC_LAM_U57;
+    ASSERT(check_type.pc.type == OFFLINE_TYPE_PC, "invalid top-bit constant");
+    raw.push_back(make_memref(ADDR_LIKE_PC_LAM_U57));
+#    else
+    raw.push_back(make_memref(ADDR_LIKE_PC));
+#    endif
+    constexpr uint64_t ADDR_LIKE_KERNEL_EVENT = 0xc200000000000000;
+    check_type.combined_value = ADDR_LIKE_KERNEL_EVENT;
+    ASSERT(check_type.extended.type == OFFLINE_TYPE_EXTENDED &&
+               check_type.extended.ext == OFFLINE_EXT_TYPE_MARKER &&
+               check_type.extended.valueB == TRACE_MARKER_TYPE_KERNEL_EVENT,
+           "invalid top-bit constant");
+    raw.push_back(make_memref(ADDR_LIKE_KERNEL_EVENT));
+    constexpr uint64_t ADDR_LIKE_HEADER = 0xc400200000000c40;
+    check_type.combined_value = ADDR_LIKE_HEADER;
+    ASSERT(check_type.extended.type == OFFLINE_TYPE_EXTENDED &&
+               check_type.extended.ext == OFFLINE_EXT_TYPE_HEADER,
+           "invalid top-bit constant");
+    raw.push_back(make_memref(ADDR_LIKE_HEADER));
+    constexpr uint64_t ADDR_LIKE_FOOTER = 0xc100000000000000;
+    check_type.combined_value = ADDR_LIKE_FOOTER;
+    ASSERT(check_type.extended.type == OFFLINE_TYPE_EXTENDED &&
+               check_type.extended.ext == OFFLINE_EXT_TYPE_FOOTER,
+           "invalid top-bit constant");
+    raw.push_back(make_memref(ADDR_LIKE_FOOTER));
+    raw.push_back(make_exit());
+
+    std::vector<uint64_t> stats;
+    std::vector<trace_entry_t> entries;
+    if (!run_raw2trace(drcontext, raw, ilist, entries, &stats))
+        return false;
+    int idx = 0;
+    return (
+        stats[RAW2TRACE_STAT_NON_CANONICAL_TOP_BITS] == 7 &&
+        check_entry(entries, idx, TRACE_TYPE_HEADER, -1) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_VERSION) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_FILETYPE) &&
+        check_entry(entries, idx, TRACE_TYPE_THREAD, -1) &&
+        check_entry(entries, idx, TRACE_TYPE_PID, -1) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_CACHE_LINE_SIZE) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER,
+                    TRACE_MARKER_TYPE_CHUNK_INSTR_COUNT) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_TIMESTAMP,
+                    TIME_VALUE) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_CPU_ID) &&
+        check_entry(entries, idx, TRACE_TYPE_ENCODING, -1) &&
+        check_entry(entries, idx, TRACE_TYPE_INSTR, -1, offs_load1) &&
+        check_entry(entries, idx, TRACE_TYPE_READ, -1, ADDR_LIKE_TIMESTAMP) &&
+        check_entry(entries, idx, TRACE_TYPE_ENCODING, -1) &&
+        check_entry(entries, idx, TRACE_TYPE_INSTR, -1, offs_load2) &&
+        check_entry(entries, idx, TRACE_TYPE_READ, -1,
+                    ADDR_LIKE_TIMESTAMP + SHARE_DISP) &&
+        check_entry(entries, idx, TRACE_TYPE_ENCODING, -1) &&
+        check_entry(entries, idx, TRACE_TYPE_INSTR, -1, offs_load3) &&
+        check_entry(entries, idx, TRACE_TYPE_READ, -1, ADDR_LIKE_PC) &&
+        check_entry(entries, idx, TRACE_TYPE_ENCODING, -1) &&
+        check_entry(entries, idx, TRACE_TYPE_INSTR, -1, offs_load4) &&
+        check_entry(entries, idx, TRACE_TYPE_READ, -1, ADDR_LIKE_PC_TOP_BIT) &&
+        check_entry(entries, idx, TRACE_TYPE_ENCODING, -1) &&
+        check_entry(entries, idx, TRACE_TYPE_INSTR, -1, offs_load5) &&
+        check_entry(entries, idx, TRACE_TYPE_READ, -1,
+                    IF_X86_ELSE(ADDR_LIKE_PC_LAM_U57, ADDR_LIKE_PC)) &&
+        check_entry(entries, idx, TRACE_TYPE_ENCODING, -1) &&
+        check_entry(entries, idx, TRACE_TYPE_INSTR, -1, offs_load6) &&
+        check_entry(entries, idx, TRACE_TYPE_READ, -1, ADDR_LIKE_KERNEL_EVENT) &&
+        check_entry(entries, idx, TRACE_TYPE_ENCODING, -1) &&
+        check_entry(entries, idx, TRACE_TYPE_INSTR, -1, offs_store1) &&
+        check_entry(entries, idx, TRACE_TYPE_WRITE, -1, ADDR_LIKE_HEADER) &&
+        check_entry(entries, idx, TRACE_TYPE_ENCODING, -1) &&
+        check_entry(entries, idx, TRACE_TYPE_INSTR, -1, offs_move) &&
+        check_entry(entries, idx, TRACE_TYPE_ENCODING, -1) &&
+        check_entry(entries, idx, TRACE_TYPE_INSTR, -1, offs_store2) &&
+        check_entry(entries, idx, TRACE_TYPE_WRITE, -1, ADDR_LIKE_FOOTER) &&
+        check_entry(entries, idx, TRACE_TYPE_THREAD_EXIT, -1) &&
+        check_entry(entries, idx, TRACE_TYPE_FOOTER, -1));
+#endif
+}
+
+bool
+test_missing_memref(void *drcontext)
+{
+#ifdef X86
+    std::cerr << "\n===============\nTesting missing memref\n";
+    // We need real timestamp values to avoid them looking like memrefs.
+    constexpr uint64_t TIMESTAMP = 13423087440807175;
+    {
+        // Test a block with conditional loads/stores.
+        instrlist_t *ilist = instrlist_create(drcontext);
+        instr_t *nop = XINST_CREATE_nop(drcontext);
+        instr_t *cmov = INSTR_CREATE_cmovcc(drcontext, OP_cmovnle, opnd_create_reg(REG1),
+                                            OPND_CREATE_MEMPTR(REG2, 0));
+        instr_t *ret = XINST_CREATE_return(drcontext);
+        instrlist_append(ilist, nop);
+        instrlist_append(ilist, cmov);
+        instrlist_append(ilist, ret);
+        size_t offs_cmov = instr_length(drcontext, nop);
+
+        std::vector<offline_entry_t> raw;
+        raw.push_back(make_header());
+        raw.push_back(make_tid());
+        raw.push_back(make_pid());
+        raw.push_back(make_line_size());
+        raw.push_back(make_timestamp(TIMESTAMP));
+        raw.push_back(make_core());
+        raw.push_back(make_block(offs_cmov, 2));
+        // We have no memref for the cmov, which is normal, but we also omit
+        // one for the ret just to show there is no error when any instruction
+        // in the block is condtional.
+        raw.push_back(make_timestamp(TIMESTAMP));
+        raw.push_back(make_exit());
+
+        std::string error = run_raw2trace_for_error_string(drcontext, raw, ilist);
+        CHECK(error.empty(), "Failed to allow missing memref in conditional block");
+    }
+    {
+        // Test an unconditional block.
+        instrlist_t *ilist = instrlist_create(drcontext);
+        instr_t *nop = XINST_CREATE_nop(drcontext);
+        instr_t *load = INSTR_CREATE_mov_ld(drcontext, opnd_create_reg(REG1),
+                                            OPND_CREATE_MEMPTR(REG2, 0));
+        instr_t *ret = XINST_CREATE_return(drcontext);
+        instrlist_append(ilist, nop);
+        instrlist_append(ilist, load);
+        instrlist_append(ilist, ret);
+        size_t offs_load = instr_length(drcontext, nop);
+
+        std::vector<offline_entry_t> raw;
+        raw.push_back(make_header());
+        raw.push_back(make_tid());
+        raw.push_back(make_pid());
+        raw.push_back(make_line_size());
+        raw.push_back(make_timestamp(TIMESTAMP));
+        raw.push_back(make_core());
+        raw.push_back(make_block(offs_load, 2));
+        // Just 1 memref when load+ret should be 2 total: error.
+        raw.push_back(make_memref(42));
+        raw.push_back(make_timestamp(TIMESTAMP));
+        raw.push_back(make_exit());
+
+        std::string error = run_raw2trace_for_error_string(drcontext, raw, ilist);
+        CHECK(!error.empty() &&
+                  error.find("Missing memref in block without predicated accesses") !=
+                      std::string::npos,
+              "Failed to detect missing memref");
+    }
+#endif
+    return true;
+}
+
+bool
+test_skipped_memrefs(void *drcontext)
+{
+#ifdef AARCH64
+    std::cerr << "\n===============\nTesting skipped memrefs\n";
+    instrlist_t *ilist = instrlist_create(drcontext);
+    instr_t *nop = XINST_CREATE_nop(drcontext);
+    constexpr int VECTOR_LENGTH_BYTES = 16; // In bytes.
+    dr_set_vector_length(VECTOR_LENGTH_BYTES * 8);
+    // First we do reg+imm memref with different element sizes and vector counts.
+    // Test with a displacement.
+    constexpr int DISP = VECTOR_LENGTH_BYTES;
+    instr_t *ld1b_imm = INSTR_CREATE_ld1b_sve_pred(
+        drcontext, opnd_create_reg_element_vector(DR_REG_Z12, OPSZ_1),
+        opnd_create_predicate_reg(DR_REG_P4, /*is_merge=*/false),
+        opnd_create_base_disp(REG2, DR_REG_NULL, 0, DISP, OPSZ_1));
+    // Test with the potential for elision (base register hasn't changed) -- though
+    // today we won't elide b/c these are in separate blocks and we avoid elision
+    // for predicated/conditional.
+    instr_t *ld1h_imm = INSTR_CREATE_ld1h_sve_pred(
+        drcontext, opnd_create_reg_element_vector(DR_REG_Z12, OPSZ_2),
+        opnd_create_predicate_reg(DR_REG_P4, /*is_merge=*/false),
+        opnd_create_base_disp(REG2, DR_REG_NULL, 0, 0, OPSZ_2));
+    // Clear the base so no elision for sure (though today there's already none).
+    instr_t *move =
+        XINST_CREATE_move(drcontext, opnd_create_reg(REG2), opnd_create_reg(REG1));
+    instr_t *ld2w_imm = INSTR_CREATE_ld2w_sve_pred(
+        drcontext, opnd_create_reg_element_vector(DR_REG_Z12, OPSZ_4),
+        opnd_create_predicate_reg(DR_REG_P4, /*is_merge=*/false),
+        opnd_create_base_disp(REG2, DR_REG_NULL, 0, 0, OPSZ_4));
+    instr_t *ld4d_imm = INSTR_CREATE_ld4d_sve_pred(
+        drcontext, opnd_create_reg_element_vector(DR_REG_Z12, OPSZ_8),
+        opnd_create_predicate_reg(DR_REG_P4, /*is_merge=*/false),
+        // REG1 so no elision.
+        opnd_create_base_disp(REG1, DR_REG_NULL, 0, 0, OPSZ_8));
+    // Test reg+reg.
+    instr_t *st1w_reg = INSTR_CREATE_st1w_sve_pred(
+        drcontext, opnd_create_reg_element_vector(DR_REG_Z12, OPSZ_4),
+        opnd_create_predicate_reg(DR_REG_P4, /*is_merge=*/false),
+        opnd_create_base_disp_shift_aarch64(REG2, REG1, DR_EXTEND_UXTX, /*scaled=*/true,
+                                            0, DR_OPND_DEFAULT, OPSZ_4, 2));
+
+    instrlist_append(ilist, nop);
+    instrlist_append(ilist, ld1b_imm);
+    instrlist_append(ilist, ld1h_imm);
+    instrlist_append(ilist, move);
+    instrlist_append(ilist, ld2w_imm);
+    instrlist_append(ilist, ld4d_imm);
+    instrlist_append(ilist, st1w_reg);
+
+    size_t offs_nop = 0;
+    size_t offs_ld1b_imm = offs_nop + instr_length(drcontext, nop);
+    size_t offs_ld1h_imm = offs_ld1b_imm + instr_length(drcontext, ld1b_imm);
+    size_t offs_move = offs_ld1h_imm + instr_length(drcontext, ld1h_imm);
+    size_t offs_ld2w_imm = offs_move + instr_length(drcontext, move);
+    size_t offs_ld4d_imm = offs_ld2w_imm + instr_length(drcontext, ld2w_imm);
+    size_t offs_st1w_reg = offs_ld4d_imm + instr_length(drcontext, ld4d_imm);
+
+    std::vector<offline_entry_t> raw;
+    raw.push_back(make_header());
+    raw.push_back(make_tid());
+    raw.push_back(make_pid());
+    raw.push_back(make_line_size());
+    raw.push_back(make_marker(TRACE_MARKER_TYPE_VECTOR_LENGTH, VECTOR_LENGTH_BYTES));
+    constexpr uint64_t TIME_VALUE = 0x0013000000000000;
+    raw.push_back(make_timestamp(TIME_VALUE));
+    raw.push_back(make_core());
+    // The ld1b's non-masked-out addresses are every other one.
+    raw.push_back(make_block(offs_ld1b_imm, 1));
+    constexpr uint64_t BASE_ADDR_LD1B = 0x1234;
+    // The tracer stores addresses w/o the disp.
+    raw.push_back(make_gather_base(BASE_ADDR_LD1B - DISP));
+    raw.push_back(make_memref(BASE_ADDR_LD1B - DISP + 1));
+    raw.push_back(make_memref(BASE_ADDR_LD1B - DISP + 3));
+    raw.push_back(make_memref(BASE_ADDR_LD1B - DISP + 5));
+    raw.push_back(make_memref(BASE_ADDR_LD1B - DISP + 7));
+    raw.push_back(make_memref(BASE_ADDR_LD1B - DISP + 9));
+    raw.push_back(make_memref(BASE_ADDR_LD1B - DISP + 11));
+    raw.push_back(make_memref(BASE_ADDR_LD1B - DISP + 13));
+    raw.push_back(make_memref(BASE_ADDR_LD1B - DISP + 15));
+    // The ld1h's non-masked-out addresses are just the last 2.
+    raw.push_back(make_block(offs_ld1h_imm, 1));
+    constexpr uint64_t BASE_ADDR_LD1H = BASE_ADDR_LD1B - DISP;
+    raw.push_back(make_gather_base(BASE_ADDR_LD1H));
+    raw.push_back(make_memref(BASE_ADDR_LD1H + 12));
+    raw.push_back(make_memref(BASE_ADDR_LD1H + 14));
+    raw.push_back(make_block(offs_move, 1));
+    // The ld2w just has one non-masked entry, so 2 addresses (one for each vector).
+    raw.push_back(make_block(offs_ld2w_imm, 1));
+    constexpr uint64_t BASE_ADDR_LD2W = 0x12345678;
+    raw.push_back(make_gather_base(BASE_ADDR_LD2W));
+    raw.push_back(make_memref(BASE_ADDR_LD2W + 0));
+    raw.push_back(make_memref(BASE_ADDR_LD2W + 4));
+    // The ld4d has no masked-out addresses.
+    raw.push_back(make_block(offs_ld4d_imm, 1));
+    constexpr uint64_t BASE_ADDR_LD4D = 0x5678;
+    raw.push_back(make_gather_base(BASE_ADDR_LD4D));
+    raw.push_back(make_memref(BASE_ADDR_LD4D + 0));
+    raw.push_back(make_memref(BASE_ADDR_LD4D + 8));
+    raw.push_back(make_memref(BASE_ADDR_LD4D + 16));
+    raw.push_back(make_memref(BASE_ADDR_LD4D + 24));
+    raw.push_back(make_memref(BASE_ADDR_LD4D + 32));
+    raw.push_back(make_memref(BASE_ADDR_LD4D + 40));
+    raw.push_back(make_memref(BASE_ADDR_LD4D + 48));
+    raw.push_back(make_memref(BASE_ADDR_LD4D + 56));
+    // The st1w has all addresses masked out.
+    raw.push_back(make_block(offs_st1w_reg, 1));
+    constexpr uint64_t BASE_ADDR_ST1W = 0x4320;
+    // This is reg+reg with no displacement.
+    raw.push_back(make_gather_base(BASE_ADDR_ST1W));
+    raw.push_back(make_timestamp(TIME_VALUE));
+    raw.push_back(make_core());
+    raw.push_back(make_exit());
+
+    std::vector<uint64_t> stats;
+    std::vector<trace_entry_t> entries;
+    if (!run_raw2trace(drcontext, raw, ilist, entries, &stats))
+        return false;
+    int idx = 0;
+    return (
+        check_entry(entries, idx, TRACE_TYPE_HEADER, -1) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_VERSION) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_FILETYPE) &&
+        check_entry(entries, idx, TRACE_TYPE_THREAD, -1) &&
+        check_entry(entries, idx, TRACE_TYPE_PID, -1) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_CACHE_LINE_SIZE) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER,
+                    TRACE_MARKER_TYPE_CHUNK_INSTR_COUNT) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_VECTOR_LENGTH,
+                    VECTOR_LENGTH_BYTES) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_TIMESTAMP,
+                    TIME_VALUE) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_CPU_ID) &&
+        // The ld1b.
+        check_entry(entries, idx, TRACE_TYPE_ENCODING, -1) &&
+        check_entry(entries, idx, TRACE_TYPE_INSTR, -1, offs_ld1b_imm) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_SKIPPED_MEMREF,
+                    BASE_ADDR_LD1B) &&
+        check_entry(entries, idx, TRACE_TYPE_READ, -1, BASE_ADDR_LD1B + 1) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_SKIPPED_MEMREF,
+                    BASE_ADDR_LD1B + 2) &&
+        check_entry(entries, idx, TRACE_TYPE_READ, -1, BASE_ADDR_LD1B + 3) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_SKIPPED_MEMREF,
+                    BASE_ADDR_LD1B + 4) &&
+        check_entry(entries, idx, TRACE_TYPE_READ, -1, BASE_ADDR_LD1B + 5) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_SKIPPED_MEMREF,
+                    BASE_ADDR_LD1B + 6) &&
+        check_entry(entries, idx, TRACE_TYPE_READ, -1, BASE_ADDR_LD1B + 7) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_SKIPPED_MEMREF,
+                    BASE_ADDR_LD1B + 8) &&
+        check_entry(entries, idx, TRACE_TYPE_READ, -1, BASE_ADDR_LD1B + 9) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_SKIPPED_MEMREF,
+                    BASE_ADDR_LD1B + 10) &&
+        check_entry(entries, idx, TRACE_TYPE_READ, -1, BASE_ADDR_LD1B + 11) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_SKIPPED_MEMREF,
+                    BASE_ADDR_LD1B + 12) &&
+        check_entry(entries, idx, TRACE_TYPE_READ, -1, BASE_ADDR_LD1B + 13) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_SKIPPED_MEMREF,
+                    BASE_ADDR_LD1B + 14) &&
+        check_entry(entries, idx, TRACE_TYPE_READ, -1, BASE_ADDR_LD1B + 15) &&
+        // The ld1h.
+        check_entry(entries, idx, TRACE_TYPE_ENCODING, -1) &&
+        check_entry(entries, idx, TRACE_TYPE_INSTR, -1, offs_ld1h_imm) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_SKIPPED_MEMREF,
+                    BASE_ADDR_LD1H) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_SKIPPED_MEMREF,
+                    BASE_ADDR_LD1H + 2) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_SKIPPED_MEMREF,
+                    BASE_ADDR_LD1H + 4) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_SKIPPED_MEMREF,
+                    BASE_ADDR_LD1H + 6) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_SKIPPED_MEMREF,
+                    BASE_ADDR_LD1H + 8) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_SKIPPED_MEMREF,
+                    BASE_ADDR_LD1H + 10) &&
+        check_entry(entries, idx, TRACE_TYPE_READ, -1, BASE_ADDR_LD1H + 12) &&
+        check_entry(entries, idx, TRACE_TYPE_READ, -1, BASE_ADDR_LD1H + 14) &&
+        // The move.
+        check_entry(entries, idx, TRACE_TYPE_ENCODING, -1) &&
+        check_entry(entries, idx, TRACE_TYPE_INSTR, -1, offs_move) &&
+        // The ld2w.
+        check_entry(entries, idx, TRACE_TYPE_ENCODING, -1) &&
+        check_entry(entries, idx, TRACE_TYPE_INSTR, -1, offs_ld2w_imm) &&
+        check_entry(entries, idx, TRACE_TYPE_READ, -1, BASE_ADDR_LD2W) &&
+        check_entry(entries, idx, TRACE_TYPE_READ, -1, BASE_ADDR_LD2W + 4) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_SKIPPED_MEMREF,
+                    BASE_ADDR_LD2W + 8) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_SKIPPED_MEMREF,
+                    BASE_ADDR_LD2W + 12) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_SKIPPED_MEMREF,
+                    BASE_ADDR_LD2W + 16) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_SKIPPED_MEMREF,
+                    BASE_ADDR_LD2W + 20) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_SKIPPED_MEMREF,
+                    BASE_ADDR_LD2W + 24) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_SKIPPED_MEMREF,
+                    BASE_ADDR_LD2W + 28) &&
+        // The ld4d.
+        check_entry(entries, idx, TRACE_TYPE_ENCODING, -1) &&
+        check_entry(entries, idx, TRACE_TYPE_INSTR, -1, offs_ld4d_imm) &&
+        check_entry(entries, idx, TRACE_TYPE_READ, -1, BASE_ADDR_LD4D) &&
+        check_entry(entries, idx, TRACE_TYPE_READ, -1, BASE_ADDR_LD4D + 8) &&
+        check_entry(entries, idx, TRACE_TYPE_READ, -1, BASE_ADDR_LD4D + 16) &&
+        check_entry(entries, idx, TRACE_TYPE_READ, -1, BASE_ADDR_LD4D + 24) &&
+        check_entry(entries, idx, TRACE_TYPE_READ, -1, BASE_ADDR_LD4D + 32) &&
+        check_entry(entries, idx, TRACE_TYPE_READ, -1, BASE_ADDR_LD4D + 40) &&
+        check_entry(entries, idx, TRACE_TYPE_READ, -1, BASE_ADDR_LD4D + 48) &&
+        check_entry(entries, idx, TRACE_TYPE_READ, -1, BASE_ADDR_LD4D + 56) &&
+        // The st1w.
+        check_entry(entries, idx, TRACE_TYPE_ENCODING, -1) &&
+        check_entry(entries, idx, TRACE_TYPE_INSTR, -1, offs_st1w_reg) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_SKIPPED_MEMREF,
+                    BASE_ADDR_ST1W) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_SKIPPED_MEMREF,
+                    BASE_ADDR_ST1W + 4) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_SKIPPED_MEMREF,
+                    BASE_ADDR_ST1W + 8) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_SKIPPED_MEMREF,
+                    BASE_ADDR_ST1W + 12) &&
+        // Tail of trace.
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_TIMESTAMP,
+                    TIME_VALUE) &&
+        check_entry(entries, idx, TRACE_TYPE_MARKER, TRACE_MARKER_TYPE_CPU_ID) &&
+        check_entry(entries, idx, TRACE_TYPE_THREAD_EXIT, -1) &&
+        check_entry(entries, idx, TRACE_TYPE_FOOTER, -1));
+#elif defined(X86)
+    // TODO i#7914: Add x86 contiguous skipped memref support.
+    return true;
+#else
+    // Not supported in tracer so no tests here.
+    return true;
+#endif
+}
+
 int
 test_main(int argc, const char *argv[])
 {
@@ -4144,7 +4685,8 @@ test_main(int argc, const char *argv[])
         !test_stats_timestamp_instr_count(drcontext) ||
         !test_is_maybe_blocking_syscall(drcontext) || !test_ifiltered(drcontext) ||
         !test_asynchronous_signal(drcontext) || !test_syscall_injection(drcontext) ||
-        !test_negative_timestamps(drcontext))
+        !test_negative_timestamps(drcontext) || !test_top_byte_ignore(drcontext) ||
+        !test_missing_memref(drcontext) || !test_skipped_memrefs(drcontext))
         return 1;
     return 0;
 }

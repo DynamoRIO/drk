@@ -104,11 +104,18 @@ trace_metadata_writer_t::write_thread_exit(byte *buffer, thread_id_t tid)
 {
     return instru.append_thread_exit(buffer, tid);
 }
+trace_marker_type_t
+trace_metadata_writer_t::canonicalize_marker_type(trace_marker_type_t marker_type)
+{
+    if (marker_type == TRACE_MARKER_TYPE_KERNEL_EVENT_RAW)
+        return TRACE_MARKER_TYPE_KERNEL_EVENT;
+    return marker_type;
+}
 int
 trace_metadata_writer_t::write_marker(byte *buffer, trace_marker_type_t type,
                                       uintptr_t val)
 {
-    return instru.append_marker(buffer, type, val);
+    return instru.append_marker(buffer, canonicalize_marker_type(type), val);
 }
 int
 trace_metadata_writer_t::write_iflush(byte *buffer, addr_t start, size_t size)
@@ -397,6 +404,7 @@ raw2trace_t::process_offline_entry(raw2trace_thread_data_t *tdata,
                 return false;
             trace_marker_type_t marker_type =
                 static_cast<trace_marker_type_t>(in_entry->extended.valueB);
+            marker_type = trace_metadata_writer_t::canonicalize_marker_type(marker_type);
             if (!process_marker(tdata, marker_type, marker_val, buf, flush_decode_cache))
                 return false;
             // If there is currently a delayed branch that has not been emitted yet,
@@ -449,7 +457,8 @@ raw2trace_t::process_offline_entry(raw2trace_thread_data_t *tdata,
             tdata->error = "memref entry found outside of bb";
             return false;
         }
-    } else if (in_entry->pc.type == OFFLINE_TYPE_PC) {
+    } else if (in_entry->pc.type ==
+               OFFLINE_TYPE_PC IF_X64(|| in_entry->pc.type == OFFLINE_TYPE_PC_TOP_BIT)) {
         if (reinterpret_cast<trace_entry_t *>(buf) != buf_base) {
             tdata->error = "We shouldn't have buffered anything before calling "
                            "append_bb_entries";
@@ -457,6 +466,7 @@ raw2trace_t::process_offline_entry(raw2trace_thread_data_t *tdata,
         }
         if (!append_bb_entries(tdata, in_entry, last_bb_handled))
             return false;
+#ifndef X64
     } else if (in_entry->addr.type == OFFLINE_TYPE_IFLUSH) {
         const offline_entry_t *entry = get_next_entry(tdata);
         if (entry == nullptr || entry->addr.type != OFFLINE_TYPE_IFLUSH) {
@@ -467,6 +477,7 @@ raw2trace_t::process_offline_entry(raw2trace_thread_data_t *tdata,
             (ptr_uint_t)entry->addr.addr);
         buf += trace_metadata_writer_t::write_iflush(
             buf, in_entry->addr.addr, (size_t)(entry->addr.addr - in_entry->addr.addr));
+#endif
     } else {
         std::stringstream ss;
         ss << "Unknown trace type " << (int)in_entry->timestamp.type;
@@ -489,6 +500,8 @@ raw2trace_t::process_marker(raw2trace_thread_data_t *tdata,
                             trace_marker_type_t marker_type, uintptr_t marker_val,
                             byte *&buf, DR_PARAM_OUT bool *flush_decode_cache)
 {
+    // The type should have been canonicalized.
+    DR_ASSERT(marker_type != TRACE_MARKER_TYPE_KERNEL_EVENT_RAW);
     if (marker_type == TRACE_MARKER_TYPE_MIDBLOCK_END_PC) {
         // Consumed by raw2trace and not made visible in final trace.
         return true;
@@ -983,7 +996,10 @@ raw2trace_t::maybe_inject_pending_syscall_sequence(raw2trace_thread_data_t *tdat
         (is_marker && entry.extended.valueB == TRACE_MARKER_TYPE_KERNEL_XFER) ||
         // For syscalls interrupted by a signal and did not have a post-syscall
         // event.
-        (is_marker && entry.extended.valueB == TRACE_MARKER_TYPE_KERNEL_EVENT)) {
+        (is_marker &&
+         trace_metadata_writer_t::canonicalize_marker_type(
+             static_cast<trace_marker_type_t>(entry.extended.valueB)) ==
+             TRACE_MARKER_TYPE_KERNEL_EVENT)) {
         is_injection_point = true;
     } else if (is_marker && entry.extended.valueB == TRACE_MARKER_TYPE_FUNC_ID) {
         if (!tdata->saw_first_func_id_marker_after_syscall_) {
@@ -1023,6 +1039,8 @@ raw2trace_t::process_next_thread_buffer(raw2trace_thread_data_t *tdata,
         // another source.
         tdata->saw_header = trace_metadata_reader_t::is_thread_start(
             in_entry, &tdata->error, &tdata->version, &tdata->file_type);
+        tdata->instru_offline.set_disable_optimizations(
+            TESTANY(OFFLINE_FILE_TYPE_NO_OPTIMIZATIONS, tdata->file_type));
         VPRINT(2, "Trace file version is %d; type is %d\n", tdata->version,
                tdata->file_type);
         if (!tdata->error.empty())
@@ -1079,7 +1097,9 @@ raw2trace_t::process_next_thread_buffer(raw2trace_thread_data_t *tdata,
         if (entry.extended.type == OFFLINE_TYPE_EXTENDED &&
             (entry.extended.ext == OFFLINE_EXT_TYPE_FOOTER ||
              (entry.extended.ext == OFFLINE_EXT_TYPE_MARKER &&
-              (entry.extended.valueB == TRACE_MARKER_TYPE_KERNEL_EVENT ||
+              (trace_metadata_writer_t::canonicalize_marker_type(
+                   static_cast<trace_marker_type_t>(entry.extended.valueB)) ==
+                   TRACE_MARKER_TYPE_KERNEL_EVENT ||
                entry.extended.valueB == TRACE_MARKER_TYPE_KERNEL_XFER ||
                (entry.extended.valueB == TRACE_MARKER_TYPE_WINDOW_ID &&
                 entry.extended.valueA != tdata->last_window))))) {
@@ -1318,6 +1338,7 @@ raw2trace_t::do_conversion()
                 thread_data_[i]->syscall_traces_conversion_empty;
             syscall_traces_injected_ += thread_data_[i]->syscall_traces_injected;
             negative_times_corrected_ += thread_data_[i]->negative_times_corrected;
+            non_canonical_top_bits_ += thread_data_[i]->non_canonical_top_bits;
         }
     } else {
         // The files can be converted concurrently.
@@ -1351,6 +1372,7 @@ raw2trace_t::do_conversion()
             syscall_traces_conversion_empty_ += tdata->syscall_traces_conversion_empty;
             syscall_traces_injected_ += tdata->syscall_traces_injected;
             negative_times_corrected_ += tdata->negative_times_corrected;
+            non_canonical_top_bits_ += tdata->non_canonical_top_bits;
         }
     }
     error = aggregate_and_write_schedule_files();
@@ -1419,12 +1441,14 @@ raw2trace_t::analyze_elidable_addresses(raw2trace_thread_data_t *tdata, uint64 m
                                         uint64 modoffs, app_pc start_pc, uint instr_count)
 {
     int version = get_version(tdata);
-    // Old versions have no elision.
+    // Old versions have no elision; we also skip memcount-based checks there
+    // for simplicity.
     if (version <= OFFLINE_FILE_VERSION_NO_ELISION)
         return true;
-    // Filtered and instruction-only traces have no elision.
-    if (TESTANY(OFFLINE_FILE_TYPE_FILTERED | OFFLINE_FILE_TYPE_NO_OPTIMIZATIONS |
-                    OFFLINE_FILE_TYPE_INSTRUCTION_ONLY,
+    // Filtered and instruction-only traces have no elision; we also skip
+    // memcount-based checks.
+    if (TESTANY(OFFLINE_FILE_TYPE_FILTERED | OFFLINE_FILE_TYPE_DFILTERED |
+                    OFFLINE_FILE_TYPE_IFILTERED | OFFLINE_FILE_TYPE_INSTRUCTION_ONLY,
                 get_file_type(tdata)))
         return true;
     // We build an ilist to use identify_elidable_addresses() and fill in
@@ -1441,14 +1465,24 @@ raw2trace_t::analyze_elidable_addresses(raw2trace_thread_data_t *tdata, uint64 m
         instrlist_append(ilist, inst);
     }
 
-    instru_offline_.identify_elidable_addresses(dcontext_, ilist, version, false);
+    int total_traced_mem_count = tdata->instru_offline.identify_elidable_addresses(
+        dcontext_, ilist, version, false);
+    if (!set_block_mem_count(tdata, modidx, modoffs, start_pc, instr_count,
+                             total_traced_mem_count)) {
+        tdata->error = "Failed to set flags for elided base address";
+        return false;
+    }
+    if (TESTANY(OFFLINE_FILE_TYPE_NO_OPTIMIZATIONS, get_file_type(tdata))) {
+        // If optimizations are enabled we're done now that we have the count.
+        return true;
+    }
 
     for (instr_t *inst = instrlist_first(ilist); inst != nullptr;
          inst = instr_get_next(inst)) {
         int index, memop_index;
         bool write, needs_base;
-        if (!instru_offline_.label_marks_elidable(inst, &index, &memop_index, &write,
-                                                  &needs_base))
+        if (!tdata->instru_offline.label_marks_elidable(inst, &index, &memop_index,
+                                                        &write, &needs_base))
             continue;
         // There could be multiple labels for one instr (e.g., "push (%rsp)".
         instr_t *meminst = instr_get_next(inst);
@@ -1478,7 +1512,7 @@ raw2trace_t::analyze_elidable_addresses(raw2trace_thread_data_t *tdata, uint64 m
         opnd_t elided_op =
             write ? instr_get_dst(meminst, index) : instr_get_src(meminst, index);
         reg_id_t base;
-        bool got_base = instru_offline_.opnd_is_elidable(elided_op, base, version);
+        bool got_base = tdata->instru_offline.opnd_is_elidable(elided_op, base, version);
         DR_ASSERT(got_base && base != DR_REG_NULL);
         int remember_index = -1;
         for (instr_t *prev = meminst; prev != nullptr; prev = instr_get_prev(prev)) {
@@ -1493,8 +1527,8 @@ raw2trace_t::analyze_elidable_addresses(raw2trace_thread_data_t *tdata, uint64 m
                 for (int i = 0; i < instr_num_srcs(prev); i++) {
                     reg_id_t prev_base;
                     if (opnd_is_memory_reference(instr_get_src(prev, i))) {
-                        if (instru_offline_.opnd_is_elidable(instr_get_src(prev, i),
-                                                             prev_base, version) &&
+                        if (tdata->instru_offline.opnd_is_elidable(instr_get_src(prev, i),
+                                                                   prev_base, version) &&
                             prev_base == base) {
                             remember_index = mem_count;
                             break;
@@ -1508,8 +1542,8 @@ raw2trace_t::analyze_elidable_addresses(raw2trace_thread_data_t *tdata, uint64 m
                 for (int i = 0; i < instr_num_dsts(prev); i++) {
                     reg_id_t prev_base;
                     if (opnd_is_memory_reference(instr_get_dst(prev, i))) {
-                        if (instru_offline_.opnd_is_elidable(instr_get_dst(prev, i),
-                                                             prev_base, version) &&
+                        if (tdata->instru_offline.opnd_is_elidable(instr_get_dst(prev, i),
+                                                                   prev_base, version) &&
                             prev_base == base) {
                             remember_index = mem_count;
                             remember_write = true;
@@ -1581,10 +1615,14 @@ raw2trace_t::interrupted_by_kernel_event(raw2trace_thread_data_t *tdata, uint64_
             // Check for interruption of the basic block in the middle by either
             // a kernel event (e.g., a signal) or DR not finishing the block
             // (e.g., on detach or some thread relocation like a synchronous flush).
-            if (next_entry->extended.valueB == TRACE_MARKER_TYPE_KERNEL_EVENT ||
+            if (trace_metadata_writer_t::canonicalize_marker_type(
+                    static_cast<trace_marker_type_t>(next_entry->extended.valueB)) ==
+                    TRACE_MARKER_TYPE_KERNEL_EVENT ||
                 next_entry->extended.valueB == TRACE_MARKER_TYPE_MIDBLOCK_END_PC) {
                 bool is_kernel =
-                    next_entry->extended.valueB == TRACE_MARKER_TYPE_KERNEL_EVENT;
+                    trace_metadata_writer_t::canonicalize_marker_type(
+                        static_cast<trace_marker_type_t>(next_entry->extended.valueB)) ==
+                    TRACE_MARKER_TYPE_KERNEL_EVENT;
                 uintptr_t marker_val = 0;
                 if (!get_marker_value(tdata, &next_entry, &marker_val)) {
                     return false;
@@ -1664,6 +1702,7 @@ raw2trace_t::append_bb_entries(raw2trace_thread_data_t *tdata,
     // Legacy traces need the offset, not the pc.
     uint64_t cur_offs = in_entry->pc.modoffs;
     std::unordered_map<reg_id_t, addr_t> reg_vals;
+    int total_mem_count = -1;
     if (instr_count == 0) {
         // L0 filtering adds a PC entry with a count of 0 prior to each memref.
         skip_icache = true;
@@ -1679,11 +1718,26 @@ raw2trace_t::append_bb_entries(raw2trace_thread_data_t *tdata,
                                             in_entry->pc.modoffs, start_pc, instr_count))
                 return false;
         }
+        block_summary_t *block = lookup_block_summary(tdata, in_entry->pc.modidx,
+                                                      in_entry->pc.modoffs, start_pc);
+        if (block == nullptr) {
+            // This must be a filtered or instr-only trace.
+            DR_ASSERT(instrs_are_separate || is_instr_only_trace ||
+                      TESTANY(OFFLINE_FILE_TYPE_DFILTERED, get_file_type(tdata)));
+        } else {
+            total_mem_count = block->total_mem_count;
+        }
     }
+    bool expect_all_memrefs = total_mem_count >= 0;
+    log(4, "expect_all_memrefs=%d total_mem_count=%d\n", expect_all_memrefs,
+        total_mem_count);
     if (instrs_are_separate && instr_count != 1) {
         tdata->error = "cannot mix 0-count and >1-count";
         return false;
     }
+    int consumed_memrefs = 0;
+    bool interrupted = false;
+    bool rseq_aborted = false;
     for (uint i = 0; i < instr_count; ++i) {
         trace_entry_t *buf_start = get_write_buffer(tdata);
         trace_entry_t *buf = buf_start;
@@ -1804,7 +1858,8 @@ raw2trace_t::append_bb_entries(raw2trace_thread_data_t *tdata,
         // The trace is recording instruction retirement, premmpted instructions
         // and the corresponding memrefs, and instructions causing a fault are
         // removed.
-        const bool interrupted = interrupted_by_kernel_event(tdata, cur_pc, cur_offs);
+        DR_ASSERT(!interrupted);
+        interrupted = interrupted_by_kernel_event(tdata, cur_pc, cur_offs);
         if (interrupted) {
             // Insert the TRACE_MARKER_TYPE_UNCOMPLETED_INSTRUCTION marker to
             // indicate an instruction is removed from the trace because it was
@@ -1886,30 +1941,133 @@ raw2trace_t::append_bb_entries(raw2trace_thread_data_t *tdata,
                 // continue reading entries until we find a non-memref entry.
                 // This works only because drx_expand_scatter_gather ensures that the
                 // expansion has its own basic block, with no other app instr in it.
-                while (!reached_end_of_memrefs) {
+                //
+                // For a contiguous scatter/gather we do know the count and
+                // offsets statically and can fill in skipped memrefs if we
+                // have the base address, which we do via a special record
+                // read below.
+                bool add_skipped_markers = false;
+                addr_t base_addr = 0;
+                int mem_element_size = 0;
+                int element_count = 0;
+                // Conservative upper bound.
+                constexpr int MAX_SG_ELEMENTS = 2048;
+                trace_entry_t sg_buf[MAX_SG_ELEMENTS];
+                trace_entry_t *sg_buf_cur = sg_buf;
+                in_entry = get_next_entry(tdata);
+                if (in_entry != nullptr) {
+                    if (!(in_entry->extended.type == OFFLINE_TYPE_EXTENDED &&
+                          in_entry->extended.ext ==
+                              OFFLINE_EXT_TYPE_SCATTER_GATHER_BASE)) {
+                        // Support older traces without such records.
+                        unread_last_entry(tdata);
+                    } else {
+                        add_skipped_markers = true;
+                        base_addr = in_entry->extended.valueA;
+                        opnd_t memref = is_scatter ? instr->mem_dest_at(0).opnd
+                                                   : instr->mem_src_at(0).opnd;
+                        if (!TESTANY(OFFLINE_FILE_TYPE_NO_OPTIMIZATIONS,
+                                     get_file_type(tdata)) &&
+                            tdata->instru_offline.opnd_disp_is_elidable(memref)) {
+                            // We stored only the base reg, as an optimization.
+                            // This happens even with predicated instructions where we
+                            // don't do base reg elision.
+                            base_addr += opnd_get_disp(memref);
+                        }
+                        int reg_element_size = instr->scatter_gather_element_size();
+                        DR_ASSERT(reg_element_size > 0);
+                        mem_element_size = opnd_size_in_bytes(opnd_get_size(memref));
+                        // dr_get_vector_length() is in bits.
+                        element_count = dr_get_vector_length() / 8 / reg_element_size;
+                        // We want the sum across all vectors, if multiple: e.g.,
+                        // LD4H writes into 4 separate vector registers.
+                        int vector_count = instr->scatter_gather_vector_count();
+                        DR_ASSERT(vector_count > 0);
+                        element_count *= vector_count;
+                        log(4,
+                            "Scatter/gather skip info: base=%p reg_el_sz=%d mem_el_sz=%d "
+                            "el_cnt=%d (for %d vectors)\n",
+                            base_addr, reg_element_size, mem_element_size, element_count,
+                            vector_count);
+                    }
+                }
+                int memref_count = 0;
+                for (; !reached_end_of_memrefs; ++memref_count) {
                     // XXX: Add sanity check for max count of store/load memrefs
-                    // possible for a given scatter/gather instr.
+                    // possible for a given scatter/gather instr. For now we have
+                    // a conservative single max.
+                    DR_ASSERT(memref_count < MAX_SG_ELEMENTS);
                     if (!append_memref(
-                            tdata, &buf, instr,
+                            tdata, &sg_buf_cur, instr,
                             // These memrefs were output by multiple store/load instrs in
                             // the expanded scatter/gather sequence. In raw2trace we see
                             // only the original app instr though. So we use the 0th
                             // dest/src of the original scatter/gather instr for all.
                             is_scatter ? instr->mem_dest_at(0) : instr->mem_src_at(0),
-                            is_scatter, reg_vals, &reached_end_of_memrefs))
+                            is_scatter, reg_vals, &reached_end_of_memrefs,
+                            expect_all_memrefs, consumed_memrefs))
+                        return false;
+                }
+                --memref_count; // The final append_memref did not find one.
+                DR_ASSERT(!add_skipped_markers || memref_count <= element_count);
+                sg_buf_cur = sg_buf;
+                int element_index = 0;
+                for (int memref_index = 0; memref_index < memref_count ||
+                     (add_skipped_markers && element_index < element_count);
+                     ++memref_index) {
+                    if (add_skipped_markers) {
+                        addr_t next_addr = base_addr + element_index * mem_element_size;
+                        log(4, "Scatter/gather el %d: next_addr=%p cur memref %d %p\n",
+                            element_index, next_addr, memref_index,
+                            memref_index < memref_count ? sg_buf_cur->addr : 0);
+                        while (element_index < element_count &&
+                               (memref_index >= memref_count ||
+                                sg_buf_cur->addr > next_addr)) {
+                            log(4, "Scatter/gather el %d: filling in skipped addr=%p\n",
+                                element_index, next_addr);
+                            buf->type = TRACE_TYPE_MARKER;
+                            buf->size = TRACE_MARKER_TYPE_SKIPPED_MEMREF;
+                            buf->addr = next_addr;
+                            ++buf;
+                            ++element_index;
+                            next_addr = base_addr + element_index * mem_element_size;
+                        }
+                        DR_ASSERT(memref_index >= memref_count ||
+                                  sg_buf_cur->addr == next_addr);
+                    }
+                    if (memref_index < memref_count) {
+                        log(4, "Scatter/gather el %d writing memref %d %p\n",
+                            element_index, memref_index, sg_buf_cur->addr);
+                        *buf = *sg_buf_cur;
+                        ++buf;
+                        ++sg_buf_cur;
+                        ++element_index;
+                    }
+                }
+                DR_ASSERT(!add_skipped_markers || element_index == element_count);
+            } else if (instrs_are_separate) {
+                // There is only one memref entry (each memref is after a count=0 PC
+                // entry). Full info (type and size) is provided via
+                // OFFLINE_EXT_TYPE_MEMINFO records, so we don't need to iterate operands.
+                if (instr->num_mem_srcs() + instr->num_mem_dests() > 0) {
+                    if (!append_memref(tdata, &buf, instr, instr->mem_src_at(0), false,
+                                       reg_vals, nullptr, expect_all_memrefs,
+                                       consumed_memrefs))
                         return false;
                 }
             } else {
                 for (uint j = 0; j < instr->num_mem_srcs(); j++) {
                     if (!append_memref(tdata, &buf, instr, instr->mem_src_at(j), false,
-                                       reg_vals, nullptr))
+                                       reg_vals, nullptr, expect_all_memrefs,
+                                       consumed_memrefs))
                         return false;
                 }
                 // We break before subsequent memrefs on an interrupt, though with
                 // today's tracer that will never happen (i#3958).
                 for (uint j = 0; !interrupted && j < instr->num_mem_dests(); j++) {
                     if (!append_memref(tdata, &buf, instr, instr->mem_dest_at(j), true,
-                                       reg_vals, nullptr))
+                                       reg_vals, nullptr, expect_all_memrefs,
+                                       consumed_memrefs))
                         return false;
                 }
             }
@@ -1929,7 +2087,7 @@ raw2trace_t::append_bb_entries(raw2trace_thread_data_t *tdata,
             }
         }
         // Check for rseq abort *after* the instruction.
-        bool rseq_aborted = false;
+        DR_ASSERT(!rseq_aborted);
         if (!handle_rseq_abort_marker(tdata, &buf, cur_pc, cur_offs, &rseq_aborted))
             return false;
 
@@ -1961,6 +2119,13 @@ raw2trace_t::append_bb_entries(raw2trace_thread_data_t *tdata,
         }
         if (rseq_aborted || interrupted)
             break;
+    }
+    if (expect_all_memrefs && !interrupted && !rseq_aborted &&
+        consumed_memrefs != total_mem_count) {
+        tdata->error = "Failed to find expected memref count";
+        log(1, "Expected %d memrefs but found %d memrefs\n", total_mem_count,
+            consumed_memrefs);
+        return false;
     }
     *handled = true;
     return true;
@@ -2162,7 +2327,9 @@ raw2trace_t::is_marker_type(const offline_entry_t *entry, trace_marker_type_t ma
 {
     return entry->extended.type == OFFLINE_TYPE_EXTENDED &&
         entry->extended.ext == OFFLINE_EXT_TYPE_MARKER &&
-        entry->extended.valueB == marker_type;
+        (entry->extended.valueB == marker_type ||
+         trace_metadata_writer_t::canonicalize_marker_type(
+             static_cast<trace_marker_type_t>(entry->extended.valueB)) == marker_type);
 }
 
 bool
@@ -2186,7 +2353,9 @@ raw2trace_t::get_marker_value(raw2trace_thread_data_t *tdata,
 #endif
     }
 #ifdef X64 // 32-bit always had the absolute pc as the raw marker value.
-    if ((*entry)->extended.valueB == TRACE_MARKER_TYPE_KERNEL_EVENT ||
+    if (trace_metadata_writer_t::canonicalize_marker_type(
+            static_cast<trace_marker_type_t>((*entry)->extended.valueB)) ==
+            TRACE_MARKER_TYPE_KERNEL_EVENT ||
         (*entry)->extended.valueB == TRACE_MARKER_TYPE_RSEQ_ABORT ||
         (*entry)->extended.valueB == TRACE_MARKER_TYPE_KERNEL_XFER) {
         if (get_version(tdata) >= OFFLINE_FILE_VERSION_KERNEL_INT_PC &&
@@ -2213,12 +2382,34 @@ raw2trace_t::get_marker_value(raw2trace_thread_data_t *tdata,
 }
 
 bool
+raw2trace_t::could_entry_be_address(offline_entry_t entry)
+{
+    // With Top Byte Ignore the top byte might be anything, but on our current
+    // architectures the 2nd-highest byte (bits 48..55) must be canonical:
+    // all 0's or all 1's.  We use the logic outlined in the comment for
+    // offline_type_t to rule out other records that can appear where we
+    // look for addresses by having those other types containn non-canonical
+    // values in 48..55 (and all other records cannot appear where we look
+    // for addresses).
+    // We further handle Linear Address Masking LAM_48 by ensuring the top
+    // bit matches bit 47 and either both are zero or bits 48..55 are canonical.
+    char bits48_55 = (entry.combined_value >> 48) & 0xff;
+#ifdef X86_64
+    return !TESTANY(0x8000800000000000, entry.combined_value) || bits48_55 == 0 ||
+        bits48_55 == static_cast<char>(0xff);
+#else
+    return bits48_55 == 0 || bits48_55 == static_cast<char>(0xff);
+#endif
+}
+
+bool
 raw2trace_t::append_memref(raw2trace_thread_data_t *tdata,
                            DR_PARAM_INOUT trace_entry_t **buf_in,
                            const instr_summary_t *instr,
                            instr_summary_t::memref_summary_t memref, bool write,
                            std::unordered_map<reg_id_t, addr_t> &reg_vals,
-                           DR_PARAM_OUT bool *reached_end_of_memrefs)
+                           DR_PARAM_OUT bool *reached_end_of_memrefs,
+                           bool expect_all_memrefs, DR_PARAM_OUT int &consumed_memrefs)
 {
     DR_ASSERT(!TESTANY(OFFLINE_FILE_TYPE_INSTRUCTION_ONLY, get_file_type(tdata)));
     trace_entry_t *buf = *buf_in;
@@ -2231,7 +2422,8 @@ raw2trace_t::append_memref(raw2trace_thread_data_t *tdata,
         DR_ASSERT(!TESTANY(OFFLINE_FILE_TYPE_FILTERED | OFFLINE_FILE_TYPE_IFILTERED |
                                OFFLINE_FILE_TYPE_DFILTERED,
                            get_file_type(tdata)));
-        bool is_elidable = instru_offline_.opnd_is_elidable(memref.opnd, base, version);
+        bool is_elidable =
+            tdata->instru_offline.opnd_is_elidable(memref.opnd, base, version);
         DR_ASSERT(is_elidable);
         if (base == DR_REG_NULL) {
             DR_ASSERT(IF_REL_ADDRS(opnd_is_near_rel_addr(memref.opnd) ||)
@@ -2273,24 +2465,47 @@ raw2trace_t::append_memref(raw2trace_thread_data_t *tdata,
         (in_entry == nullptr ||
          (in_entry->addr.type != OFFLINE_TYPE_MEMREF &&
           in_entry->addr.type != OFFLINE_TYPE_MEMREF_HIGH))) {
-        // This happens when there are predicated memrefs in the bb, or for a
-        // zero-iter rep string loop, or for a multi-memref instr with -L0_filter.
-        // For predicated memrefs, they could be earlier, so "instr"
-        // may not itself be predicated.
-        // XXX i#2015: if there are multiple predicated memrefs, our instr vs
-        // data stream may not be in the correct order here.
-        log(4,
-            "Missing memref from predication, 0-iter repstr, filter, "
-            "or reached end of memrefs output by scatter/gather seq "
-            "(next type is 0x" ZHEX64_FORMAT_STRING ")\n",
-            in_entry == nullptr ? 0 : in_entry->combined_value);
-        if (in_entry != nullptr) {
-            unread_last_entry(tdata);
+        if (in_entry != nullptr && could_entry_be_address(*in_entry)) {
+            // We've distinguished other types as documented under the
+            // offline_type_t type, so we assume this is in fact an address
+            // and Top Byte Ignore or Linear Address Masking is enabled in the hardware.
+            // We do not clear the top bits for remember_base or recording in
+            // the trace: that's left to higher abstraction levels, and we need
+            // the precise value for remember_base.
+            log(2, "Found non-canonical-top-byte address 0x" ZHEX64_FORMAT_STRING "\n",
+                in_entry->combined_value);
+            accumulate_to_statistic(tdata, RAW2TRACE_STAT_NON_CANONICAL_TOP_BITS, 1);
+        } else if (expect_all_memrefs) {
+            tdata->error = "Missing memref in block without predicated accesses";
+            log(1,
+                "Error: missing memref in block without predicated accesses "
+                "(next type is 0x" ZHEX64_FORMAT_STRING "; consumed %d memrefs)\n",
+                in_entry == nullptr ? 0 : in_entry->combined_value, consumed_memrefs);
+            // Though we're returning a presumably fatal error, we reset the state just in
+            // case the caller handles and continues.
+            if (in_entry != nullptr)
+                unread_last_entry(tdata);
+            return false;
+        } else {
+            // This happens when there are predicated memrefs in the bb, or for a
+            // zero-iter rep string loop, or for a multi-memref instr with -L0_filter.
+            // For predicated memrefs, they could be earlier, so "instr"
+            // may not itself be predicated.
+            // XXX i#2015: if there are multiple predicated memrefs, our instr vs
+            // data stream may not be in the correct order here.
+            log(4,
+                "Missing memref from predication, 0-iter repstr, filter, "
+                "or reached end of memrefs output by scatter/gather seq "
+                "(next type is 0x" ZHEX64_FORMAT_STRING ")\n",
+                in_entry == nullptr ? 0 : in_entry->combined_value);
+            if (in_entry != nullptr) {
+                unread_last_entry(tdata);
+            }
+            if (reached_end_of_memrefs != nullptr) {
+                *reached_end_of_memrefs = true;
+            }
+            return true;
         }
-        if (reached_end_of_memrefs != nullptr) {
-            *reached_end_of_memrefs = true;
-        }
-        return true;
     }
     if (!have_type) {
         if (instr->is_prefetch()) {
@@ -2313,14 +2528,15 @@ raw2trace_t::append_memref(raw2trace_thread_data_t *tdata,
         DR_ASSERT(in_entry != nullptr);
         // We take the full value, to handle low or high.
         buf->addr = (addr_t)in_entry->combined_value;
+        ++consumed_memrefs;
     }
     if (memref.remember_base &&
-        instru_offline_.opnd_is_elidable(memref.opnd, base, version)) {
+        tdata->instru_offline.opnd_is_elidable(memref.opnd, base, version)) {
         log(5, "Remembering base " PFX " for %s\n", buf->addr, get_register_name(base));
         reg_vals[base] = buf->addr;
     }
     if (!TESTANY(OFFLINE_FILE_TYPE_NO_OPTIMIZATIONS, get_file_type(tdata)) &&
-        instru_offline_.opnd_disp_is_elidable(memref.opnd)) {
+        tdata->instru_offline.opnd_disp_is_elidable(memref.opnd)) {
         // We stored only the base reg, as an optimization.
         buf->addr += opnd_get_disp(memref.opnd);
     }
@@ -2657,6 +2873,41 @@ raw2trace_t::lookup_block_summary(raw2trace_thread_data_t *tdata, uint64 modidx,
     return ret;
 }
 
+raw2trace_t::block_summary_t *
+raw2trace_t::create_block_summary(raw2trace_thread_data_t *tdata, uint64 modidx,
+                                  uint64 modoffs, app_pc block_start, int instr_count)
+{
+
+    block_summary_t *block = new block_summary_t(block_start, instr_count);
+    decode_cache_[tdata->worker].add(modidx, modoffs, block);
+    VPRINT(4,
+           "Created new block summary " PFX " for " PFX " modidx=" INT64_FORMAT_STRING
+           " modoffs=" HEX64_FORMAT_STRING "\n",
+           block, block_start, modidx, modoffs);
+    tdata->last_decode_block_start = block_start;
+    tdata->last_decode_modidx = modidx;
+    tdata->last_decode_modoffs = modoffs;
+    tdata->last_block_summary = block;
+    return block;
+}
+
+bool
+raw2trace_t::set_block_mem_count(raw2trace_thread_data_t *tdata, uint64 modidx,
+                                 uint64 modoffs, app_pc block_start, int instr_count,
+                                 int total_traced_mem_count)
+{
+    block_summary_t *block = lookup_block_summary(tdata, modidx, modoffs, block_start);
+    if (block == nullptr) {
+        block = create_block_summary(tdata, modidx, modoffs, block_start, instr_count);
+    }
+    block->total_mem_count = total_traced_mem_count;
+    VPRINT(4,
+           "Set block mem count for " PFX " modidx=" INT64_FORMAT_STRING
+           " modoffs=" HEX64_FORMAT_STRING " to %d\n",
+           block_start, modidx, modoffs, total_traced_mem_count);
+    return true;
+}
+
 instr_summary_t *
 raw2trace_t::lookup_instr_summary(raw2trace_thread_data_t *tdata, uint64 modidx,
                                   uint64 modoffs, app_pc block_start, int index,
@@ -2690,18 +2941,9 @@ raw2trace_t::create_instr_summary(raw2trace_thread_data_t *tdata, uint64 modidx,
                                   DR_PARAM_INOUT app_pc *pc, app_pc orig)
 {
     if (block == nullptr) {
-        block = new block_summary_t(block_start, instr_count);
-        DEBUG_ASSERT(index >= 0 && index < static_cast<int>(block->instrs.size()));
-        decode_cache_[tdata->worker].add(modidx, modoffs, block);
-        VPRINT(5,
-               "Created new block summary " PFX " for " PFX " modidx=" INT64_FORMAT_STRING
-               " modoffs=" HEX64_FORMAT_STRING "\n",
-               block, block_start, modidx, modoffs);
-        tdata->last_decode_block_start = block_start;
-        tdata->last_decode_modidx = modidx;
-        tdata->last_decode_modoffs = modoffs;
-        tdata->last_block_summary = block;
+        block = create_block_summary(tdata, modidx, modoffs, block_start, instr_count);
     }
+    DEBUG_ASSERT(index >= 0 && index < static_cast<int>(block->instrs.size()));
     instr_summary_t *desc = &block->instrs[index];
     if (!instr_summary_t::construct(dcontext_, block_start, pc, orig, desc, verbosity_)) {
         WARN("Encountered invalid/undecodable instr @ idx=" INT64_FORMAT_STRING
@@ -2831,8 +3073,19 @@ instr_summary_t::construct(void *dcontext, app_pc block_start, DR_PARAM_INOUT ap
 #endif
 
 #if defined(X86) || defined(AARCH64)
-    if (instr_is_scatter(instr) || instr_is_gather(instr))
+    if (instr_is_scatter(instr) || instr_is_gather(instr)) {
         desc->packed_ |= kIsScatterOrGatherMask;
+        // TODO i#7914: Add x86 contiguous skipped memref support.
+#    ifdef AARCH64
+        desc->scatter_gather_element_size_ =
+            static_cast<byte>(opnd_size_in_bytes(opnd_get_vector_element_size(
+                instr_is_scatter(instr) ? instr_get_src(instr, 0)
+                                        : instr_get_dst(instr, 0))));
+        desc->scatter_gather_vector_count_ = static_cast<byte>(
+            instr_is_scatter(instr) ? (instr_num_srcs(instr) - 1 /*predicate*/)
+                                    : instr_num_dsts(instr));
+#    endif
+    }
 #endif
     desc->type_ = ir_utils_t::instr_to_instr_type(instr);
     desc->prefetch_type_ = is_prefetch ? instru_t::instr_to_prefetch_type(instr) : 0;
@@ -3548,6 +3801,8 @@ raw2trace_t::set_file_type(raw2trace_thread_data_t *tdata, offline_file_type_t f
     // entries that follow after TRACE_MARKER_TYPE_FILTER_ENDPOINT. This does not affect
     // the written-out type.
     tdata->file_type = file_type;
+    tdata->instru_offline.set_disable_optimizations(
+        TESTANY(OFFLINE_FILE_TYPE_NO_OPTIMIZATIONS, file_type));
 }
 
 raw2trace_t::raw2trace_t(
@@ -3680,6 +3935,9 @@ raw2trace_t::accumulate_to_statistic(raw2trace_thread_data_t *tdata,
     case RAW2TRACE_STAT_NEGATIVE_TIMES_CORRECTED:
         tdata->negative_times_corrected += value;
         break;
+    case RAW2TRACE_STAT_NON_CANONICAL_TOP_BITS:
+        tdata->non_canonical_top_bits += value;
+        break;
     case RAW2TRACE_STAT_MAX:
     default: DR_ASSERT(false);
     }
@@ -3707,6 +3965,7 @@ raw2trace_t::get_statistic(raw2trace_statistic_t stat)
         return syscall_traces_conversion_empty_;
     case RAW2TRACE_STAT_SYSCALL_TRACES_INJECTED: return syscall_traces_injected_;
     case RAW2TRACE_STAT_NEGATIVE_TIMES_CORRECTED: return negative_times_corrected_;
+    case RAW2TRACE_STAT_NON_CANONICAL_TOP_BITS: return non_canonical_top_bits_;
     case RAW2TRACE_STAT_MAX:
     default: DR_ASSERT(false); return 0;
     }
