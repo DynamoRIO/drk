@@ -76,11 +76,7 @@
 
 #include "globals_api.h" // IWYU pragma: export
 
-#ifdef LINUX_KERNEL
-#    include <linux/limits.h> /* for USHRT_MAX */
-#else
-#    include <limits.h> /* for USHRT_MAX */
-#endif
+#include "../limits_wrapper.h" /* for USHRT_MAX */
 
 #ifdef UNIX
 #    ifdef LINUX_KERNEL
