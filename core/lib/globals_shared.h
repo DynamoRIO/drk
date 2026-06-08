@@ -1114,4 +1114,14 @@ typedef struct _priv_mcontext_t {
 #include "mcxtx_api.h" // IWYU pragma: export
 } priv_mcontext_t;
 
+#ifdef __has_attribute
+#    if __has_attribute(__fallthrough__)
+#        define DR_FALLTHROUGH __attribute__((__fallthrough__))
+#    else
+#        define DR_FALLTHROUGH ((void)0) /* fallthrough */
+#    endif
+#else
+#    define DR_FALLTHROUGH ((void)0) /* fallthrough */
+#endif
+
 #endif /* _GLOBALS_SHARED_H_ */
