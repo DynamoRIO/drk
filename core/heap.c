@@ -2209,7 +2209,7 @@ vmm_heap_fork_init_failed:
  * modified the value of any options to make them compatible
  */
 bool
-heap_check_option_compatibility()
+heap_check_option_compatibility(void)
 {
     bool ret = false;
 

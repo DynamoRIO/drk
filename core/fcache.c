@@ -764,7 +764,7 @@ fcache_free_unit(dcontext_t *dcontext, fcache_unit_t *unit, bool dealloc_or_reus
  * options, returns true if modified the value of any options to make them
  * compatible.  This is called while the options are writable. */
 bool
-fcache_check_option_compatibility()
+fcache_check_option_compatibility(void)
 {
     bool ret = false;
     uint i;

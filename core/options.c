@@ -2427,7 +2427,7 @@ check_option_compatibility_helper(int recurse_count)
 
 /* returns true if changed any options */
 static bool
-check_option_compatibility()
+check_option_compatibility(void)
 {
     ASSERT_OWN_OPTIONS_LOCK(true, &options_lock);
     ASSERT(!OPTIONS_PROTECTED());
@@ -2436,7 +2436,7 @@ check_option_compatibility()
 
 /* returns true if changed any options */
 static bool
-check_dynamic_option_compatibility()
+check_dynamic_option_compatibility(void)
 {
     ASSERT_OWN_OPTIONS_LOCK(true, &options_lock);
     /* NOTE : use non-synch form of USAGE_ERROR  in here to avoid
