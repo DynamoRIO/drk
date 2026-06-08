@@ -45,7 +45,6 @@ dynamorio-objs :=\
 ../../rct.o\
 ../../stats.o\
 ../../synch.o\
-../../unit-rct.o\
 ../../utils.o\
 ../../barrier.o\
 ../../vmareas.o\
