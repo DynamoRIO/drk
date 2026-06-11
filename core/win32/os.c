@@ -3225,7 +3225,7 @@ is_phandle_me(HANDLE phandle)
 
 /* Returns the number of application's command-line arguments. */
 int
-num_app_args()
+num_app_args(void)
 {
     /* XXX i#2662: Add support for Windows. */
     ASSERT_NOT_IMPLEMENTED(false);

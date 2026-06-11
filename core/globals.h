@@ -154,8 +154,10 @@
 
 #define INLINE_ONCE inline
 
-#include <stdlib.h>
-#include <stdio.h>
+#ifndef LINUX_KERNEL
+#    include <stdio.h>
+#    include <stdlib.h>
+#endif
 
 /* N.B.: some of these typedefs and defines are duplicated in
  * lib/globals_shared.h!
@@ -186,7 +188,8 @@ typedef HANDLE file_t;
 #    if defined(MACOS) || defined(ANDROID)
 typedef unsigned long ulong;
 #    endif
-#    include <sys/types.h> /* for wait */
+#    include "stddef_wrapper.h" /* for wchar_t */
+#    include "types_wrapper.h"  /* for wait */
 #    define DIRSEP '/'
 #    define ALT_DIRSEP DIRSEP
 #endif
@@ -407,7 +410,9 @@ typedef struct _client_data_t {
     bool suspended;
     /* 2 other ways to point at a context for dr_{g,s}et_mcontext() */
     priv_mcontext_t *cur_mc;
+#ifndef LINUX_KERNEL
     os_cxt_ptr_t os_cxt;
+#endif
 
     /* The error code of last failed API routine. Not updated on successful API calls
      * but only upon failures.
@@ -533,9 +538,9 @@ DYNAMORIO_EXPORT int
 dynamorio_app_init(void);
 /* dynamorio_app_init() can be called in two parts: */
 void
-dynamorio_app_init_part_one_options();
+dynamorio_app_init_part_one_options(void);
 int
-dynamorio_app_init_part_two_finalize();
+dynamorio_app_init_part_two_finalize(void);
 int
 dynamorio_app_exit(void);
 dcontext_t *
@@ -1092,7 +1097,7 @@ enum { DUMP_XML = true, DUMP_NOT_XML = false };
 
 /* io.c */
 /* to avoid transparency problems we must have our own vnsprintf and sscanf */
-#include <stdarg.h> /* for va_list */
+#include "stdarg_wrapper.h" /* for va_list */
 int
 d_r_snprintf(char *s, size_t max, const char *fmt, ...);
 int
@@ -1194,13 +1199,15 @@ strtoul(const char *str, char **end, int base);
 #endif
 
 #if !defined(NOT_DYNAMORIO_CORE_PROPER) && !defined(NOT_DYNAMORIO_CORE)
-#    undef printf
-#    define printf printf_forbidden_function
-#    undef sprintf /* defined on macos */
-#    define sprintf sprintf_forbidden_function
-#    define swprintf swprintf_forbidden_function
-#    undef vsprintf /* defined on macos */
-#    define vsprintf vsprintf_forbidden_function
+#    ifndef LINUX_KERNEL
+#        undef printf
+#        define printf printf_forbidden_function
+#        undef sprintf /* defined on macos */
+#        define sprintf sprintf_forbidden_function
+#        define swprintf swprintf_forbidden_function
+#        undef vsprintf /* defined on macos */
+#        define vsprintf vsprintf_forbidden_function
+#    endif
 
 /* libc independence */
 #    define mprotect mprotect_forbidden_function

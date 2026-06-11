@@ -1687,7 +1687,7 @@ vm_areas_init()
 }
 
 static void
-vm_areas_statistics()
+vm_areas_statistics(void)
 {
 #ifdef PROGRAM_SHEPHERDING
     DOLOG(1, LOG_VMAREAS | LOG_STATS, {
@@ -8266,7 +8266,7 @@ check_thread_vm_area(dcontext_t *dcontext, app_pc pc, app_pc tag, void **vmlist,
     if (stop != NULL) {
         *stop = area->end;
         ASSERT(*stop != NULL);
-#ifdef LINUX
+#if defined(LINUX) && !defined(LINUX_KERNEL)
         if (!vmvector_empty(d_r_rseq_areas)) {
             /* XXX i#3798: While for core operation we do not need to end a block at
              * an rseq endpoint, we need clients to treat the endpoint as a barrier and

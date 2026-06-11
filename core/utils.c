@@ -45,20 +45,26 @@
 #include "dr_tools.h"
 #include "utils.h"
 #include "module_shared.h"
-#include <math.h>
+
+#ifndef LINUX_KERNEL
+#    include <math.h>
+#endif
 
 #ifdef PROCESS_CONTROL
 #    include "moduledb.h" /* for process control macros */
 #endif
 
 #ifdef UNIX
-#    include <sys/types.h>
-#    include <sys/stat.h>
-#    include <fcntl.h>
-#    include <stdio.h>
-#    include <stdlib.h>
-#    include <unistd.h>
-#    include <errno.h>
+#    include "types_wrapper.h"
+#    ifndef LINUX_KERNEL
+#        include <sys/types.h>
+#        include <sys/stat.h>
+#        include <fcntl.h>
+#        include <stdio.h>
+#        include <stdlib.h>
+#        include <unistd.h>
+#        include <errno.h>
+#    endif
 #else
 #    include <errno.h>
 /* XXX : remove when syslog macros fixed */
@@ -73,8 +79,8 @@
 #    include "synch.h" /* all_threads_synch_lock */
 #endif
 
-#include <stdarg.h> /* for varargs */
-#include <stddef.h> /* for offsetof */
+#include "stdarg_wrapper.h" /* for varargs */
+#include "stddef_wrapper.h" /* for offsetof */
 
 try_except_t global_try_except;
 #ifdef UNIX
@@ -92,7 +98,7 @@ sideline_exit(void);
  * performs some cleanup and then calls os_terminate
  */
 static void
-soft_terminate()
+soft_terminate(void)
 {
 #ifdef SIDELINE
     /* kill child threads */
@@ -749,7 +755,8 @@ utils_init()
     ASSERT(sizeof(uint) == 4);
     ASSERT(sizeof(reg_t) == sizeof(void *));
 
-#ifdef UNIX /* after options_init(), before we open logfile or call instrument_init() */
+#if defined(UNIX) && !defined(LINUX_KERNEL)
+    /* after options_init(), before we open logfile or call instrument_init() */
     os_file_init();
 #endif
 
@@ -878,7 +885,7 @@ d_r_mutex_lock_app(mutex_t *lock, priv_mcontext_t *mc)
     }
 
     /* we have strong intentions to grab this lock, increment requests */
-    acquired = atomic_inc_and_test(&lock->lock_requests);
+    acquired = d_r_atomic_inc_and_test(&lock->lock_requests);
     DEADLOCK_AVOIDANCE_LOCK(lock, acquired, ownable);
 
     if (!acquired) {
@@ -929,7 +936,7 @@ d_r_mutex_unlock(mutex_t *lock)
     ASSERT(lock->lock_requests > LOCK_FREE_STATE && "lock not owned");
     DEADLOCK_AVOIDANCE_UNLOCK(lock, ownable);
 
-    if (atomic_dec_and_test(&lock->lock_requests))
+    if (d_r_atomic_dec_and_test(&lock->lock_requests))
         return;
     /* if we were not the last one to hold the lock,
        (i.e. final value is not LOCK_FREE_STATE)
@@ -1185,7 +1192,7 @@ d_r_read_lock(read_write_lock_t *rw)
                 /* no need to pause */
             }
             /* Even if we didn't wait another reader may be waiting for notification */
-            if (!atomic_dec_becomes_zero(&rw->num_pending_readers)) {
+            if (!d_r_atomic_dec_becomes_zero(&rw->num_pending_readers)) {
                 /* If we were not the last pending reader,
                    we need to notify another waiting one so that
                    it can get out of the contention path.
@@ -1295,7 +1302,7 @@ d_r_read_unlock(read_write_lock_t *rw)
        to check if the writer is in fact waiting.  Even though this is
        not atomic we don't need to loop here - d_r_write_lock() will loop.
     */
-    if (atomic_dec_becomes_zero(&rw->num_readers)) {
+    if (d_r_atomic_dec_becomes_zero(&rw->num_readers)) {
         /* if the writer is waiting it definitely needs to hold the mutex */
         if (mutex_testlock(&rw->lock)) {
             /* test that it was not this thread owning both write and read lock */
@@ -1714,6 +1721,7 @@ divide_uint64_print(uint64 numerator, uint64 denominator, bool percentage, uint 
 extern long
 double2int_trunc(double d);
 
+#ifndef LINUX_KERNEL
 /* For printing a float.
  * NOTE: You must preserve x87 floating point state to call this function, unless
  * you can prove the compiler will never use x87 state for float operations.
@@ -1742,6 +1750,7 @@ double_print(double val, uint precision, uint *top, uint *bottom, const char **s
     *top = double2int_trunc(val);
     *bottom = double2int_trunc((val - *top) * precision_multiple);
 }
+#endif
 
 #ifdef WINDOWS
 /* for pre_inject, injector, and core shared files, is just wrapper for syslog
@@ -2646,7 +2655,9 @@ static bool basedir_initialized = false;
 /* below used in the create_log_dir function to avoid having it on the stack
  * on what is a critical path for stack depth (diagnostics->create_log_dir->
  * get_parameter */
+#ifndef LINUX_KERNEL
 static char old_basedir[MAXIMUM_PATH];
+#endif
 /* this lock is recursive because current implementation recurses to create the
  * basedir when called to create the logdir before the basedir is created, is
  * also useful in case we receive an exception in the create_log_dir function
@@ -2665,14 +2676,17 @@ enable_new_log_dir()
 void
 create_log_dir(int dir_type)
 {
-#ifdef UNIX
+#ifdef LINUX_KERNEL
+    ASSERT_NOT_IMPLEMENTED(false);
+#else
+#    ifdef UNIX
     char *pre_execve = getenv(DYNAMORIO_VAR_EXECVE_LOGDIR);
     DEBUG_DECLARE(bool sharing_logdir = false;)
-#endif
+#    endif
     /* synchronize */
     acquire_recursive_lock(&logdir_mutex);
     SELF_UNPROTECT_DATASEC(DATASEC_RARELY_PROT);
-#ifdef UNIX
+#    ifdef UNIX
     if (dir_type == PROCESS_DIR && pre_execve != NULL) {
         /* if this app has a logdir option or config, that should trump sharing
          * the pre-execve logdir.  a logdir env var should not.
@@ -2692,7 +2706,7 @@ create_log_dir(int dir_type)
         /* check that it's gone: we've had problems with unsetenv */
         ASSERT(getenv(DYNAMORIO_VAR_EXECVE_LOGDIR) == NULL);
     }
-#endif
+#    endif
     /* used to be an else: leaving indentation though */
     if (dir_type == BASE_DIR) {
         int retval;
@@ -2715,21 +2729,21 @@ create_log_dir(int dir_type)
             basedir_initialized = true;
             /* skip creating dir basedir if is empty */
             if (basedir[0] == '\0') {
-#ifndef STATIC_LIBRARY
+#    ifndef STATIC_LIBRARY
                 SYSLOG(SYSLOG_WARNING, WARNING_EMPTY_OR_NONEXISTENT_LOGDIR_KEY, 2,
                        get_application_name(), get_application_pid());
-#endif
+#    endif
             } else {
                 if (!os_create_dir(basedir, CREATE_DIR_ALLOW_EXISTING)) {
                     /* try to create full path */
                     char swap;
                     char *end = double_strchr(basedir, DIRSEP, ALT_DIRSEP);
                     bool res;
-#ifdef WINDOWS
+#    ifdef WINDOWS
                     /* skip the drive */
                     if (end != NULL && end > basedir && *(end - 1) == ':')
                         end = double_strchr(++end, DIRSEP, ALT_DIRSEP);
-#endif
+#    endif
                     while (end) {
                         swap = *end;
                         *end = '\0';
@@ -2771,7 +2785,7 @@ create_log_dir(int dir_type)
     SELF_PROTECT_DATASEC(DATASEC_RARELY_PROT);
     release_recursive_lock(&logdir_mutex);
 
-#ifdef DEBUG
+#    ifdef DEBUG
     if (d_r_stats != NULL) {
         /* if null, we're trying to report an error (probably via a core dump),
          * so who cares if we lose logdir name */
@@ -2779,12 +2793,13 @@ create_log_dir(int dir_type)
         d_r_stats->logdir[sizeof(d_r_stats->logdir) - 1] = '\0'; /* if max no null */
     }
     if (dir_type == PROCESS_DIR
-#    ifdef UNIX
+#        ifdef UNIX
         && !sharing_logdir
-#    endif
+#        endif
     )
         SYSLOG_INTERNAL_INFO("log dir=%s", logdir);
-#endif /* DEBUG */
+#    endif /* DEBUG */
+#endif     /* LINUX_KERNEL */
 }
 
 /* Copies the name of the specified directory into buffer, returns true if
@@ -3836,7 +3851,7 @@ MD5Transform(uint32 state[4], const unsigned char block[MD5_BLOCK_LENGTH])
 {
     uint32 a, b, c, d, in[MD5_BLOCK_LENGTH / 4];
 
-#if BYTE_ORDER == LITTLE_ENDIAN
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
     memcpy(in, block, sizeof(in));
 #else
     for (a = 0; a < MD5_BLOCK_LENGTH / 4; a++) {

@@ -76,9 +76,14 @@
 
 #include "globals_api.h" // IWYU pragma: export
 
-#include <limits.h> /* for USHRT_MAX */
+#include "../limits_wrapper.h" /* for USHRT_MAX */
+
 #ifdef UNIX
-#    include <signal.h>
+#    ifdef LINUX_KERNEL
+#        include <asm/sigcontext.h>
+#    else
+#        include <signal.h>
+#    endif
 #endif
 
 #include "c_defines.h" // IWYU pragma: export
@@ -954,9 +959,9 @@ typedef struct {
     uint flags : 2;
     int ignored2; /* siginfo_t.si_code: has meaning to kernel so we avoid using */
 #else
-    uint version;           /* version number for future proofing */
-    uint nudge_action_mask; /* drawn from NUDGE_DEFS above */
-    uint flags;             /* flags drawn from above enum */
+    uint version;                   /* version number for future proofing */
+    uint nudge_action_mask;         /* drawn from NUDGE_DEFS above */
+    uint flags;                     /* flags drawn from above enum */
 #endif
     client_id_t client_id; /* unique ID identifying client */
     uint64 client_arg;     /* argument for a client nudge */
@@ -1108,5 +1113,15 @@ enum {
 typedef struct _priv_mcontext_t {
 #include "mcxtx_api.h" // IWYU pragma: export
 } priv_mcontext_t;
+
+#ifdef __has_attribute
+#    if __has_attribute(__fallthrough__)
+#        define DR_FALLTHROUGH __attribute__((__fallthrough__))
+#    else
+#        define DR_FALLTHROUGH ((void)0) /* fallthrough */
+#    endif
+#else
+#    define DR_FALLTHROUGH ((void)0) /* fallthrough */
+#endif
 
 #endif /* _GLOBALS_SHARED_H_ */

@@ -3369,7 +3369,7 @@ query_time_100ns()
 }
 
 uint64
-query_time_micros()
+query_time_micros(void)
 {
     LONGLONG time100ns = query_time_100ns();
     return ((uint64)time100ns / TIMER_UNITS_PER_MICROSECOND);

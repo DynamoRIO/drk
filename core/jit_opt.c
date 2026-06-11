@@ -547,7 +547,7 @@ fragment_tree_clear(fragment_tree_t *tree)
 static fragment_tree_t *fragment_tree;
 
 void
-jitopt_init()
+jitopt_init(void)
 {
     if (DYNAMO_OPTION(opt_jit)) {
         fragment_tree = fragment_tree_create();
@@ -564,7 +564,7 @@ jitopt_init()
 }
 
 void
-jitopt_exit()
+jitopt_exit(void)
 {
     if (DYNAMO_OPTION(opt_jit))
         fragment_tree_destroy(fragment_tree);

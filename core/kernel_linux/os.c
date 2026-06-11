@@ -1690,6 +1690,13 @@ is_thread_terminated(dcontext_t *dcontext)
 }
 
 bool
+os_wait_thread_terminated(dcontext_t *dcontext)
+{
+    ASSERT_NOT_PORTED(false);
+    return true;
+}
+
+bool
 thread_get_mcontext(thread_record_t *tr, dr_mcontext_t *mc)
 {
     ASSERT_NOT_PORTED(false);
@@ -2216,13 +2223,6 @@ get_stack_bounds(dcontext_t *dcontext, byte **base, byte **top)
 }
 
 bool
-ignorable_system_call(int num)
-{
-    ASSERT_NOT_PORTED(false);
-    return true;
-}
-
-bool
 is_clone_thread_syscall(dcontext_t *dcontext)
 {
     ASSERT_NOT_PORTED(false);
@@ -2305,7 +2305,7 @@ mutex_wait_contended_lock(mutex_t *lock)
      * If we do use a true wait need to set client_thread_safe_for_synch around it */
 
     /* we now have to undo our earlier request */
-    atomic_dec_and_test(&lock->lock_requests);
+    d_r_atomic_dec_and_test(&lock->lock_requests);
 
     while (!mutex_trylock(lock)) {
 #ifdef CLIENT_INTERFACE

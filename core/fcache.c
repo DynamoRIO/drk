@@ -47,8 +47,8 @@
 #ifdef HOT_PATCHING_INTERFACE
 #    include "hotpatch.h"
 #endif
-#include <stddef.h> /* for offsetof */
-#include <limits.h> /* for UCHAR_MAX */
+#include "stddef_wrapper.h" /* for offsetof */
+#include "limits_wrapper.h" /* for UCHAR_MAX */
 #include "perscache.h"
 #include "synch.h"
 #include "instrument.h"
@@ -764,7 +764,7 @@ fcache_free_unit(dcontext_t *dcontext, fcache_unit_t *unit, bool dealloc_or_reus
  * options, returns true if modified the value of any options to make them
  * compatible.  This is called while the options are writable. */
 bool
-fcache_check_option_compatibility()
+fcache_check_option_compatibility(void)
 {
     bool ret = false;
     uint i;
@@ -4229,7 +4229,7 @@ fcache_reset_all_caches_proactively(uint target)
     LOG(GLOBAL, LOG_CACHE, 2,
         "fcache_reset_all_caches_proactively: walking the threads\n");
     char buf[16];
-    snprintf(buf, BUFFER_SIZE_ELEMENTS(buf), "%d",
+    snprintf(buf, BUFFER_SIZE_ELEMENTS(buf), SSZFMT,
              GLOBAL_STAT(num_bbs) + GLOBAL_STAT(num_traces));
     NULL_TERMINATE_BUFFER(buf);
     SYSLOG(SYSLOG_INFORMATION, INFO_RESET_IN_PROGRESS, 3, buf, get_application_name(),

@@ -459,7 +459,7 @@ static void
 drmgr_modunload_event(void *drcontext, const module_data_t *info);
 
 static void
-drmgr_low_on_memory_event();
+drmgr_low_on_memory_event(void);
 
 static void
 drmgr_kernel_xfer_event(void *drcontext, const dr_kernel_xfer_info_t *info);
@@ -3500,7 +3500,7 @@ drmgr_unregister_low_on_memory_event_user_data(void (*func)(void *user_data))
 }
 
 static void
-drmgr_low_on_memory_event()
+drmgr_low_on_memory_event(void)
 {
     void *drcontext = dr_get_current_drcontext();
     generic_event_entry_t local[EVENTS_STACK_SZ];

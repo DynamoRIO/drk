@@ -52,10 +52,17 @@
 #    include <windows.h>
 #    include <winbase.h>
 #else
-#    include <stdio.h>
-#    include <stdlib.h>
+#    ifndef LINUX_KERNEL
+#        include <stdio.h>
+#        include <stdlib.h>
+#    endif
 #endif
-#include <stdarg.h> /* for varargs */
+
+#ifdef LINUX_KERNEL
+#    include <linux/stdarg.h> /* for varargs */
+#else
+#    include <stdarg.h> /* for varargs */
+#endif
 
 #ifndef DYNAMORIO_INTERNAL
 /* A client's target operating system and architecture must be specified. */
@@ -105,7 +112,7 @@
  * behave properly.  It indents the guard.  There seems to be no workaround.
  */
 /* clang-format off */
-#    ifndef __cplusplus
+#    if !defined(__cplusplus) && !defined(LINUX_KERNEL)
 #        ifdef WINDOWS
 #            define inline __inline
 #        else
@@ -129,7 +136,11 @@ typedef char bool;
 #    endif
 
 #    ifdef UNIX
-#        include <sys/types.h> /* for pid_t (non-glibc, e.g. musl) */
+#        ifdef LINUX_KERNEL
+#            include <linux/types.h>
+#        else
+#            include <sys/types.h> /* for pid_t (non-glibc, e.g. musl) */
+#        endif
 #    endif
 #    ifdef WINDOWS
 /* allow nameless struct/union */
@@ -162,7 +173,7 @@ typedef char bool;
 #    define ALIGN_VAR(x) __attribute__((aligned(x)))
 #    define INLINE_FORCED inline
 #    define WEAK __attribute__((weak))
-#    define NOINLINE __attribute__((noinline))
+#    define NOINLINE __attribute__((__noinline__))
 #endif
 
 /* We want a consistent size so we stay away from MAX_PATH.
@@ -209,7 +220,7 @@ typedef signed char sbyte;
 #endif
 typedef byte *app_pc;
 
-typedef void (*generic_func_t)();
+typedef void (*generic_func_t)(void);
 
 #ifdef DR_DEFINE_FOR_uint64
 #    undef DR_DO_NOT_DEFINE_uint64

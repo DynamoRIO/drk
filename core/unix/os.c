@@ -1275,7 +1275,7 @@ set_app_args(DR_PARAM_IN int *app_argc_in, DR_PARAM_IN char **app_argv_in)
 
 /* Returns the number of application's command-line arguments. */
 int
-num_app_args()
+num_app_args(void)
 {
     if (!DYNAMO_OPTION(early_inject)) {
         set_client_error_code(NULL, DR_ERROR_NOT_IMPLEMENTED);
@@ -1442,7 +1442,7 @@ query_time_millis()
 
 /* microseconds since 1601 */
 uint64
-query_time_micros()
+query_time_micros(void)
 {
     struct timeval current_time;
     uint64 val = dynamorio_syscall(SYS_gettimeofday, 2, &current_time, NULL);
@@ -10684,7 +10684,7 @@ mutex_wait_contended_lock(mutex_t *lock, priv_mcontext_t *mc)
         }
     } else {
         /* we now have to undo our earlier request */
-        atomic_dec_and_test(&lock->lock_requests);
+        d_r_atomic_dec_and_test(&lock->lock_requests);
 
         while (!d_r_mutex_trylock(lock)) {
             if (set_client_safe_for_synch)

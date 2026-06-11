@@ -18,66 +18,62 @@ dynamorio_controller-objs :=\
 ../../kernel_linux/simple_tests/repstr.o\
 ../../kernel_linux/simple_tests.o
 
-################################################################################
-## TODO i#20: Re-enable this module once the previous module has been ported.
-## obj-m += dynamorio.o
-## dynamorio-objs :=\
-## ../../exports.o\
-## ../../buildmark.o\
-## ../../config.o\
-## ../../dispatch.o\
-## ../../dynamo.o\
-## ../../emit.o\
-## ../../fcache.o\
-## ../../fragment.o\
-## ../../hashtable.o\
-## ../../heap.o\
-## ../../hotpatch.o\
-## ../../instrlist.o\
-## ../../io.o\
-## ../../link.o\
-## ../../loader_shared.o\
-## ../../moduledb.o\
-## ../../module_list.o\
-## ../../monitor.o\
-## ../../nudge.o\
-## ../../options.o\
-## ../../perfctr.o\
-## ../../perscache.o\
-## ../../rct.o\
-## ../../stats.o\
-## ../../synch.o\
-## ../../unit-rct.o\
-## ../../utils.o\
-## ../../barrier.o\
-## ../../vmareas.o\
-## ../../x86/arch.o\
-## ../../x86/decode.o\
-## ../../x86/decode_fast.o\
-## ../../x86/decode_table.o\
-## ../../x86/disassemble.o\
-## ../../x86/emit_utils.o\
-## ../../x86/encode.o\
-## ../../x86/instr.o\
-## ../../x86/instrument.o\
-## ../../x86/interp.o\
-## ../../x86/loadtoconst.o\
-## ../../x86/mangle.o\
-## ../../x86/optimize.o\
-## ../../x86/proc.o\
-## ../../x86/retcheck.o\
-## ../../x86/sideline.o\
-## ../../x86/steal_reg.o\
-## ../../x86/x86_code.o\
-## ../../x86/asm_defines.o\
-## ../../x86/x86.o\
-## ../../kernel_linux/os.o\
-## ../../kernel_linux/hypercall_guest.o\
-## ../../kernel_linux/page_table.o\
-## ../../kernel_linux/kernel_interface.o\
-## ../../kernel_linux/dynamorio_module_interface.o\
-## ../../kernel_linux/dynamorio_module.o
-################################################################################
+obj-m += dynamorio.o
+dynamorio-objs :=\
+../../exports.o\
+../../buildmark.o\
+../../config.o\
+../../dispatch.o\
+../../dynamo.o\
+../../emit.o\
+../../fcache.o\
+../../fragment.o\
+../../hashtable.o\
+../../heap.o\
+../../hotpatch.o\
+../../ir/instrlist.o\
+../../io.o\
+../../link.o\
+../../loader_shared.o\
+../../moduledb.o\
+../../module_list.o\
+../../monitor.o\
+../../nudge.o\
+../../options.o\
+../../perfctr.o\
+../../perscache.o\
+../../rct.o\
+../../stats.o\
+../../synch.o\
+../../utils.o\
+../../barrier.o\
+../../vmareas.o\
+../../x86/arch.o\
+../../x86/decode.o\
+../../x86/decode_fast.o\
+../../x86/decode_table.o\
+../../x86/disassemble.o\
+../../x86/emit_utils.o\
+../../x86/encode.o\
+../../x86/instr.o\
+../../x86/instrument.o\
+../../x86/interp.o\
+../../x86/loadtoconst.o\
+../../x86/mangle.o\
+../../x86/optimize.o\
+../../x86/proc.o\
+../../x86/retcheck.o\
+../../x86/sideline.o\
+../../x86/steal_reg.o\
+../../x86/x86_code.o\
+../../x86/asm_defines.o\
+../../x86/x86.o\
+../../kernel_linux/os.o\
+../../kernel_linux/hypercall_guest.o\
+../../kernel_linux/page_table.o\
+../../kernel_linux/kernel_interface.o\
+../../kernel_linux/dynamorio_module_interface.o\
+../../kernel_linux/dynamorio_module.o
 
 ################################################################################
 ## TODO i#20: Re-enable this module once the previous modules have been ported.
