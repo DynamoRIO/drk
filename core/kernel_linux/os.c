@@ -1690,6 +1690,13 @@ is_thread_terminated(dcontext_t *dcontext)
 }
 
 bool
+os_wait_thread_terminated(dcontext_t *dcontext)
+{
+    ASSERT_NOT_PORTED(false);
+    return true;
+}
+
+bool
 thread_get_mcontext(thread_record_t *tr, dr_mcontext_t *mc)
 {
     ASSERT_NOT_PORTED(false);

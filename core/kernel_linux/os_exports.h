@@ -88,6 +88,8 @@ thread_id_t
 get_sys_thread_id(void);
 bool
 is_thread_terminated(dcontext_t *dcontext);
+bool
+os_wait_thread_terminated(dcontext_t *dcontext);
 void
 os_tls_pre_init(int gdt_index);
 
