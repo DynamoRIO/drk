@@ -2170,7 +2170,7 @@ detach_on_permanent_stack(bool internal, bool do_cleanup, dr_stats_t *drstats)
     wait_for_outstanding_nudges();
 #endif
 
-#ifdef UNIX
+#if defined(UNIX) && !defined(LINUX_KERNEL)
     /* i#2270: we ignore alarm signals during detach to reduce races. */
     signal_remove_alarm_handlers(my_dcontext);
 #endif
@@ -2372,7 +2372,9 @@ detach_externally_on_new_stack(void)
     if (my_dcontext != NULL)
         enter_threadexit(my_dcontext);
     /* i#2270: we ignore alarm signals during detach to reduce races. */
+#ifndef LINUX_KERNEL
     signal_remove_alarm_handlers(my_dcontext);
+#endif
     /* suspend all DR-controlled threads at safe locations */
     if (!synch_with_all_threads(THREAD_SYNCH_SUSPENDED_VALID_MCONTEXT, &threads,
                                 &num_threads,
