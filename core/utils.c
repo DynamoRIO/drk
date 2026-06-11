@@ -98,7 +98,7 @@ sideline_exit(void);
  * performs some cleanup and then calls os_terminate
  */
 static void
-soft_terminate()
+soft_terminate(void)
 {
 #ifdef SIDELINE
     /* kill child threads */
@@ -755,7 +755,8 @@ utils_init()
     ASSERT(sizeof(uint) == 4);
     ASSERT(sizeof(reg_t) == sizeof(void *));
 
-#ifdef UNIX /* after options_init(), before we open logfile or call instrument_init() */
+#if defined(UNIX) && !defined(LINUX_KERNEL)
+    /* after options_init(), before we open logfile or call instrument_init() */
     os_file_init();
 #endif
 
@@ -1720,6 +1721,7 @@ divide_uint64_print(uint64 numerator, uint64 denominator, bool percentage, uint 
 extern long
 double2int_trunc(double d);
 
+#ifndef LINUX_KERNEL
 /* For printing a float.
  * NOTE: You must preserve x87 floating point state to call this function, unless
  * you can prove the compiler will never use x87 state for float operations.
@@ -1748,6 +1750,7 @@ double_print(double val, uint precision, uint *top, uint *bottom, const char **s
     *top = double2int_trunc(val);
     *bottom = double2int_trunc((val - *top) * precision_multiple);
 }
+#endif
 
 #ifdef WINDOWS
 /* for pre_inject, injector, and core shared files, is just wrapper for syslog
@@ -3846,7 +3849,7 @@ MD5Transform(uint32 state[4], const unsigned char block[MD5_BLOCK_LENGTH])
 {
     uint32 a, b, c, d, in[MD5_BLOCK_LENGTH / 4];
 
-#if BYTE_ORDER == LITTLE_ENDIAN
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
     memcpy(in, block, sizeof(in));
 #else
     for (a = 0; a < MD5_BLOCK_LENGTH / 4; a++) {
