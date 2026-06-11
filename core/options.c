@@ -42,10 +42,6 @@
 
 #include "stddef_wrapper.h"
 
-#ifdef LINUX_KERNEL
-#    include <linux/slab.h>
-#endif
-
 #ifndef NOT_DYNAMORIO_CORE
 #    include "globals.h"
 #    include "fcache.h"
@@ -689,24 +685,18 @@ set_dynamo_options_common(options_t *options, const char *optstr, bool for_this_
     if (optstr == NULL)
         return 0;
 
+    ASSERT_OWN_OPTIONS_LOCK(options == &dynamo_options || options == &temp_options,
+                            &options_lock);
+    ASSERT(!OPTIONS_PROTECTED());
+
 #ifdef LINUX_KERNEL
-    /* Kernel stack frames are limited to 4096 bytes; heap-allocate to avoid
-     * exceeding that limit with two MAX_OPTION_LENGTH buffers on the stack. */
-    char *badopt = kmalloc(MAX_OPTION_LENGTH, GFP_KERNEL);
-    char *wordbuffer = kmalloc(MAX_OPTION_LENGTH, GFP_KERNEL);
-    if (badopt == NULL || wordbuffer == NULL) {
-        kfree(badopt);
-        kfree(wordbuffer);
-        return -1;
-    }
+    /* Kernel stack frames are limited to 4096 bytes; use static (safe under options_lock). */
+    static char badopt[MAX_OPTION_LENGTH];
+    static char wordbuffer[MAX_OPTION_LENGTH];
 #else
     char badopt[MAX_OPTION_LENGTH];
     char wordbuffer[MAX_OPTION_LENGTH];
 #endif
-
-    ASSERT_OWN_OPTIONS_LOCK(options == &dynamo_options || options == &temp_options,
-                            &options_lock);
-    ASSERT(!OPTIONS_PROTECTED());
     while ((opt = getword(optstr, &pos, wordbuffer, sizeof(wordbuffer))) != NULL) {
         if (opt[0] == '-') {
             value = NULL;
@@ -746,10 +736,6 @@ set_dynamo_options_common(options_t *options, const char *optstr, bool for_this_
                            IF_DEBUG_ELSE("Terminating", "Continuing"));
     }
 
-#ifdef LINUX_KERNEL
-    kfree(badopt);
-    kfree(wordbuffer);
-#endif
     return (int)got_badopt;
 }
 
