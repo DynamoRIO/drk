@@ -2655,7 +2655,9 @@ static bool basedir_initialized = false;
 /* below used in the create_log_dir function to avoid having it on the stack
  * on what is a critical path for stack depth (diagnostics->create_log_dir->
  * get_parameter */
+#ifndef LINUX_KERNEL
 static char old_basedir[MAXIMUM_PATH];
+#endif
 /* this lock is recursive because current implementation recurses to create the
  * basedir when called to create the logdir before the basedir is created, is
  * also useful in case we receive an exception in the create_log_dir function
