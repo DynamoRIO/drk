@@ -885,7 +885,7 @@ d_r_mutex_lock_app(mutex_t *lock, priv_mcontext_t *mc)
     }
 
     /* we have strong intentions to grab this lock, increment requests */
-    acquired = atomic_inc_and_test(&lock->lock_requests);
+    acquired = d_r_atomic_inc_and_test(&lock->lock_requests);
     DEADLOCK_AVOIDANCE_LOCK(lock, acquired, ownable);
 
     if (!acquired) {
@@ -936,7 +936,7 @@ d_r_mutex_unlock(mutex_t *lock)
     ASSERT(lock->lock_requests > LOCK_FREE_STATE && "lock not owned");
     DEADLOCK_AVOIDANCE_UNLOCK(lock, ownable);
 
-    if (atomic_dec_and_test(&lock->lock_requests))
+    if (d_r_atomic_dec_and_test(&lock->lock_requests))
         return;
     /* if we were not the last one to hold the lock,
        (i.e. final value is not LOCK_FREE_STATE)
@@ -1192,7 +1192,7 @@ d_r_read_lock(read_write_lock_t *rw)
                 /* no need to pause */
             }
             /* Even if we didn't wait another reader may be waiting for notification */
-            if (!atomic_dec_becomes_zero(&rw->num_pending_readers)) {
+            if (!d_r_atomic_dec_becomes_zero(&rw->num_pending_readers)) {
                 /* If we were not the last pending reader,
                    we need to notify another waiting one so that
                    it can get out of the contention path.
@@ -1302,7 +1302,7 @@ d_r_read_unlock(read_write_lock_t *rw)
        to check if the writer is in fact waiting.  Even though this is
        not atomic we don't need to loop here - d_r_write_lock() will loop.
     */
-    if (atomic_dec_becomes_zero(&rw->num_readers)) {
+    if (d_r_atomic_dec_becomes_zero(&rw->num_readers)) {
         /* if the writer is waiting it definitely needs to hold the mutex */
         if (mutex_testlock(&rw->lock)) {
             /* test that it was not this thread owning both write and read lock */
