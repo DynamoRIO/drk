@@ -45,20 +45,26 @@
 #include "dr_tools.h"
 #include "utils.h"
 #include "module_shared.h"
-#include <math.h>
+
+#ifndef LINUX_KERNEL
+#    include <math.h>
+#endif
 
 #ifdef PROCESS_CONTROL
 #    include "moduledb.h" /* for process control macros */
 #endif
 
 #ifdef UNIX
-#    include <sys/types.h>
-#    include <sys/stat.h>
-#    include <fcntl.h>
-#    include <stdio.h>
-#    include <stdlib.h>
-#    include <unistd.h>
-#    include <errno.h>
+#    include "types_wrapper.h"
+#    ifndef LINUX_KERNEL
+#        include <sys/types.h>
+#        include <sys/stat.h>
+#        include <fcntl.h>
+#        include <stdio.h>
+#        include <stdlib.h>
+#        include <unistd.h>
+#        include <errno.h>
+#    endif
 #else
 #    include <errno.h>
 /* XXX : remove when syslog macros fixed */
@@ -73,8 +79,8 @@
 #    include "synch.h" /* all_threads_synch_lock */
 #endif
 
-#include <stdarg.h> /* for varargs */
-#include <stddef.h> /* for offsetof */
+#include "stdarg_wrapper.h" /* for varargs */
+#include "stddef_wrapper.h" /* for offsetof */
 
 try_except_t global_try_except;
 #ifdef UNIX
